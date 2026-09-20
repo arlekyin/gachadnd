@@ -1,0 +1,62 @@
+{
+  "_id": "nUXApT6Ig6sy5KmK",
+  "name": "Охотничий трофей",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> РЕСУРС | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> казнь, кровь</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>При убийстве существа восстанови 1d6 HP.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "demFe0FteRXHFw9n": {
+        "_id": "demFe0FteRXHFw9n",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "РЕСУРС",
+      "tags": [
+        "казнь",
+        "кровь"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

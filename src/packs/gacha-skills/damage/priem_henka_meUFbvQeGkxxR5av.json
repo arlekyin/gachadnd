@@ -1,0 +1,61 @@
+{
+  "_id": "meUFbvQeGkxxR5av",
+  "name": "Приём Хэнка",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УРОН | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> казнь</p>\n<p><strong>Перезарядка / Условия:</strong> 3/этаж | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Цель твоего размера в 5 фт: спасбросок Телосложения СЛ 8+бонус мастерства+Сила или 4d10 урона и немота до конца следующего хода.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "YfCYL9MeUDKOsOP0": {
+        "_id": "YfCYL9MeUDKOsOP0",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "УРОН",
+      "tags": [
+        "казнь"
+      ],
+      "cooldown": "3/этаж",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

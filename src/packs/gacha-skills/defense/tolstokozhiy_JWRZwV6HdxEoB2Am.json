@@ -1,0 +1,61 @@
+{
+  "_id": "JWRZwV6HdxEoB2Am",
+  "name": "Толстокожий",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> ЗАЩИТА | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> щит</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>При взятии выбери тип урона — сопротивление к нему.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "daTZDXNYApdSZVPJ": {
+        "_id": "daTZDXNYApdSZVPJ",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "ЗАЩИТА",
+      "tags": [
+        "щит"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

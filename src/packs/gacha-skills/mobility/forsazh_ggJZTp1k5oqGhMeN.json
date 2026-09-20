@@ -1,0 +1,62 @@
+{
+  "_id": "ggJZTp1k5oqGhMeN",
+  "name": "Форсаж",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/green_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> МОБИЛЬНОСТЬ | <strong>Редкость:</strong> Зелёный</p>\n<p><strong>Теги синергий:</strong> движение, проклятье</p>\n<p><strong>Перезарядка / Условия:</strong> 1d4 урона при остановке | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Скорость +15 фт. Переместился меньше 10 фт в ход — 1d4 урона.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "wCHGTyNn7S5O0G23": {
+        "_id": "wCHGTyNn7S5O0G23",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "green",
+      "rarity_label": "Зелёный",
+      "category": "МОБИЛЬНОСТЬ",
+      "tags": [
+        "движение",
+        "проклятье"
+      ],
+      "cooldown": "1d4 урона при остановке",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

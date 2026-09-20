@@ -1,0 +1,61 @@
+{
+  "_id": "aGwFdqaeyxuhVbIg",
+  "name": "Предоплата",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> РЕСУРС | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> проклятье</p>\n<p><strong>Перезарядка / Условия:</strong> Первый временный уровень теряется | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>+15 временных HP в начале каждого этажа. Первый временный уровень этажа без выбора навыка.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "QaehbHuGfyKFiA4L": {
+        "_id": "QaehbHuGfyKFiA4L",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "РЕСУРС",
+      "tags": [
+        "проклятье"
+      ],
+      "cooldown": "Первый временный уровень теряется",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

@@ -1,0 +1,14 @@
+# Зависимости Node.js
+node_modules/
+
+# Системный мусор 
+.DS_Store
+Thumbs.db
+
+# Логи
+npm-debug.log
+
+# Временные файлы баз данных LevelDB
+LOCK
+LOG
+LOG.old

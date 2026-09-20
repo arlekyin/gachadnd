@@ -1,0 +1,61 @@
+{
+  "_id": "5zTJyLPeSWd3I28v",
+  "name": "Часы с кукушкой",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/green_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> АНОМАЛИЯ | <strong>Редкость:</strong> Зелёный</p>\n<p><strong>Теги синергий:</strong> аномалия</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Всегда точно знаешь сколько событий осталось и сколько времени до закрытия выхода.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "PxtWN5MU9m5oWBUZ": {
+        "_id": "PxtWN5MU9m5oWBUZ",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "green",
+      "rarity_label": "Зелёный",
+      "category": "АНОМАЛИЯ",
+      "tags": [
+        "аномалия"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

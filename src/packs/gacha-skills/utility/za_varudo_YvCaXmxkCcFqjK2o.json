@@ -1,0 +1,62 @@
+{
+  "_id": "YvCaXmxkCcFqjK2o",
+  "name": "ЗА ВАРУДО",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/red_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УТИЛИТА | <strong>Редкость:</strong> Красный</p>\n<p><strong>Теги синергий:</strong> аномалия, разум</p>\n<p><strong>Перезарядка / Условия:</strong> 1/этаж | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Останавливаешь время: перемещаешься куда угодно в 60 фт, переставляешь предмета/существа.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "c7HiPCpn8VfuNRNp": {
+        "_id": "c7HiPCpn8VfuNRNp",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "red",
+      "rarity_label": "Красный",
+      "category": "УТИЛИТА",
+      "tags": [
+        "аномалия",
+        "разум"
+      ],
+      "cooldown": "1/этаж",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

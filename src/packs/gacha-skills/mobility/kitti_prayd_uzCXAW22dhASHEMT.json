@@ -1,0 +1,62 @@
+{
+  "_id": "uzCXAW22dhASHEMT",
+  "name": "Китти Прайд",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> МОБИЛЬНОСТЬ | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> аномалия, движение</p>\n<p><strong>Перезарядка / Условия:</strong> 1/короткий отдых | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Пройди сквозь стену толщиной до 5 фт. Застрять нельзя.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "pemVyKigcVELMIFK": {
+        "_id": "pemVyKigcVELMIFK",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "МОБИЛЬНОСТЬ",
+      "tags": [
+        "аномалия",
+        "движение"
+      ],
+      "cooldown": "1/короткий отдых",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

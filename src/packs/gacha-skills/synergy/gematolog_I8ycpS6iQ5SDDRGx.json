@@ -1,0 +1,61 @@
+{
+  "_id": "I8ycpS6iQ5SDDRGx",
+  "name": "Гематолог",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> СИНЕРГИЯ | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> кровь</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Когда срабатывает любой ваш навык [кровь] — восстановите (1 + уровень этажа) HP.\n\n**Условие специальной синергии:**\n- **Целевой тег:** `кровь` (мин. стаков: 1)\n- **Бонусный эффект:** +2 HP при каждом [кровь] ({count} навыков)</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "aQ99tZ5qW3I2OC6u": {
+        "_id": "aQ99tZ5qW3I2OC6u",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "СИНЕРГИЯ",
+      "tags": [
+        "кровь"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

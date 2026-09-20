@@ -1,0 +1,61 @@
+{
+  "_id": "BgJFbIfgjanNDRQE",
+  "name": "Феликс Фелицис",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УТИЛИТА | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> разум</p>\n<p><strong>Перезарядка / Условия:</strong> 1/этаж | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Объяви до броска: следующий твой d20 считается выпавшим на 20.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "u2aMsNaO2Gk1Cfik": {
+        "_id": "u2aMsNaO2Gk1Cfik",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "УТИЛИТА",
+      "tags": [
+        "разум"
+      ],
+      "cooldown": "1/этаж",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

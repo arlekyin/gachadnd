@@ -1,0 +1,61 @@
+{
+  "_id": "O8hdLd05DdpYd5DH",
+  "name": "Щит Капитана",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/green_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> ЗАЩИТА | <strong>Редкость:</strong> Зелёный</p>\n<p><strong>Теги синергий:</strong> щит</p>\n<p><strong>Перезарядка / Условия:</strong> 1/раунд | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Снижай входящий урон от одной атаки на 1d6.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "livkq5CAwFjHl572": {
+        "_id": "livkq5CAwFjHl572",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "green",
+      "rarity_label": "Зелёный",
+      "category": "ЗАЩИТА",
+      "tags": [
+        "щит"
+      ],
+      "cooldown": "1/раунд",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

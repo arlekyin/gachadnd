@@ -1,0 +1,61 @@
+{
+  "_id": "CtP2IgyWH9NcuGmt",
+  "name": "Сингулярность",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/red_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> СИНЕРГИЯ | <strong>Редкость:</strong> Красный</p>\n<p><strong>Теги синергий:</strong> аномалия</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>При взятии выбери тег. Все твои навыки считаются также имеющими этот тег.\n\n**Условие специальной синергии:**\n- **Целевой тег:** `None` (мин. стаков: 1)\n- **Бонусный эффект:** Выбери тег — все навыки его получают\n\n---\n\n<a id=\"category-урон\"></a>\n## 📁 Категория: УРОН (19 шт.)</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "rkaPsDFJvijKk9Xi": {
+        "_id": "rkaPsDFJvijKk9Xi",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "red",
+      "rarity_label": "Красный",
+      "category": "СИНЕРГИЯ",
+      "tags": [
+        "аномалия"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

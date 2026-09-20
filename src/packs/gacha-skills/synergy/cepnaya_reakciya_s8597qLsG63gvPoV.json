@@ -1,0 +1,61 @@
+{
+  "_id": "s8597qLsG63gvPoV",
+  "name": "Цепная реакция",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> СИНЕРГИЯ | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> взрыв</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Навыки [взрыв] наносят +1d6 урона за каждый другой ваш навык [взрыв].\n\n**Условие специальной синергии:**\n- **Целевой тег:** `взрыв` (мин. стаков: 2)\n- **Бонусный эффект:** +{value}d6 к взрывам ({count} [взрыв])</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "DYFIVRw1tbvQgGfm": {
+        "_id": "DYFIVRw1tbvQgGfm",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "СИНЕРГИЯ",
+      "tags": [
+        "взрыв"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}
