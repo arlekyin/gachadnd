@@ -1,0 +1,61 @@
+{
+  "_id": "YisDWvuB2D7Y7Ngt",
+  "name": "Давай по новой Миша, всё хуйня",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УТИЛИТА | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> разум</p>\n<p><strong>Перезарядка / Условия:</strong> 1/бой | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Раз за бой можно объявить «Сохранение». В конце любого следующего раунда можно объявить «Загрузка» — все откатываются к сохранённому состоянию.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "maxnz10iay7VIvN4": {
+        "_id": "maxnz10iay7VIvN4",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "УТИЛИТА",
+      "tags": [
+        "разум"
+      ],
+      "cooldown": "1/бой",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

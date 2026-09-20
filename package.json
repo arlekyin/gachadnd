@@ -1,0 +1,17 @@
+{
+  "name": "gachadnd",
+  "version": "1.0.0",
+  "main": "import_skills_macro.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "fvtt package pack gacha-skills --in ./src/packs/gacha-skills --out ./packs/gacha-skills",
+    "unpack": "fvtt package unpack gacha-skills --in ./packs/gacha-skills --out ./src/packs/gacha-skills"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@foundryvtt/foundryvtt-cli": "^3.0.4"
+  }
+}

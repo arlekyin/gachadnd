@@ -1,0 +1,61 @@
+{
+  "_id": "JGNVHWTtXntgPcuH",
+  "name": "Каска",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/grey_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> ЗАЩИТА | <strong>Редкость:</strong> Серый</p>\n<p><strong>Теги синергий:</strong> щит</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Иммунитет к урону от падающих сверху предметов меньше ведра.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "WWyYz8EUyAiFuyJF": {
+        "_id": "WWyYz8EUyAiFuyJF",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "gray",
+      "rarity_label": "Серый",
+      "category": "ЗАЩИТА",
+      "tags": [
+        "щит"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

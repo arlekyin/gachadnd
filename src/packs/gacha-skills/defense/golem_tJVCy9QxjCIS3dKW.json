@@ -1,0 +1,62 @@
+{
+  "_id": "tJVCy9QxjCIS3dKW",
+  "name": "Голем",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> ЗАЩИТА | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> проклятье, щит</p>\n<p><strong>Перезарядка / Условия:</strong> Скорость −10 фт | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>+3 AC. Скорость −10 фт.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "huJXoMyjzu627OTE": {
+        "_id": "huJXoMyjzu627OTE",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "ЗАЩИТА",
+      "tags": [
+        "проклятье",
+        "щит"
+      ],
+      "cooldown": "Скорость −10 фт",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

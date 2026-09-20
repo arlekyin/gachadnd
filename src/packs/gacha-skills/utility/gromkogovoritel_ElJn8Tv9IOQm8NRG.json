@@ -1,0 +1,62 @@
+{
+  "_id": "ElJn8Tv9IOQm8NRG",
+  "name": "Громкоговоритель",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/green_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УТИЛИТА | <strong>Редкость:</strong> Зелёный</p>\n<p><strong>Теги синергий:</strong> проклятье, разум</p>\n<p><strong>Перезарядка / Условия:</strong> Скрытность с помехой | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Голос слышен на 300 фт. +2 к Запугиванию. Шептать невозможно.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "dKJOjkXvafzYTQmR": {
+        "_id": "dKJOjkXvafzYTQmR",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "green",
+      "rarity_label": "Зелёный",
+      "category": "УТИЛИТА",
+      "tags": [
+        "проклятье",
+        "разум"
+      ],
+      "cooldown": "Скрытность с помехой",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "_id": "r4LSLSFiM1lVLzoe",
+  "name": "Фанатик",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> СИНЕРГИЯ | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> проклятье</p>\n<p><strong>Перезарядка / Условия:</strong> −1 урон без тега | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>При взятии выбери тег. Навыки с ним: +2 к урону, +1 к СЛ. Навыки без него: −1 к урону.\n\n**Условие специальной синергии:**\n- **Целевой тег:** `None` (мин. стаков: 1)\n- **Бонусный эффект:** Выбери тег: +2 урон/+1 СЛ с ним</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "lApX9Bbnasab42Fw": {
+        "_id": "lApX9Bbnasab42Fw",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "СИНЕРГИЯ",
+      "tags": [
+        "проклятье"
+      ],
+      "cooldown": "−1 урон без тега",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

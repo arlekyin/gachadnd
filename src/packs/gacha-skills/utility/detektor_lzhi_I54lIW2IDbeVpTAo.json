@@ -1,0 +1,62 @@
+{
+  "_id": "I54lIW2IDbeVpTAo",
+  "name": "Детектор лжи",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УТИЛИТА | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> проклятье, разум</p>\n<p><strong>Перезарядка / Условия:</strong> Сам не можешь лгать | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Всегда знаешь когда лгут тебе. Сам лгать физически не можешь.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "cQzwXzVbjRkkC5lz": {
+        "_id": "cQzwXzVbjRkkC5lz",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "УТИЛИТА",
+      "tags": [
+        "проклятье",
+        "разум"
+      ],
+      "cooldown": "Сам не можешь лгать",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

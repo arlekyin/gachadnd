@@ -1,0 +1,62 @@
+{
+  "_id": "cFKpExvzlGbKXDMk",
+  "name": "Баг в Матрице",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> ПАМЯТЬ | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> память, аномалия</p>\n<p><strong>Перезарядка / Условия:</strong> 1/бой | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Выберите 1 кристалл из Хранилища Памяти и создайте его точную временную копию. Копия исчезает при переходе на следующий этаж.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "jvwUiqBsLgpDpFPS": {
+        "_id": "jvwUiqBsLgpDpFPS",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "ПАМЯТЬ",
+      "tags": [
+        "память",
+        "аномалия"
+      ],
+      "cooldown": "1/бой",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

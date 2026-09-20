@@ -1,0 +1,62 @@
+{
+  "_id": "kxZIqy9MHFLRjXh7",
+  "name": "Должник",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> АНОМАЛИЯ | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> аномалия, проклятье</p>\n<p><strong>Перезарядка / Условия:</strong> ВЕСЬ лут конфискуется | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>При смерти на этаже возвращаешься в хаб живым.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "Qy5xNYSJjT04cmWp": {
+        "_id": "Qy5xNYSJjT04cmWp",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "АНОМАЛИЯ",
+      "tags": [
+        "аномалия",
+        "проклятье"
+      ],
+      "cooldown": "ВЕСЬ лут конфискуется",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

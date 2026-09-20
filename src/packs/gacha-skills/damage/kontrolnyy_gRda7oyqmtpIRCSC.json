@@ -1,0 +1,61 @@
+{
+  "_id": "gRda7oyqmtpIRCSC",
+  "name": "Контрольный",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/blue_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УРОН | <strong>Редкость:</strong> Синий</p>\n<p><strong>Теги синергий:</strong> казнь</p>\n<p><strong>Перезарядка / Условия:</strong> 1/бой | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Атака по сбитой, схваченной или ослеплённой цели с преимуществом — автокрит при попадании.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "ajGIIs8wESLQv3nx": {
+        "_id": "ajGIIs8wESLQv3nx",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "blue",
+      "rarity_label": "Синий",
+      "category": "УРОН",
+      "tags": [
+        "казнь"
+      ],
+      "cooldown": "1/бой",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

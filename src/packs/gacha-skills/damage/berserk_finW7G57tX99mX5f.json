@@ -1,0 +1,62 @@
+{
+  "_id": "finW7G57tX99mX5f",
+  "name": "Берсерк",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/green_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УРОН | <strong>Редкость:</strong> Зелёный</p>\n<p><strong>Теги синергий:</strong> кровь, проклятье</p>\n<p><strong>Перезарядка / Условия:</strong> +2 к урону / −2 AC в бою | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>+2 к урону всех атак. −2 AC пока в бою.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "CDh1aR9rF481nBEI": {
+        "_id": "CDh1aR9rF481nBEI",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "green",
+      "rarity_label": "Зелёный",
+      "category": "УРОН",
+      "tags": [
+        "кровь",
+        "проклятье"
+      ],
+      "cooldown": "+2 к урону / −2 AC в бою",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

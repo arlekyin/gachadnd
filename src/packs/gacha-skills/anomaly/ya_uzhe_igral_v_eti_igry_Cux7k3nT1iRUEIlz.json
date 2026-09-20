@@ -1,0 +1,61 @@
+{
+  "_id": "Cux7k3nT1iRUEIlz",
+  "name": "Я уже играл в эти игры",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/grey_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> АНОМАЛИЯ | <strong>Редкость:</strong> Серый</p>\n<p><strong>Теги синергий:</strong> аномалия</p>\n<p><strong>Перезарядка / Условия:</strong> Нет | <strong>Макс. стаков:</strong> 3</p>\n<hr>\n<p>Всегда находишь на стенах надписи предыдущих искателей.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "CXeazrIz5LXiRK1z": {
+        "_id": "CXeazrIz5LXiRK1z",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "gray",
+      "rarity_label": "Серый",
+      "category": "АНОМАЛИЯ",
+      "tags": [
+        "аномалия"
+      ],
+      "cooldown": "Нет",
+      "max_stacks": 3,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}

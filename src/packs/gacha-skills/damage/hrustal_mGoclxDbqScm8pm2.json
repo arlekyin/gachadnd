@@ -1,0 +1,61 @@
+{
+  "_id": "mGoclxDbqScm8pm2",
+  "name": "Хрусталь",
+  "type": "feat",
+  "img": "modules/gachadnd/assets/icons/skills/purple_fog_active.webp",
+  "system": {
+    "description": {
+      "value": "<p><strong>Категория:</strong> УРОН | <strong>Редкость:</strong> Фиолетовый</p>\n<p><strong>Теги синергий:</strong> проклятье</p>\n<p><strong>Перезарядка / Условия:</strong> Входящий урон +50% | <strong>Макс. стаков:</strong> 1</p>\n<hr>\n<p>Весь твой урон +50%. Весь входящий урон по тебе +50%.</p>",
+      "chat": "",
+      "unidentified": ""
+    },
+    "source": "Gacha Roguelike DnD5e",
+    "type": {
+      "value": "feat",
+      "subtype": ""
+    },
+    "activities": {
+      "Az6hFh6ys4j5uAGN": {
+        "_id": "Az6hFh6ys4j5uAGN",
+        "type": "utility",
+        "name": "Активировать навык",
+        "activation": {
+          "type": "special",
+          "value": null,
+          "condition": "",
+          "override": false
+        },
+        "consumption": {
+          "targets": [],
+          "scaling": {
+            "allowed": false
+          }
+        },
+        "uses": {
+          "spent": 0,
+          "max": "",
+          "recovery": []
+        }
+      }
+    }
+  },
+  "flags": {
+    "gachadnd": {
+      "rarity": "purple",
+      "rarity_label": "Фиолетовый",
+      "category": "УРОН",
+      "tags": [
+        "проклятье"
+      ],
+      "cooldown": "Входящий урон +50%",
+      "max_stacks": 1,
+      "is_active": true
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  }
+}
