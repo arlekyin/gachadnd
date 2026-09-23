@@ -4,9 +4,13 @@ node_modules/
 # Системный мусор 
 .DS_Store
 Thumbs.db
+*_old_json
+*dist
 
 # Логи
 npm-debug.log
+*.log
+*.ldb
 
 # Временные файлы баз данных LevelDB
 LOCK

@@ -1,0 +1,12 @@
+id: fanatik_r4LSLSFIm1IVLzoe
+name: Фанатик
+rarity: blue
+category: СИНЕРГИЯ
+tags:
+  - проклятье
+description: Ваша вера требует жертв. Вы получаете глобальный бонус +2 к броскам атаки. Однако, за каждый экипированный навык без тега [проклятье] вы получаете накопительный штраф -1 к броскам урона (редактируйте штраф в Активных Эффектах вручную).
+activation: none
+changes:
+  - key: system.bonuses.All-Damage
+    mode: add
+    value: '+2'

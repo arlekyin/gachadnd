@@ -1,0 +1,15 @@
+id: numerolog_ntbOzAJbck35zYEC
+name: Нумеролог
+rarity: gray
+category: СИНЕРГИЯ
+tags:
+  - разум
+description: Баланс во всем. Если у вас экипировано чётное количество навыков, вы получаете +1 к Инициативе. Если нечётное — ваша базовая скорость увеличивается на 10 футов. (Переключайте активный эффект в настройках кристалла).
+activation: none
+changes:
+  - key: system.attributes.init.bonus
+    mode: add
+    value: '+1'
+  - key: system.attributes.movement.walk
+    mode: add
+    value: '+10'

@@ -1,0 +1,10 @@
+id: "1uznQiossqozzppS"
+name: "Это в рамках правил"
+rarity: "blue"
+category: "УТИЛИТА"
+tags:
+  - разум
+description: "Вы объявляете правило из любой другой системы НРИ вслух за столом. Мастер импровизирует эффект, исходя из озвученного правила."
+activation: "special"
+uses: 1
+recovery: "scene"
