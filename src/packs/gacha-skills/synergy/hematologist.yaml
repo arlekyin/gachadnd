@@ -1,0 +1,11 @@
+id: gematolog_l8ycps6iQ5SDDRGx
+name: Гематолог
+rarity: blue
+category: СИНЕРГИЯ
+tags:
+  - кровь
+description: Ваша магия питается жизненной силой. Когда срабатывает любой ваш активный навык с тегом [кровь], вы можете восстановить количество HP, [[/heal 1+@prof]].
+activation: special
+damage:
+  - formula: 1 + @prof
+    type: healing

@@ -1,0 +1,15 @@
+id: "IiJDyQcyI5YzRpkh"
+name: "Маятник гипнотизёра"
+rarity: "Синий"
+category: "УТИЛИТА"
+tags:
+  - разум
+description: "Вы пытаетесь заворожить существо в пределах 30 футов. Цель должна преуспеть в спасброске Мудрости против вашей сложности заклинаний, иначе она становится ошеломленной до конца своего следующего хода."
+activation: "action"
+range: "30"
+uses: 3
+recovery: "short"
+save:
+  ability: "wis"
+  dc:
+    calculation: "spell"

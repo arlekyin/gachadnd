@@ -1,0 +1,12 @@
+id: "vTNmQtOpjXDFF8TV"
+name: "Гэндальф"
+rarity: "blue"
+category: "УТИЛИТА"
+tags:
+  - щит
+description: "До начала следующего хода враги не могут войти в клетки в 5 фт от тебя. Существо, пытающееся войти в эту зону, должно преуспеть в спасброске Силы, иначе его движение прерывается."
+activation: "bonus"
+uses: 3
+recovery: "short"
+save:
+  ability: "str"

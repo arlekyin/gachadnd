@@ -77,7 +77,7 @@ Hooks.on('getSceneControlButtons', (controls) => {
 
     safeAddTool({
         name: 'gachadnd-terminal',
-        title: 'Терминал Памяти',
+        title: 'Терминал Тумана',
         icon: 'fas fa-brain',
         visible: true,
         button: true,
