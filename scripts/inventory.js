@@ -4,6 +4,7 @@
 
 import { MODULE_ID } from "./main.js";
 import { getSynergyDictionary } from "./synergy-data.js";
+import { isMemorySkill } from "./synergy.js";
 
 const RARITY_MAP = {
     'gray': { label: 'Серый', color: '#9d9d9d', class: 'rarity-gray' },
@@ -148,11 +149,11 @@ Hooks.on('deleteItem', (item, options, userId) => {
     const actor = item.actor;
     if (!actor) return;
 
-    const flags = item.flags?.[MODULE_ID];
-    if (flags && (flags.tagEmitter || flags.customEffect)) {
-        ui.notifications.info(`🗑️ Навык «${item.name}» удалён из Памяти.`);
-        Hooks.callAll("gachadnd.synergyUpdated", actor);
-    }
+    if (!isMemorySkill(item)) return;
+    ui.notifications.info(`🗑️ Навык «${item.name}» удалён из Памяти.`);
+    // Пересчёт нужен, только если навык участвовал в синергиях
+    const flags = item.flags[MODULE_ID];
+    if (flags.is_active || flags.tagEmitter) Hooks.callAll("gachadnd.synergyUpdated", actor);
 });
 
 // ==========================================

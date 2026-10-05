@@ -3,23 +3,17 @@
  */
 
 import { MODULE_ID } from "./main.js";
-import { getSynergyDictionary } from "./synergy-data.js";
+import { getSynergyDictionary, UNIVERSAL_DC_FORMULA } from "./synergy-data.js";
 
 const actorUpdateLocks = new Set();
+const actorUpdatePending = new Set();
+
+// Версия формата выдаваемых способностей синергий. Способности старой версии пересоздаются.
+const SYNERGY_FEATURE_VERSION = 2;
 
 // ==========================================
 // 0. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ==========================================
-
-function getUniversalDC(actor) {
-    if (!actor || !actor.system || !actor.system.abilities) return 10;
-    let maxMod = -5;
-    for (const [key, ability] of Object.entries(actor.system.abilities)) {
-        if (ability.mod > maxMod) maxMod = ability.mod;
-    }
-    const prof = actor.system.attributes.prof || 2;
-    return 8 + maxMod + prof;
-}
 
 function createSynergyFeature(name, icon, description, featureData) {
     const activityId = foundry.utils.randomID ? foundry.utils.randomID() : Math.random().toString(36).substring(2, 10);
@@ -48,7 +42,7 @@ function createSynergyFeature(name, icon, description, featureData) {
     }
 
     if (saveAbility) {
-        activityData.save = { ability: [saveAbility], dc: { calculation: 'custom', formula: String(dc) } };
+        activityData.save = { ability: [saveAbility], dc: { calculation: '', formula: String(dc) } };
     }
 
     if (damageParts && damageParts.length > 0) {
@@ -71,30 +65,77 @@ function createSynergyFeature(name, icon, description, featureData) {
 }
 
 // ==========================================
+// ЭКИПИРОВКА НАВЫКОВ
+// ==========================================
+
+// Навык Памяти: черта, полученная из кристалла или компендиума навыков
+export function isMemorySkill(item) {
+    const flags = item?.flags?.[MODULE_ID];
+    return item?.type === 'feat' && !!flags?.skill_name && !flags.is_crystal_item && !flags.is_synergy_item;
+}
+
+// Суммарная прибавка к абсолютному лимиту слотов от экипированных навыков
+export function getSlotBonus(items) {
+    return items.reduce((sum, i) => sum + (Number(i.flags?.[MODULE_ID]?.slot_bonus) || 0), 0);
+}
+
+// Обновления эффектов навыка: передаваемые эффекты действуют только у экипированного навыка
+function getEffectSyncUpdates(item, active) {
+    return item.effects
+        .filter(e => e.transfer && (e.disabled === active))
+        .map(e => ({ _id: e.id, disabled: !active }));
+}
+
+export async function setSkillEquipped(item, active) {
+    await item.setFlag(MODULE_ID, 'is_active', active);
+    const updates = getEffectSyncUpdates(item, active);
+    if (updates.length) await item.updateEmbeddedDocuments('ActiveEffect', updates);
+}
+
+// Новые навыки на листе создаются неэкипированными: их эффекты выключены до экипировки
+Hooks.on('preCreateItem', (item) => {
+    if (!(item.parent instanceof Actor) || !isMemorySkill(item)) return;
+    if (item.flags[MODULE_ID].is_active) return;
+    const effects = item._source.effects ?? [];
+    if (!effects.some(e => e.transfer !== false && !e.disabled)) return;
+    item.updateSource({ effects: effects.map(e => (e.transfer === false ? e : { ...e, disabled: true })) });
+});
+
+Hooks.on('gachadnd.synergyUpdated', (actor) => updateActorSynergies(actor));
+
+// ==========================================
 // 1. ГЛАВНАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ АКТЕРА
 // ==========================================
 export async function updateActorSynergies(actor) {
     if (!actor) return;
     
-    if (actorUpdateLocks.has(actor.id)) return;
+    // Повторный вызов во время расчёта не теряется: расчёт перезапускается после текущего
+    if (actorUpdateLocks.has(actor.id)) {
+        actorUpdatePending.add(actor.id);
+        return;
+    }
     actorUpdateLocks.add(actor.id);
 
     try {
         console.log(`[GachaDND] === РАСЧЕТ СИНЕРГИЙ ЗАПУЩЕН (${actor.name}) ===`);
         
-        const gachaItems = actor.items.filter(i => i.type === 'feat' && i.flags?.[MODULE_ID]?.skill_name);
+        const gachaItems = actor.items.filter(isMemorySkill);
         const activeItems = gachaItems.filter(i => i.flags[MODULE_ID]?.is_active);
-        
+
+        // --- 0. СИНХРОНИЗАЦИЯ ЭФФЕКТОВ С ЭКИПИРОВКОЙ ---
+        for (const item of gachaItems) {
+            const updates = getEffectSyncUpdates(item, !!item.flags[MODULE_ID]?.is_active);
+            if (updates.length) await item.updateEmbeddedDocuments('ActiveEffect', updates);
+        }
+
         // --- А. МАТЕМАТИКА ПЕРЕГРУЗКИ ---
         const level = actor.system.details.level || 1;
         const naturalCap = 6 + Math.floor(level / 2);
-        const hasCyberpsychosis = activeItems.some(i => i.flags[MODULE_ID]?.skill_name === 'Киберпсихоз');
-        const absoluteCap = naturalCap + (hasCyberpsychosis ? 4 : 0);
         const activeCount = activeItems.length;
 
         const overloadCount = activeCount - naturalCap;
         const overloadEffectName = "Системная перегрузка (Киберпсихоз)";
-        let existingOverload = actor.effects.find(e => e.name === overloadEffectName);
+        let existingOverload = actor.effects.find(e => e.flags?.[MODULE_ID]?.is_system_effect);
 
         if (overloadCount > 0) {
             const statPenalty = overloadCount * -2;
@@ -155,8 +196,7 @@ export async function updateActorSynergies(actor) {
 
         const earnedSynergies = [];
         let itemsToGrant = []; 
-        const currentDc = getUniversalDC(actor);
-        const currentDictionary = getSynergyDictionary(currentDc);
+        const currentDictionary = getSynergyDictionary(UNIVERSAL_DC_FORMULA);
 
         for (const [tag, config] of Object.entries(currentDictionary)) {
             const count = tagCounts[tag] || 0;
@@ -175,7 +215,7 @@ export async function updateActorSynergies(actor) {
                             threshold.desc, 
                             threshold.grantedFeature
                         );
-                        featureData.flags = { [MODULE_ID]: { is_synergy_item: true, tagSource: tag } };
+                        featureData.flags = { [MODULE_ID]: { is_synergy_item: true, tagSource: tag, feature_version: SYNERGY_FEATURE_VERSION } };
                         itemsToGrant.push(featureData);
                     }
                 }
@@ -240,8 +280,9 @@ export async function updateActorSynergies(actor) {
         for (const item of existingGrantedItems) {
             const tag = item.flags[MODULE_ID].tagSource;
             const isEarned = itemsToGrant.some(grant => grant.flags[MODULE_ID].tagSource === tag && grant.name === item.name);
-            
-            if (!isEarned || seenItemNames.has(item.name)) {
+            const isOutdated = item.flags[MODULE_ID].feature_version !== SYNERGY_FEATURE_VERSION;
+
+            if (!isEarned || isOutdated || seenItemNames.has(item.name)) {
                 itemsToDelete.push(item.id);
             } else {
                 seenItemNames.add(item.name);
@@ -270,5 +311,6 @@ export async function updateActorSynergies(actor) {
         console.error(`[GachaDND] ❌ КРИТИЧЕСКАЯ ОШИБКА РАСЧЕТА:`, err);
     } finally {
         actorUpdateLocks.delete(actor.id);
+        if (actorUpdatePending.delete(actor.id)) await updateActorSynergies(actor);
     }
 }

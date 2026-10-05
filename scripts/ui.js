@@ -3,7 +3,7 @@
  */
 
 import { MODULE_ID } from "./main.js";
-import { updateActorSynergies } from "./synergy.js";
+import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } from "./synergy.js";
 
 export class MemoryTerminal extends Application {
     constructor(actor, options = {}) {
@@ -32,10 +32,11 @@ export class MemoryTerminal extends Application {
         const level = actor.system.details.level || 1;
         const naturalCap = 6 + Math.floor(level / 2);
         
-        const gachaItems = actor.items.filter(i => i.type === 'feat' && i.flags?.[MODULE_ID]?.skill_name);
+        const gachaItems = actor.items.filter(isMemorySkill);
         const activeItems = gachaItems.filter(i => i.flags[MODULE_ID]?.is_active);
-        const hasCyberpsychosis = activeItems.some(i => i.flags[MODULE_ID]?.skill_name === 'Киберпсихоз');
-        const absoluteCap = naturalCap + (hasCyberpsychosis ? 4 : 0);
+        const slotBonus = getSlotBonus(activeItems);
+        const hasCyberpsychosis = slotBonus > 0;
+        const absoluteCap = naturalCap + slotBonus;
         const activeCount = activeItems.length;
         const isOverloaded = activeCount > naturalCap;
 
@@ -78,6 +79,7 @@ export class MemoryTerminal extends Application {
                 if (period === 'sr') recoveryText = 'КО';
                 else if (period === 'lr') recoveryText = 'ДО';
                 else if (period === 'day') recoveryText = 'ДЕНЬ';
+                else recoveryText = CONFIG.DND5E.limitedUsePeriods[period]?.abbreviation ?? '';
             }
         } else {
             // Приоритет 2: Фолбэк на старые флаги, если навык еще не перевыдан
@@ -219,7 +221,7 @@ export class MemoryTerminal extends Application {
         `}).join('');
 
         passiveHtml += ctx.synergyEffects.map(eff => {
-            const isCyber = eff.name.includes('Киберпсихоз');
+            const isCyber = !!eff.flags?.[MODULE_ID]?.is_system_effect;
             const color = isCyber ? '#ff3b3b' : '#c9a75d';
             const subtitle = isCyber ? "Дебафф Системы" : "Пассивная Синергия";
             return `
@@ -391,14 +393,14 @@ export class MemoryTerminal extends Application {
                 const isActivating = !currentActive;
                 let currentAbsoluteCap = ctx.absoluteCap;
 
-                if (isActivating && item.flags[MODULE_ID]?.skill_name === 'Киберпсихоз') currentAbsoluteCap += 4;
+                if (isActivating) currentAbsoluteCap += Number(item.flags[MODULE_ID]?.slot_bonus) || 0;
                 if (isActivating && ctx.activeCount >= currentAbsoluteCap && !currentActive) {
                     ui.notifications.error(`Достигнут абсолютный предел (${currentAbsoluteCap}).`);
                     btn.disabled = false;
                     return;
                 }
 
-                await item.setFlag(MODULE_ID, 'is_active', isActivating);
+                await setSkillEquipped(item, isActivating);
                 await updateActorSynergies(this.actor);
                 this.render(false);
             });
