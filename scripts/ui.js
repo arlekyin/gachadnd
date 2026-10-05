@@ -163,7 +163,7 @@ export class MemoryTerminal extends Application {
                         <img src="${item.img}" style="width: 44px; height: 44px; border-radius: 4px; border: 1px solid ${borderColor}; flex-shrink: 0;">
                         <div style="overflow: hidden;">
                             <div style="font-family: 'Modesto Condensed', serif; font-weight: bold; font-size: 1.4em; color: ${isActive ? '#f5efe6' : '#8c8275'};">${item.name}</div>
-                            <div style="font-size: 0.85em; color: #7a7062; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">${category} ${tags ? `• [${tags}]` : ''}</div>
+                            <div style="font-size: 0.85em; color: #7a7062; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">${category}${(flags.max_rank ?? 1) > 1 ? ` • Ранг ${['I', 'II', 'III'][(flags.rank ?? 1) - 1]}` : ''} ${tags ? `• [${tags}]` : ''}</div>
                         </div>
                     </div>
                     ${this._generateUsesHtml(item)}

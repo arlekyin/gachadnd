@@ -1,0 +1,14 @@
+id: jLbwwxDHgrKJnSMF
+name: Глубокий вдох
+rarity: gray
+tags:
+  - яд
+description: Вы можете задерживать дыхание вдвое дольше обычного.
+activation: none
+ranks:
+  - text: Преимущество на спасброски против вдыхаемых ядов, газов и удушья.
+  - text: Сопротивление урону ядом.
+    changes:
+      - key: system.traits.dr.value
+        mode: add
+        value: poison

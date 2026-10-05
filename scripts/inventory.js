@@ -15,39 +15,58 @@ const RARITY_MAP = {
     'orange': { label: 'Оранжевый', color: '#ff8000', class: 'rarity-orange' }
 };
 
-function generate16CharID() {
-    return foundry.utils.randomID ? foundry.utils.randomID() : Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+// Вместимость Памяти: навыки на листе, включая неэкипированные
+export const MEMORY_CAPACITY = 20;
+
+function findMemorySkill(actor, skillName) {
+    const key = skillName.trim().toLowerCase();
+    return actor.items.find(i => isMemorySkill(i) && i.flags[MODULE_ID].skill_name.trim().toLowerCase() === key);
 }
 
-async function absorbCrystal(actor, item) {
-    if (!actor || !item) return false;
+function canRankUp(item) {
+    const flags = item.flags[MODULE_ID];
+    return (flags.rank ?? 1) < (flags.max_rank ?? 1) && Array.isArray(flags.rank_data);
+}
 
-    const gachaFlags = item.flags?.gachadnd || {};
-    const skillName = gachaFlags.skill_name || item.name.replace(/^Кристалл:\s*/, '');
-    console.log(`🎲 [GachaDND Absorb] Поглощение предмета "${item.name}" (Навык: "${skillName}") для персонажа ${actor.name}`);
+async function addBurned(actor, count) {
+    await actor.setFlag(MODULE_ID, 'burned_count', (actor.getFlag(MODULE_ID, 'burned_count') || 0) + count);
+}
 
+// Повышает ранг навыка данными ранга из компендиума; расход зарядов и экипировка сохраняются
+async function rankUpSkill(item) {
+    const flags = item.flags[MODULE_ID];
+    const rank = (flags.rank ?? 1) + 1;
+    const data = flags.rank_data[rank - 1];
+
+    await item.update({
+        [`flags.${MODULE_ID}.rank`]: rank,
+        [`flags.${MODULE_ID}.cooldown`]: data.cooldown,
+        'system.description': data.system.description,
+        'system.uses': data.system.uses,
+        'system.activities': data.system.activities
+    });
+
+    const effects = Array.from(item.effects);
+    const updates = data.effects.map((e, i) => {
+        const effect = item.effects.get(e._id) ?? (effects.length === data.effects.length ? effects[i] : null);
+        return effect ? { _id: effect.id, changes: e.changes } : null;
+    }).filter(Boolean);
+    if (updates.length) await item.updateEmbeddedDocuments('ActiveEffect', updates);
+    return rank;
+}
+
+// Данные навыка для листа: запись компендиума навыков или заглушка из описания кристалла
+async function buildSkillData(skillName, { extraFlags = {}, fallbackDescription = '' } = {}) {
     let skillData = null;
     const pack = game.packs.get(`${MODULE_ID}.gacha-skills`) || game.packs.get('world.gacha-skills');
-    
+
     if (pack) {
         const index = await pack.getIndex();
-        const entries = index.filter(i => i.name.toLowerCase() === skillName.toLowerCase());
-        
-        if (entries.length > 0) {
-            const docs = await Promise.all(entries.map(e => pack.getDocument(e._id)));
-            
-            // Умная сортировка: берем самый полный навык (игнорируя пустые копии)
-            docs.sort((a, b) => {
-                const scoreA = (a.flags?.[MODULE_ID] ? 10 : 0) + ((a.system?.description?.value?.length || 0) > 20 ? 5 : 0);
-                const scoreB = (b.flags?.[MODULE_ID] ? 10 : 0) + ((b.system?.description?.value?.length || 0) > 20 ? 5 : 0);
-                return scoreB - scoreA;
-            });
-            
-            skillData = docs[0].toObject();
-        }
+        const entry = index.find(i => i.name.toLowerCase() === skillName.toLowerCase());
+        if (entry) skillData = (await pack.getDocument(entry._id)).toObject();
     }
 
-    const rarity = gachaFlags.rarity || 'gray';
+    const rarity = extraFlags.rarity || skillData?.flags?.[MODULE_ID]?.rarity || 'gray';
     const imgPrefix = rarity === 'gray' ? 'grey' : rarity;
     const activeImg = skillData?.img || `modules/${MODULE_ID}/assets/icons/skills/${imgPrefix}_fog_active.webp`;
 
@@ -57,48 +76,95 @@ async function absorbCrystal(actor, item) {
             type: 'feat',
             img: activeImg,
             system: {
-                description: { value: item.system?.description?.value || "" },
-                source: "Gacha Roguelike DnD5e",
+                description: { value: fallbackDescription },
+                source: { custom: "Gacha Roguelike DnD5e" },
                 type: { value: "feat", subtype: "" }
             }
         };
     }
 
     const featData = foundry.utils.duplicate(skillData);
-    delete featData._id; 
+    delete featData._id;
     featData.type = 'feat';
-    featData.img = activeImg; 
-
-    if (!featData.flags) featData.flags = {};
-    
-    const newFlags = foundry.utils.duplicate(gachaFlags);
-    delete newFlags.is_crystal_item;
-
-    const compendiumFlags = skillData.flags?.[MODULE_ID] || {};
-
+    featData.img = activeImg;
+    featData.flags ??= {};
     featData.flags[MODULE_ID] = {
-        ...compendiumFlags, 
-        ...newFlags,        
-        is_active: false, 
+        ...(skillData.flags?.[MODULE_ID] || {}),
+        ...extraFlags,
+        is_active: false,
         skill_name: skillName
     };
+    delete featData.flags[MODULE_ID].is_crystal_item;
+    return featData;
+}
 
-    if (featData.system && featData.system.activities) {
-        const newActivities = {};
-        for (const [actKey, actVal] of Object.entries(featData.system.activities)) {
-            const newActId = generate16CharID();
-            const actCopy = foundry.utils.duplicate(actVal);
-            actCopy._id = newActId;
-            newActivities[newActId] = actCopy;
-        }
-        featData.system.activities = newActivities;
+/**
+ * Проверка, можно ли добавить навык в Память без принудительного режима.
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function checkMemoryAccess(actor, skillName) {
+    const existing = findMemorySkill(actor, skillName);
+    if (existing) {
+        if (canRankUp(existing)) return { ok: true };
+        return { ok: false, reason: `Навык «${skillName}» уже в Памяти на максимальном ранге.` };
+    }
+    if (actor.items.filter(isMemorySkill).length >= MEMORY_CAPACITY) {
+        return { ok: false, reason: `Память персонажа ${actor.name} переполнена (максимум ${MEMORY_CAPACITY} навыков). Освободите место.` };
+    }
+    return { ok: true };
+}
+
+/**
+ * Добавляет навык в Память персонажа.
+ * Повтор навыка повышает его ранг. В принудительном режиме (Жадность) при переполнении сгорает
+ * случайный неэкипированный навык, а повтор навыка на максимальном ранге сгорает сам.
+ * @returns {Promise<{ status: 'added'|'ranked'|'replaced'|'burned'|'blocked', rank?: number, replacedName?: string, reason?: string }>}
+ */
+export async function addSkillToMemory(actor, skillName, { forced = false, extraFlags = {}, fallbackDescription = '' } = {}) {
+    const existing = findMemorySkill(actor, skillName);
+    if (existing) {
+        if (canRankUp(existing)) return { status: 'ranked', rank: await rankUpSkill(existing) };
+        if (!forced) return { status: 'blocked', reason: checkMemoryAccess(actor, skillName).reason };
+        await addBurned(actor, 1);
+        return { status: 'burned' };
     }
 
+    let replacedName;
+    const memory = actor.items.filter(isMemorySkill);
+    if (memory.length >= MEMORY_CAPACITY) {
+        if (!forced) return { status: 'blocked', reason: checkMemoryAccess(actor, skillName).reason };
+        const candidates = memory.filter(i => !i.flags[MODULE_ID].is_active);
+        if (!candidates.length) {
+            await addBurned(actor, 1);
+            return { status: 'burned' };
+        }
+        const replaced = candidates[Math.floor(Math.random() * candidates.length)];
+        replacedName = replaced.name;
+        await replaced.delete();
+        await addBurned(actor, 1);
+    }
+
+    await actor.createEmbeddedDocuments("Item", [await buildSkillData(skillName, { extraFlags, fallbackDescription })]);
+    return { status: replacedName ? 'replaced' : 'added', replacedName };
+}
+
+async function absorbCrystal(actor, item) {
+    if (!actor || !item) return false;
+
+    const gachaFlags = item.flags?.[MODULE_ID] || {};
+    const skillName = gachaFlags.skill_name || item.name.replace(/^Кристалл:\s*/, '');
+    const { is_crystal_item, ...extraFlags } = gachaFlags;
+
     try {
-        await actor.createEmbeddedDocuments("Item", [featData]);
-        ui.notifications.info(`🧠 Кристалл «${skillName}» поглощён в Память персонажа ${actor.name}!`);
+        const result = await addSkillToMemory(actor, skillName, {
+            extraFlags,
+            fallbackDescription: item.system?.description?.value || ""
+        });
+        if (result.status === 'ranked') ui.notifications.info(`⬆️ Навык «${skillName}» персонажа ${actor.name} повышен до ранга ${result.rank}.`);
+        else if (result.status === 'added') ui.notifications.info(`🧠 Кристалл «${skillName}» поглощён в Память персонажа ${actor.name}!`);
+        else ui.notifications.warn(`⚠️ ${result.reason}`);
     } catch (err) {
-        console.error(`❌ Ошибка создания черты на листе персонажа:`, err);
+        console.error(`❌ Ошибка поглощения кристалла:`, err);
     }
 
     return true;
@@ -120,9 +186,10 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
 
     const actor = item.actor;
     if (actor) {
-        const currentMemoryCount = actor.items.filter(i => i.type === 'feat' && i.flags?.[MODULE_ID]?.skill_name).length;
-        if (currentMemoryCount >= 20) {
-            ui.notifications.warn(`⚠️ Память персонажа ${actor.name} переполнена! (Максимум 20 навыков). Освободите место.`);
+        const skillName = item.flags?.[MODULE_ID]?.skill_name || item.name.replace(/^Кристалл:\s*/, '');
+        const access = checkMemoryAccess(actor, skillName);
+        if (!access.ok) {
+            ui.notifications.warn(`⚠️ ${access.reason}`);
             return false;
         }
     }
@@ -133,6 +200,20 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
     }
     
     return true; 
+});
+
+// Повтор навыка, перенесённый на лист из компендиума, повышает ранг вместо создания копии
+Hooks.on('preCreateItem', (item) => {
+    if (!(item.parent instanceof Actor) || !isMemorySkill(item)) return;
+    const skillName = item.flags[MODULE_ID].skill_name;
+    const existing = findMemorySkill(item.parent, skillName);
+    if (!existing) return;
+    if (canRankUp(existing)) {
+        rankUpSkill(existing).then(rank => ui.notifications.info(`⬆️ Навык «${skillName}» повышен до ранга ${rank}.`));
+    } else {
+        ui.notifications.warn(`⚠️ Навык «${skillName}» уже в Памяти на максимальном ранге.`);
+    }
+    return false;
 });
 
 Hooks.on('dnd5e.postUseActivity', (activity, usageConfig, results) => {
