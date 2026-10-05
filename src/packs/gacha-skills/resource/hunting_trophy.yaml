@@ -1,0 +1,22 @@
+id: nUXApT6Ig6sy5KmK
+name: Охотничий трофей
+rarity: blue
+tags:
+  - казнь
+  - кровь
+description: Когда ваша атака или навык убивает существо, активируйте навык и восстановите 1d6 + бонус мастерства HP. Не чаще 1 раза в ход.
+activation: special
+uses: 1
+recovery: turn
+damage:
+  - formula: 1d6 + @prof
+    type: healing
+ranks:
+  - text: Восстанавливает 2d6 + бонус мастерства HP.
+    damage:
+      - formula: 2d6 + @prof
+        type: healing
+  - text: Восстанавливает (бонус мастерства)d6 + бонус мастерства HP.
+    damage:
+      - formula: (@prof)d6 + @prof
+        type: healing

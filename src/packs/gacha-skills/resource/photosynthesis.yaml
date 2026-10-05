@@ -1,0 +1,21 @@
+id: fTuOgJRGCIp8H5Ja
+name: Фотосинтез
+rarity: gray
+tags:
+  - свет
+description: Завершив короткий отдых на свету, активируйте навык и восстановите 1d6 + бонус мастерства HP сверх обычного отдыха.
+activation: special
+uses: 1
+recovery: short
+damage:
+  - formula: 1d6 + @prof
+    type: healing
+ranks:
+  - text: Восстанавливает 2d6 + бонус мастерства HP.
+    damage:
+      - formula: 2d6 + @prof
+        type: healing
+  - text: Восстанавливает (бонус мастерства)d6 + бонус мастерства HP.
+    damage:
+      - formula: (@prof)d6 + @prof
+        type: healing

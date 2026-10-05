@@ -3,6 +3,8 @@
  */
 
 import { MODULE_ID } from "./main.js";
+import { isMemorySkill } from "./synergy.js";
+import { addSkillToMemory } from "./inventory.js";
 
 const RARITY_WEIGHTS = {
     'gray': 600,
@@ -341,10 +343,39 @@ export class GachaLootTerminal extends Application {
             await targetActor.createEmbeddedDocuments("Item", drops.map(d => d.item.toObject()));
         }
 
-        await this.printLootCard(template.name, drops, targetActor);
+        const forced = await this.applyForcedLoot(template, rarityFilter);
+        await this.printLootCard(template.name, drops, targetActor, forced);
     }
 
-    async printLootCard(roomName, drops, targetActor) {
+    // Жадность: персонажи с экипированным навыком forced_loot получают кристаллы сразу в Память, без выбора
+    async applyForcedLoot(template, rarityFilter) {
+        const results = [];
+        const actors = game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner);
+
+        for (const actor of actors) {
+            const count = actor.items
+                .filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active)
+                .reduce((sum, i) => sum + (Number(i.flags[MODULE_ID].forced_loot) || 0), 0);
+
+            for (let i = 0; i < count; i++) {
+                const rarity = rarityFilter === 'any' ? rollRarity(template.bonusRoll, template.excludeOrange) : rarityFilter;
+                const crystal = await getRandomCrystalByRarity(rarity, template.requiredTag);
+                if (!crystal) continue;
+
+                const { is_crystal_item, ...extraFlags } = crystal._source?.flags?.[MODULE_ID] || {};
+                const skillName = extraFlags.skill_name || crystal.name.replace(/^Кристалл:\s*/, '');
+                const result = await addSkillToMemory(actor, skillName, {
+                    forced: true,
+                    extraFlags,
+                    fallbackDescription: crystal.system?.description?.value || ''
+                });
+                results.push({ actor, skillName, rarity: extraFlags.rarity || rarity, ...result });
+            }
+        }
+        return results;
+    }
+
+    async printLootCard(roomName, drops, targetActor, forced = []) {
         let contentHtml = ``;
         if (drops.length === 0) {
             contentHtml = `<div style="text-align: center; padding: 15px; color: #7a7062;">Ничего ценного...</div>`;
@@ -366,6 +397,18 @@ export class GachaLootTerminal extends Application {
             }).join('');
         }
 
+        const forcedText = {
+            added: () => 'занесён в Память',
+            ranked: r => `ранг повышен до ${r.rank}`,
+            replaced: r => `занесён в Память, сгорел «${r.replacedName}»`,
+            burned: () => 'сгорел'
+        };
+        const forcedHtml = forced.length ? `
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #2a2626;">
+                <div style="color: #ff003c; text-align: center; margin-bottom: 6px;">ЖАДНОСТЬ</div>
+                ${forced.map(r => `<div style="font-size: 0.9em; color: #d0c9c0;"><strong>${r.actor.name}:</strong> <span style="color: ${RARITY_COLORS[r.rarity] || '#aaa'};">${r.skillName}</span> — ${forcedText[r.status]?.(r) ?? r.status}</div>`).join('')}
+            </div>` : '';
+
         const statusText = targetActor ? `<span style="color: #1eff00;">Предметы добавлены: <strong>${targetActor.name}</strong></span>` : `<span style="color: #ffaa00;">Токен не выделен.</span>`;
 
         ChatMessage.create({
@@ -375,6 +418,7 @@ export class GachaLootTerminal extends Application {
                 <h3 style="text-align: center; color: #ede6dc; margin-bottom: 12px;">ДОБЫЧА: <span style="color: #ffaa00;">${roomName.toUpperCase()}</span></h3>
                 ${contentHtml}
                 <div style="text-align: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #2a2626;">${statusText}</div>
+                ${forcedHtml}
             </div>`
         });
     }

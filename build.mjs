@@ -64,8 +64,13 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
-    'uses', 'recovery', 'max_stacks', 'slot_bonus', 'tagEmitter', 'save', 'damage', 'changes'
+    'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'save', 'damage', 'changes', 'ranks'
 ];
+
+// Поля, которые ранг может переопределить. Ранг наследует значения предыдущего ранга.
+const RANK_FIELDS = ['text', 'uses', 'recovery', 'range', 'target', 'save', 'damage', 'changes'];
+const MAX_EXTRA_RANKS = 2;
+const RANK_LABELS = ['I', 'II', 'III'];
 
 // ==========================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -104,6 +109,17 @@ const isNumeric = v => (typeof v === 'number' && v > 0) || (typeof v === 'string
 // ПРОВЕРКА СХЕМЫ
 // ==========================================
 
+// Навык на указанном ранге (1 — базовый): базовые поля + переопределения рангов II..rank
+function resolveRank(skill, rank) {
+    const { ranks = [], ...base } = skill;
+    const resolved = { ...base };
+    for (const override of ranks.slice(0, rank - 1)) {
+        const { text, ...fields } = override ?? {};
+        Object.assign(resolved, fields);
+    }
+    return resolved;
+}
+
 function validateSkill(skill, folder) {
     const errors = [];
     const err = (field, msg) => errors.push(`${field}: ${msg}`);
@@ -140,7 +156,25 @@ function validateSkill(skill, folder) {
     if (skill.recovery !== undefined && !(skill.recovery in RECOVERY_VALUES)) {
         err('recovery', `«${skill.recovery}» — допустимо: ${Object.keys(RECOVERY_VALUES).join(', ')}`);
     }
-    if (skill.max_stacks !== undefined && !isPositiveInt(skill.max_stacks)) err('max_stacks', 'должно быть целым числом больше 0');
+    if (skill.forced_loot !== undefined && !isPositiveInt(skill.forced_loot)) err('forced_loot', 'должно быть целым числом больше 0');
+    if (skill.drawback !== undefined && !isNonEmptyString(skill.drawback)) err('drawback', 'должно быть непустой строкой');
+
+    if (skill.ranks !== undefined) {
+        if (!Array.isArray(skill.ranks) || skill.ranks.length === 0 || skill.ranks.length > MAX_EXTRA_RANKS) {
+            err('ranks', `должен быть списком из 1–${MAX_EXTRA_RANKS} элементов (ранги II и III)`);
+        } else {
+            skill.ranks.forEach((rank, i) => {
+                const label = `ranks[${i}] (ранг ${RANK_LABELS[i + 1]})`;
+                if (!rank || typeof rank !== 'object' || Array.isArray(rank)) return err(label, 'должен быть объектом');
+                Object.keys(rank).forEach(k => {
+                    if (!RANK_FIELDS.includes(k)) err(`${label}.${k}`, `поле нельзя менять по рангам (допустимы: ${RANK_FIELDS.join(', ')})`);
+                });
+                if (!isNonEmptyString(rank.text)) err(`${label}.text`, 'обязательное поле: что даёт ранг');
+                // Ранг проверяется как полноценный навык после наложения переопределений
+                validateSkill(resolveRank(skill, i + 2), folder).forEach(e => errors.push(`${label} → ${e}`));
+            });
+        }
+    }
     if (skill.slot_bonus !== undefined && !isPositiveInt(skill.slot_bonus)) err('slot_bonus', 'должно быть целым числом больше 0');
     if (skill.tagEmitter !== undefined && typeof skill.tagEmitter !== 'boolean') err('tagEmitter', 'должно быть true или false');
 
@@ -262,7 +296,20 @@ function buildActivity(skill, usesMax) {
     return activity;
 }
 
-function buildItem(skill, folder) {
+function buildItem(skill, folder, rank = 1) {
+    const maxRank = 1 + (skill.ranks?.length ?? 0);
+    const ranked = resolveRank(skill, rank);
+    const rankHtml = maxRank > 1 ? [
+        `<p><strong>Ранг:</strong> ${RANK_LABELS[rank - 1]} из ${RANK_LABELS[maxRank - 1]}</p>`,
+        '<ul>',
+        ...skill.ranks.map((r, i) => {
+            const line = `<strong>Ранг ${RANK_LABELS[i + 1]}:</strong> ${escapeHtml(r.text)}`;
+            return `<li>${i + 2 <= rank ? line : `<span style="opacity: 0.6">${line}</span>`}</li>`;
+        }),
+        '</ul>'
+    ] : [];
+    const hasChanges = [skill, ...(skill.ranks ?? [])].some(r => r?.changes);
+    skill = ranked;
     const rarity = RARITIES[skill.rarity];
     const category = CATEGORIES[folder];
     const tags = skill.tags ?? [];
@@ -280,9 +327,11 @@ function buildItem(skill, folder) {
     const description = [
         `<p><strong>Категория:</strong> ${escapeHtml(category)} | <strong>Редкость:</strong> ${rarity.label}</p>`,
         `<p><strong>Теги синергий:</strong> ${escapeHtml(tags.join(', ') || 'нет')}</p>`,
-        `<p><strong>Перезарядка:</strong> ${escapeHtml(cooldownText)}${skill.max_stacks ? ` | <strong>Макс. стаков:</strong> ${skill.max_stacks}` : ''}</p>`,
+        `<p><strong>Перезарядка:</strong> ${escapeHtml(cooldownText)}</p>`,
+        ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(skill.drawback)}</p>`] : []),
         '<hr>',
-        textToHtml(skill.description)
+        textToHtml(skill.description),
+        ...rankHtml
     ].join('\n');
 
     const item = {
@@ -311,7 +360,10 @@ function buildItem(skill, folder) {
                 tags,
                 cooldown: cooldownText,
                 has_activation: isActive,
-                ...(skill.max_stacks ? { max_stacks: skill.max_stacks } : {}),
+                rank,
+                max_rank: maxRank,
+                ...(skill.drawback ? { drawback: skill.drawback } : {}),
+                ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {})
             }
@@ -327,14 +379,15 @@ function buildItem(skill, folder) {
         item.system.activities[activity._id] = activity;
     }
 
-    if (skill.changes) {
+    // Эффект создаётся, если изменения есть хотя бы на одном ранге: ранги меняют только его changes
+    if (hasChanges) {
         const effectId = stableId(skill.id, 'effect', 0);
         item.effects.push({
             _id: effectId,
             _key: `!items.effects!${skill.id}.${effectId}`,
             name: skill.name,
             img,
-            changes: skill.changes.map(c => ({
+            changes: (skill.changes ?? []).map(c => ({
                 key: c.key,
                 mode: EFFECT_MODES[c.mode],
                 value: String(c.value),
@@ -393,7 +446,21 @@ for (const folder of folders) {
             continue;
         }
 
-        items.push({ file: `${path.basename(file, path.extname(file))}_${skill.id}.json`, item: buildItem(skill, folder) });
+        const item = buildItem(skill, folder, 1);
+        const maxRank = item.flags.gachadnd.max_rank;
+        if (maxRank > 1) {
+            // Данные каждого ранга для повышения ранга на листе персонажа (scripts/inventory.js)
+            item.flags.gachadnd.rank_data = Array.from({ length: maxRank }, (_, i) => {
+                const ranked = buildItem(skill, folder, i + 1);
+                const { spent, ...uses } = ranked.system.uses;
+                return {
+                    system: { description: ranked.system.description, uses, activities: ranked.system.activities },
+                    cooldown: ranked.flags.gachadnd.cooldown,
+                    effects: ranked.effects.map(e => ({ _id: e._id, changes: e.changes }))
+                };
+            });
+        }
+        items.push({ file: `${path.basename(file, path.extname(file))}_${skill.id}.json`, item });
     }
 }
 
