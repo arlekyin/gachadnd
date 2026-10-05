@@ -1,6 +1,6 @@
 id: "6QupvWUgvplSmg8H"
 name: "Экспеллиармус"
-rarity: "green"
+rarity: green
 category: "УТИЛИТА"
 tags:
   - разум
@@ -10,5 +10,3 @@ range: "30"
 recovery: "combat"
 save:
   ability: "str"
-  dc:
-    calculation: "spell"

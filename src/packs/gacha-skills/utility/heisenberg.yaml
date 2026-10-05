@@ -1,6 +1,6 @@
 id: "7uHkdMIjXJOamv24"
 name: "Хайзенберг"
-rarity: "Синий"
+rarity: blue
 category: "УТИЛИТА"
 tags:
   - разум
@@ -12,8 +12,6 @@ uses: 1
 recovery: "floor"
 save:
   ability: "wis"
-  dc:
-    calculation: "spell"
 changes:
   - key: "system.skills.itm.bonus"
     mode: "add"

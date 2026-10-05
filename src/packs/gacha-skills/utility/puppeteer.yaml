@@ -1,6 +1,6 @@
 id: "jOGIQZ4jF6Z6OP1N"
 name: "Кукловод"
-rarity: "Фиолетовый"
+rarity: purple
 category: "УТИЛИТА"
 tags:
   - проклятье
@@ -11,5 +11,3 @@ range: "60"
 recovery: "floor"
 save:
   ability: "wis"
-  dc:
-    calculation: "spell"

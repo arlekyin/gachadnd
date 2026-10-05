@@ -1,6 +1,6 @@
 id: "Au8kSh2ycjwLgQbB"
 name: "Джедайский фокус"
-rarity: "green"
+rarity: green
 category: "УТИЛИТА"
 tags:
   - разум
@@ -9,5 +9,3 @@ activation: "bonus"
 recovery: "short"
 save:
   ability: "wis"
-  dc:
-    calculation: "spell"
