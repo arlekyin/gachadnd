@@ -106,6 +106,7 @@ export function checkMemoryAccess(actor, skillName) {
     const existing = findMemorySkill(actor, skillName);
     if (existing) {
         if (canRankUp(existing)) return { ok: true };
+        if ((existing.flags[MODULE_ID].max_rank ?? 1) === 1) return { ok: false, reason: `Навык «${skillName}» уникален и уже есть в Памяти.` };
         return { ok: false, reason: `Навык «${skillName}» уже в Памяти на максимальном ранге.` };
     }
     if (actor.items.filter(isMemorySkill).length >= MEMORY_CAPACITY) {
@@ -211,7 +212,7 @@ Hooks.on('preCreateItem', (item) => {
     if (canRankUp(existing)) {
         rankUpSkill(existing).then(rank => ui.notifications.info(`⬆️ Навык «${skillName}» повышен до ранга ${rank}.`));
     } else {
-        ui.notifications.warn(`⚠️ Навык «${skillName}» уже в Памяти на максимальном ранге.`);
+        ui.notifications.warn(`⚠️ ${checkMemoryAccess(item.parent, skillName).reason}`);
     }
     return false;
 });
