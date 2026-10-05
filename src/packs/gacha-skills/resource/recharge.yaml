@@ -7,8 +7,3 @@ description: Активируйте навык, чтобы полностью в
 activation: special
 uses: 1
 recovery: floor
-ranks:
-  - text: 2 использования за этаж.
-    uses: 2
-  - text: 2 использования, восстанавливаются после короткого отдыха.
-    recovery: short

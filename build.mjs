@@ -70,6 +70,8 @@ const ALLOWED_FIELDS = [
 // Поля, которые ранг может переопределить. Ранг наследует значения предыдущего ранга.
 const RANK_FIELDS = ['text', 'uses', 'recovery', 'range', 'target', 'save', 'damage', 'changes'];
 const MAX_EXTRA_RANKS = 2;
+// Уникальные редкости: повтор навыка не поглощается, рангов нет
+const UNIQUE_RARITIES = ['purple', 'red'];
 const RANK_LABELS = ['I', 'II', 'III'];
 
 // ==========================================
@@ -159,7 +161,9 @@ function validateSkill(skill, folder) {
     if (skill.forced_loot !== undefined && !isPositiveInt(skill.forced_loot)) err('forced_loot', 'должно быть целым числом больше 0');
     if (skill.drawback !== undefined && !isNonEmptyString(skill.drawback)) err('drawback', 'должно быть непустой строкой');
 
-    if (skill.ranks !== undefined) {
+    if (skill.ranks !== undefined && UNIQUE_RARITIES.includes(skill.rarity)) {
+        err('ranks', `навыки редкости ${UNIQUE_RARITIES.join(', ')} уникальны и не имеют рангов`);
+    } else if (skill.ranks !== undefined) {
         if (!Array.isArray(skill.ranks) || skill.ranks.length === 0 || skill.ranks.length > MAX_EXTRA_RANKS) {
             err('ranks', `должен быть списком из 1–${MAX_EXTRA_RANKS} элементов (ранги II и III)`);
         } else {

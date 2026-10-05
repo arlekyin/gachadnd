@@ -11,12 +11,3 @@ recovery: floor
 damage:
   - formula: 10 + @details.level
     type: temphp
-ranks:
-  - text: 10 + 2 × уровень временных HP.
-    damage:
-      - formula: 10 + 2 * @details.level
-        type: temphp
-  - text: 15 + 3 × уровень временных HP.
-    damage:
-      - formula: 15 + 3 * @details.level
-        type: temphp
