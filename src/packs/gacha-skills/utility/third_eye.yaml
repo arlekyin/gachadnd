@@ -1,10 +1,16 @@
 id: "wmG84TtxXJWR7zn9"
 name: "Третий глаз"
-rarity: "Фиолетовый"
+rarity: purple
 category: "УТИЛИТА"
 tags:
   - проклятье
   - разум
 description: "Вы автоматически видите невидимых существ и предметы, а также распознаете любые визуальные иллюзии в пределах 30 футов. Из-за яркого свечения вашего третьего глаза вы совершаете все проверки Ловкости (Скрытность) с помехой."
 activation: "none"
-range: "30"
+changes:
+  - key: "system.attributes.senses.truesight"
+    mode: "upgrade"
+    value: "30"
+  - key: "system.skills.ste.roll.mode"
+    mode: "add"
+    value: "-1"

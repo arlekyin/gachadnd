@@ -1,6 +1,6 @@
 id: "JqCKPHlCBj5lY2B9"
 name: "Фус-Ро-Да"
-rarity: "purple"
+rarity: purple
 category: "УТИЛИТА"
 tags:
   - взрыв
@@ -13,8 +13,6 @@ target:
   type: "cone"
 save:
   ability: "str"
-  dc:
-    calculation: "spell"
 damage:
   - formula: "3d8"
     type: "thunder"

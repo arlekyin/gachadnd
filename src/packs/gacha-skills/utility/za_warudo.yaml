@@ -1,6 +1,6 @@
 id: "YvCaXmxkCcFqjK2o"
 name: "ЗА ВАРУДО"
-rarity: "Красный"
+rarity: red
 category: "УТИЛИТА"
 tags:
   - аномалия
@@ -12,5 +12,3 @@ uses: 1
 recovery: "floor"
 save:
   ability: "cha"
-  dc:
-    calculation: "spell"

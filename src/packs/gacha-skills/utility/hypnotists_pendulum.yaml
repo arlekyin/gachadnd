@@ -1,6 +1,6 @@
 id: "IiJDyQcyI5YzRpkh"
 name: "Маятник гипнотизёра"
-rarity: "Синий"
+rarity: blue
 category: "УТИЛИТА"
 tags:
   - разум
@@ -11,5 +11,3 @@ uses: 3
 recovery: "short"
 save:
   ability: "wis"
-  dc:
-    calculation: "spell"
