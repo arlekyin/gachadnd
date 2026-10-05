@@ -6,11 +6,14 @@ import { MemoryTerminal } from "./ui.js";
 import { GachaLootTerminal } from "./loot.js";
 import { GachaMapTerminal } from "./map.js";
 import "./compendium.js";
+import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
 
 export const MODULE_ID = 'gachadnd';
 
 Hooks.once('init', () => {
     console.log(`%c🎲 GachaDND | Инициализация...`, 'color: #ffaa00; font-weight: bold;');
+
+    registerGachaPeriods();
 
     game.gachadnd = {
         openTerminal: (actor) => {
@@ -27,6 +30,14 @@ Hooks.once('init', () => {
         openMapTerminal: () => {
             const existing = Object.values(ui.windows).find(w => w instanceof GachaMapTerminal);
             if (existing) existing.bringToTop(); else new GachaMapTerminal().render(true);
+        },
+        // Восстановление зарядов по периоду: 'gachaFloor', 'gachaRun', 'gachaScene' или стандартный период dnd5e
+        recoverUses: async (period, actors) => {
+            if (!game.user?.isGM) return ui.notifications.warn("⚠️ Восстанавливать заряды может только Мастер.");
+            const count = await recoverPeriodUses(period, actors);
+            const label = CONFIG.DND5E.limitedUsePeriods[period]?.label ?? period;
+            ui.notifications.info(`🔄 Период «${label}»: восстановлены заряды у ${count} навыков.`);
+            return count;
         }
     };
 });
