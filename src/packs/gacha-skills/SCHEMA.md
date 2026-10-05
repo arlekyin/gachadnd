@@ -30,8 +30,9 @@
 | `target` | нет | `{ type, value }`: шаблон области. `type`: `cone`, `cube`, `cylinder`, `line`, `radius`, `sphere`, `square`, `wall`, `circle`; `value` — размер в футах. |
 | `save` | нет | `{ ability, dc, on_save }` — см. ниже. |
 | `damage` | нет | Список `{ formula, type }`. |
-| `changes` | нет | Список изменений Active Effect `{ key, mode, value }`. Действуют, пока навык находится на листе. |
+| `changes` | нет | Список изменений Active Effect `{ key, mode, value }`. Действуют, только пока навык экипирован в слот. |
 | `max_stacks` | нет | Целое число > 0. |
+| `slot_bonus` | нет | Целое число > 0. Пока навык экипирован, абсолютный лимит слотов выше на это число. |
 | `tagEmitter` | нет | `true` — навык излучает выбранный тег (Сингулярность). |
 
 `range`, `target`, `save`, `damage`, `uses`, `recovery` допустимы только при `activation`, отличном от `none`.

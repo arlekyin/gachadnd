@@ -1,5 +1,8 @@
 // scripts/synergy-data.js
 
+// Универсальная сложность: 8 + бонус мастерства + наивысший модификатор характеристики
+export const UNIVERSAL_DC_FORMULA = `8 + @prof + max(${['str', 'dex', 'con', 'int', 'wis', 'cha'].map(a => `@abilities.${a}.mod`).join(', ')})`;
+
 export function getSynergyDictionary(dc) {
     return {
         'аномалия': {

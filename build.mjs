@@ -10,7 +10,7 @@ import path from 'path';
 import crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/recovery.js';
-import { getSynergyDictionary } from './scripts/synergy-data.js';
+import { getSynergyDictionary, UNIVERSAL_DC_FORMULA } from './scripts/synergy-data.js';
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
 const DIST_DIR = './dist/packs/gacha-skills';
@@ -59,14 +59,12 @@ const ON_SAVE = ['half', 'none', 'full'];
 
 // Значения dc, кроме числа и объекта { formula }
 const DC_KEYWORDS = ['spellcasting', 'universal', ...ABILITIES];
-// 8 + бонус мастерства + наивысший модификатор характеристики
-const UNIVERSAL_DC_FORMULA = `8 + @prof + max(${ABILITIES.map(a => `@abilities.${a}.mod`).join(', ')})`;
 
 const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4, override: 5 };
 
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
-    'uses', 'recovery', 'max_stacks', 'tagEmitter', 'save', 'damage', 'changes'
+    'uses', 'recovery', 'max_stacks', 'slot_bonus', 'tagEmitter', 'save', 'damage', 'changes'
 ];
 
 // ==========================================
@@ -143,6 +141,7 @@ function validateSkill(skill, folder) {
         err('recovery', `«${skill.recovery}» — допустимо: ${Object.keys(RECOVERY_VALUES).join(', ')}`);
     }
     if (skill.max_stacks !== undefined && !isPositiveInt(skill.max_stacks)) err('max_stacks', 'должно быть целым числом больше 0');
+    if (skill.slot_bonus !== undefined && !isPositiveInt(skill.slot_bonus)) err('slot_bonus', 'должно быть целым числом больше 0');
     if (skill.tagEmitter !== undefined && typeof skill.tagEmitter !== 'boolean') err('tagEmitter', 'должно быть true или false');
 
     // Поля активности имеют смысл только при activation, отличном от none
@@ -313,6 +312,7 @@ function buildItem(skill, folder) {
                 cooldown: cooldownText,
                 has_activation: isActive,
                 ...(skill.max_stacks ? { max_stacks: skill.max_stacks } : {}),
+                ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {})
             }
         },
