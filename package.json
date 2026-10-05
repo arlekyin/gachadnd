@@ -1,7 +1,7 @@
 {
   "name": "gachadnd",
   "version": "1.0.0",
-  "main": "import_skills_macro.js",
+  "type": "module",
   "scripts": {
     "build": "node build.mjs && fvtt package pack gacha-skills --in ./dist/packs/gacha-skills --out ./packs"
   },
