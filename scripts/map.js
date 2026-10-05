@@ -280,6 +280,9 @@ export class GachaMapTerminal extends Application {
                     await canvas.scene.setFlag(MODULE_ID, 'floorMap', this.currentMap);
                 }
                 this.render(false);
+
+                // Новый этаж: восстанавливаем заряды навыков с перезарядкой «этаж»
+                await game.gachadnd.recoverUses('gachaFloor');
             });
         }
 
