@@ -68,7 +68,10 @@ categories.forEach(category => {
 
         const recoveryInput = skill.recovery ? skill.recovery.toLowerCase().trim() : '';
         const recoverySystemKey = recoveryMap[recoveryInput] || '';
-        const recoveryArray = (recoverySystemKey && skill.uses) ? [{ period: recoverySystemKey, type: 'recoverAll' }] : [];
+        
+        // Автоматическое назначение 1 заряда, если указано восстановление, но пропущен параметр uses
+        const usesCount = skill.uses ? `${skill.uses}` : (recoverySystemKey ? "1" : "");
+        const recoveryArray = (recoverySystemKey && usesCount) ? [{ period: recoverySystemKey, type: 'recoverAll' }] : [];
 
         const itemId = skill.id || generateId();
 
@@ -88,7 +91,7 @@ categories.forEach(category => {
                 type: { value: "feat", subtype: "" },
                 uses: {
                     spent: 0,
-                    max: skill.uses ? `${skill.uses}` : "",
+                    max: usesCount,
                     recovery: recoveryArray
                 },
                 activities: {}
@@ -133,7 +136,7 @@ categories.forEach(category => {
                     override: false
                 },
                 consumption: {
-                    targets: skill.uses ? [{ type: 'itemUses', value: '1' }] : [],
+                    targets: usesCount ? [{ type: 'itemUses', value: '1' }] : [],
                     scaling: { allowed: false }
                 }
             };
@@ -210,9 +213,7 @@ categories.forEach(category => {
             JSON.stringify(item, null, 2),
             'utf8'
         );
-        
-        console.log(`[+] Скомпилирован: ${outputFilename}`);
     });
 });
 
-console.log('Сборка завершена! База готова к упаковке.');
+console.log('Сборка завершена. База готова к упаковке.');
