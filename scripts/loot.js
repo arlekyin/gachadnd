@@ -12,8 +12,7 @@ const RARITY_WEIGHTS = {
     'green': 250,
     'blue': 100,
     'purple': 40,
-    'red': 9,
-    'orange': 1
+    'red': 9
 };
 
 const RARITY_COLORS = {

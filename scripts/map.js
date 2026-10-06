@@ -3,6 +3,8 @@
  */
 
 import { MODULE_ID } from "./main.js";
+import { onNodeEntered } from "./horsemen.js";
+import { DoomAltar } from "./altar.js";
 
 const MAP_DATA = {
     NODE_START: 'start',
@@ -13,6 +15,9 @@ const MAP_DATA = {
     NODE_RISK: 'risk',
     NODE_SHOP: 'shop',
     NODE_REST: 'rest',
+    NODE_DOOM: 'doom',
+    // Узел Погибели появляется не на каждом этаже и не чаще одного раза
+    DOOM_CHANCE: 0.5,
     
     MIN_WIDTH: 2,
     MAX_WIDTH: 4,
@@ -26,17 +31,20 @@ const MAP_DATA = {
     
     LABELS: {
         'start': 'Вход', 'boss': 'Босс', 'mob': 'Монстры', 'elite': 'Элита',
-        'event': 'Событие', 'risk': 'Риск', 'shop': 'Магазин', 'rest': 'Привал'
+        'event': 'Событие', 'risk': 'Риск', 'shop': 'Магазин', 'rest': 'Привал',
+        'doom': 'Погибель'
     },
     
     ICONS: {
         'start': 'fa-dungeon', 'boss': 'fa-skull', 'mob': 'fa-ghost', 'elite': 'fa-dragon',
-        'event': 'fa-question', 'risk': 'fa-exclamation-triangle', 'shop': 'fa-coins', 'rest': 'fa-campground'
+        'event': 'fa-question', 'risk': 'fa-exclamation-triangle', 'shop': 'fa-coins', 'rest': 'fa-campground',
+        'doom': 'fa-horse-head'
     },
     
     COLORS: {
         'start': '#7a7062', 'boss': '#ff003c', 'mob': '#8c8275', 'elite': '#ff8000',
-        'event': '#0070dd', 'risk': '#a335ee', 'shop': '#ffaa00', 'rest': '#1eff00'
+        'event': '#0070dd', 'risk': '#a335ee', 'shop': '#ffaa00', 'rest': '#1eff00',
+        'doom': '#ff8000'
     }
 };
 
@@ -69,6 +77,11 @@ function buildContentTypes(count) {
     let types = [];
     for (let [t, n] of Object.entries(counts)) {
         for (let j = 0; j < n; j++) types.push(t);
+    }
+    // Погибель заменяет один узел Монстров или Событие
+    if (Math.random() < MAP_DATA.DOOM_CHANCE) {
+        const candidates = types.map((t, i) => ['mob', 'event'].includes(t) ? i : -1).filter(i => i >= 0);
+        if (candidates.length) types[candidates[Math.floor(Math.random() * candidates.length)]] = MAP_DATA.NODE_DOOM;
     }
     return types.sort(() => Math.random() - 0.5);
 }
@@ -314,7 +327,11 @@ export class GachaMapTerminal extends Application {
                     }
                 } else {
                     // Если отряд уже где-то стоит
-                    if (mapData.currentNodeId === nodeId) return; // Клик по текущей комнате
+                    // Клик по текущей комнате; на Погибели открывает алтарь
+                    if (mapData.currentNodeId === nodeId) {
+                        if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
+                        return;
+                    }
                     
                     const currentNode = mapData.nodes.find(n => n.id === mapData.currentNodeId);
                     if (!currentNode.next.includes(nodeId) && !mapData.visitedNodes.includes(nodeId)) {
@@ -337,6 +354,10 @@ export class GachaMapTerminal extends Application {
                 
                 // Перерисовываем интерфейс
                 this.render(false);
+
+                // Серия Войны и штраф проклятой Войны; на Погибели — алтарь
+                await onNodeEntered(nodeData.type);
+                if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
 
                 // Сообщение в чат
                 ChatMessage.create({

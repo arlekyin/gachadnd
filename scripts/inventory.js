@@ -6,6 +6,7 @@ import { MODULE_ID } from "./main.js";
 import { getSynergyDictionary } from "./synergy-data.js";
 import { isMemorySkill } from "./synergy.js";
 import { getSkillPack, currentSkillName, crystalForSkill, buildCrystalData } from "./crystals.js";
+import { getHorseman, isCleansed, hasTakenHorseman, feedHunger } from "./horsemen.js";
 
 const RARITY_MAP = {
     'gray': { label: 'Серый', color: '#9d9d9d', class: 'rarity-gray' },
@@ -292,6 +293,17 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
 
     const actor = item.actor;
     if (actor) {
+        // Всадник: только один на персонажа за забег
+        if (item.flags?.[MODULE_ID]?.horseman && getHorseman(actor)) {
+            ui.notifications.warn(`⚠️ У персонажа ${actor.name} уже есть всадник.`);
+            return false;
+        }
+        // Проклятый Голод: кристалл можно скормить ему вместо поглощения
+        const hunger = getHorseman(actor, 'hunger');
+        if (hunger && !isCleansed(hunger) && !usageConfig?.gachadndToMemory) {
+            chooseHungerOrMemory(actor, item);
+            return false;
+        }
         const skillName = currentSkillName(item.flags?.[MODULE_ID], item.name);
         const access = checkMemoryAccess(actor, skillName);
         if (!access.ok) {
@@ -307,6 +319,23 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
     
     return true; 
 });
+
+async function chooseHungerOrMemory(actor, crystal) {
+    const choice = await foundry.applications.api.DialogV2.wait({
+        window: { title: crystal.name },
+        content: '<p>Голод ждёт. Скормить кристалл ему или поглотить навык в Память?</p>',
+        buttons: [
+            { action: 'feed', label: 'Скормить Голоду', icon: 'fas fa-skull', default: true },
+            { action: 'memory', label: 'В Память', icon: 'fas fa-brain' }
+        ],
+        rejectClose: false
+    });
+    if (choice === 'feed') return feedHunger(actor, crystal);
+    if (choice === 'memory') {
+        const activity = crystal.system.activities?.contents?.[0] ?? [...(crystal.system.activities?.values?.() ?? [])][0];
+        return activity?.use({ gachadndToMemory: true });
+    }
+}
 
 // Навык, брошенный на лист из компендиума или с другого персонажа, становится кристаллом в инвентаре:
 // в Память навык попадает только поглощением кристалла (как свиток из заклинания в dnd5e)

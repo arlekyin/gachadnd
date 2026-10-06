@@ -26,7 +26,9 @@ const RARITIES = {
     green: { label: 'Зелёный', img: 'green_fog_active.webp' },
     blue: { label: 'Синий', img: 'blue_fog_active.webp' },
     purple: { label: 'Фиолетовый', img: 'purple_fog_active.webp' },
-    red: { label: 'Красный', img: 'red_fog_active.webp' }
+    red: { label: 'Красный', img: 'red_fog_active.webp' },
+    // Всадники Погибели; своей иконки пока нет
+    orange: { label: 'Оранжевый', img: 'red_fog_active.webp' }
 };
 
 // Папка → категория
@@ -38,7 +40,8 @@ const CATEGORIES = {
     mobility: 'МОБИЛЬНОСТЬ',
     resource: 'РЕСУРС',
     synergy: 'СИНЕРГИЯ',
-    utility: 'УТИЛИТА'
+    utility: 'УТИЛИТА',
+    horseman: 'ВСАДНИК'
 };
 
 const TAGS = Object.keys(getSynergyDictionary(10));
@@ -66,7 +69,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus'
+    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -74,7 +77,9 @@ const ALLOWED_FIELDS = [
 const RANK_FIELDS = ['text', 'uses', 'range', 'target', 'damage', 'roll', 'changes'];
 const MAX_EXTRA_RANKS = 2;
 // Уникальные редкости: повтор навыка не поглощается, рангов нет
-const UNIQUE_RARITIES = ['purple', 'red'];
+const UNIQUE_RARITIES = ['purple', 'red', 'orange'];
+// Всадники Погибели: проклятое состояние и сращённая форма
+const HORSEMEN = ['hunger', 'plague', 'war', 'death'];
 const RANK_LABELS = ['I', 'II', 'III'];
 // Личный эффект вписывает Мастер в копию навыка на листе персонажа (scripts/inventory.js → setPersonalEffect)
 const SCALING_COUNTS = ['memory', 'burned', 'equipped', 'equipped_tags'];
@@ -299,6 +304,19 @@ function validateSkill(skill, folder) {
         }
     }
     if (skill.memory_bonus !== undefined && !isPositiveInt(skill.memory_bonus)) err('memory_bonus', 'должно быть целым числом больше 0');
+    // Всадник: только оранжевая редкость, обязательны условие сращивания и сращённая форма
+    if ((skill.rarity === 'orange') !== (skill.horseman !== undefined)) err('horseman', 'оранжевая редкость — только у всадников, и всадник — только оранжевый');
+    if (skill.horseman !== undefined) {
+        if (!HORSEMEN.includes(skill.horseman)) err('horseman', `«${skill.horseman}» — допустимо: ${HORSEMEN.join(', ')}`);
+        if (!isNonEmptyString(skill.cleanse)) err('cleanse', 'обязательное поле: условие сращивания');
+        if (skill.cleanse_goal !== undefined && !isPositiveInt(skill.cleanse_goal)) err('cleanse_goal', 'должно быть целым числом больше 0');
+        const { name, description, ...rest } = skill.cleansed ?? {};
+        Object.keys(rest).forEach(k => err(`cleansed.${k}`, 'неизвестное поле (допустимы: name, description)'));
+        if (!isNonEmptyString(name)) err('cleansed.name', 'обязательное поле');
+        if (!isNonEmptyString(description)) err('cleansed.description', 'обязательное поле');
+    } else {
+        ['cleanse', 'cleanse_goal', 'cleansed'].forEach(f => { if (skill[f] !== undefined) err(f, 'только у всадников (horseman)'); });
+    }
     if (skill.loot_bonus !== undefined && !isPositiveInt(skill.loot_bonus)) err('loot_bonus', 'должно быть целым числом больше 0');
     if (skill.personal !== undefined && !UNIQUE_RARITIES.includes(skill.rarity)) err('personal', 'личный эффект — только у уникальных навыков (фиолетовых и красных)');
     for (const field of ['undeletable', 'combat_swap', 'personal']) {
@@ -479,8 +497,20 @@ function buildItem(skill, folder, rank = 1) {
         '<hr>',
         textToHtml(withFormula(skill.description, skill)),
         ...(skill.personal ? [PERSONAL_PLACEHOLDER] : []),
+        ...(skill.horseman ? [
+            `<p><strong>Сращивание:</strong> ${escapeHtml(skill.cleanse)}</p>`,
+            `<p><strong>Сращённая форма — ${escapeHtml(skill.cleansed.name)}:</strong></p>`,
+            textToHtml(skill.cleansed.description)
+        ] : []),
         ...rankHtml
     ].join('\n');
+    // Описание всадника после сращивания: штрафа и условия больше нет
+    const cleansedDescription = skill.horseman ? [
+        `<p><strong>Категория:</strong> ${escapeHtml(category)} | <strong>Редкость:</strong> ${rarity.label}</p>`,
+        `<p><strong>Сращённая форма — ${escapeHtml(skill.cleansed.name)}</strong></p>`,
+        '<hr>',
+        textToHtml(skill.cleansed.description)
+    ].join('\n') : null;
 
     const item = {
         _id: skill.id,
@@ -528,7 +558,15 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.undeletable ? { undeletable: true } : {}),
                 ...(skill.combat_swap ? { combat_swap: true } : {}),
                 ...(skill.personal ? { personal: true } : {}),
-                ...(skill.loot_bonus ? { loot_bonus: skill.loot_bonus } : {})
+                ...(skill.loot_bonus ? { loot_bonus: skill.loot_bonus } : {}),
+                ...(skill.horseman ? {
+                    horseman: skill.horseman,
+                    cleansed: false,
+                    cleanse_goal: skill.cleanse_goal ?? null,
+                    cleanse_progress: 0,
+                    cleansed_name: skill.cleansed.name,
+                    cleansed_description: cleansedDescription
+                } : {})
             }
         },
         effects: [],

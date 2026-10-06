@@ -806,3 +806,32 @@
 /* Личный эффект уникального навыка — вписан Мастером в копию на листе персонажа */
 .gachadnd-terminal .gd-personal { margin-top: 8px; padding: 6px 10px; border-left: 2px solid var(--rarity, #e8c46a); background: rgba(232, 196, 106, 0.06); }
 .gachadnd-terminal .gd-personal p { margin: 4px 0; }
+
+/* Всадник Погибели: состояние и прогресс сращивания */
+.gachadnd-terminal .gd-horseman { margin: 4px 0 6px; padding: 4px 8px; border: 1px solid #ff8000; color: #ffb066; font-size: 13px; background: rgba(255, 128, 0, 0.08); }
+.gachadnd-terminal .gd-horseman.cleansed { border-color: #ffd27a; color: #ffe2a8; background: rgba(255, 210, 122, 0.1); }
+
+/* ==========================================
+   Алтарь Погибели
+   ========================================== */
+.gachadnd-doom .window-content { background: radial-gradient(circle at 50% 30%, #2a0d05 0%, #0b0606 70%); color: #e8d8c8; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.gachadnd-doom .gd-doom-blood { text-align: center; font-size: 15px; color: #ff9a6b; letter-spacing: 0.04em; }
+.gachadnd-doom .gd-doom-blood strong { color: #ff4a2a; font-size: 20px; text-shadow: 0 0 8px rgba(255, 60, 30, 0.7); }
+.gachadnd-doom .gd-horses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.gachadnd-doom .gd-horse { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid #3a2420; background: rgba(0, 0, 0, 0.45); text-align: center; transition: border-color 0.3s, box-shadow 0.3s; }
+.gachadnd-doom .gd-horse > i { font-size: 34px; color: #4a3a35; }
+.gachadnd-doom .gd-horse-name { font-size: 16px; font-weight: bold; color: #b8a090; }
+.gachadnd-doom .gd-horse-status { font-size: 12px; opacity: 0.85; min-height: 30px; }
+.gachadnd-doom .gd-horse.open { border-color: #ff8000; box-shadow: 0 0 16px rgba(255, 128, 0, 0.45), inset 0 0 14px rgba(255, 128, 0, 0.15); }
+.gachadnd-doom .gd-horse.open > i { color: #ff8000; text-shadow: 0 0 10px #ff8000; }
+.gachadnd-doom .gd-horse.open .gd-horse-name { color: #ffcf99; }
+.gachadnd-doom .gd-horse.taken { border-color: #ffd27a; }
+.gachadnd-doom .gd-horse.taken > i { color: #ffd27a; }
+.gachadnd-doom .gd-horse.closed, .gachadnd-doom .gd-horse.absent { opacity: 0.45; }
+.gachadnd-doom .gd-horse select, .gachadnd-doom .gd-horse button { width: 100%; }
+.gachadnd-doom .gd-doom-party { display: flex; flex-direction: column; gap: 6px; }
+.gachadnd-doom .gd-doom-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid #2c1c18; background: rgba(0, 0, 0, 0.35); }
+.gachadnd-doom .gd-doom-hp { color: #ff8a8a; font-variant-numeric: tabular-nums; }
+.gachadnd-doom .gd-doom-row button { white-space: nowrap; }
+@container (max-width: 560px) { .gachadnd-doom .gd-horses { grid-template-columns: repeat(2, 1fr); } }
+.gachadnd-doom-chat { padding: 8px; border: 1px solid #ff8000; background: #120806; color: #e8d8c8; }

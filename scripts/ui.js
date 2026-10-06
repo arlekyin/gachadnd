@@ -6,7 +6,8 @@
  */
 
 import { MODULE_ID } from "./main.js";
-import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat } from "./synergy.js";
+import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
+import { HORSEMEN, isHorseman, isCleansed, cleanseHorseman, addCleanseProgress } from "./horsemen.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
@@ -111,7 +112,9 @@ export class MemoryTerminal extends ApplicationV2 {
             use: MemoryTerminal.#onUse,
             expand: MemoryTerminal.#onExpand,
             openSheet: MemoryTerminal.#onOpenSheet,
-            editPersonal: MemoryTerminal.#onEditPersonal
+            editPersonal: MemoryTerminal.#onEditPersonal,
+            horsemanProgress: MemoryTerminal.#onHorsemanProgress,
+            horsemanCleanse: MemoryTerminal.#onHorsemanCleanse
         }
     };
 
@@ -179,7 +182,8 @@ export class MemoryTerminal extends ApplicationV2 {
             tagCounts, glossary,
             naturalCap, absoluteCap, memory, equipped, emittedTags, selected,
             atRest, hitDice, synergyItems, synergyEffects, descriptions,
-            overloaded: equipped.length > naturalCap
+            slotted: equipped.filter(occupiesSlot),
+            overloaded: equipped.filter(occupiesSlot).length > naturalCap
         };
     }
 
@@ -284,7 +288,8 @@ export class MemoryTerminal extends ApplicationV2 {
                 ${ranked ? `<span class="gd-chip">Ранг ${romanRank(flags.rank ?? 1)}${canRankUp(selected) ? ' · можно улучшить' : ''}</span>` : ''}
                 ${['purple', 'red'].includes(flags.rarity) ? '<span class="gd-chip unique">Уникальный</span>' : ''}
             </div>
-            ${flags.drawback ? `<div class="gd-feature-drawback"><strong>Штраф:</strong> ${esc(flags.drawback)}</div>` : ''}
+            ${flags.drawback && !flags.cleansed ? `<div class="gd-feature-drawback"><strong>Штраф:</strong> ${esc(flags.drawback)}</div>` : ''}
+            ${flags.horseman ? `<div class="gd-horseman ${flags.cleansed ? 'cleansed' : ''}">🐎 ${HORSEMEN[flags.horseman]} · ${flags.cleansed ? 'сращён' : `проклят${flags.cleanse_goal ? ` · сращивание ${flags.cleanse_progress ?? 0} / ${flags.cleanse_goal}` : ''}`}</div>` : ''}
             <div class="gd-feature-text">${body || '<p>Описание отсутствует.</p>'}</div>
             ${game.user?.isGM && ranked && (flags.rank ?? 1) < flags.max_rank ? `
                 <div class="gd-gm-ranks"><div class="gd-gm-ranks-title"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер</div>
@@ -297,6 +302,8 @@ export class MemoryTerminal extends ApplicationV2 {
                 </button>
                 ${useButton}
                 ${forgeButton}
+                ${flags.horseman && !flags.cleansed && game.user?.isGM && flags.cleanse_goal ? `<button type="button" class="gd-btn" data-action="horsemanProgress" data-item-id="${selected.id}" title="Видит только Мастер"><i class="fas fa-plus"></i> Прогресс</button>` : ''}
+                ${flags.horseman && !flags.cleansed && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="horsemanCleanse" data-item-id="${selected.id}" title="Видит только Мастер"><i class="fas fa-horse-head"></i> Срастить</button>` : ''}
                 ${flags.personal && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="${selected.id}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>` : ''}
             </div>`;
     }
@@ -337,7 +344,7 @@ export class MemoryTerminal extends ApplicationV2 {
     }
 
     // Кольцо «Предела разума» из сегментов, как счётчик Хватки в Hades II
-    #ringHtml({ naturalCap, absoluteCap, equipped, overloaded }) {
+    #ringHtml({ naturalCap, absoluteCap, slotted: equipped, overloaded }) {
         const r = 52;
         const c = 2 * Math.PI * r;
         const step = c / absoluteCap;
@@ -419,6 +426,18 @@ export class MemoryTerminal extends ApplicationV2 {
         this.render();
     }
 
+    static async #onHorsemanProgress(event, target) {
+        const item = this.actor.items.get(target.dataset.itemId);
+        if (item && game.user.isGM) await addCleanseProgress(item, 1);
+        this.render();
+    }
+
+    static async #onHorsemanCleanse(event, target) {
+        const item = this.actor.items.get(target.dataset.itemId);
+        if (item && game.user.isGM) await cleanseHorseman(item);
+        this.render();
+    }
+
     // Мастер вписывает личный эффект в копию навыка этого персонажа
     static async #onEditPersonal(event, target) {
         const item = this.actor.items.get(target.dataset.itemId);
@@ -464,6 +483,10 @@ export class MemoryTerminal extends ApplicationV2 {
         target.disabled = true;
 
         const equipping = !item.flags[MODULE_ID]?.is_active;
+        if (!equipping && isHorseman(item) && !isCleansed(item)) {
+            ui.notifications.warn(`${item.name}: проклятого всадника снять нельзя.`);
+            return this.render();
+        }
 
         // В бою навыки не меняются; Горячая замена разрешает одну пару «снять → экипировать»
         let usesSwap = false;
@@ -490,7 +513,8 @@ export class MemoryTerminal extends ApplicationV2 {
             const level = this.actor.system.details?.level || 1;
             const equipped = this.actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active);
             const cap = 6 + Math.floor(level / 2) + getSlotBonus(equipped) + (Number(item.flags[MODULE_ID]?.slot_bonus) || 0);
-            if (equipped.length >= cap) {
+            // Сращённый всадник экипируется сверх лимита
+            if (occupiesSlot(item) && equipped.filter(occupiesSlot).length >= cap) {
                 ui.notifications.error(`Достигнут абсолютный предел (${cap}).`);
                 return this.render();
             }
