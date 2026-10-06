@@ -13,7 +13,9 @@ export function getSkillPack() {
 }
 
 export function crystalImage(rarity) {
-    return `modules/${MODULE_ID}/assets/icons/skills/${rarity === 'gray' ? 'grey' : rarity}_fog_crystall.webp`;
+    // У оранжевых всадников пока нет своей иконки
+    const file = { gray: 'grey', orange: 'red' }[rarity] ?? rarity;
+    return `modules/${MODULE_ID}/assets/icons/skills/${file}_fog_crystall.webp`;
 }
 
 // Старые имена переименованных навыков — для кристаллов, выданных до появления skill_id
@@ -65,7 +67,8 @@ export function buildCrystalData(skill) {
                 skill_name: source.name,
                 rarity,
                 category: flags.category ?? '',
-                tags: flags.tags ?? []
+                tags: flags.tags ?? [],
+                ...(flags.horseman ? { horseman: flags.horseman } : {})
             }
         }
     };
@@ -80,7 +83,8 @@ export async function randomCrystal(rarity, requiredTag = null) {
     const pack = getSkillPack();
     if (!pack) return null;
     const index = await pack.getIndex({ fields: [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`] });
-    const all = [...index];
+    // Всадники не выпадают в добыче — только с алтаря Погибели
+    const all = [...index].filter(e => e.flags?.[MODULE_ID]?.rarity !== 'orange');
     const rarityOf = e => e.flags?.[MODULE_ID]?.rarity;
     const hasTag = e => (e.flags?.[MODULE_ID]?.tags ?? []).some(t => t.toLowerCase().includes(requiredTag.toLowerCase()));
 

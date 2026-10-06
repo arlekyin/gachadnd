@@ -74,6 +74,12 @@ export function isMemorySkill(item) {
     return item?.type === 'feat' && !!flags?.skill_name && !flags.is_crystal_item && !flags.is_synergy_item;
 }
 
+// Сращённый всадник экипирован сверх лимита и слота не занимает
+export function occupiesSlot(item) {
+    const flags = item?.flags?.[MODULE_ID];
+    return !(flags?.horseman && flags?.cleansed);
+}
+
 // Персонаж участвует в начатом бою — менять навыки нельзя (кроме Горячей замены)
 export function isInCombat(actor) {
     return !!game.combats?.some(c => c.started && c.combatants.some(cb => cb.actor?.id === actor?.id));
@@ -136,7 +142,7 @@ export async function updateActorSynergies(actor) {
         // --- А. МАТЕМАТИКА ПЕРЕГРУЗКИ ---
         const level = actor.system.details.level || 1;
         const naturalCap = 6 + Math.floor(level / 2);
-        const activeCount = activeItems.length;
+        const activeCount = activeItems.filter(occupiesSlot).length;
 
         const overloadCount = activeCount - naturalCap;
         const overloadEffectName = "Системная перегрузка (Киберпсихоз)";
