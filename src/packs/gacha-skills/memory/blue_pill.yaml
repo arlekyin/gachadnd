@@ -1,0 +1,22 @@
+id: wpLzqTJkPWkZdtlv
+name: Синяя таблетка
+rarity: blue
+tags:
+  - память
+  - щит
+description: Пока в вашей Памяти не меньше 10 навыков, вы получаете сопротивление урону Психической энергией и иммунитет к состояниям «Испуганный» и «Очарованный». Эффект включается автоматически.
+memory_scaling:
+  count: memory
+  min: 10
+  max: 1
+  text: Сопротивление урону Психической энергией, иммунитет к испугу и очарованию.
+  changes:
+    - key: system.traits.dr.value
+      mode: add
+      value: psychic
+    - key: system.traits.ci.value
+      mode: add
+      value: frightened
+    - key: system.traits.ci.value
+      mode: add
+      value: charmed

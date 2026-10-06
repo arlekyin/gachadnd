@@ -15,8 +15,13 @@ const RARITY_MAP = {
     'orange': { label: 'Оранжевый', color: '#ff8000', class: 'rarity-orange' }
 };
 
-// Вместимость Памяти: навыки на листе, включая неэкипированные
+// Вместимость Памяти: навыки на листе, включая неэкипированные; навыки с memory_bonus её расширяют, даже не экипированные
 export const MEMORY_CAPACITY = 20;
+export function getMemoryCapacity(actor) {
+    return MEMORY_CAPACITY + actor.items
+        .filter(isMemorySkill)
+        .reduce((sum, i) => sum + (Number(i.flags[MODULE_ID].memory_bonus) || 0), 0);
+}
 
 function findMemorySkill(actor, skillName) {
     const key = skillName.trim().toLowerCase();
@@ -31,6 +36,7 @@ export function canRankUp(item) {
 
 async function addBurned(actor, count) {
     await actor.setFlag(MODULE_ID, 'burned_count', (actor.getFlag(MODULE_ID, 'burned_count') || 0) + count);
+    Hooks.callAll("gachadnd.synergyUpdated", actor);
 }
 
 // Повышает ранг навыка данными ранга из компендиума; расход зарядов и экипировка сохраняются
@@ -204,8 +210,8 @@ export function checkMemoryAccess(actor, skillName) {
         if ((existing.flags[MODULE_ID].max_rank ?? 1) === 1) return { ok: false, reason: `Навык «${skillName}» уникален и уже есть в Памяти.` };
         return { ok: false, reason: `Навык «${skillName}» уже в Памяти на максимальном ранге.` };
     }
-    if (actor.items.filter(isMemorySkill).length >= MEMORY_CAPACITY) {
-        return { ok: false, reason: `Память персонажа ${actor.name} переполнена (максимум ${MEMORY_CAPACITY} навыков). Освободите место.` };
+    if (actor.items.filter(isMemorySkill).length >= getMemoryCapacity(actor)) {
+        return { ok: false, reason: `Память персонажа ${actor.name} переполнена (максимум ${getMemoryCapacity(actor)} навыков). Освободите место.` };
     }
     return { ok: true };
 }
@@ -228,17 +234,17 @@ export async function addSkillToMemory(actor, skillName, { forced = false, extra
 
     let replacedName;
     const memory = actor.items.filter(isMemorySkill);
-    if (memory.length >= MEMORY_CAPACITY) {
+    if (memory.length >= getMemoryCapacity(actor)) {
         if (!forced) return { status: 'blocked', reason: checkMemoryAccess(actor, skillName).reason };
-        const candidates = memory.filter(i => !i.flags[MODULE_ID].is_active);
+        const candidates = memory.filter(i => !i.flags[MODULE_ID].is_active && !i.flags[MODULE_ID].undeletable);
         if (!candidates.length) {
             await addBurned(actor, 1);
             return { status: 'burned' };
         }
         const replaced = candidates[Math.floor(Math.random() * candidates.length)];
         replacedName = replaced.name;
+        // Сгоревший навык учитывается в счётчике хуком deleteItem
         await replaced.delete();
-        await addBurned(actor, 1);
     }
 
     await actor.createEmbeddedDocuments("Item", [await buildSkillData(skillName, { extraFlags, fallbackDescription })]);
@@ -308,6 +314,13 @@ Hooks.on('preCreateItem', (item) => {
     return false;
 });
 
+// Неудаляемые навыки (Битый сектор): удалить может только Мастер
+Hooks.on('preDeleteItem', (item) => {
+    if (!isMemorySkill(item) || !item.flags[MODULE_ID].undeletable || game.user.isGM) return;
+    ui.notifications.error('Файл повреждён.');
+    return false;
+});
+
 Hooks.on('dnd5e.postUseActivity', (activity, usageConfig, results) => {
     const item = activity.item;
     if (!isCrystalItem(item)) return;
@@ -323,10 +336,10 @@ Hooks.on('deleteItem', (item, options, userId) => {
     if (!actor) return;
 
     if (!isMemorySkill(item)) return;
-    ui.notifications.info(`🗑️ Навык «${item.name}» удалён из Памяти.`);
-    // Пересчёт нужен, только если навык участвовал в синергиях
-    const flags = item.flags[MODULE_ID];
-    if (flags.is_active || flags.tagEmitter) Hooks.callAll("gachadnd.synergyUpdated", actor);
+    ui.notifications.info(`🔥 Навык «${item.name}» сожжён.`);
+    // Удаление навыка из Памяти — сожжение: растёт счётчик (Легенда Найт-Сити),
+    // а синергии и эффекты от состава Памяти пересчитываются
+    addBurned(actor, 1);
 });
 
 // ==========================================

@@ -65,7 +65,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'ranks', 'stacking'
+    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -253,14 +253,33 @@ function validateSkill(skill, folder) {
         }
     }
 
-    if (skill.changes !== undefined) {
-        if (!Array.isArray(skill.changes) || skill.changes.length === 0) err('changes', 'должен быть непустым списком');
-        else skill.changes.forEach((c, i) => {
-            if (typeof c?.key !== 'string' || !/^(system|flags)\.[A-Za-z0-9_.]+$/.test(c.key)) err(`changes[${i}].key`, `«${c?.key}» — путь должен начинаться с system. или flags. и состоять из латиницы, цифр, _ и .`);
-            if (!(c?.mode in EFFECT_MODES)) err(`changes[${i}].mode`, `«${c?.mode}» — допустимо: ${Object.keys(EFFECT_MODES).join(', ')}`);
-            if (c?.value === undefined || c?.value === null) err(`changes[${i}].value`, 'обязательное поле');
+    const checkChanges = (list, field) => {
+        if (!Array.isArray(list) || list.length === 0) return err(field, 'должен быть непустым списком');
+        list.forEach((c, i) => {
+            if (typeof c?.key !== 'string' || !/^(system|flags)\.[A-Za-z0-9_.]+$/.test(c.key)) err(`${field}[${i}].key`, `«${c?.key}» — путь должен начинаться с system. или flags. и состоять из латиницы, цифр, _ и .`);
+            if (!(c?.mode in EFFECT_MODES)) err(`${field}[${i}].mode`, `«${c?.mode}» — допустимо: ${Object.keys(EFFECT_MODES).join(', ')}`);
+            if (c?.value === undefined || c?.value === null) err(`${field}[${i}].value`, 'обязательное поле');
         });
+    };
+    if (skill.changes !== undefined) checkChanges(skill.changes, 'changes');
+
+    // Эффект, сила которого зависит от состава Памяти
+    if (skill.memory_scaling !== undefined) {
+        const { count, every, min, max, changes, text, ...rest } = skill.memory_scaling ?? {};
+        Object.keys(rest).forEach(k => err(`memory_scaling.${k}`, 'неизвестное поле (допустимы: count, every, min, max, changes, text)'));
+        const tagCount = typeof count === 'string' && count.startsWith('tag:') ? count.slice(4) : null;
+        if (!['memory', 'burned'].includes(count) && !(tagCount && TAGS.includes(tagCount))) err('memory_scaling.count', `«${count}» — допустимо: memory, burned, tag:<тег из словаря>`);
+        if (every !== undefined && !isPositiveInt(every)) err('memory_scaling.every', 'должно быть целым числом больше 0');
+        if (min !== undefined && !isPositiveInt(min)) err('memory_scaling.min', 'должно быть целым числом больше 0');
+        if (max !== undefined && max !== 'prof' && !isPositiveInt(max)) err('memory_scaling.max', 'должно быть целым числом больше 0 или prof');
+        if (text !== undefined && !isNonEmptyString(text)) err('memory_scaling.text', 'должно быть непустой строкой');
+        checkChanges(changes, 'memory_scaling.changes');
     }
+    if (skill.memory_bonus !== undefined && !isPositiveInt(skill.memory_bonus)) err('memory_bonus', 'должно быть целым числом больше 0');
+    for (const field of ['undeletable', 'combat_swap']) {
+        if (skill[field] !== undefined && skill[field] !== true) err(field, 'допустимо только true');
+    }
+    if (skill.combat_swap && !(isActive && skill.recovery)) err('combat_swap', 'требует activation и recovery: заряд тратится на замену');
 
     // {damage} подставляет формулу текущего ранга — у навыка должна быть запись в damage
     if ([skill.description, skill.drawback].some(t => typeof t === 'string' && t.includes('{damage}'))
@@ -469,7 +488,16 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
-                ...(skill.tagEmitter ? { tagEmitter: true } : {})
+                ...(skill.tagEmitter ? { tagEmitter: true } : {}),
+                ...(skill.memory_scaling ? {
+                    memory_scaling: {
+                        ...skill.memory_scaling,
+                        changes: skill.memory_scaling.changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
+                    }
+                } : {}),
+                ...(skill.memory_bonus ? { memory_bonus: skill.memory_bonus } : {}),
+                ...(skill.undeletable ? { undeletable: true } : {}),
+                ...(skill.combat_swap ? { combat_swap: true } : {})
             }
         },
         effects: [],
