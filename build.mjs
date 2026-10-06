@@ -718,6 +718,17 @@ for (const { file, item } of items) {
 fs.mkdirSync(path.dirname(RISK_OUT), { recursive: true });
 fs.writeFileSync(RISK_OUT, JSON.stringify(risks, null, 2) + '\n', 'utf8');
 
+// Базы компендиумов (LevelDB) полностью собираются из dist: старая база удаляется перед упаковкой,
+// иначе неполная или повреждённая база (например, после git pull) не откроется. Мир должен быть закрыт.
+for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm']) {
+    try {
+        fs.rmSync(path.join('./packs', pack), { recursive: true, force: true });
+    } catch (e) {
+        console.error(`Не удалось удалить старую базу packs/${pack}: ${e.message}. Закройте мир в Foundry и повторите сборку.`);
+        process.exit(1);
+    }
+}
+
 // Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
 let journals = [];
 try {
