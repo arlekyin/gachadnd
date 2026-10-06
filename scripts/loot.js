@@ -369,6 +369,7 @@ export class GachaLootTerminal extends Application {
                     extraFlags,
                     fallbackDescription: crystal.system?.description?.value || ''
                 });
+                if (result.status === 'duplicate') await actor.createEmbeddedDocuments('Item', [crystal.toObject()]);
                 results.push({ actor, skillName, rarity: extraFlags.rarity || rarity, ...result });
             }
         }
@@ -399,7 +400,7 @@ export class GachaLootTerminal extends Application {
 
         const forcedText = {
             added: () => 'занесён в Память',
-            ranked: r => `ранг повышен до ${r.rank}`,
+            duplicate: () => 'повтор — кристалл в инвентаре, слияние на Привале',
             replaced: r => `занесён в Память, сгорел «${r.replacedName}»`,
             burned: () => 'сгорел'
         };

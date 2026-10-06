@@ -116,9 +116,18 @@ function getHitDice(actor) {
     return hd?.classes ? hd : null;
 }
 
-// Повышение ранга на Привале за Кости Хитов; кости списываются с самых маленьких
+// Повторный кристалл навыка в инвентаре персонажа
+export function findDuplicateCrystal(actor, item) {
+    const key = item.flags[MODULE_ID].skill_name.trim().toLowerCase();
+    return actor.items.find(i => isCrystalItem(i)
+        && (i.flags?.[MODULE_ID]?.skill_name || i.name.replace(/^Кристалл:\s*/, '')).trim().toLowerCase() === key);
+}
+
+// Слияние на Привале: повторный кристалл + Кости Хитов → ранг; кости списываются с самых маленьких
 export async function forgeSkill(actor, item) {
     if (!canRankUp(item)) return ui.notifications.warn(`⚠️ Навык «${item.name}» нельзя улучшить.`);
+    const crystal = findDuplicateCrystal(actor, item);
+    if (!crystal) return ui.notifications.warn(`⚠️ Для слияния нужен повторный кристалл «${item.name}» в инвентаре.`);
     const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
     const cost = FORGE_COST[rank];
     const hd = getHitDice(actor);
@@ -135,8 +144,11 @@ export async function forgeSkill(actor, item) {
         if (!left) break;
     }
     await actor.updateEmbeddedDocuments('Item', updates);
+    const quantity = crystal.system?.quantity ?? 1;
+    if (quantity > 1) await crystal.update({ 'system.quantity': quantity - 1 });
+    else await crystal.delete();
     await rankUpSkill(item);
-    await announceRankUp(actor, item, rank, `Привал: потрачено Костей Хитов — ${cost}`);
+    await announceRankUp(actor, item, rank, `Привал: слит повторный кристалл, потрачено Костей Хитов — ${cost}`);
 }
 
 /**
@@ -146,7 +158,7 @@ export async function forgeSkill(actor, item) {
 export function checkMemoryAccess(actor, skillName) {
     const existing = findMemorySkill(actor, skillName);
     if (existing) {
-        if (canRankUp(existing)) return { ok: true };
+        if (canRankUp(existing)) return { ok: false, reason: `Навык «${skillName}» уже в Памяти. Повторный кристалл сливается с ним на Привале кнопкой «Слить» в Терминале Тумана.` };
         if ((existing.flags[MODULE_ID].max_rank ?? 1) === 1) return { ok: false, reason: `Навык «${skillName}» уникален и уже есть в Памяти.` };
         return { ok: false, reason: `Навык «${skillName}» уже в Памяти на максимальном ранге.` };
     }
@@ -165,8 +177,9 @@ export function checkMemoryAccess(actor, skillName) {
 export async function addSkillToMemory(actor, skillName, { forced = false, extraFlags = {}, fallbackDescription = '' } = {}) {
     const existing = findMemorySkill(actor, skillName);
     if (existing) {
-        if (canRankUp(existing)) return { status: 'ranked', rank: await rankUpSkill(existing) };
         if (!forced) return { status: 'blocked', reason: checkMemoryAccess(actor, skillName).reason };
+        // Повтор с доступным рангом остаётся кристаллом в инвентаре — его сливают на Привале
+        if (canRankUp(existing)) return { status: 'duplicate' };
         await addBurned(actor, 1);
         return { status: 'burned' };
     }
@@ -202,8 +215,7 @@ async function absorbCrystal(actor, item) {
             extraFlags,
             fallbackDescription: item.system?.description?.value || ""
         });
-        if (result.status === 'ranked') await announceRankUp(actor, findMemorySkill(actor, skillName), result.rank, 'Поглощён повторный кристалл');
-        else if (result.status === 'added') ui.notifications.info(`🧠 Кристалл «${skillName}» поглощён в Память персонажа ${actor.name}!`);
+        if (result.status === 'added') ui.notifications.info(`🧠 Кристалл «${skillName}» поглощён в Память персонажа ${actor.name}!`);
         else ui.notifications.warn(`⚠️ ${result.reason}`);
     } catch (err) {
         console.error(`❌ Ошибка поглощения кристалла:`, err);
@@ -244,17 +256,13 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
     return true; 
 });
 
-// Повтор навыка, перенесённый на лист из компендиума, повышает ранг вместо создания копии
+// Копия навыка, который уже есть в Памяти, на лист не добавляется
 Hooks.on('preCreateItem', (item) => {
     if (!(item.parent instanceof Actor) || !isMemorySkill(item)) return;
     const skillName = item.flags[MODULE_ID].skill_name;
     const existing = findMemorySkill(item.parent, skillName);
     if (!existing) return;
-    if (canRankUp(existing)) {
-        rankUpSkill(existing).then(rank => announceRankUp(item.parent, existing, rank, 'Добавлена повторная копия'));
-    } else {
-        ui.notifications.warn(`⚠️ ${checkMemoryAccess(item.parent, skillName).reason}`);
-    }
+    ui.notifications.warn(`⚠️ ${checkMemoryAccess(item.parent, skillName).reason}`);
     return false;
 });
 
