@@ -40,6 +40,32 @@ function descriptionBody(html = '') {
     return html.includes('<hr>') ? html.slice(html.indexOf('<hr>') + 4) : html;
 }
 
+// Характеристики навыка из его активности dnd5e — строки под описанием
+function statsRows(item) {
+    const rows = [];
+    const activity = item.system?.activities?.contents?.[0];
+    if (!activity) {
+        rows.push(['Тип', 'Пассивный — действует, пока навык экипирован']);
+    } else {
+        const labels = activity.labels ?? {};
+        const activation = labels.activation || CONFIG.DND5E.activityActivationTypes?.[activity.activation?.type]?.label;
+        if (activation) rows.push(['Активация', activation]);
+        if (labels.range || activity.range?.value) rows.push(['Дальность', labels.range || `${activity.range.value} фт`]);
+        const template = activity.target?.template;
+        if (template?.type) rows.push(['Область', `${CONFIG.DND5E.areaTargetTypes?.[template.type]?.label ?? template.type}, ${template.size} фт`]);
+        const ability = activity.save?.ability?.first?.() ?? [...(activity.save?.ability ?? [])][0];
+        if (ability) rows.push(['Спасбросок', labels.save || CONFIG.DND5E.abilities?.[ability]?.label || ability]);
+    }
+    const uses = usesInfo(item);
+    if (uses) {
+        // Заряды редактируются прямо в строке характеристик
+        const period = item.system.uses.recovery?.[0]?.period;
+        const periodLabel = period ? (CONFIG.DND5E.limitedUsePeriods?.[period]?.label ?? uses.period) : '';
+        rows.push(['Заряды', `<input type="text" class="gd-uses-input" data-item-id="${item.id}" data-max="${uses.max}" value="${uses.value}"> / ${uses.max}${periodLabel ? ` · ${esc(periodLabel)}` : ''}`, true]);
+    }
+    return rows;
+}
+
 function hasActivities(item) {
     return (item.system?.activities?.size ?? 0) > 0;
 }
@@ -198,9 +224,10 @@ export class MemoryTerminal extends ApplicationV2 {
         return `
             <div class="gd-altar">
                 <div class="gd-deck">${this.#deckHtml(context)}</div>
-                <div class="gd-feature">${this.#featureHtml(context)}</div>
+                <div class="gd-feature"><div class="gd-feature-inner">${this.#featureHtml(context)}</div></div>
                 <aside class="gd-side">
                     ${this.#ringHtml(context)}
+                    ${this.#buildHtml(context)}
                     <div class="gd-glossary">${context.glossary.map(g => `
                         <div class="gd-term ${g.accent ? 'accent' : ''}">
                             <div class="gd-term-title">${esc(g.title)}</div>
@@ -212,6 +239,10 @@ export class MemoryTerminal extends ApplicationV2 {
     }
 
     #deckHtml(context) {
+        // Свободные ячейки Памяти — пустыми картами, как закрытые карты Арканы
+        const empty = Math.max(0, MEMORY_CAPACITY - context.memory.length);
+        const emptyHtml = Array.from({ length: empty }, () =>
+            '<div class="gd-tcard empty" title="Свободная ячейка Памяти"><i class="fas fa-plus"></i></div>').join('');
         return context.memory.map(item => {
             const flags = item.flags[MODULE_ID];
             const rarity = RARITY[flags.rarity] ?? RARITY.gray;
@@ -227,7 +258,7 @@ export class MemoryTerminal extends ApplicationV2 {
                     ${mergeable ? '<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>' : ''}
                     <div class="gd-tcard-name">${esc(item.name)}</div>
                 </div>`;
-        }).join('');
+        }).join('') + emptyHtml;
     }
 
     #featureHtml({ selected, emittedTags, atRest, hitDice, descriptions }) {
@@ -239,7 +270,6 @@ export class MemoryTerminal extends ApplicationV2 {
         if (flags.is_active && !flags.tagEmitter) emittedTags.forEach(t => { if (!tags.includes(t)) tags.push(t); });
 
         const body = descriptionBody(descriptions.get(selected.id));
-        const uses = usesInfo(selected);
 
         let forgeButton = '';
         if (atRest && canRankUp(selected)) {
@@ -262,11 +292,12 @@ export class MemoryTerminal extends ApplicationV2 {
                 <span class="gd-chip" style="--chip: ${rarity.color}">${rarity.label}</span>
                 <span class="gd-chip">${esc(flags.category ?? '')}</span>
                 ${tags.map(t => `<span class="gd-chip tag">${esc(t)}</span>`).join('')}
-                ${ranked ? `<span class="gd-chip">Ранг ${RANK_LABELS[(flags.rank ?? 1) - 1]} из ${RANK_LABELS[(flags.max_rank ?? 1) - 1]}</span>` : '<span class="gd-chip">Уникальный</span>'}
+                ${ranked ? `<span class="gd-chip">Ранг ${RANK_LABELS[(flags.rank ?? 1) - 1]} из ${RANK_LABELS[(flags.max_rank ?? 1) - 1]}</span>` : ''}
+                ${['purple', 'red'].includes(flags.rarity) ? '<span class="gd-chip unique">Уникальный</span>' : ''}
             </div>
-            ${uses ? `<div class="gd-feature-uses">Заряды ${usesHtml(selected)}</div>` : ''}
             ${flags.drawback ? `<div class="gd-feature-drawback"><strong>Штраф:</strong> ${esc(flags.drawback)}</div>` : ''}
             <div class="gd-feature-text">${body || '<p>Описание отсутствует.</p>'}</div>
+            <dl class="gd-stats">${statsRows(selected).map(([k, v, raw]) => `<dt>${k}</dt><dd>${raw ? v : esc(v)}</dd>`).join('')}</dl>
             <div class="gd-details-actions">
                 <button type="button" class="gd-btn ${flags.is_active ? 'unequip' : 'equip'}" data-action="toggleEquip" data-item-id="${selected.id}">
                     ${flags.is_active ? '<i class="fas fa-power-off"></i> Снять' : '<i class="fas fa-bolt"></i> Экипировать'}
@@ -274,6 +305,18 @@ export class MemoryTerminal extends ApplicationV2 {
                 ${useButton}
                 ${forgeButton}
             </div>`;
+    }
+
+    // Прогресс синергий по всем тегам экипированных навыков: ступени 2/4/6
+    #buildHtml({ tagCounts }) {
+        const tags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        if (!tags.length) return '';
+        const rows = tags.map(([tag, count]) => {
+            const pips = Array.from({ length: 6 }, (_, i) =>
+                `<span class="${i < count ? 'on' : ''} ${i % 2 ? 'step' : ''}"></span>`).join('');
+            return `<div class="gd-build-row"><span class="gd-build-tag">${esc(tag)}</span><span class="gd-build-pips">${pips}</span><span class="gd-build-count">${count}</span></div>`;
+        }).join('');
+        return `<div class="gd-build"><div class="gd-build-title">Синергии сборки</div>${rows}</div>`;
     }
 
     // Кольцо «Предела разума» из сегментов, как счётчик Хватки в Hades II
