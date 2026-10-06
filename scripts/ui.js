@@ -40,16 +40,6 @@ function descriptionBody(html = '') {
     return html.includes('<hr>') ? html.slice(html.indexOf('<hr>') + 4) : html;
 }
 
-// Частицы пепла: позиции и задержки детерминированы, чтобы перерисовка не дёргала анимацию
-function embersHtml(count, seed = 0) {
-    let html = '';
-    for (let i = 0; i < count; i++) {
-        const k = (i * 37 + seed * 11) % 100;
-        html += `<i style="--x: ${(k * 0.97) % 100}%; --d: ${((i * 0.73 + seed * 0.31) % 3).toFixed(2)}s; --t: ${(2.4 + (k % 7) * 0.25).toFixed(2)}s; --s: ${1 + (k % 3)}px"></i>`;
-    }
-    return `<span class="gd-embers" aria-hidden="true">${html}</span>`;
-}
-
 function hasActivities(item) {
     return (item.system?.activities?.size ?? 0) > 0;
 }
@@ -233,7 +223,6 @@ export class MemoryTerminal extends ApplicationV2 {
             return `
                 <div class="${classes.join(' ')}" style="--rarity: ${rarity.color}" data-action="select" data-item-id="${item.id}" title="${esc(item.name)}">
                     <div class="gd-tcard-art" style="background-image: url('${item.img}')"></div>
-                    ${flags.is_active ? embersHtml(5, item.id.charCodeAt(0)) : ''}
                     ${ranked ? `<span class="gd-tcard-badge">${flags.rank ?? 1}</span>` : ''}
                     ${mergeable ? '<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>' : ''}
                     <div class="gd-tcard-name">${esc(item.name)}</div>
@@ -265,7 +254,7 @@ export class MemoryTerminal extends ApplicationV2 {
         return `
             <div class="gd-bigcard ${flags.is_active ? 'equipped' : ''}" style="--rarity: ${rarity.color}" data-action="openSheet" data-item-id="${selected.id}" title="Открыть лист навыка">
                 <div class="gd-bigcard-art" style="background-image: url('${selected.img}')"></div>
-                ${flags.is_active ? embersHtml(24, 3) : ''}
+                ${flags.is_active ? '<span class="gd-neon" aria-hidden="true"></span>' : ''}
                 ${ranked ? `<div class="gd-bigcard-plate">${RANK_LABELS[(flags.rank ?? 1) - 1]}</div>` : ''}
             </div>
             <h2 class="gd-feature-name">${esc(selected.name)}</h2>
