@@ -18,6 +18,7 @@ import { randomCrystal, crystalForSkill } from "./crystals.js";
 import { getFloor, rollGold, addGold } from "./economy.js";
 import { partyActors } from "./horsemen.js";
 import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "./socket.js";
+import { validateRisk } from "./risk-schema.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -29,17 +30,51 @@ const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt
 // ДАННЫЕ
 // ==========================================
 
+// Пул испытаний: встроенные (data/risks.json) и свои испытания Мастера из JSON-файла мира
 let challenges = null;
-async function loadChallenges() {
-    if (!challenges) {
-        const response = await fetch(`modules/${MODULE_ID}/data/risks.json`);
-        challenges = response.ok ? await response.json() : [];
+async function fetchJson(path) {
+    try {
+        const response = await fetch(path);
+        return response.ok ? await response.json() : null;
+    } catch {
+        return null;
     }
+}
+
+async function loadChallenges() {
+    if (challenges) return challenges;
+    const own = game.settings.get(MODULE_ID, 'riskOnlyCustom') ? [] : (await fetchJson(`modules/${MODULE_ID}/data/risks.json`)) ?? [];
+    const custom = [];
+    const path = game.settings.get(MODULE_ID, 'riskCustomFile');
+    if (path) {
+        const data = await fetchJson(path);
+        if (!data) ui.notifications.error(`Свои испытания Риска: файл «${path}» не прочитан. Нужен JSON — объект испытания или список.`);
+        for (const [i, risk] of (Array.isArray(data) ? data : data ? [data] : []).entries()) {
+            const errors = validateRisk(risk);
+            if ([...own, ...custom].some(c => c.id === risk?.id)) errors.push(`id: «${risk.id}» уже используется`);
+            if (errors.length) {
+                if (game.user.isGM) ui.notifications.error(`Испытание ${risk?.id ?? `№${i + 1}`} пропущено — ${errors[0]}`);
+                console.warn(`[GachaDND] Испытание Риска ${risk?.id ?? i} пропущено:`, errors);
+            } else custom.push(risk);
+        }
+    }
+    challenges = [...own, ...custom];
     return challenges;
 }
 
 export function registerRiskSettings() {
     game.settings.register(MODULE_ID, 'riskHistory', { scope: 'world', config: false, type: Array, default: [] });
+    const reset = () => { challenges = null; };
+    game.settings.register(MODULE_ID, 'riskCustomFile', {
+        name: 'Свои испытания Риска',
+        hint: 'JSON-файл с испытаниями (объект или список) — формат как в src/risks/SCHEMA.md модуля. Добавляются к встроенным.',
+        scope: 'world', config: true, type: String, default: '', filePicker: 'any', onChange: reset
+    });
+    game.settings.register(MODULE_ID, 'riskOnlyCustom', {
+        name: 'Только свои испытания Риска',
+        hint: 'Встроенные испытания не используются.',
+        scope: 'world', config: true, type: Boolean, default: false, onChange: reset
+    });
 }
 
 function currentRiskNode(scene = canvas?.scene) {
@@ -242,6 +277,17 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
         if (risk.stage >= challenge.stages.length) await deliver(risk, game.actors.get(risk.recipientId) ?? actor ?? partyActors()[0], 'complete');
     }
 
+    // Импровизация не удалась: провал этапа, выступавший теряет ПЗ, равные уровню, и пропускает следующий этап
+    else if (op === 'autoFail' && user?.isGM && stage && !risk.pending) {
+        if (!stage.group && actor) {
+            await applyFail(actor, { hp: 1 });
+            risk.lastPerformer = actorId;
+        }
+        risk.groupRolls = {};
+        risk.log.push(`✖ ${stage.name}: ${stage.group ? 'отряд' : actor?.name ?? 'отряд'} — импровизация не удалась`);
+        await finishFailure();
+    }
+
     else if (op === 'recipient' && user?.isGM) {
         risk.recipientId = recipientId;
     }
@@ -293,6 +339,7 @@ export class RiskWindow extends ApplicationV2 {
             blood: () => request({ op: 'blood' }),
             accept: () => request({ op: 'accept' }),
             auto: RiskWindow.#onAuto,
+            autoFail: RiskWindow.#onAutoFail,
             leave: RiskWindow.#onLeave
         }
     };
@@ -386,7 +433,8 @@ export class RiskWindow extends ApplicationV2 {
         const gm = game.user.isGM && risk.active ? `
             <div class="gd-risk-gm">
                 <label>Добыча — <select class="gd-risk-recipient">${party.map(a => `<option value="${a.id}" ${a.id === risk.recipientId ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
-                ${stage && !risk.pending ? '<button type="button" data-action="auto" title="Творческое применение навыка, заклинания или предмета">Автоуспех</button>' : ''}
+                ${stage && !risk.pending ? '<button type="button" data-action="auto" title="Творческое применение навыка, заклинания или предмета удалось">Автоуспех</button>' : ''}
+                ${stage && !risk.pending ? '<button type="button" data-action="autoFail" title="Импровизация не удалась: провал этапа, выступавший теряет ПЗ, равные уровню">Автопровал</button>' : ''}
                 <button type="button" data-action="leave" ${risk.pending ? 'disabled' : ''}>Уйти с добычей</button>
             </div>` : '';
 
@@ -446,6 +494,10 @@ export class RiskWindow extends ApplicationV2 {
 
     static #onAuto() {
         request({ op: 'auto', actorId: this.performerId });
+    }
+
+    static #onAutoFail() {
+        request({ op: 'autoFail', actorId: this.performerId });
     }
 
     static #onLeave() {
