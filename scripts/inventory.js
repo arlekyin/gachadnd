@@ -23,7 +23,7 @@ function findMemorySkill(actor, skillName) {
     return actor.items.find(i => isMemorySkill(i) && i.flags[MODULE_ID].skill_name.trim().toLowerCase() === key);
 }
 
-function canRankUp(item) {
+export function canRankUp(item) {
     const flags = item.flags[MODULE_ID];
     return (flags.rank ?? 1) < (flags.max_rank ?? 1) && Array.isArray(flags.rank_data);
 }
@@ -98,6 +98,47 @@ async function buildSkillData(skillName, { extraFlags = {}, fallbackDescription 
     return featData;
 }
 
+const RANK_LABELS = ['I', 'II', 'III'];
+
+// Сообщение в чат о повышении ранга — видно всем игрокам
+export async function announceRankUp(actor, item, rank, note = '') {
+    await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor }),
+        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> — ранг ${RANK_LABELS[rank - 1]}${note ? `<br><span style="opacity: 0.75">${note}</span>` : ''}</div>`
+    });
+}
+
+// Цена улучшения на Привале в Костях Хитов: ранг II — 1, ранг III — 2
+export const FORGE_COST = { 2: 1, 3: 2 };
+
+function getHitDice(actor) {
+    const hd = actor.system?.attributes?.hd;
+    return hd?.classes ? hd : null;
+}
+
+// Повышение ранга на Привале за Кости Хитов; кости списываются с самых маленьких
+export async function forgeSkill(actor, item) {
+    if (!canRankUp(item)) return ui.notifications.warn(`⚠️ Навык «${item.name}» нельзя улучшить.`);
+    const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
+    const cost = FORGE_COST[rank];
+    const hd = getHitDice(actor);
+    if (!hd || hd.value < cost) return ui.notifications.warn(`⚠️ Не хватает Костей Хитов: нужно ${cost}, доступно ${hd?.value ?? 0}.`);
+
+    const classes = [...hd.classes].sort((a, b) =>
+        parseInt(a.system.hd.denomination.slice(1)) - parseInt(b.system.hd.denomination.slice(1)));
+    const updates = [];
+    let left = cost;
+    for (const cls of classes) {
+        const take = Math.min(left, cls.system.hd.value);
+        if (take > 0) updates.push({ _id: cls.id, 'system.hd.spent': cls.system.hd.spent + take });
+        left -= take;
+        if (!left) break;
+    }
+    await actor.updateEmbeddedDocuments('Item', updates);
+    await rankUpSkill(item);
+    await announceRankUp(actor, item, rank, `Привал: потрачено Костей Хитов — ${cost}`);
+}
+
 /**
  * Проверка, можно ли добавить навык в Память без принудительного режима.
  * @returns {{ ok: boolean, reason?: string }}
@@ -161,7 +202,7 @@ async function absorbCrystal(actor, item) {
             extraFlags,
             fallbackDescription: item.system?.description?.value || ""
         });
-        if (result.status === 'ranked') ui.notifications.info(`⬆️ Навык «${skillName}» персонажа ${actor.name} повышен до ранга ${result.rank}.`);
+        if (result.status === 'ranked') await announceRankUp(actor, findMemorySkill(actor, skillName), result.rank, 'Поглощён повторный кристалл');
         else if (result.status === 'added') ui.notifications.info(`🧠 Кристалл «${skillName}» поглощён в Память персонажа ${actor.name}!`);
         else ui.notifications.warn(`⚠️ ${result.reason}`);
     } catch (err) {
@@ -210,7 +251,7 @@ Hooks.on('preCreateItem', (item) => {
     const existing = findMemorySkill(item.parent, skillName);
     if (!existing) return;
     if (canRankUp(existing)) {
-        rankUpSkill(existing).then(rank => ui.notifications.info(`⬆️ Навык «${skillName}» повышен до ранга ${rank}.`));
+        rankUpSkill(existing).then(rank => announceRankUp(item.parent, existing, rank, 'Добавлена повторная копия'));
     } else {
         ui.notifications.warn(`⚠️ ${checkMemoryAccess(item.parent, skillName).reason}`);
     }

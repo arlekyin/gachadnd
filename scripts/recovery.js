@@ -5,7 +5,8 @@
  * Не использует глобальные объекты Foundry на уровне модуля.
  */
 
-// Собственные периоды модуля, регистрируются в CONFIG.DND5E.limitedUsePeriods
+// Собственные периоды модуля, регистрируются в CONFIG.DND5E.limitedUsePeriods.
+// gachaFloor оставлен для навыков, собранных до перехода «этажа» на долгий отдых.
 export const GACHA_PERIODS = {
     gachaFloor: { label: 'Этаж', abbreviation: 'этаж' },
     gachaRun: { label: 'Забег', abbreviation: 'забег' },
@@ -20,7 +21,8 @@ export const RECOVERY_VALUES = {
     turn: { period: 'turn', label: 'ход' },
     round: { period: 'turnStart', label: 'раунд' },
     combat: { period: 'initiative', label: 'бой' },
-    floor: { period: 'gachaFloor', label: 'этаж' },
+    // Долгий отдых — только после босса, поэтому «раз за этаж» = «раз за долгий отдых»
+    floor: { period: 'lr', label: 'этаж' },
     run: { period: 'gachaRun', label: 'забег' },
     scene: { period: 'gachaScene', label: 'сцена' },
     none: { period: null, label: 'без восстановления' }
