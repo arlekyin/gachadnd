@@ -5,10 +5,3 @@ tags:
   - щит
 description: Вас нельзя приклеить, опутать паутиной или схватить слизью.
 activation: none
-ranks:
-  - text: Преимущество на проверки, чтобы вырваться из захвата.
-  - text: Иммунитет к состоянию «схваченный».
-    changes:
-      - key: system.traits.ci.value
-        mode: add
-        value: grappled
