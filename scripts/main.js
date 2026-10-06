@@ -2,6 +2,9 @@
  * Gacha Roguelike dnd5e — Главный клиентский скрипт модуля
  */
 
+// Первым: остальные скрипты читают MODULE_ID через main.js
+export { MODULE_ID } from "./constants.js";
+import { MODULE_ID } from "./constants.js";
 import { MemoryTerminal } from "./ui.js";
 import { GachaLootTerminal } from "./loot.js";
 import { GachaMapTerminal } from "./map.js";
@@ -14,7 +17,6 @@ import { DoomAltar } from "./altar.js";
 import { ShopWindow, registerShopSocket } from "./shop.js";
 import { registerEconomySettings } from "./economy.js";
 
-export const MODULE_ID = 'gachadnd';
 
 Hooks.once('init', () => {
     console.log(`%c🎲 GachaDND | Инициализация...`, 'color: #ffaa00; font-weight: bold;');
