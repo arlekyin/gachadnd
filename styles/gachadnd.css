@@ -791,14 +791,14 @@
 .gachadnd-terminal .gd-body::before {
   background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.0045'%20numOctaves='4'%20seed='7'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.62%20%200%200%200%200%200.93%20%200%200%200%200%200.86%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E");
   background-size: 640px 640px;
-  opacity: 0.32;
+  opacity: 0.45;
   animation: gd-fog-drift 90s linear var(--gd-phase-fog, 0ms) infinite;
 }
 .gachadnd-terminal .gd-altar::after,
 .gachadnd-terminal .gd-body::after {
   background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.008'%20numOctaves='4'%20seed='19'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.62%20%200%200%200%200%200.93%20%200%200%200%200%200.86%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E");
   background-size: 640px 640px;
-  opacity: 0.2;
+  opacity: 0.3;
   animation: gd-fog-drift 55s linear var(--gd-phase-fog2, 0ms) infinite reverse;
 }
 @keyframes gd-fog-drift {
@@ -878,7 +878,7 @@
 .gachadnd-terminal .gd-build-count { width: 14px; text-align: right; color: #9fd9c8; }
 
 /* ==========================================
-   Нейронная сеть на фоне
+   Нейронная сеть на фоне (canvas, scripts/neural.js)
    ========================================== */
 
 .gachadnd-terminal .gd-neural {
@@ -888,26 +888,4 @@
   height: 100%;
   z-index: -1;
   pointer-events: none;
-}
-.gachadnd-terminal .gd-neural-links line { stroke: rgba(95, 224, 184, 0.10); stroke-width: 1; }
-.gachadnd-terminal .gd-neural-nodes circle {
-  fill: #7fe8c8;
-  opacity: 0.25;
-  animation: gd-node-glow var(--dur) ease-in-out infinite;
-}
-@keyframes gd-node-glow {
-  0%, 100% { opacity: 0.15; }
-  50% { opacity: 0.6; }
-}
-.gachadnd-terminal .gd-pulse {
-  stroke: #c8fff0;
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: 0;
-  filter: drop-shadow(0 0 3px #5fe0b8);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gachadnd-terminal .gd-neural-nodes circle { animation: none; }
-  .gachadnd-terminal .gd-pulse { display: none; }
 }

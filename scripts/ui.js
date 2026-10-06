@@ -11,7 +11,7 @@ import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, MEMORY_CAPACIT
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
-import { neuralHtml } from "./neural.js";
+import { NeuralBackground } from "./neural.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -129,6 +129,12 @@ export class MemoryTerminal extends ApplicationV2 {
 
     // Изменения документов приходят пачками (экипировка, пересчёт синергий) — перерисовка одна
     #debouncedRender = foundry.utils.debounce(() => this.render(), 50);
+
+    _onClose(options) {
+        this.neural?.stop();
+        this.neural = null;
+        return super._onClose?.(options);
+    }
     requestRender() {
         this.#debouncedRender();
     }
@@ -199,7 +205,7 @@ export class MemoryTerminal extends ApplicationV2 {
         return `
             ${this.#tabsHtml(context)}
             ${this.#headerHtml(context)}
-            <section class="gd-body">${neuralHtml(this.actor.id, context.equipped.length)}${this.#slotsHtml(context)}</section>`;
+            <section class="gd-body"><canvas class="gd-neural" data-active="${context.equipped.length}"></canvas>${this.#slotsHtml(context)}</section>`;
     }
 
     #tabsHtml(context) {
@@ -224,7 +230,7 @@ export class MemoryTerminal extends ApplicationV2 {
         }
         return `
             <div class="gd-altar">
-                ${neuralHtml(this.actor.id, context.equipped.length)}
+                <canvas class="gd-neural" data-active="${context.equipped.length}"></canvas>
                 <div class="gd-deck">${this.#deckHtml(context)}</div>
                 <div class="gd-feature"><div class="gd-feature-inner">${this.#featureHtml(context)}</div></div>
                 <aside class="gd-side">
@@ -356,6 +362,12 @@ export class MemoryTerminal extends ApplicationV2 {
     }
 
     _onRender() {
+        // Фон-сеть: старый цикл отрисовки останавливается, новый запускается на свежем canvas
+        this.neural?.stop();
+        const canvas = this.element.querySelector('canvas.gd-neural');
+        this.neural = canvas ? new NeuralBackground(canvas, this.actor.id, Number(canvas.dataset.active) || 0) : null;
+        this.neural?.start();
+
         // Отрицательная задержка = текущая позиция в цикле: неон продолжает движение после перерисовки
         const now = Date.now();
         this.element.style.setProperty('--gd-phase-small', `-${now % 4500}ms`);
