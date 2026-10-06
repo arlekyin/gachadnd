@@ -474,7 +474,7 @@
 .gachadnd-terminal .gd-row-main:hover { background: rgba(255, 255, 255, 0.03); }
 .gachadnd-terminal .gd-row-main img { width: 34px; height: 34px; border: none; border-radius: 3px; }
 .gachadnd-terminal .gd-row-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.gachadnd-terminal .gd-row-name span { font-family: "Modesto Condensed", serif; font-size: 1.25em; color: #f5efe6; }
+.gachadnd-terminal .gd-row-name > span { font-family: "Modesto Condensed", serif; font-size: 1.25em; color: #f5efe6; }
 .gachadnd-terminal .gd-row-name small { font-size: 0.75em; color: var(--gd-dim); text-transform: uppercase; }
 .gachadnd-terminal .gd-roll {
   width: 32px;
