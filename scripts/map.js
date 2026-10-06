@@ -202,10 +202,15 @@ export class GachaMapTerminal extends Application {
             </style>
         `;
 
-        let controlPanel = '';
+        // Номер этажа забега: виден всем; Мастер задаёт номер следующего этажа при создании карты
+        const floor = getFloor();
+        const nextFloor = this.currentMap?.visitedNodes?.length ? floor + 1 : floor;
+        let controlPanel = `
+            <div style="padding: 8px 10px; border-bottom: 1px solid #3d3834; background: #110f0e; text-align: center; color: #ffaa00; font-size: 1.25em; letter-spacing: 0.08em; z-index: 10;">ЭТАЖ ${floor}</div>`;
         if (game.user.isGM) {
-            controlPanel = `
-                <div style="padding: 10px; border-bottom: 1px solid #3d3834; display: flex; justify-content: space-between; align-items: center; background: #161414; z-index: 10;">
+            controlPanel += `
+                <div style="padding: 10px; border-bottom: 1px solid #3d3834; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #161414; z-index: 10;">
+                    <div style="color: #7a7062; font-size: 1.1em;" title="Номер нового этажа. От него зависят цены и награды золотом.">Этаж: <input type="number" id="gacha-map-floor" value="${nextFloor}" min="1" max="20" style="width: 40px; background: #000; color: #ffaa00; border: 1px solid #444; text-align: center;"></div>
                     <div style="color: #7a7062; font-size: 1.1em;">Узлов: <input type="number" id="gacha-map-length" value="6" min="3" max="15" style="width: 40px; background: #000; color: #ffaa00; border: 1px solid #444; text-align: center;"></div>
                     <button id="gacha-generate-map-btn" style="width: 150px; padding: 4px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border: 1px solid #ffaa00; color: #ffaa00; font-weight: bold; cursor: pointer;">Создать Этаж</button>
                 </div>
@@ -296,8 +301,9 @@ export class GachaMapTerminal extends Application {
             genBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const length = parseInt(element.querySelector('#gacha-map-length').value) || 6;
-                // Новый этаж забега: номер растёт, если по прошлой карте отряд уже ходил
-                if (this.currentMap?.visitedNodes?.length) await game.settings.set(MODULE_ID, 'runFloor', getFloor() + 1);
+                // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
+                const floor = Math.max(1, parseInt(element.querySelector('#gacha-map-floor').value) || getFloor());
+                await game.settings.set(MODULE_ID, 'runFloor', floor);
                 this.currentMap = generateMapGraph(length);
                 
                 if (canvas.scene) {

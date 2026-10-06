@@ -28,7 +28,7 @@ export function allowedItemRarities(floor) {
 
 export function registerEconomySettings() {
     const settings = {
-        runFloor: { name: 'Этаж забега', hint: 'Растёт при создании нового этажа на карте. От него зависят цены и награды золотом.', type: Number, default: 1 },
+        runFloor: { name: 'Этаж забега', type: Number, default: 1, config: false },
         goldBase: { name: 'Базовое золото 1-го этажа', hint: 'База(Э) = базовое золото × рост^(Э − 1).', type: Number, default: 100 },
         goldGrowth: { name: 'Рост золота за этаж', type: Number, default: 1.5 },
         crystalPrices: { name: 'Цены кристаллов (доля базы)', hint: 'Серый / зелёный / синий / фиолетовый. Красные не продаются.', type: String, default: '0.2/0.5/1.2/3' },
@@ -40,6 +40,11 @@ export function registerEconomySettings() {
     for (const [key, config] of Object.entries(settings)) {
         game.settings.register(MODULE_ID, key, { scope: 'world', config: true, ...config });
     }
+    // Номер этажа задаётся на карте этажа; перерисовка открытых окон при его изменении
+    game.settings.settings.get(`${MODULE_ID}.runFloor`).onChange = () => {
+        Object.values(ui.windows).forEach(w => w.constructor?.name === 'GachaMapTerminal' && w.render(false));
+        foundry.applications.instances?.get('gachadnd-shop')?.render();
+    };
 }
 
 export const getFloor = () => Math.max(1, Number(game.settings.get(MODULE_ID, 'runFloor')) || 1);
