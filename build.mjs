@@ -227,14 +227,14 @@ function validateSkill(skill, folder) {
         });
     }
 
-    // [[/heal]] и [[/damage]] без формулы берут её из активности навыка — активность должна быть
-    const bareEnrichers = [skill.description, skill.drawback].filter(Boolean).join(' ')
-        .matchAll(/\[\[\/(heal|healing|damage)((?:\s+(?:average|extended|temp))*)\s*\]\]/g);
-    const damage = Array.isArray(skill.damage) ? skill.damage : [];
-    const hasHeal = isActive && damage.some(d => HEALING_TYPES.includes(d?.type));
-    const hasDamage = isActive && damage.some(d => DAMAGE_TYPES.includes(d?.type));
-    for (const [match, kind] of bareEnrichers) {
-        if (kind === 'damage' ? !hasDamage : !hasHeal) err('description', `${match} без формулы требует ${kind === 'damage' ? 'урона' : 'лечения'} в damage`);
+    // {damage} подставляет формулу текущего ранга — у навыка должна быть запись в damage
+    if ([skill.description, skill.drawback].some(t => typeof t === 'string' && t.includes('{damage}'))
+        && !(isActive && Array.isArray(skill.damage) && skill.damage.length)) {
+        err('description', '{damage} требует активации и записи в damage');
+    }
+    // [[/heal]] и [[/damage]] без формулы dnd5e разрешает не во всех окнах (в карточке чата — нет)
+    if ([skill.description, skill.drawback].some(t => typeof t === 'string' && /\[\[\/(heal|healing|damage)((\s+(average|extended|temp))*)\s*]]/.test(t))) {
+        err('description', '[[/heal]] и [[/damage]] без формулы не используются — пишите {damage}');
     }
 
     return errors;
@@ -310,6 +310,12 @@ function buildActivity(skill, usesMax) {
     return activity;
 }
 
+// {damage} → формула урона или лечения навыка на данном ранге, вычисляемая в Foundry ([[gacha ...]])
+function withFormula(text, skill) {
+    const formula = (skill.damage ?? []).map(d => String(d.formula)).join(' + ');
+    return String(text).replaceAll('{damage}', `[[gacha ${formula}]]`);
+}
+
 function buildItem(skill, folder, rank = 1) {
     const maxRank = 1 + (skill.ranks?.length ?? 0);
     const ranked = resolveRank(skill, rank);
@@ -342,9 +348,9 @@ function buildItem(skill, folder, rank = 1) {
         `<p><strong>Категория:</strong> ${escapeHtml(category)} | <strong>Редкость:</strong> ${rarity.label}</p>`,
         `<p><strong>Теги синергий:</strong> ${escapeHtml(tags.join(', ') || 'нет')}</p>`,
         `<p><strong>Перезарядка:</strong> ${escapeHtml(cooldownText)}</p>`,
-        ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(skill.drawback)}</p>`] : []),
+        ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(withFormula(skill.drawback, skill))}</p>`] : []),
         '<hr>',
-        textToHtml(skill.description),
+        textToHtml(withFormula(skill.description, skill)),
         ...rankHtml
     ].join('\n');
 

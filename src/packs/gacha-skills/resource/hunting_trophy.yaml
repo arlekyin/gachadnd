@@ -4,7 +4,7 @@ rarity: blue
 tags:
   - казнь
   - кровь
-description: Когда ваша атака или навык убивает существо, активируйте навык и восстановите HP — [[/heal]]. Не чаще 1 раза в ход.
+description: Когда ваша атака или навык убивает существо, активируйте навык и восстановите {damage} HP. Не чаще 1 раза в ход.
 activation: special
 uses: 1
 recovery: turn
@@ -12,11 +12,11 @@ damage:
   - formula: 1d6 + @prof
     type: healing
 ranks:
-  - text: Восстанавливает [[/heal 2d6 + @prof]].
+  - text: Восстанавливает [[gacha 2d6 + @prof]] HP.
     damage:
       - formula: 2d6 + @prof
         type: healing
-  - text: Восстанавливает [[/heal (@prof)d6 + @prof]].
+  - text: Восстанавливает [[gacha (@prof)d6 + @prof]] HP.
     damage:
       - formula: (@prof)d6 + @prof
         type: healing
