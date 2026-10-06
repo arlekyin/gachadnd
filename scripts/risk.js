@@ -67,12 +67,12 @@ export function registerRiskSettings() {
     const reset = () => { challenges = null; };
     game.settings.register(MODULE_ID, 'riskCustomFile', {
         name: 'Свои испытания Риска',
-        hint: 'JSON-файл с испытаниями (объект или список) — формат как в src/risks/SCHEMA.md модуля. Добавляются к встроенным.',
-        scope: 'world', config: true, type: String, default: '', filePicker: 'any', onChange: reset
+        hint: 'Путь к JSON-файлу с испытаниями (объект или список), например worlds/мой-мир/risks.json. Формат — src/risks/SCHEMA.md модуля. Добавляются к встроенным. Действует на узлы Риска, открытые после изменения.',
+        scope: 'world', config: true, type: String, default: '', onChange: reset
     });
     game.settings.register(MODULE_ID, 'riskOnlyCustom', {
         name: 'Только свои испытания Риска',
-        hint: 'Встроенные испытания не используются.',
+        hint: 'Встроенные испытания не используются. Действует на узлы Риска, открытые после изменения.',
         scope: 'world', config: true, type: Boolean, default: false, onChange: reset
     });
 }
@@ -311,6 +311,28 @@ onSocket('openRisk', () => RiskWindow.show());
 
 const request = payload => requestGM('riskOp', payload);
 
+// Новое испытание на узле: из тех, что ещё не встречались в забеге
+async function startChallenge(found, exclude = null) {
+    const all = await loadChallenges();
+    if (!all.length) {
+        ui.notifications.error('Испытания Риска не найдены: проверьте настройки «Свои испытания Риска» или соберите модуль (npm run build).');
+        return false;
+    }
+    let history = game.settings.get(MODULE_ID, 'riskHistory') ?? [];
+    let pool = all.filter(c => !history.includes(c.id) && c.id !== exclude);
+    if (!pool.length) { history = []; pool = all.filter(c => c.id !== exclude); }
+    if (!pool.length) pool = all;
+    const challenge = pool[Math.floor(Math.random() * pool.length)];
+    await game.settings.set(MODULE_ID, 'riskHistory', [...history, challenge.id]);
+    await saveRisk(found.map, found.node.id, {
+        challengeId: challenge.id, floor: getFloor(), stage: 0, failures: 0, active: true,
+        pot: { gold: 0, crystals: [] }, lastPerformer: null, pending: null, groupRolls: {}, log: [],
+        recipientId: found.node.risk?.recipientId ?? partyActors()[0]?.id ?? null, ended: null
+    });
+    await chat(`<strong>${esc(challenge.name)}</strong><br>${esc(challenge.intro)}`);
+    return true;
+}
+
 // ==========================================
 // ОКНО РИСКА
 // ==========================================
@@ -340,7 +362,8 @@ export class RiskWindow extends ApplicationV2 {
             accept: () => request({ op: 'accept' }),
             auto: RiskWindow.#onAuto,
             autoFail: RiskWindow.#onAutoFail,
-            leave: RiskWindow.#onLeave
+            leave: RiskWindow.#onLeave,
+            reroll: RiskWindow.#onReroll
         }
     };
 
@@ -349,21 +372,7 @@ export class RiskWindow extends ApplicationV2 {
         if (!game.user.isGM) return RiskWindow.show();
         const found = currentRiskNode();
         if (!found) return ui.notifications.warn('Отряд не стоит на узле Риска.');
-        if (!found.node.risk) {
-            const all = await loadChallenges();
-            if (!all.length) return ui.notifications.error('Испытания Риска не найдены: соберите модуль (npm run build).');
-            let history = game.settings.get(MODULE_ID, 'riskHistory') ?? [];
-            let pool = all.filter(c => !history.includes(c.id));
-            if (!pool.length) { history = []; pool = all; }
-            const challenge = pool[Math.floor(Math.random() * pool.length)];
-            await game.settings.set(MODULE_ID, 'riskHistory', [...history, challenge.id]);
-            await saveRisk(found.map, found.node.id, {
-                challengeId: challenge.id, floor: getFloor(), stage: 0, failures: 0, active: true,
-                pot: { gold: 0, crystals: [] }, lastPerformer: null, pending: null, groupRolls: {}, log: [],
-                recipientId: partyActors()[0]?.id ?? null, ended: null
-            });
-            await chat(`<strong>${esc(challenge.name)}</strong><br>${esc(challenge.intro)}`);
-        }
+        if (!found.node.risk && !(await startChallenge(found))) return;
         emit('openRisk');
         return RiskWindow.show();
     }
@@ -436,6 +445,7 @@ export class RiskWindow extends ApplicationV2 {
                 ${stage && !risk.pending ? '<button type="button" data-action="auto" title="Творческое применение навыка, заклинания или предмета удалось">Автоуспех</button>' : ''}
                 ${stage && !risk.pending ? '<button type="button" data-action="autoFail" title="Импровизация не удалась: провал этапа, выступавший теряет ПЗ, равные уровню">Автопровал</button>' : ''}
                 <button type="button" data-action="leave" ${risk.pending ? 'disabled' : ''}>Уйти с добычей</button>
+                ${risk.stage === 0 && !risk.failures && !risk.pending ? '<button type="button" data-action="reroll" title="Заменить испытание на этом узле, пока ни один этап не пройден">Другое испытание</button>' : ''}
             </div>` : '';
 
         return `
@@ -498,6 +508,13 @@ export class RiskWindow extends ApplicationV2 {
 
     static #onAutoFail() {
         request({ op: 'autoFail', actorId: this.performerId });
+    }
+
+    static async #onReroll() {
+        const found = currentRiskNode();
+        if (!game.user.isGM || !found?.node.risk || found.node.risk.stage > 0 || found.node.risk.failures) return;
+        await startChallenge(found, found.node.risk.challengeId);
+        emit('openRisk');
     }
 
     static #onLeave() {

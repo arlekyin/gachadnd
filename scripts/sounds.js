@@ -33,12 +33,13 @@ export function registerSoundSettings() {
     for (const [key, config] of Object.entries(SOUNDS)) {
         game.settings.register(MODULE_ID, `sound_${key}`, {
             name: config.name,
-            hint: 'Пустое поле — встроенный звук Foundry.',
+            hint: 'По умолчанию — встроенный звук Foundry.',
             scope: 'world',
             config: true,
             type: String,
             filePicker: 'audio',
-            default: ''
+            // Поле выбора файла не принимает пустую строку: без значения по умолчанию форма настроек не сохраняется
+            default: config.fallback()
         });
     }
 }
