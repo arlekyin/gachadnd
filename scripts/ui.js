@@ -113,7 +113,8 @@ export class MemoryTerminal extends ApplicationV2 {
         window: { icon: 'fas fa-brain', resizable: true },
         position: { width: 1180, height: 800 },
         actions: {
-            tab: MemoryTerminal.#onTab,
+            // Не «tab»: это имя занято встроенным переключением вкладок ApplicationV2
+            switchTab: MemoryTerminal.#onTab,
             select: MemoryTerminal.#onSelect,
             toggleEquip: MemoryTerminal.#onToggleEquip,
             forge: MemoryTerminal.#onForge,
@@ -211,8 +212,8 @@ export class MemoryTerminal extends ApplicationV2 {
     #tabsHtml(context) {
         return `
             <nav class="gd-tabs">
-                <a class="${this.tab === 'memory' ? 'active' : ''}" data-action="tab" data-tab="memory">Память <span>${context.memory.length}/${MEMORY_CAPACITY}</span></a>
-                <a class="${this.tab === 'slots' ? 'active' : ''}" data-action="tab" data-tab="slots">Слоты <span>${context.equipped.length}</span></a>
+                <a class="${this.tab === 'memory' ? 'active' : ''}" data-action="switchTab" data-tab="memory">Память <span>${context.memory.length}/${MEMORY_CAPACITY}</span></a>
+                <a class="${this.tab === 'slots' ? 'active' : ''}" data-action="switchTab" data-tab="slots">Слоты <span>${context.equipped.length}</span></a>
             </nav>`;
     }
 
