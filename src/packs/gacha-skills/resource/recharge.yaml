@@ -6,4 +6,4 @@ tags:
 description: Активируйте навык, чтобы полностью восстановить заряды одного другого навыка из Памяти. Заряды выставляются вручную в Терминале Тумана.
 activation: special
 uses: 1
-recovery: floor
+recovery: long

@@ -16,13 +16,13 @@ export const GACHA_PERIODS = {
 // Значения поля `recovery` в YAML → период dnd5e
 export const RECOVERY_VALUES = {
     short: { period: 'sr', label: 'короткий отдых' },
-    long: { period: 'lr', label: 'длинный отдых' },
+    long: { period: 'lr', label: 'долгий отдых' },
     day: { period: 'day', label: 'день' },
     turn: { period: 'turn', label: 'ход' },
     round: { period: 'turnStart', label: 'раунд' },
     combat: { period: 'initiative', label: 'бой' },
-    // Долгий отдых — только после босса, поэтому «раз за этаж» = «раз за долгий отдых»
-    floor: { period: 'lr', label: 'этаж' },
+    // Устаревшее значение: «этаж» заменён долгим отдыхом (он проходит только после босса)
+    floor: { period: 'lr', label: 'долгий отдых' },
     run: { period: 'gachaRun', label: 'забег' },
     scene: { period: 'gachaScene', label: 'сцена' },
     none: { period: null, label: 'без восстановления' }

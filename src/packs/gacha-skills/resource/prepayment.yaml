@@ -7,7 +7,7 @@ description: В начале каждого этажа активируйте н
 drawback: Первый временный уровень этажа — без выбора навыка.
 activation: special
 uses: 1
-recovery: floor
+recovery: long
 damage:
   - formula: 10 + @details.level
     type: temphp
