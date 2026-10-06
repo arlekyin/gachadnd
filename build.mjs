@@ -353,7 +353,7 @@ function buildItem(skill, folder, rank = 1) {
         `<p><strong>Ранг:</strong> ${RANK_LABELS[rank - 1]} из ${RANK_LABELS[maxRank - 1]}</p>`,
         '<ul>',
         ...skill.ranks.map((r, i) => {
-            const line = `<strong>Ранг ${RANK_LABELS[i + 1]}:</strong> ${escapeHtml(r.text)}`;
+            const line = `<strong>Ранг ${RANK_LABELS[i + 1]}:</strong> ${escapeHtml(withFormula(r.text, resolveRank(skill, i + 2)))}`;
             return `<li>${i + 2 <= rank ? line : `<span style="opacity: 0.6">${line}</span>`}</li>`;
         }),
         '</ul>'

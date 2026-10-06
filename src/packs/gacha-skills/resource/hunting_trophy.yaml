@@ -12,11 +12,11 @@ damage:
   - formula: 1d6 + @prof
     type: healing
 ranks:
-  - text: Восстанавливает 2d6 + бонус мастерства ПЗ.
+  - text: Восстанавливает количество ПЗ, равное {damage}.
     damage:
       - formula: 2d6 + @prof
         type: healing
-  - text: Восстанавливает Nd6 + бонус мастерства ПЗ, где N — ваш бонус мастерства.
+  - text: Восстанавливает количество ПЗ, равное {damage}.
     damage:
       - formula: (@prof)d6 + @prof
         type: healing
