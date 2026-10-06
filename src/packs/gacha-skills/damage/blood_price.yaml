@@ -4,21 +4,7 @@ rarity: blue
 tags:
   - кровь
   - проклятье
-description: Один раз в ход, попав атакой, заплатите кровью — цель получает дополнительный некротический урон, равный {damage}.
-activation: special
-uses: 1
-recovery: turn
+description: Бонусным действием заплатите кровью. Ваша следующая атака в этом ходу при попадании наносит дополнительный некротический урон Nd6, где N — ваш бонус мастерства.
+activation: bonus
 cost:
   hp: '@details.level'
-damage:
-  - formula: (@prof)d6
-    type: necrotic
-ranks:
-  - text: Дополнительный урон — {damage}.
-    damage:
-      - formula: (@prof)d8
-        type: necrotic
-  - text: Дополнительный урон — {damage}.
-    damage:
-      - formula: (@prof)d10
-        type: necrotic
