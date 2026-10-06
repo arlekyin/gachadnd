@@ -116,10 +116,18 @@ function getHitDice(actor) {
     return hd?.classes ? hd : null;
 }
 
+// Кристалл пригоден для слияния: есть в количестве и не израсходован
+function isUsableCrystal(crystal) {
+    if ((crystal.system?.quantity ?? 1) <= 0) return false;
+    const uses = crystal.system?.uses;
+    if (uses?.max) return (uses.value ?? (Number(uses.max) - (uses.spent ?? 0))) > 0;
+    return true;
+}
+
 // Повторный кристалл навыка в инвентаре персонажа
 export function findDuplicateCrystal(actor, item) {
     const key = item.flags[MODULE_ID].skill_name.trim().toLowerCase();
-    return actor.items.find(i => isCrystalItem(i)
+    return actor.items.find(i => isCrystalItem(i) && isUsableCrystal(i)
         && (i.flags?.[MODULE_ID]?.skill_name || i.name.replace(/^Кристалл:\s*/, '')).trim().toLowerCase() === key);
 }
 
