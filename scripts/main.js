@@ -7,6 +7,7 @@ import { GachaLootTerminal } from "./loot.js";
 import { GachaMapTerminal } from "./map.js";
 import "./compendium.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
+import { registerSoundSettings } from "./sounds.js";
 
 export const MODULE_ID = 'gachadnd';
 
@@ -14,6 +15,7 @@ Hooks.once('init', () => {
     console.log(`%c🎲 GachaDND | Инициализация...`, 'color: #ffaa00; font-weight: bold;');
 
     registerGachaPeriods();
+    registerSoundSettings();
 
     game.gachadnd = {
         openTerminal: (actor) => {

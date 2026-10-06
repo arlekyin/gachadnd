@@ -690,3 +690,92 @@
 .gachadnd-terminal .gd-roll:hover { background: #143030; }
 .gachadnd-terminal .gd-tabs { background: #0a1112; border-bottom-color: #2f4440; }
 .gachadnd-terminal .gd-tabs a.active { color: #9fd9c8; border-bottom-color: #5fe0b8; background: rgba(95, 224, 184, 0.08); }
+
+/* ==========================================
+   Динамические эффекты Терминала
+   ========================================== */
+
+/* Неоновая пульсация экипированных карт */
+@keyframes gd-neon {
+  0%, 100% { box-shadow: 0 0 8px rgba(95, 224, 184, 0.5), inset 0 0 10px rgba(95, 224, 184, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(95, 224, 184, 0.9), 0 0 28px rgba(95, 224, 184, 0.35), inset 0 0 14px rgba(95, 224, 184, 0.35); }
+}
+.gachadnd-terminal .gd-tcard.equipped { animation: gd-neon 2.8s ease-in-out infinite; }
+.gachadnd-terminal .gd-tcard.equipped.selected { animation: none; }
+
+@keyframes gd-bigneon {
+  0%, 100% { box-shadow: 0 0 0 2px #0b1214, 0 0 0 4px rgba(201, 167, 93, 0.6), 0 0 22px var(--rarity), 0 0 40px rgba(95, 224, 184, 0.25); }
+  50% { box-shadow: 0 0 0 2px #0b1214, 0 0 0 4px rgba(201, 167, 93, 0.8), 0 0 30px var(--rarity), 0 0 60px rgba(95, 224, 184, 0.45); }
+}
+.gachadnd-terminal .gd-bigcard.equipped { animation: gd-bigneon 3.2s ease-in-out infinite; }
+
+/* Тлеющий пепел: частицы поднимаются от нижнего края карты */
+.gachadnd-terminal .gd-embers {
+  position: absolute;
+  inset: -4px;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.gachadnd-terminal .gd-embers i {
+  position: absolute;
+  bottom: -4px;
+  left: var(--x);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: #c8fff0;
+  box-shadow: 0 0 4px #5fe0b8, 0 0 8px #5fe0b8;
+  opacity: 0;
+  animation: gd-ember var(--t) linear var(--d) infinite;
+}
+@keyframes gd-ember {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  10% { opacity: 0.95; }
+  60% { opacity: 0.7; }
+  100% { transform: translate(8px, -140px) scale(0.3); opacity: 0; }
+}
+.gachadnd-terminal .gd-bigcard .gd-embers { inset: -30px -24px 0; overflow: visible; }
+.gachadnd-terminal .gd-bigcard .gd-embers i { width: calc(var(--s) + 2px); height: calc(var(--s) + 2px); }
+.gachadnd-terminal .gd-bigcard .gd-embers i:nth-child(odd) { background: #ffd9a0; box-shadow: 0 0 4px #ff9a3c, 0 0 8px #ff9a3c; }
+@keyframes gd-ember-big {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate(-12px, -320px) scale(0.2); opacity: 0; }
+}
+.gachadnd-terminal .gd-bigcard .gd-embers i { animation-name: gd-ember-big; }
+
+/* Экипировка: вспышка и «вспыхивание» карты */
+@keyframes gd-fx-equip {
+  0% { transform: scale(0.92); filter: brightness(2.2) saturate(1.5); box-shadow: 0 0 0 0 rgba(160, 255, 225, 0.9); }
+  40% { transform: scale(1.08); box-shadow: 0 0 30px 8px rgba(160, 255, 225, 0.7); }
+  100% { transform: scale(1); filter: none; }
+}
+.gachadnd-terminal .fx-equip { animation: gd-fx-equip 0.7s ease-out 1 !important; }
+
+/* Снятие: карта гаснет и осыпается */
+@keyframes gd-fx-unequip {
+  0% { filter: brightness(1.4); transform: translateY(0); }
+  50% { filter: grayscale(1) brightness(0.5); transform: translateY(3px); }
+  100% { filter: saturate(0.35) brightness(0.65); transform: translateY(0); }
+}
+.gachadnd-terminal .fx-unequip { animation: gd-fx-unequip 0.6s ease-in 1 !important; }
+
+/* Слияние: золотой взрыв */
+@keyframes gd-fx-merge {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 200, 80, 0.9); filter: brightness(1); }
+  30% { transform: scale(1.1) rotate(-1deg); box-shadow: 0 0 40px 14px rgba(255, 200, 80, 0.8); filter: brightness(1.8); }
+  60% { transform: scale(0.98) rotate(1deg); }
+  100% { transform: scale(1); filter: none; }
+}
+.gachadnd-terminal .fx-merge { animation: gd-fx-merge 0.9s ease-out 1 !important; }
+
+/* Без анимаций по системной настройке */
+@media (prefers-reduced-motion: reduce) {
+  .gachadnd-terminal .gd-tcard.equipped,
+  .gachadnd-terminal .gd-bigcard.equipped,
+  .gachadnd-terminal .fx-equip,
+  .gachadnd-terminal .fx-unequip,
+  .gachadnd-terminal .fx-merge { animation: none !important; }
+  .gachadnd-terminal .gd-embers { display: none; }
+}
