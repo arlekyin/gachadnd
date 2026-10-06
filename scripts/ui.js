@@ -8,6 +8,7 @@
 import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
 import { HORSEMEN, isHorseman, isCleansed, cleanseHorseman, addCleanseProgress } from "./horsemen.js";
+import { isRiskActive } from "./risk.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
@@ -488,6 +489,10 @@ export class MemoryTerminal extends ApplicationV2 {
             return this.render();
         }
 
+        if (isRiskActive() && !game.user.isGM) {
+            ui.notifications.warn('Во время испытания Риска навыки менять нельзя.');
+            return this.render();
+        }
         // В бою навыки не меняются; Горячая замена разрешает одну пару «снять → экипировать»
         let usesSwap = false;
         if (isInCombat(this.actor) && !game.user.isGM) {

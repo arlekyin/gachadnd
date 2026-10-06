@@ -1,0 +1,53 @@
+id: cave_in
+name: Обвал свода
+intro: Потолок трещит. С него сыплется пыль, где-то впереди уже рухнул первый камень.
+collapse:
+  text: Свод рушится. Отряд выбирается из-под завала с пустыми карманами.
+  hp: 3
+stages:
+  - name: Трещины
+    approaches:
+      - label: Понять, где свод держится
+        skill: prc
+        dc: -1
+        fail: { text: "Камень падает прямо на вас.", hp: 2 }
+      - label: Прочесть породу
+        skill: nat
+        fail: { text: "Порода обманчива.", hp: 1, condition: prone }
+  - name: Завал — разобрать всем
+    group: true
+    approaches:
+      - label: Растаскивать камни
+        skill: ath
+        fail: { text: "Камень придавил руку.", hp: 1 }
+      - label: Подсказывать, что вынимать
+        skill: inv
+        fail: { text: "Вынули не тот камень.", hp: 1, condition: prone }
+  - name: Раненый искатель
+    approaches:
+      - label: Перевязать и вести
+        skill: med
+        fail: { text: "Он кричит — сверху сыплется камень.", hp: 2 }
+      - label: Вынести на руках
+        skill: ath
+        dc: 1
+        fail: { text: "Вы падаете вместе с ним.", hp: 1, condition: prone }
+  - name: Пыль
+    approaches:
+      - label: Идти по сквозняку
+        skill: sur
+        fail: { text: "Сквозняк ведёт в тупик.", hp: 2 }
+      - label: Вслепую на ощупь
+        skill: ste
+        dc: 1
+        fail: { text: "Пыль режет глаза.", hp: 1, condition: blinded }
+  - name: Последний проход
+    approaches:
+      - label: Проползти под плитой
+        skill: acr
+        dc: 1
+        fail: { text: "Плита оседает на спину.", hp: 2 }
+      - label: Подпереть плиту
+        skill: ath
+        dc: 2
+        fail: { text: "Подпорка ломается.", hp: 1, condition: restrained }

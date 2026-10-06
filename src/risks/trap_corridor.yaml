@@ -1,0 +1,54 @@
+id: trap_corridor
+name: Коридор ловушек
+intro: Узкий коридор, стены в отверстиях, пол из одинаковых плит. Кто-то очень не хотел гостей.
+collapse:
+  text: Механизм срабатывает весь разом — иглы, плиты и лезвия.
+  hp: 2
+  condition: poisoned
+stages:
+  - name: Плиты с нажимом
+    approaches:
+      - label: Вычислить безопасный узор
+        skill: inv
+        dc: -1
+        fail: { text: "Плита проседает — из стены бьёт дротик.", hp: 2 }
+      - label: Пройти по краю
+        skill: acr
+        dc: 1
+        fail: { text: "Нога соскальзывает на плиту.", hp: 1, condition: poisoned }
+  - name: Иглы в стенах
+    approaches:
+      - label: Обезвредить механизм
+        skill: slt
+        fail: { text: "Игла оцарапала руку.", hp: 1, condition: poisoned }
+      - label: Заметить и обойти отверстия
+        skill: prc
+        dc: -1
+        fail: { text: "Иглы летят из незамеченной щели.", hp: 2 }
+  - name: Ядовитый выдох
+    group: true
+    approaches:
+      - label: Не дышать и бежать
+        skill: ath
+        fail: { text: "Вдох яда.", hp: 1, condition: poisoned }
+      - label: Прикрыть лицо мокрой тканью
+        skill: sur
+        fail: { text: "Ткань не спасает.", hp: 1 }
+  - name: Шестерни
+    approaches:
+      - label: Понять, как работает механизм
+        skill: inv
+        fail: { text: "Шестерня зажимает рукав и дёргает о стену.", hp: 2 }
+      - label: Разобраться в рунах на механизме
+        skill: arc
+        dc: 1
+        fail: { text: "Руна вспыхивает — разряд.", hp: 1, condition: deafened }
+  - name: Дверь с загадкой
+    approaches:
+      - label: Вспомнить, чей это герб
+        skill: his
+        fail: { text: "Неверный ответ — из пола бьёт лезвие.", hp: 2 }
+      - label: Подобрать отмычку
+        skill: slt
+        dc: 2
+        fail: { text: "Отмычка ломается, срабатывает ловушка замка.", hp: 1, condition: poisoned }

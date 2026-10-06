@@ -18,7 +18,8 @@ export const HORSEMEN = {
 };
 
 const COMBAT_NODES = ['mob', 'elite', 'boss'];
-const PEACE_NODES = ['event', 'shop', 'rest', 'doom'];
+// Риск — небоевое испытание навыков
+const PEACE_NODES = ['event', 'shop', 'rest', 'doom', 'risk'];
 
 export const isHorseman = item => !!item?.flags?.[MODULE_ID]?.horseman;
 export const isCleansed = item => !!item?.flags?.[MODULE_ID]?.cleansed;

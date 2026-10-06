@@ -1,0 +1,53 @@
+id: sealed_door
+name: Печать с загадкой
+intro: Каменная дверь в рунах. Над ней — лицо, которое открывает глаза, когда вы подходите.
+collapse:
+  text: Печать признаёт вас недостойными. Разум обжигает чужой голос.
+  hp: 2
+  condition: frightened
+stages:
+  - name: Руны
+    approaches:
+      - label: Прочесть как заклинание
+        skill: arc
+        fail: { text: "Руна бьёт разрядом.", hp: 2 }
+      - label: Узнать древний язык
+        skill: his
+        dc: -1
+        fail: { text: "Вы читаете вслух не то.", hp: 1, condition: deafened }
+  - name: Голос стража
+    approaches:
+      - label: Убедить, что вы свои
+        skill: per
+        fail: { text: "Страж не верит.", hp: 1, condition: frightened }
+      - label: Солгать
+        skill: dec
+        dc: 2
+        fail: { text: "Ложь раскрыта — страж кричит вам в разум.", hp: 2 }
+  - name: Испытание веры
+    approaches:
+      - label: Назвать нужного бога
+        skill: rel
+        fail: { text: "Не тот бог.", hp: 2 }
+      - label: Понять, чего ждёт страж
+        skill: ins
+        dc: 1
+        fail: { text: "Вы ошиблись в намерениях стража.", hp: 1, condition: frightened }
+  - name: Иллюзорный проход
+    approaches:
+      - label: Найти настоящую дверь среди ложных
+        skill: inv
+        fail: { text: "Ложная дверь — удар о камень.", hp: 2 }
+      - label: Увидеть мерцание иллюзии
+        skill: prc
+        dc: 1
+        fail: { text: "Иллюзия ослепляет вспышкой.", hp: 1, condition: blinded }
+  - name: Удержать печать — все вместе
+    group: true
+    approaches:
+      - label: Напитать печать своей магией
+        skill: arc
+        fail: { text: "Печать тянет силы.", hp: 1 }
+      - label: Держаться верой
+        skill: rel
+        fail: { text: "Вера дрогнула.", hp: 1, condition: frightened }
