@@ -264,50 +264,6 @@
   overflow: hidden;
 }
 
-/* Шапка: предел разума */
-.gachadnd-terminal .gd-header {
-  padding: 12px 16px 10px;
-  background: linear-gradient(180deg, #1c1a19 0%, #121110 100%);
-  border-bottom: 1px solid var(--gd-line);
-}
-.gachadnd-terminal .gd-header.overloaded {
-  background: linear-gradient(180deg, #380d12 0%, #1a0507 100%);
-  border-bottom-color: #990022;
-}
-.gachadnd-terminal .gd-cap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: "Modesto Condensed", serif;
-}
-.gachadnd-terminal .gd-cap-label {
-  font-size: 1.35em;
-  color: #ede6dc;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.gachadnd-terminal .gd-slots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  flex: 1;
-}
-.gachadnd-terminal .gd-slot {
-  width: 14px;
-  height: 14px;
-  border: 1px solid #5a524a;
-  border-radius: 2px;
-  background: #0d0c0c;
-}
-.gachadnd-terminal .gd-slot.extra { border-color: var(--gd-purple); border-style: dashed; }
-.gachadnd-terminal .gd-slot.filled { background: var(--gd-green); border-color: var(--gd-green); box-shadow: 0 0 4px var(--gd-green); }
-.gachadnd-terminal .gd-slot.filled.overload { background: var(--gd-red); border-color: var(--gd-red); box-shadow: 0 0 4px var(--gd-red); }
-.gachadnd-terminal .gd-cap-count { font-size: 1.35em; color: var(--gd-green); white-space: nowrap; }
-.gachadnd-terminal .overloaded .gd-cap-count { color: var(--gd-red); }
-.gachadnd-terminal .gd-cap-note { margin-top: 6px; font-size: 0.85em; }
-.gachadnd-terminal .gd-cap-note.extra { color: var(--gd-purple); }
-.gachadnd-terminal .gd-cap-note.overload { color: var(--gd-red); font-weight: bold; }
-
 /* Баннер Привала */
 .gachadnd-terminal .gd-rest-banner {
   padding: 8px 16px;
@@ -315,37 +271,6 @@
   border-bottom: 1px solid #6b4a10;
   color: #ffcc66;
   font-size: 0.9em;
-}
-
-/* Вкладки */
-.gachadnd-terminal .gd-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 0 12px;
-  background: #111;
-  border-bottom: 1px solid var(--gd-line);
-  font-family: "Modesto Condensed", serif;
-  flex: 0 0 auto;
-}
-.gachadnd-terminal .gd-tabs a {
-  padding: 10px 14px;
-  font-size: 1.25em;
-  color: #b5a998;
-  text-transform: uppercase;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-.gachadnd-terminal .gd-tabs a span { font-size: 0.75em; color: var(--gd-dim); margin-left: 4px; }
-.gachadnd-terminal .gd-tabs a:hover { color: #fff; }
-.gachadnd-terminal .gd-tabs a.active { color: var(--gd-gold); border-bottom-color: var(--gd-gold); background: rgba(201, 167, 93, 0.08); }
-
-.gachadnd-terminal .gd-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .gachadnd-terminal .gd-empty {
@@ -621,61 +546,19 @@
 }
 .gachadnd-terminal .gd-uses-period { margin-left: 4px; text-transform: uppercase; font-size: 11px; }
 
-/* Слоты */
-.gachadnd-terminal .gd-section {
-  margin: 4px 0 0;
-  border: none;
-  font-family: "Modesto Condensed", serif;
-  font-size: 1.05em;
-  color: var(--gd-dim);
-  text-transform: uppercase;
-}
-.gachadnd-terminal .gd-row {
-  background: var(--gd-panel);
-  border: 1px solid #2a2626;
-  border-left: 4px solid var(--rarity);
-  border-radius: 4px;
-}
-.gachadnd-terminal .gd-row-main { display: flex; align-items: center; gap: 10px; padding: 6px 10px; cursor: pointer; }
-.gachadnd-terminal .gd-row-main:hover { background: rgba(255, 255, 255, 0.03); }
-.gachadnd-terminal .gd-row-main img { width: 34px; height: 34px; border: none; border-radius: 3px; }
-.gachadnd-terminal .gd-row-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.gachadnd-terminal .gd-row-name > span { font-family: "Modesto Condensed", serif; font-size: 1.25em; color: #f5efe6; }
-.gachadnd-terminal .gd-row-name small { font-size: 0.75em; color: var(--gd-dim); text-transform: uppercase; }
+/* Кнопка броска */
 .gachadnd-terminal .gd-roll {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   padding: 0;
-  background: #1c1a19;
-  border: 1px solid var(--gd-gold);
+  border: 1px solid #5fe0b8;
   border-radius: 4px;
-  color: var(--gd-gold);
+  background: #0e1c1c;
+  color: #5fe0b8;
   cursor: pointer;
 }
-.gachadnd-terminal .gd-roll:hover { background: #2b261c; }
-.gachadnd-terminal .gd-row-desc { padding: 8px 12px; border-top: 1px solid #2a2626; font-size: 13px; color: #c9c1b5; }
-.gachadnd-terminal .gd-row-desc p { margin: 0 0 6px; }
-
-/* Общие элементы и вкладка «Слоты» в той же гамме */
-.gachadnd-terminal .gd-pips { color: #c9a75d; letter-spacing: 1px; font-size: 0.75em; }
-.gachadnd-terminal .gd-header {
-  background: linear-gradient(180deg, #102020 0%, #0b1214 100%);
-  border-bottom-color: #2f4440;
-}
-.gachadnd-terminal .gd-slot.filled { background: #5fe0b8; border-color: #5fe0b8; box-shadow: 0 0 4px #5fe0b8; }
-.gachadnd-terminal .gd-cap-count { color: #9fd9c8; }
-.gachadnd-terminal .gd-body {
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(40, 140, 130, 0.16) 0%, transparent 60%),
-    linear-gradient(180deg, #0c1414 0%, #080b0c 100%);
-}
-.gachadnd-terminal .gd-row { background: rgba(10, 20, 20, 0.85); border-color: #2f4440; border-left-color: var(--rarity); }
-.gachadnd-terminal .gd-section { color: #9fd9c8; }
-.gachadnd-terminal .gd-roll { border-color: #5fe0b8; color: #5fe0b8; background: #0e1c1c; }
 .gachadnd-terminal .gd-roll:hover { background: #143030; }
-.gachadnd-terminal .gd-tabs { background: #0a1112; border-bottom-color: #2f4440; }
-.gachadnd-terminal .gd-tabs a.active { color: #9fd9c8; border-bottom-color: #5fe0b8; background: rgba(95, 224, 184, 0.08); }
 
 /* ==========================================
    Динамические эффекты Терминала
@@ -768,15 +651,12 @@
    ========================================== */
 
 /* Два слоя шума (feTurbulence) медленно дрейфуют с разной скоростью */
-.gachadnd-terminal .gd-altar,
-.gachadnd-terminal .gd-body {
+.gachadnd-terminal .gd-altar {
   position: relative;
   isolation: isolate;
 }
 .gachadnd-terminal .gd-altar::before,
-.gachadnd-terminal .gd-altar::after,
-.gachadnd-terminal .gd-body::before,
-.gachadnd-terminal .gd-body::after {
+.gachadnd-terminal .gd-altar::after {
   content: "";
   position: absolute;
   top: 0;
@@ -787,15 +667,13 @@
   pointer-events: none;
   background-repeat: repeat;
 }
-.gachadnd-terminal .gd-altar::before,
-.gachadnd-terminal .gd-body::before {
+.gachadnd-terminal .gd-altar::before {
   background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.0045'%20numOctaves='4'%20seed='7'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.62%20%200%200%200%200%200.93%20%200%200%200%200%200.86%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E");
   background-size: 640px 640px;
   opacity: 0.45;
   animation: gd-fog-drift 90s linear var(--gd-phase-fog, 0ms) infinite;
 }
-.gachadnd-terminal .gd-altar::after,
-.gachadnd-terminal .gd-body::after {
+.gachadnd-terminal .gd-altar::after {
   background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.008'%20numOctaves='4'%20seed='19'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.62%20%200%200%200%200%200.93%20%200%200%200%200%200.86%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E");
   background-size: 640px 640px;
   opacity: 0.3;
@@ -805,14 +683,11 @@
   from { transform: translateX(0); }
   to { transform: translateX(-640px); }
 }
-.gachadnd-terminal .gd-altar,
-.gachadnd-terminal .gd-body { overflow-x: hidden; }
+.gachadnd-terminal .gd-altar { overflow-x: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .gachadnd-terminal .gd-altar::before,
-  .gachadnd-terminal .gd-altar::after,
-  .gachadnd-terminal .gd-body::before,
-  .gachadnd-terminal .gd-body::after { animation: none; }
+  .gachadnd-terminal .gd-altar::after { animation: none; }
 }
 
 /* ==========================================
@@ -889,3 +764,28 @@
   z-index: -1;
   pointer-events: none;
 }
+
+/* Заголовок колоды и активные синергии */
+.gachadnd-terminal .gd-deck-wrap { display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+.gachadnd-terminal .gd-deck { flex: 1; min-height: 0; }
+.gachadnd-terminal .gd-deck-title { font-family: "Modesto Condensed", serif; text-transform: uppercase; color: #9fd9c8; letter-spacing: 1px; font-size: 1.15em; }
+.gachadnd-terminal .gd-deck-title span { color: #e9f3ef; margin-left: 6px; }
+.gachadnd-terminal .gd-synergies {
+  padding: 8px 10px;
+  border: 1px solid #2f4440;
+  border-radius: 4px;
+  background: rgba(10, 20, 20, 0.85);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gachadnd-terminal .gd-syn { border-left: 3px solid #c9a75d; border-radius: 3px; background: rgba(255, 255, 255, 0.02); }
+.gachadnd-terminal .gd-syn.system { border-left-color: #ff3b3b; }
+.gachadnd-terminal .gd-syn-main { display: flex; align-items: center; gap: 8px; padding: 4px 6px; cursor: pointer; }
+.gachadnd-terminal .gd-syn-main:hover { background: rgba(95, 224, 184, 0.05); }
+.gachadnd-terminal .gd-syn-main img { width: 24px; height: 24px; border: none; border-radius: 3px; }
+.gachadnd-terminal .gd-syn-name { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+.gachadnd-terminal .gd-syn-name span { font-size: 12px; color: #f4efe4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gachadnd-terminal .gd-syn-name small { font-size: 10px; color: #9fd9c8; text-transform: uppercase; }
+.gachadnd-terminal .gd-syn-desc { padding: 4px 8px 8px; font-size: 12px; color: #b9c8c3; text-align: left; }
+.gachadnd-terminal .gd-syn-desc p { margin: 0 0 4px; }
