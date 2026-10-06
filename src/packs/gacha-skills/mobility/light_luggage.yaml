@@ -1,0 +1,19 @@
+id: wE6G7TzPy8KeAevp
+name: Лёгкий багаж
+rarity: blue
+tags:
+  - движение
+  - проклятье
+description: Ваша скорость увеличивается на 15 футов, вы получаете +1 к КД и совершаете спасброски Ловкости с преимуществом.
+drawback: Вы можете носить только лёгкую броню. Надев среднюю или тяжёлую броню или взяв щит, вы теряете эффект навыка, пока не снимете их.
+activation: none
+changes:
+  - key: system.attributes.movement.walk
+    mode: add
+    value: '+15'
+  - key: system.attributes.ac.bonus
+    mode: add
+    value: '+1'
+  - key: system.abilities.dex.save.roll.mode
+    mode: add
+    value: '1'
