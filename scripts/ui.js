@@ -315,6 +315,8 @@ export class MemoryTerminal extends ApplicationV2 {
         const now = Date.now();
         this.element.style.setProperty('--gd-phase-small', `-${now % 4500}ms`);
         this.element.style.setProperty('--gd-phase-big', `-${now % 6000}ms`);
+        this.element.style.setProperty('--gd-phase-fog', `-${now % 90000}ms`);
+        this.element.style.setProperty('--gd-phase-fog2', `-${now % 55000}ms`);
 
         // Анимация последнего действия (экипировка, снятие, слияние) — на картах этого навыка
         if (this.fx && Date.now() - this.fx.time < 1500) {

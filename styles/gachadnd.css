@@ -486,20 +486,6 @@
   box-shadow: 0 0 0 2px #0b1214, 0 0 0 4px rgba(201, 167, 93, 0.6), 0 0 24px var(--rarity);
   cursor: pointer;
 }
-.gachadnd-terminal .gd-bigcard::before,
-.gachadnd-terminal .gd-bigcard::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 22px;
-  height: 60px;
-  margin-top: -30px;
-  border: 3px solid var(--rarity);
-  border-radius: 50%;
-  opacity: 0.8;
-}
-.gachadnd-terminal .gd-bigcard::before { left: -18px; border-right-color: transparent; border-top-color: transparent; }
-.gachadnd-terminal .gd-bigcard::after { right: -18px; border-left-color: transparent; border-bottom-color: transparent; }
 .gachadnd-terminal .gd-bigcard:not(.equipped) .gd-bigcard-art { filter: saturate(0.5) brightness(0.8); }
 .gachadnd-terminal .gd-bigcard-art {
   width: 100%;
@@ -775,4 +761,56 @@
   .gachadnd-terminal .fx-equip,
   .gachadnd-terminal .fx-unequip,
   .gachadnd-terminal .fx-merge { animation: none !important; }
+}
+
+/* ==========================================
+   Туман на фоне Терминала
+   ========================================== */
+
+/* Два слоя шума (feTurbulence) медленно дрейфуют с разной скоростью */
+.gachadnd-terminal .gd-altar,
+.gachadnd-terminal .gd-body {
+  position: relative;
+  isolation: isolate;
+}
+.gachadnd-terminal .gd-altar::before,
+.gachadnd-terminal .gd-altar::after,
+.gachadnd-terminal .gd-body::before,
+.gachadnd-terminal .gd-body::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  background-repeat: repeat;
+}
+.gachadnd-terminal .gd-altar::before,
+.gachadnd-terminal .gd-body::before {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.0045'%20numOctaves='4'%20seed='7'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.62%20%200%200%200%200%200.93%20%200%200%200%200%200.86%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E");
+  background-size: 640px 640px;
+  opacity: 0.32;
+  animation: gd-fog-drift 90s linear var(--gd-phase-fog, 0ms) infinite;
+}
+.gachadnd-terminal .gd-altar::after,
+.gachadnd-terminal .gd-body::after {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.008'%20numOctaves='4'%20seed='19'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.62%20%200%200%200%200%200.93%20%200%200%200%200%200.86%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E");
+  background-size: 640px 640px;
+  opacity: 0.2;
+  animation: gd-fog-drift 55s linear var(--gd-phase-fog2, 0ms) infinite reverse;
+}
+@keyframes gd-fog-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-640px); }
+}
+.gachadnd-terminal .gd-altar,
+.gachadnd-terminal .gd-body { overflow-x: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gachadnd-terminal .gd-altar::before,
+  .gachadnd-terminal .gd-altar::after,
+  .gachadnd-terminal .gd-body::before,
+  .gachadnd-terminal .gd-body::after { animation: none; }
 }
