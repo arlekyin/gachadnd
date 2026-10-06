@@ -52,5 +52,6 @@
         "manifest": "https://raw.githubusercontent.com/foundryvtt/dnd5e/main/system.json"
       }
     ]
-  }
+  },
+  "socket": true
 }

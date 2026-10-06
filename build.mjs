@@ -69,7 +69,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed'
+    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -317,6 +317,12 @@ function validateSkill(skill, folder) {
     } else {
         ['cleanse', 'cleanse_goal', 'cleansed'].forEach(f => { if (skill[f] !== undefined) err(f, 'только у всадников (horseman)'); });
     }
+    if (skill.shop_discount !== undefined) {
+        const { per_skill, max, ...rest } = skill.shop_discount ?? {};
+        Object.keys(rest).forEach(k => err(`shop_discount.${k}`, 'неизвестное поле (допустимы: per_skill, max)'));
+        if (!isPositiveInt(per_skill)) err('shop_discount.per_skill', 'процент за навык в Памяти — целое число больше 0');
+        if (max !== undefined && !isPositiveInt(max)) err('shop_discount.max', 'предел скидки в процентах — целое число больше 0');
+    }
     if (skill.loot_bonus !== undefined && !isPositiveInt(skill.loot_bonus)) err('loot_bonus', 'должно быть целым числом больше 0');
     if (skill.personal !== undefined && !UNIQUE_RARITIES.includes(skill.rarity)) err('personal', 'личный эффект — только у уникальных навыков (фиолетовых и красных)');
     for (const field of ['undeletable', 'combat_swap', 'personal']) {
@@ -559,6 +565,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.combat_swap ? { combat_swap: true } : {}),
                 ...(skill.personal ? { personal: true } : {}),
                 ...(skill.loot_bonus ? { loot_bonus: skill.loot_bonus } : {}),
+                ...(skill.shop_discount ? { shop_discount: skill.shop_discount } : {}),
                 ...(skill.horseman ? {
                     horseman: skill.horseman,
                     cleansed: false,

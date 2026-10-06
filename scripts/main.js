@@ -11,6 +11,8 @@ import { registerSoundSettings } from "./sounds.js";
 import { giveCrystal } from "./inventory.js";
 import "./horsemen.js";
 import { DoomAltar } from "./altar.js";
+import { ShopWindow, registerShopSocket } from "./shop.js";
+import { registerEconomySettings } from "./economy.js";
 
 export const MODULE_ID = 'gachadnd';
 
@@ -19,6 +21,7 @@ Hooks.once('init', () => {
 
     registerGachaPeriods();
     registerSoundSettings();
+    registerEconomySettings();
 
     game.gachadnd = {
         openTerminal: (actor) => {
@@ -38,6 +41,7 @@ Hooks.once('init', () => {
             if (existing) existing.bringToTop(); else new GachaMapTerminal().render(true);
         },
         openDoomAltar: () => DoomAltar.open(),
+        openShop: () => ShopWindow.open(),
         // Кристалл навыка вручную: game.gachadnd.giveCrystal(actor, 'Фус-Ро-Да')
         giveCrystal: (actor, skillName) => giveCrystal(actor, { skillName }),
         // Восстановление зарядов по периоду: 'gachaRun', 'gachaScene' или стандартный период dnd5e
@@ -118,6 +122,7 @@ Hooks.on('getSceneControlButtons', (controls) => {
 
 // 4. Принудительная отрисовка UI после загрузки, чтобы новые кнопки 100% появились на экране
 Hooks.once('ready', () => {
+    registerShopSocket();
     if (ui.controls) {
         ui.controls.initialize();
         ui.controls.render(true);
