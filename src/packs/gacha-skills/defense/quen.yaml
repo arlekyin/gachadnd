@@ -15,7 +15,7 @@ ranks:
     damage:
       - formula: 5 + 2 * @prof
         type: temphp
-  - text: Количество временных ПЗ, равное {damage}. Когда щит спадает, атаковавший получает урон силовым полем, равный вашему бонусу мастерства.
+  - text: Количество временных ПЗ, равное {damage}.
     damage:
       - formula: 5 + 3 * @prof
         type: temphp

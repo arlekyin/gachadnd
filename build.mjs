@@ -64,11 +64,12 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
-    'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'save', 'damage', 'changes', 'ranks'
+    'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'save', 'damage', 'roll', 'changes', 'ranks'
 ];
 
-// Поля, которые ранг может переопределить. Ранг наследует значения предыдущего ранга.
-const RANK_FIELDS = ['text', 'uses', 'recovery', 'range', 'target', 'save', 'damage', 'changes'];
+// Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
+// значения тех же эффектов. Новых механик ранг не добавляет. Ранг наследует предыдущий ранг.
+const RANK_FIELDS = ['text', 'uses', 'range', 'target', 'damage', 'roll', 'changes'];
 const MAX_EXTRA_RANKS = 2;
 // Уникальные редкости: повтор навыка не поглощается, рангов нет
 const UNIQUE_RARITIES = ['purple', 'red'];
@@ -174,6 +175,18 @@ function validateSkill(skill, folder) {
                     if (!RANK_FIELDS.includes(k)) err(`${label}.${k}`, `поле нельзя менять по рангам (допустимы: ${RANK_FIELDS.join(', ')})`);
                 });
                 if (!isNonEmptyString(rank.text)) err(`${label}.text`, 'обязательное поле: что даёт ранг');
+                if (!Object.keys(rank).some(k => k !== 'text')) err(label, 'ранг должен менять хотя бы одно число (uses, range, target, damage, roll, changes), а не только текст');
+                if (rank.target && skill.target && rank.target.type !== skill.target.type) err(`${label}.target.type`, 'форма области по рангам не меняется');
+                if (rank.target && !skill.target) err(`${label}.target`, 'у навыка нет области — ранг может только менять её размер');
+                if (rank.roll && !skill.roll) err(`${label}.roll`, 'у навыка нет броска — ранг может только менять его формулу');
+                if (rank.damage) {
+                    const types = d => (Array.isArray(d) ? d : []).map(x => x?.type).join(',');
+                    if (types(rank.damage) !== types(skill.damage)) err(`${label}.damage`, 'типы урона/лечения по рангам не меняются — только формулы');
+                }
+                if (rank.changes) {
+                    const keys = c => (Array.isArray(c) ? c : []).map(x => x?.key).sort().join(',');
+                    if (keys(rank.changes) !== keys(skill.changes)) err(`${label}.changes`, 'ранг может менять только значения тех же эффектов, что и у навыка');
+                }
                 // Ранг проверяется как полноценный навык после наложения переопределений
                 validateSkill(resolveRank(skill, i + 2), folder).forEach(e => errors.push(`${label} → ${e}`));
             });
@@ -183,11 +196,16 @@ function validateSkill(skill, folder) {
     if (skill.tagEmitter !== undefined && typeof skill.tagEmitter !== 'boolean') err('tagEmitter', 'должно быть true или false');
 
     // Поля активности имеют смысл только при activation, отличном от none
-    for (const field of ['range', 'target', 'save', 'damage', 'uses', 'recovery']) {
+    for (const field of ['range', 'target', 'save', 'damage', 'roll', 'uses', 'recovery']) {
         if (!isActive && skill[field] !== undefined) err(field, 'задано при activation: none — поле не будет использовано');
     }
 
     if (skill.range !== undefined && !isNumeric(skill.range)) err('range', 'должно быть числом (футы)');
+
+    if (skill.roll !== undefined) {
+        if (!skill.roll || typeof skill.roll !== 'object' || !isNonEmptyString(String(skill.roll.formula ?? ''))) err('roll.formula', 'обязательное поле');
+        if (skill.save !== undefined || skill.damage !== undefined) err('roll', 'бросок (roll) — для навыков без урона, лечения и спасброска');
+    }
 
     if (skill.target !== undefined) {
         if (!TEMPLATE_TYPES.includes(skill.target?.type)) err('target.type', `«${skill.target?.type}» — допустимо: ${TEMPLATE_TYPES.join(', ')}`);
@@ -232,6 +250,10 @@ function validateSkill(skill, folder) {
         && !(isActive && Array.isArray(skill.damage) && skill.damage.length)) {
         err('description', '{damage} требует активации и записи в damage');
     }
+    if ([skill.description, skill.drawback].some(t => typeof t === 'string' && t.includes('{roll}')) && !skill.roll) {
+        err('description', '{roll} требует поля roll');
+    }
+
     // [[/heal]] и [[/damage]] без формулы dnd5e разрешает не во всех окнах (в карточке чата — нет)
     if ([skill.description, skill.drawback].some(t => typeof t === 'string' && /\[\[\/(heal|healing|damage)((\s+(average|extended|temp))*)\s*]]/.test(t))) {
         err('description', '[[/heal]] и [[/damage]] без формулы не используются — пишите {damage}');
@@ -298,6 +320,10 @@ function buildActivity(skill, usesMax) {
         };
     }
 
+    if (type === 'utility' && skill.roll) {
+        activity.roll = { formula: String(skill.roll.formula), name: skill.roll.name ?? 'Бросок', prompt: false, visible: true };
+    }
+
     if (type === 'save') {
         activity.save = { ability: [skill.save.ability], dc: buildDc(skill.save.dc) };
         activity.damage = { onSave: skill.save.on_save ?? 'half', parts: damage.map(damagePart) };
@@ -339,6 +365,7 @@ function withFormula(text, skill) {
     const rendered = damage.length && damage.every(d => isConstant(d) && DAMAGE_TYPES.includes(d.type))
         ? damage.map(d => `[[/damage ${d.formula} ${d.type}]]`).join(' и ')
         : null;
+    text = String(text).replaceAll('{roll}', skill.roll ? formulaToText(skill.roll.formula) : '{roll}');
     if (rendered) return String(text).replaceAll('{damage}', rendered);
     const formula = damage.map(d => d.formula).join(' + ');
     return String(text)
