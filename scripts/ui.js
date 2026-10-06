@@ -311,6 +311,11 @@ export class MemoryTerminal extends ApplicationV2 {
     }
 
     _onRender() {
+        // Отрицательная задержка = текущая позиция в цикле: неон продолжает движение после перерисовки
+        const now = Date.now();
+        this.element.style.setProperty('--gd-phase-small', `-${now % 4500}ms`);
+        this.element.style.setProperty('--gd-phase-big', `-${now % 6000}ms`);
+
         // Анимация последнего действия (экипировка, снятие, слияние) — на картах этого навыка
         if (this.fx && Date.now() - this.fx.time < 1500) {
             this.element.querySelectorAll(`[data-item-id="${this.fx.id}"].gd-tcard, [data-item-id="${this.fx.id}"].gd-bigcard`)
