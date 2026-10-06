@@ -12,6 +12,7 @@ import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/recovery.js';
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from './scripts/synergy-data.js';
 import { validateRisk } from './scripts/risk-schema.js';
+import { buildRules } from './tools/rules.mjs';
 const TAG_NAMES = Object.fromEntries(Object.entries(TAG_KEYS).map(([tag, key]) => [key, tag]));
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
@@ -717,4 +718,13 @@ for (const { file, item } of items) {
 fs.mkdirSync(path.dirname(RISK_OUT), { recursive: true });
 fs.writeFileSync(RISK_OUT, JSON.stringify(risks, null, 2) + '\n', 'utf8');
 
-console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}. База готова к упаковке.`);
+// Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
+let journals = [];
+try {
+    journals = buildRules({ srcDir: './src/rules', distDir: './dist/packs', items, risks, stableId });
+} catch (e) {
+    console.error(`Сборка правил остановлена: ${e.message}`);
+    process.exit(1);
+}
+
+console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);

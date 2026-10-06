@@ -39,9 +39,24 @@
     },
     {
       "name": "gacha-rules",
-      "label": "Gacha: Правила Тумана",
-      "path": "packs/gacha-rules.db",
-      "type": "JournalEntry"
+      "label": "Gacha: Правила Лабиринта",
+      "path": "packs/gacha-rules",
+      "type": "JournalEntry",
+      "ownership": {
+        "PLAYER": "OBSERVER",
+        "ASSISTANT": "OWNER"
+      }
+    },
+    {
+      "name": "gacha-gm",
+      "label": "Gacha: Справочник Мастера",
+      "path": "packs/gacha-gm",
+      "type": "JournalEntry",
+      "ownership": {
+        "PLAYER": "NONE",
+        "TRUSTED": "NONE",
+        "ASSISTANT": "OWNER"
+      }
     }
   ],
   "relationships": {
