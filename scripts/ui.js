@@ -4,7 +4,7 @@
 
 import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } from "./synergy.js";
-import { canRankUp, forgeSkill, FORGE_COST } from "./inventory.js";
+import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 
 // Описание с обработкой обогатителей dnd5e ([[/heal]], [[/damage]], [[lookup @prof]]) по данным персонажа
@@ -155,14 +155,14 @@ export class MemoryTerminal extends Application {
             </div>
         `;
 
-        // Кнопка улучшения: только на Привале и только для навыков с доступным рангом
+        // Кнопка слияния: на Привале, у навыков с доступным рангом и повторным кристаллом в инвентаре
         const atRest = isPartyAtRest();
         const hdValue = actor => actor.system?.attributes?.hd?.value ?? 0;
         const forgeHtml = item => {
-            if (!atRest || !canRankUp(item)) return '';
+            if (!atRest || !canRankUp(item) || !findDuplicateCrystal(this.actor, item)) return '';
             const cost = FORGE_COST[(item.flags[MODULE_ID].rank ?? 1) + 1];
             const enough = hdValue(this.actor) >= cost;
-            return `<button type="button" class="gachadnd-forge-btn" data-item-id="${item.id}" ${enough ? '' : 'disabled'} title="Повысить ранг за Кости Хитов (доступно: ${hdValue(this.actor)})" style="width: 90px; padding: 6px; margin-left: 10px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); color: ${enough ? '#ffaa00' : '#6b5a3a'}; border: 1px solid ${enough ? '#ffaa00' : '#3d3834'}; border-radius: 3px; cursor: ${enough ? 'pointer' : 'not-allowed'}; font-family: 'Modesto Condensed', serif; font-size: 1em; flex-shrink: 0;">Улучшить<br>−${cost} КХ</button>`;
+            return `<button type="button" class="gachadnd-forge-btn" data-item-id="${item.id}" ${enough ? '' : 'disabled'} title="Слить повторный кристалл: ранг +1 за Кости Хитов (доступно: ${hdValue(this.actor)})" style="width: 90px; padding: 6px; margin-left: 10px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); color: ${enough ? '#ffaa00' : '#6b5a3a'}; border: 1px solid ${enough ? '#ffaa00' : '#3d3834'}; border-radius: 3px; cursor: ${enough ? 'pointer' : 'not-allowed'}; font-family: 'Modesto Condensed', serif; font-size: 1em; flex-shrink: 0;">Слить<br>−${cost} КХ</button>`;
         };
 
         let memoryHtml = ctx.gachaItems.map(item => {
