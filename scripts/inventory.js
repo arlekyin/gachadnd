@@ -314,6 +314,20 @@ Hooks.on('preCreateItem', (item) => {
     return false;
 });
 
+// Личный эффект уникального навыка: хранится в копии навыка на листе персонажа,
+// компендиум и копии у других персонажей не меняются
+const PERSONAL_BLOCK = /<div class="gd-personal">[\s\S]*?<\/div>/;
+export async function setPersonalEffect(item, text) {
+    const clean = String(text ?? '').trim();
+    const paragraphs = clean
+        ? clean.split(/\n\s*\n/).map((p, i) => `<p>${i === 0 ? '<strong>Личный эффект:</strong> ' : ''}${foundry.utils.escapeHTML ? foundry.utils.escapeHTML(p) : p.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</p>`.replace(/\n/g, '<br>')).join('')
+        : '<p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p>';
+    const block = `<div class="gd-personal">${paragraphs}</div>`;
+    const description = item.system.description?.value ?? '';
+    const value = PERSONAL_BLOCK.test(description) ? description.replace(PERSONAL_BLOCK, block) : `${description}\n${block}`;
+    await item.update({ 'system.description.value': value, [`flags.${MODULE_ID}.personal_effect`]: clean });
+}
+
 // Неудаляемые навыки (Битый сектор): удалить может только Мастер
 Hooks.on('preDeleteItem', (item) => {
     if (!isMemorySkill(item) || !item.flags[MODULE_ID].undeletable || game.user.isGM) return;

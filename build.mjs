@@ -65,7 +65,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap'
+    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -75,6 +75,8 @@ const MAX_EXTRA_RANKS = 2;
 // Уникальные редкости: повтор навыка не поглощается, рангов нет
 const UNIQUE_RARITIES = ['purple', 'red'];
 const RANK_LABELS = ['I', 'II', 'III'];
+// Личный эффект вписывает Мастер в копию навыка на листе персонажа (scripts/inventory.js → setPersonalEffect)
+const PERSONAL_PLACEHOLDER = '<div class="gd-personal"><p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p></div>';
 
 // ==========================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -276,7 +278,9 @@ function validateSkill(skill, folder) {
         checkChanges(changes, 'memory_scaling.changes');
     }
     if (skill.memory_bonus !== undefined && !isPositiveInt(skill.memory_bonus)) err('memory_bonus', 'должно быть целым числом больше 0');
-    for (const field of ['undeletable', 'combat_swap']) {
+    if (skill.loot_bonus !== undefined && !isPositiveInt(skill.loot_bonus)) err('loot_bonus', 'должно быть целым числом больше 0');
+    if (skill.personal !== undefined && !UNIQUE_RARITIES.includes(skill.rarity)) err('personal', 'личный эффект — только у уникальных навыков (фиолетовых и красных)');
+    for (const field of ['undeletable', 'combat_swap', 'personal']) {
         if (skill[field] !== undefined && skill[field] !== true) err(field, 'допустимо только true');
     }
     if (skill.combat_swap && !(isActive && skill.recovery)) err('combat_swap', 'требует activation и recovery: заряд тратится на замену');
@@ -451,6 +455,7 @@ function buildItem(skill, folder, rank = 1) {
         ...(skill.cost?.hp !== undefined ? [`<p><strong>Цена:</strong> ${escapeHtml(formulaToText(String(skill.cost.hp)))} ПЗ за использование</p>`] : []),
         '<hr>',
         textToHtml(withFormula(skill.description, skill)),
+        ...(skill.personal ? [PERSONAL_PLACEHOLDER] : []),
         ...rankHtml
     ].join('\n');
 
@@ -497,7 +502,9 @@ function buildItem(skill, folder, rank = 1) {
                 } : {}),
                 ...(skill.memory_bonus ? { memory_bonus: skill.memory_bonus } : {}),
                 ...(skill.undeletable ? { undeletable: true } : {}),
-                ...(skill.combat_swap ? { combat_swap: true } : {})
+                ...(skill.combat_swap ? { combat_swap: true } : {}),
+                ...(skill.personal ? { personal: true } : {}),
+                ...(skill.loot_bonus ? { loot_bonus: skill.loot_bonus } : {})
             }
         },
         effects: [],
