@@ -4,6 +4,8 @@
 
 import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } from "./synergy.js";
+import { canRankUp, forgeSkill, FORGE_COST } from "./inventory.js";
+import { isPartyAtRest } from "./map.js";
 
 // Описание с обработкой обогатителей dnd5e ([[/heal]], [[/damage]], [[lookup @prof]]) по данным персонажа
 async function enrichDescription(item) {
@@ -153,6 +155,16 @@ export class MemoryTerminal extends Application {
             </div>
         `;
 
+        // Кнопка улучшения: только на Привале и только для навыков с доступным рангом
+        const atRest = isPartyAtRest();
+        const hdValue = actor => actor.system?.attributes?.hd?.value ?? 0;
+        const forgeHtml = item => {
+            if (!atRest || !canRankUp(item)) return '';
+            const cost = FORGE_COST[(item.flags[MODULE_ID].rank ?? 1) + 1];
+            const enough = hdValue(this.actor) >= cost;
+            return `<button type="button" class="gachadnd-forge-btn" data-item-id="${item.id}" ${enough ? '' : 'disabled'} title="Повысить ранг за Кости Хитов (доступно: ${hdValue(this.actor)})" style="width: 90px; padding: 6px; margin-left: 10px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); color: ${enough ? '#ffaa00' : '#6b5a3a'}; border: 1px solid ${enough ? '#ffaa00' : '#3d3834'}; border-radius: 3px; cursor: ${enough ? 'pointer' : 'not-allowed'}; font-family: 'Modesto Condensed', serif; font-size: 1em; flex-shrink: 0;">Улучшить<br>−${cost} КХ</button>`;
+        };
+
         let memoryHtml = ctx.gachaItems.map(item => {
             const flags = item.flags[MODULE_ID] || {};
             const isActive = flags.is_active;
@@ -179,6 +191,7 @@ export class MemoryTerminal extends Application {
                         </div>
                     </div>
                     ${this._generateUsesHtml(item)}
+                    ${forgeHtml(item)}
                     <button type="button" class="gachadnd-toggle-btn" data-item-id="${item.id}" style="width: 110px; padding: 6px; margin-left: 10px; background: ${isActive ? 'linear-gradient(180deg, #183318 0%, #0d1a0d 100%)' : 'linear-gradient(180deg, #222 0%, #111 100%)'}; color: ${isActive ? '#4eff5c' : '#776e62'}; border: 1px solid ${isActive ? '#2da83b' : '#333'}; border-radius: 3px; cursor: pointer; font-family: 'Modesto Condensed', serif; font-size: 1.1em; text-transform: uppercase; font-weight: bold; flex-shrink: 0;">
                         ${isActive ? 'Экипирован' : 'В Памяти'}
                     </button>
@@ -391,6 +404,17 @@ export class MemoryTerminal extends Application {
             });
         });
 
+        element.querySelectorAll('.gachadnd-forge-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                if (btn.disabled) return;
+                btn.disabled = true;
+                const item = this.actor.items.get(btn.dataset.itemId);
+                if (item) await forgeSkill(this.actor, item);
+                this.render(false);
+            });
+        });
+
         element.querySelectorAll('.gachadnd-toggle-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -419,3 +443,9 @@ export class MemoryTerminal extends Application {
         });
     }
 }
+
+// Перемещение отряда по карте этажа меняет доступность улучшения на Привале
+Hooks.on('updateScene', (scene, changes) => {
+    if (!foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) return;
+    Object.values(ui.windows).filter(w => w instanceof MemoryTerminal).forEach(w => w.render(false));
+});

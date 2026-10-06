@@ -31,7 +31,7 @@ Hooks.once('init', () => {
             const existing = Object.values(ui.windows).find(w => w instanceof GachaMapTerminal);
             if (existing) existing.bringToTop(); else new GachaMapTerminal().render(true);
         },
-        // Восстановление зарядов по периоду: 'gachaFloor', 'gachaRun', 'gachaScene' или стандартный период dnd5e
+        // Восстановление зарядов по периоду: 'gachaRun', 'gachaScene' или стандартный период dnd5e
         recoverUses: async (period, actors) => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ Восстанавливать заряды может только Мастер.");
             const count = await recoverPeriodUses(period, actors);
