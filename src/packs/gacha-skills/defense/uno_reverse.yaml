@@ -1,0 +1,10 @@
+id: jbSWTOS9L8qeDU9h
+name: Уно-реверс
+rarity: purple
+tags:
+  - разум
+  - щит
+description: Когда по вам попадает атака, реакцией перенаправьте половину её урона атакующему. Вторую половину получаете вы.
+activation: reaction
+uses: 1
+recovery: long
