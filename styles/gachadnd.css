@@ -695,55 +695,52 @@
    Динамические эффекты Терминала
    ========================================== */
 
-/* Неоновая пульсация экипированных карт */
-@keyframes gd-neon {
-  0%, 100% { box-shadow: 0 0 8px rgba(95, 224, 184, 0.5), inset 0 0 10px rgba(95, 224, 184, 0.2); }
-  50% { box-shadow: 0 0 16px rgba(95, 224, 184, 0.9), 0 0 28px rgba(95, 224, 184, 0.35), inset 0 0 14px rgba(95, 224, 184, 0.35); }
+/* Неон экипированных карт: карта залита цветом, по контуру бежит яркий участок */
+@property --gd-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }
-.gachadnd-terminal .gd-tcard.equipped { animation: gd-neon 2.8s ease-in-out infinite; }
-.gachadnd-terminal .gd-tcard.equipped.selected { animation: none; }
+@keyframes gd-neon-run { to { --gd-angle: 360deg; } }
 
-@keyframes gd-bigneon {
-  0%, 100% { box-shadow: 0 0 0 2px #0b1214, 0 0 0 4px rgba(201, 167, 93, 0.6), 0 0 22px var(--rarity), 0 0 40px rgba(95, 224, 184, 0.25); }
-  50% { box-shadow: 0 0 0 2px #0b1214, 0 0 0 4px rgba(201, 167, 93, 0.8), 0 0 30px var(--rarity), 0 0 60px rgba(95, 224, 184, 0.45); }
+.gachadnd-terminal .gd-tcard.equipped,
+.gachadnd-terminal .gd-bigcard.equipped {
+  --neon: #5fe0b8;
+  --neon-hot: #e4fff5;
+  --neon-dim: #17614e;
 }
-.gachadnd-terminal .gd-bigcard.equipped { animation: gd-bigneon 3.2s ease-in-out infinite; }
+.gachadnd-terminal .gd-tcard.equipped {
+  background: linear-gradient(180deg, #2c7a64 0%, #13463a 100%);
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(95, 224, 184, 0.55), inset 0 0 14px rgba(160, 255, 225, 0.35);
+}
+.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art { border-color: rgba(228, 255, 245, 0.75); }
+.gachadnd-terminal .gd-bigcard.equipped {
+  background: linear-gradient(170deg, #2c7a64 0%, #103c32 100%);
+  border-color: transparent;
+  box-shadow: 0 0 0 2px #0b1214, 0 0 30px rgba(95, 224, 184, 0.6), inset 0 0 24px rgba(160, 255, 225, 0.35);
+}
 
-/* Тлеющий пепел: частицы поднимаются от нижнего края карты */
-.gachadnd-terminal .gd-embers {
+/* Бегущий контур: конический градиент, вырезанный маской в рамку */
+.gachadnd-terminal .gd-tcard.equipped::before,
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon {
+  content: "";
   position: absolute;
-  inset: -4px;
-  overflow: hidden;
+  inset: -3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: conic-gradient(from var(--gd-angle),
+    var(--neon-dim) 0deg, var(--neon) 30deg, var(--neon-hot) 55deg, var(--neon) 80deg, var(--neon-dim) 120deg,
+    var(--neon-dim) 180deg, var(--neon) 215deg, var(--neon-hot) 235deg, var(--neon) 255deg, var(--neon-dim) 300deg, var(--neon-dim) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  filter: drop-shadow(0 0 4px var(--neon));
+  animation: gd-neon-run 4.5s linear infinite;
   pointer-events: none;
-  border-radius: inherit;
 }
-.gachadnd-terminal .gd-embers i {
-  position: absolute;
-  bottom: -4px;
-  left: var(--x);
-  width: var(--s);
-  height: var(--s);
-  border-radius: 50%;
-  background: #c8fff0;
-  box-shadow: 0 0 4px #5fe0b8, 0 0 8px #5fe0b8;
-  opacity: 0;
-  animation: gd-ember var(--t) linear var(--d) infinite;
-}
-@keyframes gd-ember {
-  0% { transform: translate(0, 0) scale(1); opacity: 0; }
-  10% { opacity: 0.95; }
-  60% { opacity: 0.7; }
-  100% { transform: translate(8px, -140px) scale(0.3); opacity: 0; }
-}
-.gachadnd-terminal .gd-bigcard .gd-embers { inset: -30px -24px 0; overflow: visible; }
-.gachadnd-terminal .gd-bigcard .gd-embers i { width: calc(var(--s) + 2px); height: calc(var(--s) + 2px); }
-.gachadnd-terminal .gd-bigcard .gd-embers i:nth-child(odd) { background: #ffd9a0; box-shadow: 0 0 4px #ff9a3c, 0 0 8px #ff9a3c; }
-@keyframes gd-ember-big {
-  0% { transform: translate(0, 0) scale(1); opacity: 0; }
-  10% { opacity: 1; }
-  100% { transform: translate(-12px, -320px) scale(0.2); opacity: 0; }
-}
-.gachadnd-terminal .gd-bigcard .gd-embers i { animation-name: gd-ember-big; }
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -6px; padding: 5px; border-radius: 13px; animation-duration: 6s; }
+.gachadnd-terminal .gd-tcard.equipped.selected { border-color: transparent; }
 
 /* Экипировка: вспышка и «вспыхивание» карты */
 @keyframes gd-fx-equip {
@@ -772,10 +769,9 @@
 
 /* Без анимаций по системной настройке */
 @media (prefers-reduced-motion: reduce) {
-  .gachadnd-terminal .gd-tcard.equipped,
-  .gachadnd-terminal .gd-bigcard.equipped,
+  .gachadnd-terminal .gd-tcard.equipped::before,
+  .gachadnd-terminal .gd-bigcard.equipped > .gd-neon,
   .gachadnd-terminal .fx-equip,
   .gachadnd-terminal .fx-unequip,
   .gachadnd-terminal .fx-merge { animation: none !important; }
-  .gachadnd-terminal .gd-embers { display: none; }
 }
