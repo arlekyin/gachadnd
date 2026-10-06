@@ -8,6 +8,7 @@ import { GachaMapTerminal } from "./map.js";
 import "./compendium.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
 import { registerSoundSettings } from "./sounds.js";
+import { giveCrystal } from "./inventory.js";
 
 export const MODULE_ID = 'gachadnd';
 
@@ -34,6 +35,8 @@ Hooks.once('init', () => {
             const existing = Object.values(ui.windows).find(w => w instanceof GachaMapTerminal);
             if (existing) existing.bringToTop(); else new GachaMapTerminal().render(true);
         },
+        // Кристалл навыка вручную: game.gachadnd.giveCrystal(actor, 'Фус-Ро-Да')
+        giveCrystal: (actor, skillName) => giveCrystal(actor, { skillName }),
         // Восстановление зарядов по периоду: 'gachaRun', 'gachaScene' или стандартный период dnd5e
         recoverUses: async (period, actors) => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ Восстанавливать заряды может только Мастер.");
