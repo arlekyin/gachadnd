@@ -376,16 +376,18 @@ function withFormula(text, skill) {
 function buildItem(skill, folder, rank = 1) {
     const maxRank = 1 + (skill.ranks?.length ?? 0);
     const ranked = resolveRank(skill, rank);
+    // Эффект первооткрывателя: в описании только полученные ранги, следующий раскрывается при слиянии
+    const obtained = (skill.ranks ?? []).slice(0, rank - 1);
     const rankHtml = maxRank > 1 ? [
-        `<p><strong>Ранг:</strong> ${RANK_LABELS[rank - 1]} из ${RANK_LABELS[maxRank - 1]}</p>`,
-        '<ul>',
-        ...skill.ranks.map((r, i) => {
-            const line = `<strong>Ранг ${RANK_LABELS[i + 1]}:</strong> ${escapeHtml(withFormula(r.text, resolveRank(skill, i + 2)))}`;
-            return `<li>${i + 2 <= rank ? line : `<span style="opacity: 0.6">${line}</span>`}</li>`;
-        }),
-        '</ul>'
+        `<p><strong>Ранг:</strong> ${RANK_LABELS[rank - 1]}</p>`,
+        ...(obtained.length ? [
+            '<ul>',
+            ...obtained.map((r, i) => `<li><strong>Ранг ${RANK_LABELS[i + 1]}:</strong> ${escapeHtml(withFormula(r.text, resolveRank(skill, i + 2)))}</li>`),
+            '</ul>'
+        ] : [])
     ] : [];
     const hasChanges = [skill, ...(skill.ranks ?? [])].some(r => r?.changes);
+    const rankTexts = (skill.ranks ?? []).map((r, i) => withFormula(r.text, resolveRank(skill, i + 2)));
     skill = ranked;
     const rarity = RARITIES[skill.rarity];
     const category = CATEGORIES[folder];
@@ -439,6 +441,8 @@ function buildItem(skill, folder, rank = 1) {
                 has_activation: isActive,
                 rank,
                 max_rank: maxRank,
+                // Тексты рангов II–III: для сообщения о слиянии и для Мастера в Терминале
+                ...(rankTexts.length ? { rank_texts: rankTexts } : {}),
                 ...(skill.drawback ? { drawback: skill.drawback } : {}),
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),

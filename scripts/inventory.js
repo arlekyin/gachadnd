@@ -102,9 +102,13 @@ const RANK_LABELS = ['I', 'II', 'III'];
 
 // Сообщение в чат о повышении ранга — видно всем игрокам
 export async function announceRankUp(actor, item, rank, note = '') {
+    // Открытие нового ранга: его эффект игроки узнают только сейчас
+    const revealed = item.flags?.[MODULE_ID]?.rank_texts?.[rank - 2];
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> — ранг ${RANK_LABELS[rank - 1]}${note ? `<br><span style="opacity: 0.75">${note}</span>` : ''}</div>`
+        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> — ранг ${RANK_LABELS[rank - 1]}`
+            + `${revealed ? `<br>${String(revealed).replace(/&/g, '&amp;').replace(/</g, '&lt;')}` : ''}`
+            + `${note ? `<br><span style="opacity: 0.75">${note}</span>` : ''}</div>`
     });
 }
 

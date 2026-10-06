@@ -280,11 +280,15 @@ export class MemoryTerminal extends ApplicationV2 {
                 <span class="gd-chip" style="--chip: ${rarity.color}">${rarity.label}</span>
                 <span class="gd-chip">${esc(flags.category ?? '')}</span>
                 ${tags.map(t => `<span class="gd-chip tag">${esc(t)}</span>`).join('')}
-                ${ranked ? `<span class="gd-chip">Ранг ${RANK_LABELS[(flags.rank ?? 1) - 1]} из ${RANK_LABELS[(flags.max_rank ?? 1) - 1]}</span>` : ''}
+                ${ranked ? `<span class="gd-chip">Ранг ${RANK_LABELS[(flags.rank ?? 1) - 1]}${(flags.rank ?? 1) < flags.max_rank ? ' · можно улучшить' : ''}</span>` : ''}
                 ${['purple', 'red'].includes(flags.rarity) ? '<span class="gd-chip unique">Уникальный</span>' : ''}
             </div>
             ${flags.drawback ? `<div class="gd-feature-drawback"><strong>Штраф:</strong> ${esc(flags.drawback)}</div>` : ''}
             <div class="gd-feature-text">${body || '<p>Описание отсутствует.</p>'}</div>
+            ${game.user?.isGM && ranked && (flags.rank ?? 1) < flags.max_rank ? `
+                <div class="gd-gm-ranks"><div class="gd-gm-ranks-title"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер</div>
+                ${(flags.rank_texts ?? []).slice((flags.rank ?? 1) - 1).map((t, i) => `<div><strong>Ранг ${RANK_LABELS[(flags.rank ?? 1) + i]}:</strong> ${esc(t)}</div>`).join('')}
+                </div>` : ''}
             <dl class="gd-stats">${statsRows(selected).map(([k, v, raw]) => `<dt>${k}</dt><dd>${raw ? v : esc(v)}</dd>`).join('')}</dl>
             <div class="gd-details-actions">
                 <button type="button" class="gd-btn ${flags.is_active ? 'unequip' : 'equip'}" data-action="toggleEquip" data-item-id="${selected.id}">
