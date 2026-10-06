@@ -5,7 +5,7 @@
 import { MODULE_ID } from "./main.js";
 import { getSynergyDictionary } from "./synergy-data.js";
 import { isMemorySkill } from "./synergy.js";
-import { getSkillPack, currentSkillName } from "./crystals.js";
+import { getSkillPack, currentSkillName, crystalForSkill, buildCrystalData } from "./crystals.js";
 
 const RARITY_MAP = {
     'gray': { label: 'Серый', color: '#9d9d9d', class: 'rarity-gray' },
@@ -251,7 +251,7 @@ export async function addSkillToMemory(actor, skillName, { forced = false, extra
         await replaced.delete();
     }
 
-    await actor.createEmbeddedDocuments("Item", [await buildSkillData(skillName, { extraFlags, fallbackDescription })]);
+    await actor.createEmbeddedDocuments("Item", [await buildSkillData(skillName, { extraFlags, fallbackDescription })], { gachadndMemory: true });
     return { status: replacedName ? 'replaced' : 'added', replacedName };
 }
 
@@ -307,6 +307,27 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
     
     return true; 
 });
+
+// Навык, брошенный на лист из компендиума или с другого персонажа, становится кристаллом в инвентаре:
+// в Память навык попадает только поглощением кристалла (как свиток из заклинания в dnd5e)
+Hooks.on('preCreateItem', (item, data, options) => {
+    if (!(item.parent instanceof Actor) || !isMemorySkill(item) || options.gachadndMemory) return;
+    giveCrystal(item.parent, { skillId: item.flags[MODULE_ID].skill_id ?? item._source._id, skillName: item.flags[MODULE_ID].skill_name }, item.toObject());
+    return false;
+});
+
+/**
+ * Выдаёт персонажу кристалл навыка. Данные навыка — из компендиума навыков.
+ * @param {Actor} actor
+ * @param {{ skillId?: string, skillName?: string }} skill
+ * @param {object} [fallback]  Данные навыка, если в компендиуме его нет.
+ */
+export async function giveCrystal(actor, skill, fallback = null) {
+    const crystal = await crystalForSkill(skill) ?? (fallback ? buildCrystalData(fallback) : null);
+    if (!crystal) return ui.notifications.warn(`⚠️ Навык «${skill.skillName ?? skill.skillId}» не найден в компендиуме навыков.`);
+    await actor.createEmbeddedDocuments('Item', [crystal]);
+    ui.notifications.info(`💎 ${crystal.name} — в инвентаре персонажа ${actor.name}.`);
+}
 
 // Копия навыка, который уже есть в Памяти, на лист не добавляется
 Hooks.on('preCreateItem', (item) => {
