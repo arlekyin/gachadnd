@@ -10,6 +10,7 @@ import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } f
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, MEMORY_CAPACITY } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
+import { playTerminalSound } from "./sounds.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -37,6 +38,16 @@ async function enrichDescription(html, document) {
 // Шапка описания навыка (категория, редкость, перезарядка) выводится плашками — в тексте только суть
 function descriptionBody(html = '') {
     return html.includes('<hr>') ? html.slice(html.indexOf('<hr>') + 4) : html;
+}
+
+// Частицы пепла: позиции и задержки детерминированы, чтобы перерисовка не дёргала анимацию
+function embersHtml(count, seed = 0) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+        const k = (i * 37 + seed * 11) % 100;
+        html += `<i style="--x: ${(k * 0.97) % 100}%; --d: ${((i * 0.73 + seed * 0.31) % 3).toFixed(2)}s; --t: ${(2.4 + (k % 7) * 0.25).toFixed(2)}s; --s: ${1 + (k % 3)}px"></i>`;
+    }
+    return `<span class="gd-embers" aria-hidden="true">${html}</span>`;
 }
 
 function hasActivities(item) {
@@ -222,6 +233,7 @@ export class MemoryTerminal extends ApplicationV2 {
             return `
                 <div class="${classes.join(' ')}" style="--rarity: ${rarity.color}" data-action="select" data-item-id="${item.id}" title="${esc(item.name)}">
                     <div class="gd-tcard-art" style="background-image: url('${item.img}')"></div>
+                    ${flags.is_active ? embersHtml(5, item.id.charCodeAt(0)) : ''}
                     ${ranked ? `<span class="gd-tcard-badge">${flags.rank ?? 1}</span>` : ''}
                     ${mergeable ? '<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>' : ''}
                     <div class="gd-tcard-name">${esc(item.name)}</div>
@@ -253,6 +265,7 @@ export class MemoryTerminal extends ApplicationV2 {
         return `
             <div class="gd-bigcard ${flags.is_active ? 'equipped' : ''}" style="--rarity: ${rarity.color}" data-action="openSheet" data-item-id="${selected.id}" title="Открыть лист навыка">
                 <div class="gd-bigcard-art" style="background-image: url('${selected.img}')"></div>
+                ${flags.is_active ? embersHtml(24, 3) : ''}
                 ${ranked ? `<div class="gd-bigcard-plate">${RANK_LABELS[(flags.rank ?? 1) - 1]}</div>` : ''}
             </div>
             <h2 class="gd-feature-name">${esc(selected.name)}</h2>
@@ -309,6 +322,12 @@ export class MemoryTerminal extends ApplicationV2 {
     }
 
     _onRender() {
+        // Анимация последнего действия (экипировка, снятие, слияние) — на картах этого навыка
+        if (this.fx && Date.now() - this.fx.time < 1500) {
+            this.element.querySelectorAll(`[data-item-id="${this.fx.id}"].gd-tcard, [data-item-id="${this.fx.id}"].gd-bigcard`)
+                .forEach(el => el.classList.add(`fx-${this.fx.type}`));
+        }
+
         this.element.querySelectorAll('.gd-uses-input').forEach(input => {
             input.addEventListener('click', event => event.stopPropagation());
             input.addEventListener('change', async event => {
@@ -419,7 +438,12 @@ export class MemoryTerminal extends ApplicationV2 {
         const item = this.actor.items.get(target.dataset.itemId);
         if (!item) return;
         target.disabled = true;
+        const rank = item.flags[MODULE_ID]?.rank ?? 1;
         await forgeSkill(this.actor, item);
+        if ((item.flags[MODULE_ID]?.rank ?? 1) > rank) {
+            this.fx = { id: item.id, type: 'merge', time: Date.now() };
+            playTerminalSound('merge');
+        }
         this.render();
     }
 
@@ -440,6 +464,8 @@ export class MemoryTerminal extends ApplicationV2 {
         }
 
         await setSkillEquipped(item, equipping);
+        this.fx = { id: item.id, type: equipping ? 'equip' : 'unequip', time: Date.now() };
+        playTerminalSound(equipping ? 'equip' : 'unequip');
         await updateActorSynergies(this.actor);
         this.render();
     }
