@@ -11,6 +11,7 @@ import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, MEMORY_CAPACIT
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
+import { neuralHtml } from "./neural.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -198,7 +199,7 @@ export class MemoryTerminal extends ApplicationV2 {
         return `
             ${this.#tabsHtml(context)}
             ${this.#headerHtml(context)}
-            <section class="gd-body">${this.#slotsHtml(context)}</section>`;
+            <section class="gd-body">${neuralHtml(this.actor.id, context.equipped.length)}${this.#slotsHtml(context)}</section>`;
     }
 
     #tabsHtml(context) {
@@ -223,6 +224,7 @@ export class MemoryTerminal extends ApplicationV2 {
         }
         return `
             <div class="gd-altar">
+                ${neuralHtml(this.actor.id, context.equipped.length)}
                 <div class="gd-deck">${this.#deckHtml(context)}</div>
                 <div class="gd-feature"><div class="gd-feature-inner">${this.#featureHtml(context)}</div></div>
                 <aside class="gd-side">
