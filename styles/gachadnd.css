@@ -835,3 +835,24 @@
 .gachadnd-doom .gd-doom-row button { white-space: nowrap; }
 @container (max-width: 560px) { .gachadnd-doom .gd-horses { grid-template-columns: repeat(2, 1fr); } }
 .gachadnd-doom-chat { padding: 8px; border: 1px solid #ff8000; background: #120806; color: #e8d8c8; }
+
+/* ==========================================
+   Магазин — Торговец Тумана
+   ========================================== */
+.gachadnd-shop .window-content { background: radial-gradient(circle at 50% 0%, #1d1608 0%, #0a0907 70%); color: #e8dcc8; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.gachadnd-shop h3 { margin: 6px 0 2px; border-bottom: 1px solid #3a3020; color: #ffd27a; font-size: 15px; letter-spacing: 0.05em; }
+.gachadnd-shop .gd-shop-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.gachadnd-shop .gd-shop-head label { display: flex; align-items: center; gap: 6px; }
+.gachadnd-shop .gd-shop-gold { color: #ffd27a; font-weight: bold; }
+.gachadnd-shop .gd-goods { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.gachadnd-shop .gd-good { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; text-align: center; border: 1px solid color-mix(in srgb, var(--good) 55%, transparent); background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 0 14px color-mix(in srgb, var(--good) 15%, transparent); }
+.gachadnd-shop .gd-good img { width: 48px; height: 48px; border: none; filter: drop-shadow(0 0 6px var(--good)); }
+.gachadnd-shop .gd-good-name { font-weight: bold; color: var(--good); font-size: 13px; }
+.gachadnd-shop .gd-good-sub { font-size: 11px; opacity: 0.75; }
+.gachadnd-shop .gd-good button { width: 100%; margin-top: auto; }
+.gachadnd-shop .gd-good.sold { opacity: 0.4; }
+.gachadnd-shop .gd-good-sold { font-size: 11px; margin-top: auto; }
+.gachadnd-shop .gd-services { display: flex; flex-direction: column; gap: 6px; }
+.gachadnd-shop .gd-service { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid #2c2618; background: rgba(0, 0, 0, 0.35); }
+.gachadnd-shop .gd-service:last-child { grid-template-columns: 1fr auto; }
+.gachadnd-shop-chat { padding: 8px; border: 1px solid #ffd27a; background: #120f06; color: #e8dcc8; }

@@ -6,6 +6,7 @@ import { MODULE_ID } from "./main.js";
 import { isMemorySkill } from "./synergy.js";
 import { addSkillToMemory } from "./inventory.js";
 import { randomCrystal, crystalImage } from "./crystals.js";
+import { rollGold, getFloor, addGold } from "./economy.js";
 
 const RARITY_WEIGHTS = {
     'gray': 600,
@@ -146,8 +147,12 @@ export class GachaLootTerminal extends Application {
             await targetActor.createEmbeddedDocuments("Item", drops.map(d => d.crystal));
         }
 
+        // Золото комнаты растёт с этажом: База(Э) × доля комнаты
+        const gold = rollGold(roomType);
+        if (targetActor && gold > 0) await addGold(targetActor, gold);
+
         const forced = await this.applyForcedLoot(template, rarityFilter);
-        await this.printLootCard(template.name, drops, targetActor, forced);
+        await this.printLootCard(template.name, drops, targetActor, forced, gold);
     }
 
     // Жадность: персонажи с экипированным навыком forced_loot получают кристаллы сразу в Память, без выбора
@@ -175,7 +180,7 @@ export class GachaLootTerminal extends Application {
         return results;
     }
 
-    async printLootCard(roomName, drops, targetActor, forced = []) {
+    async printLootCard(roomName, drops, targetActor, forced = [], gold = 0) {
         let contentHtml = ``;
         if (drops.length === 0) {
             contentHtml = `<div style="text-align: center; padding: 15px; color: #7a7062;">Ничего ценного...</div>`;
@@ -209,7 +214,7 @@ export class GachaLootTerminal extends Application {
                 ${forced.map(r => `<div style="font-size: 0.9em; color: #d0c9c0;"><strong>${r.actor.name}:</strong> <span style="color: ${RARITY_COLORS[r.rarity] || '#aaa'};">${r.skillName}</span> — ${forcedText[r.status]?.(r) ?? r.status}</div>`).join('')}
             </div>` : '';
 
-        const statusText = targetActor ? `<span style="color: #1eff00;">Предметы добавлены: <strong>${targetActor.name}</strong></span>` : `<span style="color: #ffaa00;">Токен не выделен.</span>`;
+        const statusText = targetActor ? `<span style="color: #1eff00;">Предметы${gold ? ' и золото' : ''} добавлены: <strong>${targetActor.name}</strong></span>` : `<span style="color: #ffaa00;">Токен не выделен.</span>`;
 
         ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ alias: "Туманный Разлом" }),
@@ -217,6 +222,7 @@ export class GachaLootTerminal extends Application {
             <div style="background: #0b0a0a; border: 2px solid #3d3834; border-radius: 6px; padding: 12px; font-family: 'Modesto Condensed', serif;">
                 <h3 style="text-align: center; color: #ede6dc; margin-bottom: 12px;">ДОБЫЧА: <span style="color: #ffaa00;">${roomName.toUpperCase()}</span></h3>
                 ${contentHtml}
+                ${gold ? `<div style="text-align: center; margin-top: 8px; color: #ffd27a; font-size: 1.15em;"><i class="fas fa-coins"></i> ${gold} зм · этаж ${getFloor()}</div>` : ''}
                 <div style="text-align: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #2a2626;">${statusText}</div>
                 ${forcedHtml}
             </div>`

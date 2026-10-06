@@ -5,6 +5,8 @@
 import { MODULE_ID } from "./main.js";
 import { onNodeEntered } from "./horsemen.js";
 import { DoomAltar } from "./altar.js";
+import { ShopWindow } from "./shop.js";
+import { getFloor } from "./economy.js";
 
 const MAP_DATA = {
     NODE_START: 'start',
@@ -294,6 +296,8 @@ export class GachaMapTerminal extends Application {
             genBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const length = parseInt(element.querySelector('#gacha-map-length').value) || 6;
+                // Новый этаж забега: номер растёт, если по прошлой карте отряд уже ходил
+                if (this.currentMap?.visitedNodes?.length) await game.settings.set(MODULE_ID, 'runFloor', getFloor() + 1);
                 this.currentMap = generateMapGraph(length);
                 
                 if (canvas.scene) {
@@ -330,6 +334,7 @@ export class GachaMapTerminal extends Application {
                     // Клик по текущей комнате; на Погибели открывает алтарь
                     if (mapData.currentNodeId === nodeId) {
                         if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
+                        if (nodeData.type === MAP_DATA.NODE_SHOP) ShopWindow.open();
                         return;
                     }
                     
@@ -358,6 +363,7 @@ export class GachaMapTerminal extends Application {
                 // Серия Войны и штраф проклятой Войны; на Погибели — алтарь
                 await onNodeEntered(nodeData.type);
                 if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
+                if (nodeData.type === MAP_DATA.NODE_SHOP) ShopWindow.open();
 
                 // Сообщение в чат
                 ChatMessage.create({
