@@ -736,10 +736,11 @@
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
   filter: drop-shadow(0 0 4px var(--neon));
-  animation: gd-neon-run 4.5s linear infinite;
+  /* Фаза задаётся из часов при каждой отрисовке — перерисовка не запускает анимацию заново */
+  animation: gd-neon-run 4.5s linear var(--gd-phase-small, 0ms) infinite;
   pointer-events: none;
 }
-.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -6px; padding: 5px; border-radius: 13px; animation-duration: 6s; }
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -6px; padding: 5px; border-radius: 13px; animation-duration: 6s; animation-delay: var(--gd-phase-big, 0ms); }
 .gachadnd-terminal .gd-tcard.equipped.selected { border-color: transparent; }
 
 /* Экипировка: вспышка и «вспыхивание» карты */
