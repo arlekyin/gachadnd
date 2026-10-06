@@ -6,8 +6,8 @@
  */
 
 import { MODULE_ID } from "./main.js";
-import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } from "./synergy.js";
-import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, MEMORY_CAPACITY, romanRank } from "./inventory.js";
+import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat } from "./synergy.js";
+import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
@@ -155,7 +155,7 @@ export class MemoryTerminal extends ApplicationV2 {
         const hitDice = actor.system.attributes?.hd?.value ?? 0;
 
         const synergyItems = actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item);
-        const synergyEffects = actor.effects.filter(e => e.flags?.[MODULE_ID]?.is_synergy || e.flags?.[MODULE_ID]?.is_system_effect);
+        const synergyEffects = actor.effects.filter(e => e.flags?.[MODULE_ID]?.is_synergy || e.flags?.[MODULE_ID]?.is_system_effect || e.flags?.[MODULE_ID]?.memory_scaling_source);
 
         const descriptions = new Map();
         for (const doc of [selected, ...equipped, ...synergyItems].filter(Boolean)) {
@@ -208,7 +208,7 @@ export class MemoryTerminal extends ApplicationV2 {
             <div class="gd-altar">
                 <canvas class="gd-neural" data-active="${context.equipped.length}"></canvas>
                 <div class="gd-deck-wrap">
-                    <div class="gd-deck-title">Память <span>${context.memory.length} / ${MEMORY_CAPACITY}</span></div>
+                    <div class="gd-deck-title">Память <span>${context.memory.length} / ${getMemoryCapacity(this.actor)}</span></div>
                     <div class="gd-deck">${this.#deckHtml(context)}</div>
                 </div>
                 <div class="gd-feature"><div class="gd-feature-inner">${this.#featureHtml(context)}</div></div>
@@ -228,7 +228,7 @@ export class MemoryTerminal extends ApplicationV2 {
 
     #deckHtml(context) {
         // Свободные ячейки Памяти — пустыми картами, как закрытые карты Арканы
-        const empty = Math.max(0, MEMORY_CAPACITY - context.memory.length);
+        const empty = Math.max(0, getMemoryCapacity(this.actor) - context.memory.length);
         const emptyHtml = Array.from({ length: empty }, () =>
             '<div class="gd-tcard empty" title="Свободная ячейка Памяти"><i class="fas fa-plus"></i></div>').join('');
         return context.memory.map(item => {
@@ -445,6 +445,28 @@ export class MemoryTerminal extends ApplicationV2 {
         target.disabled = true;
 
         const equipping = !item.flags[MODULE_ID]?.is_active;
+
+        // В бою навыки не меняются; Горячая замена разрешает одну пару «снять → экипировать»
+        let usesSwap = false;
+        if (isInCombat(this.actor) && !game.user.isGM) {
+            if (equipping) {
+                if (!this.actor.getFlag(MODULE_ID, 'swapPending')) {
+                    ui.notifications.warn('В бою навыки менять нельзя.');
+                    return this.render();
+                }
+                usesSwap = true;
+            } else {
+                const swap = this.actor.items.find(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active
+                    && i.flags[MODULE_ID].combat_swap && (Number(i.system.uses?.max) || 0) > (i.system.uses?.spent || 0));
+                if (!swap) {
+                    ui.notifications.warn('В бою навыки менять нельзя.');
+                    return this.render();
+                }
+                await swap.update({ 'system.uses.spent': (swap.system.uses.spent || 0) + 1 });
+                await this.actor.setFlag(MODULE_ID, 'swapPending', true);
+                ui.notifications.info(`${swap.name}: выберите навык, который займёт освободившийся слот.`);
+            }
+        }
         if (equipping) {
             const level = this.actor.system.details?.level || 1;
             const equipped = this.actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active);
@@ -456,6 +478,7 @@ export class MemoryTerminal extends ApplicationV2 {
         }
 
         await setSkillEquipped(item, equipping);
+        if (usesSwap) await this.actor.unsetFlag(MODULE_ID, 'swapPending');
         this.fx = { id: item.id, type: equipping ? 'equip' : 'unequip', time: Date.now() };
         playTerminalSound(equipping ? 'equip' : 'unequip');
         await updateActorSynergies(this.actor);

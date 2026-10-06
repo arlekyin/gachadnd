@@ -1,0 +1,13 @@
+id: SQYf93cs55QxPxk4
+name: Сандевистан
+rarity: purple
+tags:
+  - память
+  - движение
+description: Бонусным действием ускорьте нервную систему. До конца хода вы можете использовать два навыка из Памяти, не тратя на них действие или бонусное действие.
+drawback: В конце хода вы получаете {damage} от отказа нервной системы.
+activation: bonus
+recovery: short
+damage:
+  - formula: 2d10
+    type: psychic

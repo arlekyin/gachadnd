@@ -1,0 +1,19 @@
+id: yV7oGPkQbY96OvgP
+name: Легенда Найт-Сити
+rarity: blue
+tags:
+  - память
+  - сталь
+description: За каждые 3 навыка, сожжённых за время забега, ваши атаки оружием получают +1 к урону, максимум — ваш бонус мастерства. Сожжённым считается любой навык, удалённый из Памяти, в том числе сгоревший при переполнении. Счёт ведётся с начала забега, даже если навык экипирован позже.
+memory_scaling:
+  count: burned
+  every: 3
+  max: prof
+  text: +{n} к урону атак оружием.
+  changes:
+    - key: system.bonuses.mwak.damage
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rwak.damage
+      mode: add
+      value: '+{n}'

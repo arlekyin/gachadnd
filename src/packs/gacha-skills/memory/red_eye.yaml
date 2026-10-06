@@ -1,0 +1,16 @@
+id: EJ5PoahIMO8YMoAu
+name: Красный глаз
+rarity: gray
+tags:
+  - память
+  - проклятье
+description: Ваш глаз светится красным. Если в вашей Памяти есть ещё хотя бы один навык с тегом «проклятье», вы получаете +1 к проверкам Запугивания.
+memory_scaling:
+  count: tag:проклятье
+  min: 2
+  max: 1
+  text: +1 к проверкам Запугивания.
+  changes:
+    - key: system.skills.itm.bonuses.check
+      mode: add
+      value: '+{n}'

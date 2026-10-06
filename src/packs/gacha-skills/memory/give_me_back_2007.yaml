@@ -1,0 +1,12 @@
+id: aHOqikfKgKvgsQCF
+name: Верните мне мой 2007-й
+rarity: purple
+tags:
+  - память
+  - свет
+description: Реакцией, когда урон опускает ваши ПЗ до 0, сожгите случайный неэкипированный навык из вашей Памяти. Вы не теряете сознание, а ваши ПЗ становятся равны половине их максимума.
+activation: reaction
+recovery: long
+damage:
+  - formula: floor(@attributes.hp.max / 2)
+    type: healing

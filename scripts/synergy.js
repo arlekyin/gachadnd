@@ -74,6 +74,11 @@ export function isMemorySkill(item) {
     return item?.type === 'feat' && !!flags?.skill_name && !flags.is_crystal_item && !flags.is_synergy_item;
 }
 
+// Персонаж участвует в начатом бою — менять навыки нельзя (кроме Горячей замены)
+export function isInCombat(actor) {
+    return !!game.combats?.some(c => c.started && c.combatants.some(cb => cb.actor?.id === actor?.id));
+}
+
 // Суммарная прибавка к абсолютному лимиту слотов от экипированных навыков
 export function getSlotBonus(items) {
     return items.reduce((sum, i) => sum + (Number(i.flags?.[MODULE_ID]?.slot_bonus) || 0), 0);
@@ -139,17 +144,19 @@ export async function updateActorSynergies(actor) {
 
         if (overloadCount > 0) {
             const statPenalty = overloadCount * -2;
+            const hpPenalty = -overloadCount * level;
             const effectData = {
                 name: overloadEffectName,
                 img: "icons/svg/hazard.svg",
                 icon: "icons/svg/hazard.svg", // Дублируем для V11+
-                description: `<p>Критический перегруз памяти! Штраф <strong>${statPenalty}</strong> к Интеллекту, Мудрости и Харизме.</p>`,
+                description: `<p>Критический перегруз памяти! Штраф <strong>${statPenalty}</strong> к Интеллекту, Мудрости и Харизме и <strong>${hpPenalty}</strong> к максимуму ПЗ.</p>`,
                 origin: actor.uuid,
                 disabled: false,
                 changes: [
                     { key: "system.abilities.int.value", mode: 2, value: statPenalty },
                     { key: "system.abilities.wis.value", mode: 2, value: statPenalty },
-                    { key: "system.abilities.cha.value", mode: 2, value: statPenalty }
+                    { key: "system.abilities.cha.value", mode: 2, value: statPenalty },
+                    { key: "system.attributes.hp.bonuses.overall", mode: 2, value: String(hpPenalty) }
                 ],
                 flags: { [MODULE_ID]: { is_system_effect: true } }
             };
@@ -305,6 +312,8 @@ export async function updateActorSynergies(actor) {
             ui.notifications.info(`✨ Разум расширен: получены новые способности синергий!`);
         }
 
+        await syncMemoryScaling(actor, gachaItems, activeItems);
+
         console.log(`[GachaDND] === РАСЧЕТ УСПЕШНО ЗАВЕРШЕН ===`);
 
     } catch (err) {
@@ -314,3 +323,71 @@ export async function updateActorSynergies(actor) {
         if (actorUpdatePending.delete(actor.id)) await updateActorSynergies(actor);
     }
 }
+
+// ==========================================
+// 2. ЭФФЕКТЫ ОТ СОСТАВА ПАМЯТИ (memory_scaling)
+// ==========================================
+
+/**
+ * Экипированные навыки с memory_scaling получают эффект на персонаже, сила которого зависит
+ * от числа навыков в Памяти, навыков с тегом или сожжённых кристаллов.
+ * n = floor(число / every), если число ≥ min; не больше max ('prof' — бонус мастерства).
+ */
+async function syncMemoryScaling(actor, memory, equipped) {
+    const prof = actor.system.attributes?.prof ?? 2;
+    const desired = new Map();
+    for (const item of equipped) {
+        const config = item.flags[MODULE_ID]?.memory_scaling;
+        if (!config) continue;
+        let count;
+        if (config.count === 'memory') count = memory.length;
+        else if (config.count === 'burned') count = actor.getFlag(MODULE_ID, 'burned_count') || 0;
+        else {
+            const tag = String(config.count).replace(/^tag:/, '');
+            count = memory.filter(i => (i.flags[MODULE_ID]?.tags ?? []).includes(tag)).length;
+        }
+        let n = count >= (config.min ?? 1) ? Math.floor(count / (config.every ?? 1)) : 0;
+        const max = config.max === 'prof' ? prof : config.max;
+        if (max !== undefined) n = Math.min(n, max);
+        if (n > 0) desired.set(item.id, { item, n, config });
+    }
+
+    const existing = actor.effects.filter(e => e.flags?.[MODULE_ID]?.memory_scaling_source);
+    const toDelete = [];
+    const toUpdate = [];
+    for (const effect of existing) {
+        const want = desired.get(effect.flags[MODULE_ID].memory_scaling_source);
+        if (!want) { toDelete.push(effect.id); continue; }
+        if (effect.flags[MODULE_ID].memory_scaling_n !== want.n) toUpdate.push({ _id: effect.id, ...scalingEffectData(want) });
+        desired.delete(effect.flags[MODULE_ID].memory_scaling_source);
+    }
+    if (toDelete.length) await actor.deleteEmbeddedDocuments('ActiveEffect', toDelete);
+    if (toUpdate.length) await actor.updateEmbeddedDocuments('ActiveEffect', toUpdate);
+    const toCreate = [...desired.values()].map(scalingEffectData);
+    if (toCreate.length) await actor.createEmbeddedDocuments('ActiveEffect', toCreate);
+}
+
+function scalingEffectData({ item, n, config }) {
+    return {
+        name: `${item.name} (${n})`,
+        img: item.img,
+        origin: item.uuid,
+        disabled: false,
+        description: config.text ? `<p>${String(config.text).replaceAll('{n}', n)}</p>` : '',
+        changes: (config.changes ?? []).map(c => ({ ...c, value: String(c.value).replaceAll('{n}', n) })),
+        flags: { [MODULE_ID]: { memory_scaling_source: item.id, memory_scaling_n: n } }
+    };
+}
+
+// Состав Памяти изменился — пересчитать эффекты, зависящие от него
+Hooks.on('createItem', (item, options, userId) => {
+    if (game.user.id === userId && item.parent instanceof Actor && isMemorySkill(item)) updateActorSynergies(item.parent);
+});
+
+// Неиспользованная Горячая замена не переносится в следующий бой
+Hooks.on('deleteCombat', (combat) => {
+    if (!game.user.isGM) return;
+    for (const combatant of combat.combatants) {
+        if (combatant.actor?.getFlag(MODULE_ID, 'swapPending')) combatant.actor.unsetFlag(MODULE_ID, 'swapPending');
+    }
+});

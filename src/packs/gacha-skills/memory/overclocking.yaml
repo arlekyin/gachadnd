@@ -1,0 +1,11 @@
+id: bZzW3JnABMMVytI3
+name: Оверклокинг
+rarity: blue
+tags:
+  - память
+  - кровь
+description: Когда у экипированного навыка закончились заряды, используйте Оверклокинг и восстановите этому навыку 1 заряд в Терминале Тумана. Один раз за бой.
+activation: special
+recovery: combat
+cost:
+  hp: 2d6
