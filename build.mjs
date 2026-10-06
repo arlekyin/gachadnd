@@ -310,10 +310,40 @@ function buildActivity(skill, usesMax) {
     return activity;
 }
 
-// {damage} → формула урона или лечения навыка на данном ранге, вычисляемая в Foundry ([[gacha ...]])
+// Формула словами, как в описаниях dnd5e: «1d10 + ваш уровень»
+const ABILITY_NAMES = { str: 'Силы', dex: 'Ловкости', con: 'Телосложения', int: 'Интеллекта', wis: 'Мудрости', cha: 'Харизмы' };
+// Дательный падеж первого слагаемого после «равное»: «равное бонусу мастерства + ваш уровень»
+const DATIVE = [['бонус мастерства', 'бонусу мастерства'], ['ваш уровень', 'вашему уровню'], ['модификатор ', 'модификатору ']];
+function formulaToText(formula, { dative = false } = {}) {
+    const perProf = /\(@prof\)d\d+/.test(formula);
+    let text = String(formula)
+        .replace(/\(@prof\)d(\d+)/g, 'Nd$1')
+        .replace(/max\(@abilities\.(\w+)\.mod,\s*0\)/g, (_, a) => `модификатор ${ABILITY_NAMES[a] ?? a} (не меньше 0)`)
+        .replace(/@abilities\.(\w+)\.mod/g, (_, a) => `модификатор ${ABILITY_NAMES[a] ?? a}`)
+        .replace(/@prof/g, 'бонус мастерства')
+        .replace(/@details\.level/g, 'ваш уровень')
+        .replace(/\s*\*\s*/g, ' × ');
+    if (dative) {
+        const match = DATIVE.find(([nom]) => text.startsWith(nom));
+        if (match) text = match[1] + text.slice(match[0].length);
+    }
+    return perProf ? `${text}, где N — ваш бонус мастерства` : text;
+}
+
+// {damage} → урон или лечение навыка на данном ранге.
+// Постоянный урон (только кости и числа) — кнопкой броска dnd5e, как у заговоров;
+// формула с переменными или лечение — словами, как «1d10 + ваш уровень» у Второго дыхания.
 function withFormula(text, skill) {
-    const formula = (skill.damage ?? []).map(d => String(d.formula)).join(' + ');
-    return String(text).replaceAll('{damage}', `[[gacha ${formula}]]`);
+    const damage = skill.damage ?? [];
+    const isConstant = d => !String(d.formula).includes('@');
+    const rendered = damage.length && damage.every(d => isConstant(d) && DAMAGE_TYPES.includes(d.type))
+        ? damage.map(d => `[[/damage ${d.formula} ${d.type}]]`).join(' и ')
+        : null;
+    if (rendered) return String(text).replaceAll('{damage}', rendered);
+    const formula = damage.map(d => d.formula).join(' + ');
+    return String(text)
+        .replaceAll('равное {damage}', `равное ${formulaToText(formula, { dative: true })}`)
+        .replaceAll('{damage}', formulaToText(formula));
 }
 
 function buildItem(skill, folder, rank = 1) {

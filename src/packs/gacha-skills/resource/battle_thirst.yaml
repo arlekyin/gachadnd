@@ -3,7 +3,7 @@ name: Жажда боя
 rarity: green
 tags:
   - кровь
-description: В начале боя активируйте навык и получите {damage} временных HP.
+description: В начале боя активируйте навык и получите количество временных ПЗ, равное {damage}.
 activation: encounter
 uses: 1
 recovery: combat
@@ -11,11 +11,11 @@ damage:
   - formula: "@prof + @details.level"
     type: temphp
 ranks:
-  - text: "[[gacha 2 * @prof + @details.level]] временных HP."
+  - text: 2 × бонус мастерства + ваш уровень временных ПЗ.
     damage:
       - formula: "2 * @prof + @details.level"
         type: temphp
-  - text: "[[gacha 3 * @prof + @details.level]] временных HP."
+  - text: 3 × бонус мастерства + ваш уровень временных ПЗ.
     damage:
       - formula: "3 * @prof + @details.level"
         type: temphp
