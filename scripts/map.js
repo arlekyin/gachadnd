@@ -44,7 +44,7 @@ const MAP_DATA = {
     COLORS: {
         'start': '#7a7062', 'boss': '#ff003c', 'mob': '#8c8275', 'elite': '#ff8000',
         'event': '#0070dd', 'risk': '#a335ee', 'shop': '#ffaa00', 'rest': '#1eff00',
-        'doom': '#ff8000'
+        'doom': '#e6dcc3'
     }
 };
 
