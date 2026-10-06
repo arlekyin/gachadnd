@@ -1,11 +1,17 @@
-id: "Au8kSh2ycjwLgQbB"
-name: "Джедайский фокус"
+id: Au8kSh2ycjwLgQbB
+name: Джедайский фокус
 rarity: green
-category: "УТИЛИТА"
 tags:
   - разум
-description: "Вы указываете существу и внушаете ему волю разума. Цель должна преуспеть в спасброске Мудрости против вашей сложности спасбросков, иначе она подчиняется одной простой и абсолютно безвредной просьбе."
-activation: "bonus"
-recovery: "short"
+description: Бонусным действием вы указываете на существо и внушаете ему волю разума. Цель совершает спасбросок Мудрости — при провале она выполняет одну простую и абсолютно безвредную для себя просьбу.
+activation: bonus
+recovery: short
 save:
-  ability: "wis"
+  ability: wis
+  dc: universal
+  on_save: none
+ranks:
+  - text: 2 заряда.
+    uses: 2
+  - text: 3 заряда.
+    uses: 3

@@ -10,7 +10,8 @@ import path from 'path';
 import crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/recovery.js';
-import { getSynergyDictionary, UNIVERSAL_DC_FORMULA } from './scripts/synergy-data.js';
+import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from './scripts/synergy-data.js';
+const TAG_NAMES = Object.fromEntries(Object.entries(TAG_KEYS).map(([tag, key]) => [key, tag]));
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
 const DIST_DIR = './dist/packs/gacha-skills';
@@ -76,6 +77,8 @@ const MAX_EXTRA_RANKS = 2;
 const UNIQUE_RARITIES = ['purple', 'red'];
 const RANK_LABELS = ['I', 'II', 'III'];
 // Личный эффект вписывает Мастер в копию навыка на листе персонажа (scripts/inventory.js → setPersonalEffect)
+const SCALING_COUNTS = ['memory', 'burned', 'equipped', 'equipped_tags'];
+const SCALING_TAG_COUNTS = ['tag', 'equipped_tag', 'equipped_not_tag'];
 const PERSONAL_PLACEHOLDER = '<div class="gd-personal"><p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p></div>';
 
 // ==========================================
@@ -265,17 +268,35 @@ function validateSkill(skill, folder) {
     };
     if (skill.changes !== undefined) checkChanges(skill.changes, 'changes');
 
-    // Эффект, сила которого зависит от состава Памяти
+    // Эффекты, сила которых зависит от состава Памяти или экипировки: объект или список объектов
     if (skill.memory_scaling !== undefined) {
-        const { count, every, min, max, changes, text, ...rest } = skill.memory_scaling ?? {};
-        Object.keys(rest).forEach(k => err(`memory_scaling.${k}`, 'неизвестное поле (допустимы: count, every, min, max, changes, text)'));
-        const tagCount = typeof count === 'string' && count.startsWith('tag:') ? count.slice(4) : null;
-        if (!['memory', 'burned'].includes(count) && !(tagCount && TAGS.includes(tagCount))) err('memory_scaling.count', `«${count}» — допустимо: memory, burned, tag:<тег из словаря>`);
-        if (every !== undefined && !isPositiveInt(every)) err('memory_scaling.every', 'должно быть целым числом больше 0');
-        if (min !== undefined && !isPositiveInt(min)) err('memory_scaling.min', 'должно быть целым числом больше 0');
-        if (max !== undefined && max !== 'prof' && !isPositiveInt(max)) err('memory_scaling.max', 'должно быть целым числом больше 0 или prof');
-        if (text !== undefined && !isNonEmptyString(text)) err('memory_scaling.text', 'должно быть непустой строкой');
-        checkChanges(changes, 'memory_scaling.changes');
+        const list = Array.isArray(skill.memory_scaling) ? skill.memory_scaling : [skill.memory_scaling];
+        if (!list.length) err('memory_scaling', 'должен быть объектом или непустым списком');
+        list.forEach((entry, i) => {
+            const field = list.length > 1 || Array.isArray(skill.memory_scaling) ? `memory_scaling[${i}]` : 'memory_scaling';
+            const { count, every, min, max, offset, parity, changes, text, ...rest } = entry ?? {};
+            Object.keys(rest).forEach(k => err(`${field}.${k}`, 'неизвестное поле (допустимы: count, every, min, max, offset, parity, changes, text)'));
+            const [mode, tag] = typeof count === 'string' && count.includes(':') ? [count.slice(0, count.indexOf(':')), count.slice(count.indexOf(':') + 1)] : [count, null];
+            const validCount = tag === null
+                ? SCALING_COUNTS.includes(mode)
+                : SCALING_TAG_COUNTS.includes(mode) && TAGS.includes(tag);
+            if (!validCount) err(`${field}.count`, `«${count}» — допустимо: ${SCALING_COUNTS.join(', ')}, ${SCALING_TAG_COUNTS.map(m => `${m}:<тег>`).join(', ')}`);
+            if (every !== undefined && !isPositiveInt(every)) err(`${field}.every`, 'должно быть целым числом больше 0');
+            if (min !== undefined && !(Number.isInteger(min) && min >= 0)) err(`${field}.min`, 'должно быть целым числом не меньше 0');
+            if (offset !== undefined && !isPositiveInt(offset)) err(`${field}.offset`, 'должно быть целым числом больше 0');
+            if (parity !== undefined && !['even', 'odd'].includes(parity)) err(`${field}.parity`, 'допустимо: even, odd');
+            if (max !== undefined && max !== 'prof' && !isPositiveInt(max)) err(`${field}.max`, 'должно быть целым числом больше 0 или prof');
+            if (text !== undefined && !isNonEmptyString(text)) err(`${field}.text`, 'должно быть непустой строкой');
+            checkChanges(changes, `${field}.changes`);
+        });
+    }
+
+    // Счётчики экипированных тегов в формулах: @flags.gachadnd.counts.<ключ тега>
+    const formulas = [...(skill.damage ?? []).map(d => d?.formula), skill.roll?.formula, skill.cost?.hp].filter(f => f !== undefined).map(String);
+    for (const formula of formulas) {
+        for (const [, key] of formula.matchAll(/@flags\.gachadnd\.counts\.(\w+)/g)) {
+            if (!Object.values(TAG_KEYS).includes(key)) err('formula', `«${key}» — неизвестный ключ тега (допустимо: ${Object.values(TAG_KEYS).join(', ')})`);
+        }
     }
     if (skill.memory_bonus !== undefined && !isPositiveInt(skill.memory_bonus)) err('memory_bonus', 'должно быть целым числом больше 0');
     if (skill.loot_bonus !== undefined && !isPositiveInt(skill.loot_bonus)) err('loot_bonus', 'должно быть целым числом больше 0');
@@ -387,6 +408,8 @@ const DATIVE = [['бонус мастерства', 'бонусу мастерс
 function formulaToText(formula, { dative = false } = {}) {
     const perProf = /\(@prof\)d\d+/.test(formula);
     let text = String(formula)
+        .replace(/\(@flags\.gachadnd\.counts\.(\w+)\)d(\d+)/g, (_, key, die) => `1d${die} за каждый экипированный навык с тегом «${TAG_NAMES[key] ?? key}»`)
+        .replace(/@flags\.gachadnd\.counts\.(\w+)/g, (_, key) => `число экипированных навыков с тегом «${TAG_NAMES[key] ?? key}»`)
         .replace(/\(@prof\)d(\d+)/g, 'Nd$1')
         .replace(/max\(@abilities\.(\w+)\.mod,\s*0\)/g, (_, a) => `модификатор ${ABILITY_NAMES[a] ?? a} (не меньше 0)`)
         .replace(/@abilities\.(\w+)\.mod/g, (_, a) => `модификатор ${ABILITY_NAMES[a] ?? a}`)
@@ -495,10 +518,10 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {}),
                 ...(skill.memory_scaling ? {
-                    memory_scaling: {
-                        ...skill.memory_scaling,
-                        changes: skill.memory_scaling.changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
-                    }
+                    memory_scaling: (Array.isArray(skill.memory_scaling) ? skill.memory_scaling : [skill.memory_scaling]).map(entry => ({
+                        ...entry,
+                        changes: entry.changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
+                    }))
                 } : {}),
                 ...(skill.memory_bonus ? { memory_bonus: skill.memory_bonus } : {}),
                 ...(skill.undeletable ? { undeletable: true } : {}),
