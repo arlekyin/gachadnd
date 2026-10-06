@@ -5,6 +5,7 @@
 import { MODULE_ID } from "./main.js";
 import { isMemorySkill } from "./synergy.js";
 import { addSkillToMemory } from "./inventory.js";
+import { randomCrystal, crystalImage } from "./crystals.js";
 
 const RARITY_WEIGHTS = {
     'gray': 600,
@@ -27,166 +28,6 @@ const ROOM_TEMPLATES = {
     'cursed': { name: 'Проклятая комната', chancePerPlayer: 1.5, bonusRoll: false, excludeOrange: true, requiredTag: 'проклят' }
 };
 
-function generateActivityId() {
-    return foundry.utils.randomID ? foundry.utils.randomID() : Math.random().toString(36).substring(2, 10);
-}
-
-// ==========================================
-// УНИВЕРСАЛЬНАЯ ФАБРИКА СБОРКИ КРИСТАЛЛА
-// ==========================================
-export async function giveCrystalToActor(actor, skill) {
-    const source = skill._source || skill;
-    const flags = source.flags?.[MODULE_ID] || {};
-    
-    const rarity = flags.rarity || 'gray';
-    const category = flags.category || 'УТИЛИТА';
-    const tags = flags.tags || [];
-    
-    const fileColor = rarity === 'gray' ? 'grey' : rarity;
-    const skillDesc = source.system?.description?.value || "";
-    const actId = generateActivityId();
-    
-    const itemData = {
-        name: `Кристалл: ${source.name}`,
-        type: 'consumable',
-        img: `modules/${MODULE_ID}/assets/icons/skills/${fileColor}_fog_crystall.webp`,
-        system: {
-            description: { 
-                value: `<p>Сожмите кристалл в руке, чтобы поглотить этот навык.</p><hr>${skillDesc}` 
-            },
-            consumableType: 'potion',
-            uses: { value: 1, max: 1, per: 'charges', autoDestroy: true },
-            activities: {
-                [actId]: {
-                    _id: actId,
-                    type: 'utility',
-                    name: 'Поглотить кристалл',
-                    activation: { type: 'special', value: 1, condition: '' },
-                    consumption: { targets: [{ type: 'itemUses', value: 1 }] },
-                    uses: { spent: 0, max: '' }
-                }
-            }
-        },
-        flags: {
-            [MODULE_ID]: {
-                is_crystal_item: true,
-                skill_name: source.name,
-                rarity: rarity,
-                category: category,
-                tags: tags
-            }
-        }
-    };
-
-    await actor.createEmbeddedDocuments("Item", [itemData]);
-    ui.notifications.info(`💎 Кристалл «${source.name}» выдан персонажу ${actor.name}`);
-}
-
-// ==========================================
-// СИНХРОНИЗАТОР КОМПЕНДИУМОВ (АВТО-СБОРКА)
-// ==========================================
-async function syncCrystalsCompendium() {
-    const skillPack = game.packs.get(`${MODULE_ID}.gacha-skills`) || game.packs.get('world.gacha-skills');
-    const itemPack = game.packs.get(`${MODULE_ID}.gacha-items`) || game.packs.get('world.gacha-items');
-
-    if (!skillPack || !itemPack) {
-        return ui.notifications.error("❌ Компендиумы не найдены.");
-    }
-
-    ui.notifications.info("🔄 Начинаю чистую пересборку базы кристаллов...");
-
-    const wasLocked = itemPack.locked;
-    if (wasLocked) await itemPack.configure({ locked: false });
-
-    const index = await itemPack.getIndex({ force: true });
-    const oldIds = index.map(i => i._id);
-    if (oldIds.length > 0) {
-        await Item.deleteDocuments(oldIds, { pack: itemPack.collection });
-    }
-
-    const skills = await skillPack.getDocuments();
-    
-    // УМНЫЙ ФИЛЬТР: Выбор лучшей версии навыка, если есть пустышки
-    const uniqueSkillsMap = new Map();
-    skills.forEach(skill => {
-        const source = skill._source || skill;
-        const cleanName = source.name?.trim().toLowerCase();
-        if (!cleanName) return;
-
-        let score = 0;
-        const flags = source.flags?.[MODULE_ID];
-        const desc = source.system?.description?.value || "";
-
-        if (flags) score += 10;
-        if (flags?.rarity) score += 5;
-        if (desc.includes("Категория:")) score += 10;
-        if (desc.length > 20) score += 5;
-
-        const existing = uniqueSkillsMap.get(cleanName);
-        const existingScore = existing ? existing.score : -1;
-
-        if (score > existingScore) {
-            uniqueSkillsMap.set(cleanName, { skill, score });
-        }
-    });
-
-    const uniqueSkills = Array.from(uniqueSkillsMap.values()).map(v => v.skill);
-    console.log(`[GachaDND] Умный фильтр: из ${skills.length} записей отобрано ${uniqueSkills.length} полных.`);
-
-    const crystalsData = uniqueSkills.map(skill => {
-        const source = skill._source || skill;
-        const flags = source.flags?.[MODULE_ID] || {};
-        
-        const rarity = flags.rarity || 'gray';
-        const category = flags.category || 'УТИЛИТА';
-        const tags = flags.tags || [];
-        
-        const fileColor = rarity === 'gray' ? 'grey' : rarity;
-        const skillDesc = source.system?.description?.value || "";
-        const actId = generateActivityId();
-
-        return {
-            _id: source._id,
-            name: `Кристалл: ${source.name}`,
-            type: 'consumable',
-            img: `modules/${MODULE_ID}/assets/icons/skills/${fileColor}_fog_crystall.webp`,
-            system: {
-                description: { 
-                    value: `<p>Сожмите кристалл в руке, чтобы поглотить этот навык.</p><hr>${skillDesc}` 
-                },
-                consumableType: 'potion',
-                uses: { value: 1, max: 1, per: 'charges', autoDestroy: true },
-                activities: {
-                    [actId]: {
-                        _id: actId,
-                        type: 'utility',
-                        name: 'Поглотить кристалл',
-                        activation: { type: 'special', value: 1, condition: '' },
-                        consumption: { targets: [{ type: 'itemUses', value: 1 }] },
-                        uses: { spent: 0, max: '' }
-                    }
-                }
-            },
-            flags: {
-                [MODULE_ID]: {
-                    is_crystal_item: true,
-                    skill_name: source.name,
-                    rarity: rarity,
-                    category: category,
-                    tags: tags
-                }
-            }
-        };
-    });
-
-    if (crystalsData.length > 0) {
-        await Item.createDocuments(crystalsData, { pack: itemPack.collection, keepId: true });
-    }
-
-    if (wasLocked) await itemPack.configure({ locked: true });
-    ui.notifications.info(`✅ База очищена! Создано ровно ${crystalsData.length} уникальных кристаллов.`);
-}
-
 function rollRarity(bonusRoll = false, excludeOrange = false) {
     let weights = { ...RARITY_WEIGHTS };
     if (bonusRoll) delete weights['gray'];
@@ -200,37 +41,6 @@ function rollRarity(bonusRoll = false, excludeOrange = false) {
         roll -= weight;
     }
     return bonusRoll ? 'green' : 'gray'; 
-}
-
-async function getRandomCrystalByRarity(rarity, requiredTag = null) {
-    const pack = game.packs.get(`${MODULE_ID}.gacha-items`) || game.packs.get('world.gacha-items');
-    if (!pack) return null;
-
-    const docs = await pack.getDocuments();
-    let filtered = docs.filter(d => {
-        const flags = d._source?.flags?.[MODULE_ID] || d.flags?.[MODULE_ID] || {};
-        return flags.rarity === rarity;
-    });
-
-    if (requiredTag) {
-        const req = requiredTag.toLowerCase();
-        filtered = filtered.filter(d => {
-            const flags = d._source?.flags?.[MODULE_ID] || d.flags?.[MODULE_ID] || {};
-            const tags = flags.tags || [];
-            return tags.some(t => t.toLowerCase().includes(req));
-        });
-        
-        if (filtered.length === 0) {
-            filtered = docs.filter(d => {
-                const flags = d._source?.flags?.[MODULE_ID] || d.flags?.[MODULE_ID] || {};
-                const tags = flags.tags || [];
-                return tags.some(t => t.toLowerCase().includes(req));
-            });
-        }
-    }
-
-    if (filtered.length === 0) return docs[Math.floor(Math.random() * docs.length)] || null;
-    return filtered[Math.floor(Math.random() * filtered.length)];
 }
 
 export class GachaLootTerminal extends Application {
@@ -288,10 +98,6 @@ export class GachaLootTerminal extends Application {
             <button type="button" id="gacha-generate-btn" style="margin-top: 5px; padding: 12px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border: 1px solid #ffaa00; border-radius: 4px; color: #ffaa00; font-size: 1.25em; font-weight: bold; cursor: pointer;">
                 <i class="fas fa-dice-d20"></i> Сгенерировать добычу
             </button>
-            <hr style="border-color: #3d3834; margin: 10px 0;">
-            <button type="button" id="gacha-sync-btn" style="padding: 10px; background: linear-gradient(180deg, #183318 0%, #0d1a0d 100%); border: 1px solid #2da83b; border-radius: 4px; color: #4eff5c; font-size: 1.1em; font-weight: bold; cursor: pointer;">
-                <i class="fas fa-sync-alt"></i> Синхронизировать кристаллы
-            </button>
         `;
         return $(div);
     }
@@ -309,10 +115,6 @@ export class GachaLootTerminal extends Application {
             this.close();
         });
 
-        element.querySelector('#gacha-sync-btn').addEventListener('click', async (e) => {
-            e.preventDefault();
-            await syncCrystalsCompendium();
-        });
     }
 
     async generateLoot(roomType, players, rarityFilter) {
@@ -334,18 +136,15 @@ export class GachaLootTerminal extends Application {
             let targetRarity = rarityFilter;
             if (rarityFilter === 'any') targetRarity = rollRarity(template.bonusRoll, template.excludeOrange);
 
-            const item = await getRandomCrystalByRarity(targetRarity, template.requiredTag);
-            if (item) {
-                const flags = item._source?.flags?.[MODULE_ID] || item.flags?.[MODULE_ID] || {};
-                drops.push({ item, rarity: flags.rarity || targetRarity });
-            }
+            const crystal = await randomCrystal(targetRarity, template.requiredTag);
+            if (crystal) drops.push({ crystal, rarity: crystal.flags[MODULE_ID].rarity });
         }
 
         const targets = canvas.tokens.controlled;
         const targetActor = targets.length === 1 ? targets[0].actor : null;
 
         if (targetActor && drops.length > 0) {
-            await targetActor.createEmbeddedDocuments("Item", drops.map(d => d.item.toObject()));
+            await targetActor.createEmbeddedDocuments("Item", drops.map(d => d.crystal));
         }
 
         const forced = await this.applyForcedLoot(template, rarityFilter);
@@ -364,17 +163,13 @@ export class GachaLootTerminal extends Application {
 
             for (let i = 0; i < count; i++) {
                 const rarity = rarityFilter === 'any' ? rollRarity(template.bonusRoll, template.excludeOrange) : rarityFilter;
-                const crystal = await getRandomCrystalByRarity(rarity, template.requiredTag);
+                const crystal = await randomCrystal(rarity, template.requiredTag);
                 if (!crystal) continue;
 
-                const { is_crystal_item, ...extraFlags } = crystal._source?.flags?.[MODULE_ID] || {};
-                const skillName = extraFlags.skill_name || crystal.name.replace(/^Кристалл:\s*/, '');
-                const result = await addSkillToMemory(actor, skillName, {
-                    forced: true,
-                    extraFlags,
-                    fallbackDescription: crystal.system?.description?.value || ''
-                });
-                if (result.status === 'duplicate') await actor.createEmbeddedDocuments('Item', [crystal.toObject()]);
+                const { is_crystal_item, ...extraFlags } = crystal.flags[MODULE_ID];
+                const skillName = extraFlags.skill_name;
+                const result = await addSkillToMemory(actor, skillName, { forced: true, extraFlags });
+                if (result.status === 'duplicate') await actor.createEmbeddedDocuments('Item', [crystal]);
                 results.push({ actor, skillName, rarity: extraFlags.rarity || rarity, ...result });
             }
         }
@@ -388,15 +183,15 @@ export class GachaLootTerminal extends Application {
         } else {
             contentHtml = drops.map(d => {
                 const color = RARITY_COLORS[d.rarity] || '#aaa';
-                const flags = d.item._source?.flags?.[MODULE_ID] || d.item.flags?.[MODULE_ID] || {};
+                const flags = d.crystal.flags[MODULE_ID];
                 const tags = (flags.tags || []).join(', ');
-                const customImg = `modules/${MODULE_ID}/assets/icons/skills/${d.rarity === 'gray' ? 'grey' : d.rarity}_fog_crystall.webp`;
+                const customImg = crystalImage(d.rarity);
 
                 return `
                     <div style="display: flex; align-items: center; gap: 12px; background: #111; padding: 8px; border: 1px solid ${color}; border-radius: 4px; margin-bottom: 8px;">
                         <img src="${customImg}" style="width: 40px; height: 40px; border-radius: 3px; border: 1px solid ${color};">
                         <div>
-                            <div style="font-weight: bold; color: ${color}; font-size: 1.15em;">${d.item.name}</div>
+                            <div style="font-weight: bold; color: ${color}; font-size: 1.15em;">${d.crystal.name}</div>
                             <div style="font-size: 0.8em; color: #8c8275;">${flags.category || 'УТИЛИТА'} ${tags ? `• [${tags}]` : ''}</div>
                         </div>
                     </div>`;

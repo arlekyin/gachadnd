@@ -5,6 +5,7 @@
 import { MODULE_ID } from "./main.js";
 import { getSynergyDictionary } from "./synergy-data.js";
 import { isMemorySkill } from "./synergy.js";
+import { getSkillPack, currentSkillName } from "./crystals.js";
 
 const RARITY_MAP = {
     'gray': { label: 'Серый', color: '#9d9d9d', class: 'rarity-gray' },
@@ -23,9 +24,10 @@ export function getMemoryCapacity(actor) {
         .reduce((sum, i) => sum + (Number(i.flags[MODULE_ID].memory_bonus) || 0), 0);
 }
 
+// Сравнение по текущему имени навыка в компендиуме: переименование не создаёт «новый» навык
 function findMemorySkill(actor, skillName) {
     const key = skillName.trim().toLowerCase();
-    return actor.items.find(i => isMemorySkill(i) && i.flags[MODULE_ID].skill_name.trim().toLowerCase() === key);
+    return actor.items.find(i => isMemorySkill(i) && currentSkillName(i.flags[MODULE_ID], i.name).trim().toLowerCase() === key);
 }
 
 export function canRankUp(item) {
@@ -93,11 +95,12 @@ async function rankUpSkill(item) {
 // Данные навыка для листа: запись компендиума навыков или заглушка из описания кристалла
 async function buildSkillData(skillName, { extraFlags = {}, fallbackDescription = '' } = {}) {
     let skillData = null;
-    const pack = game.packs.get(`${MODULE_ID}.gacha-skills`) || game.packs.get('world.gacha-skills');
+    const pack = getSkillPack();
 
     if (pack) {
         const index = await pack.getIndex();
-        const entry = index.find(i => i.name.toLowerCase() === skillName.toLowerCase());
+        const entry = (extraFlags.skill_id && index.get(extraFlags.skill_id))
+            ?? index.find(i => i.name.toLowerCase() === skillName.toLowerCase());
         if (entry) skillData = (await pack.getDocument(entry._id)).toObject();
     }
 
@@ -123,11 +126,12 @@ async function buildSkillData(skillName, { extraFlags = {}, fallbackDescription 
     featData.type = 'feat';
     featData.img = activeImg;
     featData.flags ??= {};
+    // Данные навыка берутся из компендиума; флаги кристалла (могли устареть) — только для заглушки
+    const fromPack = !!skillData.flags?.[MODULE_ID]?.skill_name;
     featData.flags[MODULE_ID] = {
-        ...(skillData.flags?.[MODULE_ID] || {}),
-        ...extraFlags,
+        ...(fromPack ? skillData.flags[MODULE_ID] : extraFlags),
         is_active: false,
-        skill_name: skillName
+        skill_name: fromPack ? skillData.name : skillName
     };
     delete featData.flags[MODULE_ID].is_crystal_item;
     return featData;
@@ -166,9 +170,9 @@ function isUsableCrystal(crystal) {
 
 // Повторный кристалл навыка в инвентаре персонажа
 export function findDuplicateCrystal(actor, item) {
-    const key = item.flags[MODULE_ID].skill_name.trim().toLowerCase();
+    const key = currentSkillName(item.flags[MODULE_ID], item.name).trim().toLowerCase();
     return actor.items.find(i => isCrystalItem(i) && isUsableCrystal(i)
-        && (i.flags?.[MODULE_ID]?.skill_name || i.name.replace(/^Кристалл:\s*/, '')).trim().toLowerCase() === key);
+        && currentSkillName(i.flags?.[MODULE_ID], i.name).trim().toLowerCase() === key);
 }
 
 // Слияние на Привале: повторный кристалл + Кости Хитов → ранг; кости списываются с самых маленьких
@@ -255,7 +259,7 @@ async function absorbCrystal(actor, item) {
     if (!actor || !item) return false;
 
     const gachaFlags = item.flags?.[MODULE_ID] || {};
-    const skillName = gachaFlags.skill_name || item.name.replace(/^Кристалл:\s*/, '');
+    const skillName = currentSkillName(gachaFlags, item.name);
     const { is_crystal_item, ...extraFlags } = gachaFlags;
 
     try {
@@ -288,7 +292,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
 
     const actor = item.actor;
     if (actor) {
-        const skillName = item.flags?.[MODULE_ID]?.skill_name || item.name.replace(/^Кристалл:\s*/, '');
+        const skillName = currentSkillName(item.flags?.[MODULE_ID], item.name);
         const access = checkMemoryAccess(actor, skillName);
         if (!access.ok) {
             ui.notifications.warn(`⚠️ ${access.reason}`);
@@ -307,7 +311,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
 // Копия навыка, который уже есть в Памяти, на лист не добавляется
 Hooks.on('preCreateItem', (item) => {
     if (!(item.parent instanceof Actor) || !isMemorySkill(item)) return;
-    const skillName = item.flags[MODULE_ID].skill_name;
+    const skillName = currentSkillName(item.flags[MODULE_ID], item.name);
     const existing = findMemorySkill(item.parent, skillName);
     if (!existing) return;
     ui.notifications.warn(`⚠️ ${checkMemoryAccess(item.parent, skillName).reason}`);

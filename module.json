@@ -38,17 +38,6 @@
       }
     },
     {
-      "name": "gacha-items",
-      "label": "Gacha: Физические Кристаллы (Предметы)",
-      "path": "packs/gacha-items",
-      "type": "Item",
-      "system": "dnd5e",
-      "ownership": {
-        "PLAYER": "OBSERVER",
-        "ASSISTANT": "OWNER"
-      }
-    },
-    {
       "name": "gacha-rules",
       "label": "Gacha: Правила Тумана",
       "path": "packs/gacha-rules.db",
