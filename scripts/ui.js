@@ -7,7 +7,7 @@
 
 import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat } from "./synergy.js";
-import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank } from "./inventory.js";
+import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
@@ -110,7 +110,8 @@ export class MemoryTerminal extends ApplicationV2 {
             forge: MemoryTerminal.#onForge,
             use: MemoryTerminal.#onUse,
             expand: MemoryTerminal.#onExpand,
-            openSheet: MemoryTerminal.#onOpenSheet
+            openSheet: MemoryTerminal.#onOpenSheet,
+            editPersonal: MemoryTerminal.#onEditPersonal
         }
     };
 
@@ -296,6 +297,7 @@ export class MemoryTerminal extends ApplicationV2 {
                 </button>
                 ${useButton}
                 ${forgeButton}
+                ${flags.personal && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="${selected.id}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>` : ''}
             </div>`;
     }
 
@@ -414,6 +416,23 @@ export class MemoryTerminal extends ApplicationV2 {
     static #onExpand(event, target) {
         const id = target.dataset.docId;
         if (this.expanded.has(id)) this.expanded.delete(id); else this.expanded.add(id);
+        this.render();
+    }
+
+    // Мастер вписывает личный эффект в копию навыка этого персонажа
+    static async #onEditPersonal(event, target) {
+        const item = this.actor.items.get(target.dataset.itemId);
+        if (!item || !game.user.isGM) return;
+        const current = item.flags[MODULE_ID]?.personal_effect ?? '';
+        const text = await foundry.applications.api.DialogV2.prompt({
+            window: { title: `Личный эффект: ${item.name} — ${this.actor.name}` },
+            content: `<p>Эффект, отражающий характер персонажа. Пустая строка между абзацами — новый абзац.</p>
+                <textarea name="personal" rows="8" style="width: 100%">${esc(current)}</textarea>`,
+            ok: { label: 'Сохранить', callback: (ev, button) => button.form.elements.personal.value },
+            rejectClose: false
+        });
+        if (text === null || text === undefined) return;
+        await setPersonalEffect(item, text);
         this.render();
     }
 

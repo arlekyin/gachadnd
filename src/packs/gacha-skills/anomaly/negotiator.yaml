@@ -1,0 +1,10 @@
+id: E4s3jcEPyh5lm4WJ
+name: Переговорщик
+rarity: blue
+tags:
+  - разум
+description: Разумные обитатели этажей чувствуют своего. Вы совершаете проверки Убеждения с преимуществом.
+changes:
+  - key: system.skills.per.roll.mode
+    mode: add
+    value: '1'

@@ -1,0 +1,18 @@
+id: cZ3AcOAHitFPYvvh
+name: Полукровка
+rarity: blue
+tags:
+  - аномалия
+  - проклятье
+description: В вас течёт кровь аномалий. Вы получаете сопротивление урону Некротической энергией и Ядом.
+drawback: Урон Излучением удвоен — у вас уязвимость к нему.
+changes:
+  - key: system.traits.dr.value
+    mode: add
+    value: necrotic
+  - key: system.traits.dr.value
+    mode: add
+    value: poison
+  - key: system.traits.dv.value
+    mode: add
+    value: radiant

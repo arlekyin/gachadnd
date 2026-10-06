@@ -323,6 +323,11 @@ export class GachaLootTerminal extends Application {
         
         let dropsCount = guaranteedDrops;
         if (Math.random() <= fractionalChance) dropsCount += 1;
+        // Любимчик Лабиринта: каждый экипированный навык с loot_bonus добавляет кристаллы в общую добычу
+        dropsCount += game.actors
+            .filter(a => a.type === 'character' && a.hasPlayerOwner)
+            .flatMap(a => a.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active))
+            .reduce((sum, i) => sum + (Number(i.flags[MODULE_ID].loot_bonus) || 0), 0);
 
         const drops = [];
         for (let i = 0; i < dropsCount; i++) {
