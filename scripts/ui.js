@@ -71,13 +71,6 @@ function hasActivities(item) {
     return (item.system?.activities?.size ?? 0) > 0;
 }
 
-function rankPips(flags) {
-    const max = flags.max_rank ?? 1;
-    if (max <= 1) return '';
-    const rank = flags.rank ?? 1;
-    return `<span class="gd-pips" title="Ранг ${RANK_LABELS[rank - 1]} из ${RANK_LABELS[max - 1]}">${'●'.repeat(rank)}${'○'.repeat(max - rank)}</span>`;
-}
-
 function usesInfo(item) {
     const max = parseInt(item.system?.uses?.max);
     if (!max) return null;
@@ -102,7 +95,6 @@ export class MemoryTerminal extends ApplicationV2 {
     constructor(actor, options = {}) {
         super({ id: `gachadnd-terminal-${actor.id}`, ...options });
         this.actor = actor;
-        this.tab = 'memory';
         this.selectedId = null;
         this.expanded = new Set();
     }
@@ -113,8 +105,6 @@ export class MemoryTerminal extends ApplicationV2 {
         window: { icon: 'fas fa-brain', resizable: true },
         position: { width: 1180, height: 800 },
         actions: {
-            // Не «tab»: это имя занято встроенным переключением вкладок ApplicationV2
-            switchTab: MemoryTerminal.#onTab,
             select: MemoryTerminal.#onSelect,
             toggleEquip: MemoryTerminal.#onToggleEquip,
             forge: MemoryTerminal.#onForge,
@@ -197,24 +187,9 @@ export class MemoryTerminal extends ApplicationV2 {
     // ==========================================
 
     async _renderHTML(context) {
-        if (this.tab === 'memory') {
-            return `
-                ${this.#tabsHtml(context)}
-                ${context.atRest ? this.#restBannerHtml(context) : ''}
-                ${this.#altarHtml(context)}`;
-        }
         return `
-            ${this.#tabsHtml(context)}
-            ${this.#headerHtml(context)}
-            <section class="gd-body"><canvas class="gd-neural" data-active="${context.equipped.length}"></canvas>${this.#slotsHtml(context)}</section>`;
-    }
-
-    #tabsHtml(context) {
-        return `
-            <nav class="gd-tabs">
-                <a class="${this.tab === 'memory' ? 'active' : ''}" data-action="switchTab" data-tab="memory">Память <span>${context.memory.length}/${MEMORY_CAPACITY}</span></a>
-                <a class="${this.tab === 'slots' ? 'active' : ''}" data-action="switchTab" data-tab="slots">Слоты <span>${context.equipped.length}</span></a>
-            </nav>`;
+            ${context.atRest ? this.#restBannerHtml(context) : ''}
+            ${this.#altarHtml(context)}`;
     }
 
     #restBannerHtml({ hitDice }) {
@@ -232,11 +207,15 @@ export class MemoryTerminal extends ApplicationV2 {
         return `
             <div class="gd-altar">
                 <canvas class="gd-neural" data-active="${context.equipped.length}"></canvas>
-                <div class="gd-deck">${this.#deckHtml(context)}</div>
+                <div class="gd-deck-wrap">
+                    <div class="gd-deck-title">Память <span>${context.memory.length} / ${MEMORY_CAPACITY}</span></div>
+                    <div class="gd-deck">${this.#deckHtml(context)}</div>
+                </div>
                 <div class="gd-feature"><div class="gd-feature-inner">${this.#featureHtml(context)}</div></div>
                 <aside class="gd-side">
                     ${this.#ringHtml(context)}
                     ${this.#buildHtml(context)}
+                    ${this.#synergiesHtml(context)}
                     <div class="gd-glossary">${context.glossary.map(g => `
                         <div class="gd-term ${g.accent ? 'accent' : ''}">
                             <div class="gd-term-title">${esc(g.title)}</div>
@@ -314,6 +293,29 @@ export class MemoryTerminal extends ApplicationV2 {
                 ${useButton}
                 ${forgeButton}
             </div>`;
+    }
+
+    // Активные синергии: способности (с кнопкой броска) и эффекты; клик раскрывает описание
+    #synergiesHtml({ synergyItems, synergyEffects, descriptions }) {
+        const docs = [
+            ...synergyItems.map(doc => ({ doc, kind: 'способность', rollable: hasActivities(doc) })),
+            ...synergyEffects.map(doc => ({ doc, kind: doc.flags[MODULE_ID]?.is_system_effect ? 'дебафф системы' : 'эффект', system: !!doc.flags[MODULE_ID]?.is_system_effect }))
+        ];
+        if (!docs.length) return '';
+        const rows = docs.map(({ doc, kind, rollable, system }) => {
+            const open = this.expanded.has(doc.id);
+            return `
+                <div class="gd-syn ${open ? 'open' : ''} ${system ? 'system' : ''}">
+                    <div class="gd-syn-main" data-action="expand" data-doc-id="${doc.id}">
+                        <img src="${doc.img}">
+                        <div class="gd-syn-name"><span>${esc(doc.name)}</span><small>${kind}</small></div>
+                        ${rollable ? usesHtml(doc) : ''}
+                        ${rollable ? `<button type="button" class="gd-roll" data-action="use" data-item-id="${doc.id}" title="Использовать"><i class="fas fa-dice-d20"></i></button>` : ''}
+                    </div>
+                    ${open ? `<div class="gd-syn-desc">${descriptionBody(descriptions.get(doc.id)) || '<p>Описание отсутствует.</p>'}</div>` : ''}
+                </div>`;
+        }).join('');
+        return `<div class="gd-synergies"><div class="gd-build-title">Активные синергии</div>${rows}</div>`;
     }
 
     // Прогресс синергий по всем тегам экипированных навыков: ступени 2/4/6
@@ -396,77 +398,9 @@ export class MemoryTerminal extends ApplicationV2 {
         });
     }
 
-    #headerHtml({ naturalCap, absoluteCap, equipped, overloaded, atRest, hitDice }) {
-        const pips = Array.from({ length: absoluteCap }, (_, i) => {
-            const classes = ['gd-slot'];
-            if (i >= naturalCap) classes.push('extra');
-            if (i < equipped.length) classes.push(i >= naturalCap ? 'filled overload' : 'filled');
-            return `<span class="${classes.join(' ')}"></span>`;
-        }).join('');
-
-        return `
-            <header class="gd-header ${overloaded ? 'overloaded' : ''}">
-                <div class="gd-cap">
-                    <span class="gd-cap-label">Предел разума</span>
-                    <span class="gd-slots">${pips}</span>
-                    <span class="gd-cap-count">${equipped.length} / ${naturalCap}</span>
-                </div>
-                ${absoluteCap > naturalCap ? `<div class="gd-cap-note extra">Киберпсихоз: абсолютный предел ${absoluteCap}</div>` : ''}
-                ${overloaded ? `<div class="gd-cap-note overload">Перегруз разума: −2 к Инт, Мдр и Хар за каждый слот сверх ${naturalCap}</div>` : ''}
-            </header>`;
-    }
-
-    #slotsHtml({ equipped, synergyItems, synergyEffects, descriptions }) {
-        const row = (doc, { color, subtitle, pips = '', uses = '', rollable = false }) => {
-            const open = this.expanded.has(doc.id);
-            return `
-                <div class="gd-row ${open ? 'open' : ''}" style="--rarity: ${color}">
-                    <div class="gd-row-main" data-action="expand" data-doc-id="${doc.id}">
-                        <img src="${doc.img}">
-                        <div class="gd-row-name">
-                            <span>${esc(doc.name)} ${pips}</span>
-                            <small>${subtitle}</small>
-                        </div>
-                        ${uses}
-                        ${rollable ? `<button type="button" class="gd-roll" data-action="use" data-item-id="${doc.id}" title="Использовать"><i class="fas fa-dice-d20"></i></button>` : ''}
-                    </div>
-                    ${open ? `<div class="gd-row-desc">${descriptionBody(descriptions.get(doc.id)) || '<p>Описание отсутствует.</p>'}</div>` : ''}
-                </div>`;
-        };
-
-        const skills = equipped.map(item => {
-            const flags = item.flags[MODULE_ID];
-            return row(item, {
-                color: (RARITY[flags.rarity] ?? RARITY.gray).color,
-                subtitle: hasActivities(item) ? esc(flags.category ?? '') : `${esc(flags.category ?? '')} · пассивный`,
-                pips: rankPips(flags),
-                uses: usesHtml(item),
-                rollable: hasActivities(item)
-            });
-        }).join('');
-
-        const synergies = [
-            ...synergyItems.map(item => row(item, { color: '#c9a75d', subtitle: 'способность синергии', uses: usesHtml(item), rollable: hasActivities(item) })),
-            ...synergyEffects.map(effect => row(effect, {
-                color: effect.flags[MODULE_ID]?.is_system_effect ? '#ff3b3b' : '#c9a75d',
-                subtitle: effect.flags[MODULE_ID]?.is_system_effect ? 'дебафф системы' : 'пассивная синергия'
-            }))
-        ].join('');
-
-        if (!skills && !synergies) return `<div class="gd-empty">Слоты пусты.<br>Экипируйте навыки во вкладке «Память».</div>`;
-        return `
-            ${skills ? `<h3 class="gd-section">Навыки</h3>${skills}` : ''}
-            ${synergies ? `<h3 class="gd-section">Синергии</h3>${synergies}` : ''}`;
-    }
-
     // ==========================================
     // ДЕЙСТВИЯ
     // ==========================================
-
-    static #onTab(event, target) {
-        this.tab = target.dataset.tab;
-        this.render();
-    }
 
     static #onSelect(event, target) {
         this.selectedId = target.dataset.itemId;
