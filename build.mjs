@@ -501,6 +501,7 @@ function buildItem(skill, folder, rank = 1) {
         },
         flags: {
             gachadnd: {
+                skill_id: skill.id,
                 skill_name: skill.name,
                 rarity: skill.rarity,
                 rarity_label: rarity.label,
