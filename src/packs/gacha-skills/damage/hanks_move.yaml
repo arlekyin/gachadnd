@@ -1,0 +1,17 @@
+id: meUFbvQeGkxxR5av
+name: Приём Хэнка
+rarity: purple
+tags:
+  - казнь
+description: Действием схватите существо вашего размера в пределах 5 футов. Оно совершает спасбросок Телосложения против Сложности по Силе (8 + бонус мастерства + модификатор Силы). При провале получает {damage} и становится немым до конца своего следующего хода.
+activation: action
+range: 5
+uses: 3
+recovery: long
+save:
+  ability: con
+  dc: str
+  on_save: none
+damage:
+  - formula: 4d10
+    type: bludgeoning

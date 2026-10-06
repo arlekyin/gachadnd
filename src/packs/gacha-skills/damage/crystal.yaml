@@ -1,0 +1,22 @@
+id: mGoclxDbqScm8pm2
+name: Хрусталь
+rarity: purple
+tags:
+  - проклятье
+description: Ваши атаки и навыки наносят урон так, как если бы у цели была уязвимость к нему (урон удваивается).
+drawback: Вы уязвимы ко всем типам урона.
+activation: none
+changes:
+  - { key: system.traits.dv.value, mode: add, value: acid }
+  - { key: system.traits.dv.value, mode: add, value: bludgeoning }
+  - { key: system.traits.dv.value, mode: add, value: cold }
+  - { key: system.traits.dv.value, mode: add, value: fire }
+  - { key: system.traits.dv.value, mode: add, value: force }
+  - { key: system.traits.dv.value, mode: add, value: lightning }
+  - { key: system.traits.dv.value, mode: add, value: necrotic }
+  - { key: system.traits.dv.value, mode: add, value: piercing }
+  - { key: system.traits.dv.value, mode: add, value: poison }
+  - { key: system.traits.dv.value, mode: add, value: psychic }
+  - { key: system.traits.dv.value, mode: add, value: radiant }
+  - { key: system.traits.dv.value, mode: add, value: slashing }
+  - { key: system.traits.dv.value, mode: add, value: thunder }

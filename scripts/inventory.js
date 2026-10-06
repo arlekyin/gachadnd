@@ -25,6 +25,7 @@ function findMemorySkill(actor, skillName) {
 
 export function canRankUp(item) {
     const flags = item.flags[MODULE_ID];
+    if (flags.stacking) return true;
     return (flags.rank ?? 1) < (flags.max_rank ?? 1) && Array.isArray(flags.rank_data);
 }
 
@@ -33,8 +34,36 @@ async function addBurned(actor, count) {
 }
 
 // Повышает ранг навыка данными ранга из компендиума; расход зарядов и экипировка сохраняются
+// Римская запись ранга — у навыков с бесконечными рангами он может быть любым
+export function romanRank(n) {
+    const table = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+    let out = '';
+    for (const [value, sign] of table) while (n >= value) { out += sign; n -= value; }
+    return out;
+}
+
+// Бесконечные ранги: урон = прибавка × ранг, описание пересобирается из шаблона
+async function stackSkill(item) {
+    const flags = item.flags[MODULE_ID];
+    const rank = (flags.rank ?? 1) + 1;
+    const value = String((flags.stack_base ?? 1) * rank);
+    const activity = item.system.activities?.contents?.[0];
+    const update = {
+        [`flags.${MODULE_ID}.rank`]: rank,
+        'system.description.value': String(flags.stack_template ?? '').replaceAll('{n}', value).replaceAll('{rank}', romanRank(rank))
+    };
+    if (activity) {
+        const parts = foundry.utils.deepClone(item._source.system.activities[activity.id]?.damage?.parts ?? []);
+        if (parts[0]) parts[0].custom = { ...(parts[0].custom ?? {}), enabled: true, formula: value };
+        update[`system.activities.${activity.id}.damage.parts`] = parts;
+    }
+    await item.update(update);
+    return rank;
+}
+
 async function rankUpSkill(item) {
     const flags = item.flags[MODULE_ID];
+    if (flags.stacking) return stackSkill(item);
     const rank = (flags.rank ?? 1) + 1;
     const data = flags.rank_data[rank - 1];
 
@@ -103,10 +132,11 @@ const RANK_LABELS = ['I', 'II', 'III'];
 // Сообщение в чат о повышении ранга — видно всем игрокам
 export async function announceRankUp(actor, item, rank, note = '') {
     // Открытие нового ранга: его эффект игроки узнают только сейчас
-    const revealed = item.flags?.[MODULE_ID]?.rank_texts?.[rank - 2];
+    const flags = item.flags?.[MODULE_ID] ?? {};
+    const revealed = flags.stacking ? `Сила навыка: ${(flags.stack_base ?? 1) * rank}` : flags.rank_texts?.[rank - 2];
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> — ранг ${RANK_LABELS[rank - 1]}`
+        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> — ранг ${romanRank(rank)}`
             + `${revealed ? `<br>${String(revealed).replace(/&/g, '&amp;').replace(/</g, '&lt;')}` : ''}`
             + `${note ? `<br><span style="opacity: 0.75">${note}</span>` : ''}</div>`
     });
@@ -141,7 +171,7 @@ export async function forgeSkill(actor, item) {
     const crystal = findDuplicateCrystal(actor, item);
     if (!crystal) return ui.notifications.warn(`⚠️ Для слияния нужен повторный кристалл «${item.name}» в инвентаре.`);
     const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
-    const cost = FORGE_COST[rank];
+    const cost = FORGE_COST[rank] ?? 2;
     const hd = getHitDice(actor);
     if (!hd || hd.value < cost) return ui.notifications.warn(`⚠️ Не хватает Костей Хитов: нужно ${cost}, доступно ${hd?.value ?? 0}.`);
 

@@ -64,7 +64,8 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
-    'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'save', 'damage', 'roll', 'changes', 'ranks'
+    'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
+    'ranks', 'stacking'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -196,11 +197,27 @@ function validateSkill(skill, folder) {
     if (skill.tagEmitter !== undefined && typeof skill.tagEmitter !== 'boolean') err('tagEmitter', 'должно быть true или false');
 
     // Поля активности имеют смысл только при activation, отличном от none
-    for (const field of ['range', 'target', 'save', 'damage', 'roll', 'uses', 'recovery']) {
+    for (const field of ['range', 'target', 'save', 'damage', 'roll', 'uses', 'recovery', 'cost']) {
         if (!isActive && skill[field] !== undefined) err(field, 'задано при activation: none — поле не будет использовано');
     }
 
     if (skill.range !== undefined && !isNumeric(skill.range)) err('range', 'должно быть числом (футы)');
+
+    if (skill.cost !== undefined) {
+        const { hp, ...rest } = skill.cost ?? {};
+        Object.keys(rest).forEach(k => err(`cost.${k}`, 'неизвестное поле (допустимо: hp)'));
+        if (hp === undefined || String(hp).trim() === '') err('cost.hp', 'обязательное поле: сколько ПЗ стоит использование (число или формула)');
+    }
+
+    // Бесконечные ранги: каждое слияние прибавляет базовое значение урона
+    if (skill.stacking !== undefined) {
+        if (skill.stacking !== true) err('stacking', 'допустимо только true');
+        if (skill.ranks !== undefined) err('stacking', 'нельзя совмещать с ranks');
+        if (UNIQUE_RARITIES.includes(skill.rarity)) err('stacking', 'фиолетовые и красные навыки уникальны');
+        if (!Array.isArray(skill.damage) || skill.damage.length !== 1 || !/^\d+$/.test(String(skill.damage[0]?.formula))) {
+            err('stacking', 'требует ровно одну запись damage с целым числом в formula (прибавка за ранг)');
+        }
+    }
 
     if (skill.roll !== undefined) {
         if (!skill.roll || typeof skill.roll !== 'object' || !isNonEmptyString(String(skill.roll.formula ?? ''))) err('roll.formula', 'обязательное поле');
@@ -304,7 +321,11 @@ function buildActivity(skill, usesMax) {
             override: false
         },
         consumption: {
-            targets: usesMax ? [{ type: 'itemUses', target: '', value: '1', scaling: { mode: '', formula: '' } }] : [],
+            targets: [
+                ...(usesMax ? [{ type: 'itemUses', target: '', value: '1', scaling: { mode: '', formula: '' } }] : []),
+                // Плата ПЗ — штатный расход атрибута dnd5e: не даёт использовать, если ПЗ не хватает
+                ...(skill.cost?.hp !== undefined ? [{ type: 'attribute', target: 'attributes.hp.value', value: String(skill.cost.hp), scaling: { mode: '', formula: '' } }] : [])
+            ],
             scaling: { allowed: false, max: '' }
         }
     };
@@ -378,7 +399,7 @@ function buildItem(skill, folder, rank = 1) {
     const ranked = resolveRank(skill, rank);
     // Эффект первооткрывателя: в описании только полученные ранги, следующий раскрывается при слиянии
     const obtained = (skill.ranks ?? []).slice(0, rank - 1);
-    const rankHtml = maxRank > 1 ? [
+    const rankHtml = skill.stacking ? ['<p><strong>Ранг:</strong> {rank}</p>'] : maxRank > 1 ? [
         `<p><strong>Ранг:</strong> ${RANK_LABELS[rank - 1]}</p>`,
         ...(obtained.length ? [
             '<ul>',
@@ -408,6 +429,7 @@ function buildItem(skill, folder, rank = 1) {
         `<p><strong>Теги синергий:</strong> ${escapeHtml(tags.join(', ') || 'нет')}</p>`,
         `<p><strong>Перезарядка:</strong> ${escapeHtml(cooldownText)}</p>`,
         ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(withFormula(skill.drawback, skill))}</p>`] : []),
+        ...(skill.cost?.hp !== undefined ? [`<p><strong>Цена:</strong> ${escapeHtml(formulaToText(String(skill.cost.hp)))} ПЗ за использование</p>`] : []),
         '<hr>',
         textToHtml(withFormula(skill.description, skill)),
         ...rankHtml
@@ -445,6 +467,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(rankTexts.length ? { rank_texts: rankTexts } : {}),
                 ...(skill.drawback ? { drawback: skill.drawback } : {}),
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
+                ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {})
             }
@@ -527,7 +550,14 @@ for (const folder of folders) {
             continue;
         }
 
-        const item = buildItem(skill, folder, 1);
+        let item;
+        if (skill.stacking) {
+            // Шаблон описания с {n} (урон) и {rank}; на листе подставляется при каждом слиянии
+            const template = buildItem({ ...skill, damage: [{ ...skill.damage[0], formula: '{n}' }] }, folder, 1).system.description.value;
+            item = buildItem(skill, folder, 1);
+            item.flags.gachadnd.stack_template = template;
+            item.system.description.value = template.replaceAll('{n}', skill.damage[0].formula).replaceAll('{rank}', 'I');
+        } else item = buildItem(skill, folder, 1);
         const maxRank = item.flags.gachadnd.max_rank;
         if (maxRank > 1) {
             // Данные каждого ранга для повышения ранга на листе персонажа (scripts/inventory.js)
