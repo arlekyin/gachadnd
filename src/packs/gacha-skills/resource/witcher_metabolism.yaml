@@ -12,7 +12,7 @@ damage:
     type: poison
 ranks:
   - text: Каждое зелье дополнительно восстанавливает количество ПЗ, равное вашему бонусу мастерства.
-  - text: Урон от токсичности снижен до [[/damage 1d4 poison]].
+  - text: Урон от токсичности снижен до {damage}.
     damage:
       - formula: 1d4
         type: poison
