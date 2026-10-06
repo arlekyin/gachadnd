@@ -7,6 +7,7 @@ import { getSynergyDictionary } from "./synergy-data.js";
 import { isMemorySkill } from "./synergy.js";
 import { getSkillPack, currentSkillName, crystalForSkill, buildCrystalData } from "./crystals.js";
 import { getHorseman, isCleansed, hasTakenHorseman, feedHunger } from "./horsemen.js";
+import { isRiskActive } from "./risk.js";
 
 const RARITY_MAP = {
     'gray': { label: 'Серый', color: '#9d9d9d', class: 'rarity-gray' },
@@ -293,6 +294,10 @@ Hooks.on('dnd5e.preUseActivity', (activity, usageConfig, dialogConfig) => {
 
     const actor = item.actor;
     if (actor) {
+        if (isRiskActive() && !game.user.isGM) {
+            ui.notifications.warn('Во время испытания Риска кристаллы не поглощаются.');
+            return false;
+        }
         // Всадник: только один на персонажа за забег
         if (item.flags?.[MODULE_ID]?.horseman && getHorseman(actor)) {
             ui.notifications.warn(`⚠️ У персонажа ${actor.name} уже есть всадник.`);

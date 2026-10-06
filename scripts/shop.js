@@ -14,8 +14,9 @@ import {
     shopDiscount, applyDiscount, wealth, pay
 } from "./economy.js";
 
+import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "./socket.js";
+
 const { ApplicationV2 } = foundry.applications.api;
-const SOCKET = `module.${MODULE_ID}`;
 
 const RARITY_COLORS = { gray: '#9d9d9d', green: '#1eff00', blue: '#0070dd', purple: '#a335ee', red: '#ff003c' };
 const ITEM_RARITY_LABELS = { common: 'обычный', uncommon: 'необычный', rare: 'редкий', veryRare: 'очень редкий', legendary: 'легендарный' };
@@ -28,10 +29,6 @@ function rollShopRarity() {
     let roll = Math.random() * Object.values(SHOP_WEIGHTS).reduce((a, b) => a + b, 0);
     for (const [rarity, weight] of Object.entries(SHOP_WEIGHTS)) if ((roll -= weight) < 0) return rarity;
     return 'gray';
-}
-
-function isActiveGM() {
-    return game.user.isActiveGM ?? (game.user.isGM && game.users.activeGM?.id === game.user.id);
 }
 
 function currentShopNode(scene = canvas.scene) {
@@ -102,8 +99,7 @@ async function performShopOp({ op, userId, actorId, slot, itemId }) {
     const user = game.users.get(userId);
     if (!actor || !user || !actor.testUserPermission(user, 'OWNER')) return;
     const floor = shop.floor ?? getFloor();
-    // Отказ видит тот, кто покупал: сокет не доставляет сообщение отправителю
-    const deny = text => (userId === game.user.id ? ui.notifications.warn(text) : game.socket.emit(SOCKET, { action: 'notify', userId, text }));
+    const deny = text => notifyUser(userId, text);
 
     if (op === 'buy') {
         const good = shop.goods.find(g => g.slot === slot);
@@ -143,20 +139,17 @@ async function performShopOp({ op, userId, actorId, slot, itemId }) {
     }
 }
 
-function request(payload) {
-    payload = { ...payload, userId: game.user.id };
-    if (isActiveGM()) return performShopOp(payload);
-    if (!game.users.activeGM) return ui.notifications.warn('Магазин работает, только когда Мастер в игре.');
-    game.socket.emit(SOCKET, { action: 'shopOp', payload });
-}
+const request = payload => requestGM('shopOp', payload);
 
-export function registerShopSocket() {
-    game.socket.on(SOCKET, message => {
-        if (message.action === 'shopOp' && isActiveGM()) performShopOp(message.payload);
-        if (message.action === 'openShop') ShopWindow.show();
-        if (message.action === 'notify' && message.userId === game.user.id) ui.notifications.warn(message.text);
-    });
-}
+// Сообщения Магазина: операции выполняет Мастер, открытие окна — у всех
+// Операции выполняются по очереди: два покупателя не купят один товар
+let queue = Promise.resolve();
+onSocket('shopOp', message => {
+    if (!isActiveGM()) return;
+    queue = queue.then(() => performShopOp(message.payload)).catch(err => console.error('[GachaDND] Магазин:', err));
+    return queue;
+});
+onSocket('openShop', () => ShopWindow.show());
 
 // ==========================================
 // ОКНО МАГАЗИНА
@@ -185,7 +178,7 @@ export class ShopWindow extends ApplicationV2 {
             const floor = getFloor();
             await saveShop(found.map, found.node.id, { floor, rerolls: 0, goods: await generateStock(floor) });
         }
-        game.socket.emit(SOCKET, { action: 'openShop' });
+        emit('openShop');
         return ShopWindow.show();
     }
 

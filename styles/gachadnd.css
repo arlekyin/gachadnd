@@ -856,3 +856,35 @@
 .gachadnd-shop .gd-service { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid #2c2618; background: rgba(0, 0, 0, 0.35); }
 .gachadnd-shop .gd-service:last-child { grid-template-columns: 1fr auto; }
 .gachadnd-shop-chat { padding: 8px; border: 1px solid #ffd27a; background: #120f06; color: #e8dcc8; }
+
+/* ==========================================
+   Риск — испытание «испытай удачу»
+   ========================================== */
+.gachadnd-risk .window-content { background: radial-gradient(circle at 50% 0%, #1a0d24 0%, #08070b 70%); color: #e4dcef; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.gachadnd-risk .gd-risk-head { display: flex; justify-content: space-between; align-items: center; }
+.gachadnd-risk h2 { margin: 0; border: none; color: #c98cff; text-shadow: 0 0 8px rgba(163, 53, 238, 0.6); }
+.gachadnd-risk h3 { margin: 4px 0 0; border-bottom: 1px solid #3a2a4a; color: #e0c8ff; font-size: 15px; }
+.gachadnd-risk .gd-risk-reward { float: right; color: #ffd27a; font-size: 13px; }
+.gachadnd-risk .gd-risk-intro { font-style: italic; opacity: 0.85; }
+.gachadnd-risk .gd-risk-pot { padding: 6px 10px; border: 1px solid #5a4020; background: rgba(255, 210, 122, 0.06); }
+.gachadnd-risk .gd-pip { display: inline-block; width: 14px; height: 14px; margin-left: 4px; border: 1px solid #ff003c; transform: rotate(45deg); }
+.gachadnd-risk .gd-pip.on { background: #ff003c; box-shadow: 0 0 8px #ff003c; }
+.gachadnd-risk .gd-risk-pick { display: flex; gap: 14px; flex-wrap: wrap; }
+.gachadnd-risk .gd-risk-pick label { display: flex; align-items: center; gap: 6px; }
+.gachadnd-risk .gd-risk-note { font-size: 12px; opacity: 0.8; }
+.gachadnd-risk .gd-approaches { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.gachadnd-risk .gd-approach { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid #4a3260; background: rgba(0, 0, 0, 0.4); }
+.gachadnd-risk .gd-approach-label { font-weight: bold; color: #e0c8ff; }
+.gachadnd-risk .gd-approach-meta { color: #ffd27a; font-size: 13px; }
+.gachadnd-risk .gd-approach-fail { font-size: 12px; color: #ff9a9a; }
+.gachadnd-risk .gd-approach button { margin-top: auto; }
+.gachadnd-risk .gd-risk-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px solid #241a30; }
+.gachadnd-risk .gd-risk-row > span:first-child { min-width: 120px; }
+.gachadnd-risk .ok { color: #7dff9a; }
+.gachadnd-risk .bad { color: #ff7a7a; }
+.gachadnd-risk .gd-risk-pending { padding: 10px; border: 1px solid #ff003c; background: rgba(255, 0, 60, 0.08); display: flex; flex-direction: column; gap: 8px; }
+.gachadnd-risk .gd-risk-buttons { display: flex; gap: 8px; }
+.gachadnd-risk .gd-risk-gm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-top: 8px; border-top: 1px dashed #3a2a4a; }
+.gachadnd-risk .gd-risk-log { font-size: 12px; opacity: 0.8; max-height: 140px; overflow-y: auto; border-top: 1px solid #241a30; padding-top: 6px; }
+.gachadnd-risk .gd-risk-end { font-size: 16px; text-align: center; color: #ffd27a; padding: 10px; }
+.gachadnd-risk-chat { padding: 8px; border: 1px solid #a335ee; background: #0e0814; color: #e4dcef; }

@@ -1,0 +1,53 @@
+id: ghost_market
+name: Ярмарка призраков
+intro: Посреди тумана — шумная ярмарка. Торговцы прозрачные, товары настоящие. Цены, говорят, тоже.
+collapse:
+  text: Ярмарка разом смолкает. Сотни призрачных глаз смотрят на воров.
+  hp: 1
+  condition: frightened
+stages:
+  - name: Торг
+    approaches:
+      - label: Сбить цену
+        skill: per
+        fail: { text: "Торговец обиделся и плюнул эктоплазмой.", hp: 1 }
+      - label: Выдать себя за мёртвого
+        skill: dec
+        dc: 2
+        fail: { text: "Призраки видят живых насквозь.", hp: 1, condition: frightened }
+  - name: Карманник
+    approaches:
+      - label: Поймать воришку
+        skill: prc
+        fail: { text: "Воришка исчезает с вашим кошельком в руке… и возвращает его со шрамом.", hp: 2 }
+      - label: Обчистить карманника самому
+        skill: slt
+        dc: 1
+        fail: { text: "Призрачная рука цепко хватает за запястье.", hp: 1, condition: restrained }
+  - name: Танец мёртвых — все вместе
+    group: true
+    approaches:
+      - label: Танцевать
+        skill: prf
+        fail: { text: "Сбились с ритма — призраки шипят.", hp: 1 }
+      - label: Кружиться не сбиваясь
+        skill: acr
+        fail: { text: "Голова кругом.", hp: 1, condition: prone }
+  - name: Хозяин ярмарки
+    approaches:
+      - label: Понять, чего он хочет
+        skill: ins
+        fail: { text: "Хозяин смеётся вам в лицо.", hp: 1, condition: frightened }
+      - label: Надавить
+        skill: itm
+        dc: 2
+        fail: { text: "Хозяин давит в ответ.", hp: 2 }
+  - name: Выход с ярмарки
+    approaches:
+      - label: Вспомнить обычай прощания с мёртвыми
+        skill: his
+        fail: { text: "Не тот обычай.", hp: 2 }
+      - label: Уговорить отпустить
+        skill: per
+        dc: 1
+        fail: { text: "Вас не отпускают так просто.", hp: 1, condition: frightened }
