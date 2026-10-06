@@ -1,0 +1,16 @@
+id: tJVCy9QxjCIS3dKW
+name: Голем
+rarity: purple
+tags:
+  - проклятье
+  - щит
+description: Ваша кожа каменеет. Вы получаете +3 к КД.
+drawback: Ваша скорость уменьшается на 15 футов.
+activation: none
+changes:
+  - key: system.attributes.ac.bonus
+    mode: add
+    value: '+3'
+  - key: system.attributes.movement.walk
+    mode: add
+    value: '-15'
