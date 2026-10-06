@@ -3,7 +3,7 @@
  */
 
 import { MODULE_ID } from "./main.js";
-import { getSynergyDictionary, UNIVERSAL_DC_FORMULA } from "./synergy-data.js";
+import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-data.js";
 
 const actorUpdateLocks = new Set();
 const actorUpdatePending = new Set();
@@ -180,6 +180,8 @@ export async function updateActorSynergies(actor) {
         console.log(`[GachaDND] Найдены излучаемые теги:`, emittedTags);
 
         const tagCounts = {};
+        // Теги каждого экипированного навыка с учётом излучения — для memory_scaling
+        const equippedTags = new Map();
         activeItems.forEach(item => {
             const flags = item.flags[MODULE_ID] || {};
             let currentTags = [...(flags.tags || [])].map(t => String(t).toLowerCase().trim());
@@ -194,6 +196,7 @@ export async function updateActorSynergies(actor) {
                 if (!currentTags.includes(myEmittedTag)) currentTags.push(myEmittedTag);
             }
 
+            equippedTags.set(item.id, currentTags);
             currentTags.forEach(t => {
                 tagCounts[t] = (tagCounts[t] || 0) + 1;
             });
@@ -312,7 +315,7 @@ export async function updateActorSynergies(actor) {
             ui.notifications.info(`✨ Разум расширен: получены новые способности синергий!`);
         }
 
-        await syncMemoryScaling(actor, gachaItems, activeItems);
+        await syncMemoryScaling(actor, gachaItems, activeItems, equippedTags, tagCounts);
 
         console.log(`[GachaDND] === РАСЧЕТ УСПЕШНО ЗАВЕРШЕН ===`);
 
@@ -329,45 +332,69 @@ export async function updateActorSynergies(actor) {
 // ==========================================
 
 /**
- * Экипированные навыки с memory_scaling получают эффект на персонаже, сила которого зависит
- * от числа навыков в Памяти, навыков с тегом или сожжённых кристаллов.
- * n = floor(число / every), если число ≥ min; не больше max ('prof' — бонус мастерства).
+ * Экипированные навыки с memory_scaling получают эффекты на персонаже, сила которых зависит
+ * от состава Памяти или экипировки. Для каждой записи:
+ * число = count − offset; эффект действует, если число ≥ min и подходит по parity;
+ * n = floor(число / every), не больше max ('prof' — бонус мастерства).
+ * Заодно число экипированных навыков с каждым тегом пишется во флаг counts — его читают формулы бросков.
  */
-async function syncMemoryScaling(actor, memory, equipped) {
+function scalingCount(config, { actor, memory, equipped, equippedTags }) {
+    const count = String(config.count);
+    const tag = count.includes(':') ? count.slice(count.indexOf(':') + 1) : null;
+    const tagsOf = item => equippedTags.get(item.id) ?? item.flags[MODULE_ID]?.tags ?? [];
+    if (count === 'memory') return memory.length;
+    if (count === 'burned') return actor.getFlag(MODULE_ID, 'burned_count') || 0;
+    if (count === 'equipped') return equipped.length;
+    if (count === 'equipped_tags') return new Set(equipped.flatMap(tagsOf)).size;
+    if (count.startsWith('tag:')) return memory.filter(i => (i.flags[MODULE_ID]?.tags ?? []).includes(tag)).length;
+    if (count.startsWith('equipped_tag:')) return equipped.filter(i => tagsOf(i).includes(tag)).length;
+    if (count.startsWith('equipped_not_tag:')) return equipped.filter(i => !tagsOf(i).includes(tag)).length;
+    return 0;
+}
+
+async function syncMemoryScaling(actor, memory, equipped, equippedTags = new Map(), tagCounts = {}) {
     const prof = actor.system.attributes?.prof ?? 2;
+    const context = { actor, memory, equipped, equippedTags };
     const desired = new Map();
     for (const item of equipped) {
-        const config = item.flags[MODULE_ID]?.memory_scaling;
-        if (!config) continue;
-        let count;
-        if (config.count === 'memory') count = memory.length;
-        else if (config.count === 'burned') count = actor.getFlag(MODULE_ID, 'burned_count') || 0;
-        else {
-            const tag = String(config.count).replace(/^tag:/, '');
-            count = memory.filter(i => (i.flags[MODULE_ID]?.tags ?? []).includes(tag)).length;
-        }
-        let n = count >= (config.min ?? 1) ? Math.floor(count / (config.every ?? 1)) : 0;
-        const max = config.max === 'prof' ? prof : config.max;
-        if (max !== undefined) n = Math.min(n, max);
-        if (n > 0) desired.set(item.id, { item, n, config });
+        const raw = item.flags[MODULE_ID]?.memory_scaling;
+        if (!raw) continue;
+        (Array.isArray(raw) ? raw : [raw]).forEach((config, index) => {
+            const count = scalingCount(config, context) - (config.offset ?? 0);
+            if (count < (config.min ?? 1)) return;
+            if (config.parity === 'even' && count % 2 !== 0) return;
+            if (config.parity === 'odd' && count % 2 !== 1) return;
+            let n = Math.floor(count / (config.every ?? 1));
+            const max = config.max === 'prof' ? prof : config.max;
+            if (max !== undefined) n = Math.min(n, max);
+            if (n > 0) desired.set(`${item.id}:${index}`, { item, index, n, config });
+        });
     }
 
     const existing = actor.effects.filter(e => e.flags?.[MODULE_ID]?.memory_scaling_source);
     const toDelete = [];
     const toUpdate = [];
     for (const effect of existing) {
-        const want = desired.get(effect.flags[MODULE_ID].memory_scaling_source);
+        const flags = effect.flags[MODULE_ID];
+        const key = `${flags.memory_scaling_source}:${flags.memory_scaling_index ?? 0}`;
+        const want = desired.get(key);
         if (!want) { toDelete.push(effect.id); continue; }
-        if (effect.flags[MODULE_ID].memory_scaling_n !== want.n) toUpdate.push({ _id: effect.id, ...scalingEffectData(want) });
-        desired.delete(effect.flags[MODULE_ID].memory_scaling_source);
+        if (flags.memory_scaling_n !== want.n) toUpdate.push({ _id: effect.id, ...scalingEffectData(want) });
+        desired.delete(key);
     }
     if (toDelete.length) await actor.deleteEmbeddedDocuments('ActiveEffect', toDelete);
     if (toUpdate.length) await actor.updateEmbeddedDocuments('ActiveEffect', toUpdate);
     const toCreate = [...desired.values()].map(scalingEffectData);
     if (toCreate.length) await actor.createEmbeddedDocuments('ActiveEffect', toCreate);
+
+    // Счётчики тегов для формул: @flags.gachadnd.counts.explosion и т.п.
+    const counts = Object.fromEntries(Object.entries(TAG_KEYS).map(([tag, key]) => [key, tagCounts[tag] ?? 0]));
+    if (!foundry.utils.objectsEqual(actor.getFlag(MODULE_ID, 'counts') ?? {}, counts)) {
+        await actor.setFlag(MODULE_ID, 'counts', counts);
+    }
 }
 
-function scalingEffectData({ item, n, config }) {
+function scalingEffectData({ item, index, n, config }) {
     return {
         name: `${item.name} (${n})`,
         img: item.img,
@@ -375,7 +402,7 @@ function scalingEffectData({ item, n, config }) {
         disabled: false,
         description: config.text ? `<p>${String(config.text).replaceAll('{n}', n)}</p>` : '',
         changes: (config.changes ?? []).map(c => ({ ...c, value: String(c.value).replaceAll('{n}', n) })),
-        flags: { [MODULE_ID]: { memory_scaling_source: item.id, memory_scaling_n: n } }
+        flags: { [MODULE_ID]: { memory_scaling_source: item.id, memory_scaling_index: index, memory_scaling_n: n } }
     };
 }
 

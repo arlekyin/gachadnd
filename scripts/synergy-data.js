@@ -3,6 +3,13 @@
 // Универсальная сложность: 8 + бонус мастерства + наивысший модификатор характеристики
 export const UNIVERSAL_DC_FORMULA = `8 + @prof + max(${['str', 'dex', 'con', 'int', 'wis', 'cha'].map(a => `@abilities.${a}.mod`).join(', ')})`;
 
+// Латинские ключи тегов: формулы бросков не принимают кириллицу (@flags.gachadnd.counts.explosion)
+export const TAG_KEYS = {
+    'аномалия': 'anomaly', 'взрыв': 'explosion', 'движение': 'movement', 'казнь': 'execution',
+    'кровь': 'blood', 'огонь': 'fire', 'проклятье': 'curse', 'разум': 'mind', 'сталь': 'steel',
+    'щит': 'shield', 'память': 'memory', 'яд': 'poison', 'свет': 'light'
+};
+
 export function getSynergyDictionary(dc) {
     return {
         'аномалия': {

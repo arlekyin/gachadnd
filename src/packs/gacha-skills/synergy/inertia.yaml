@@ -1,10 +1,20 @@
 id: ZTsYFgW0nSi8UpA2
 name: Инерция
 rarity: green
-category: СИНЕРГИЯ
 tags:
   - движение
-description: 'Кинетическая энергия питает ваши удары. После того как вы использовали навык с тегом [движение], вы можете заявить использование этого кристалла при вашей следующей атаке в этом ходу. Атака нанесет дополнительный урон силовым полем: 1d4 за каждый ваш экипированный навык с тегом [движение].'
+description: Кинетическая энергия питает ваши удары. После того как вы использовали навык с тегом «движение», ваша следующая атака в этом ходу наносит дополнительный урон Силовым полем — {damage}. Число костей подставляется автоматически.
 activation: special
-uses: 1
 recovery: turn
+damage:
+  - formula: (@flags.gachadnd.counts.movement)d4
+    type: force
+ranks:
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@flags.gachadnd.counts.movement)d6
+        type: force
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@flags.gachadnd.counts.movement)d8
+        type: force
