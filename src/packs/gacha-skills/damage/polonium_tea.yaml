@@ -1,0 +1,21 @@
+id: LrBp7xqOrsnOFwIa
+name: Чай с полонием
+rarity: green
+tags:
+  - яд
+description: Ваша первая попавшая атака в ход наносит дополнительно {damage}. При критическом попадании цель отравлена до конца её следующего хода.
+activation: special
+uses: 1
+recovery: turn
+damage:
+  - formula: 1d4
+    type: poison
+ranks:
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: 1d6
+        type: poison
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: 1d8
+        type: poison

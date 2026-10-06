@@ -7,7 +7,7 @@
 
 import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } from "./synergy.js";
-import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, MEMORY_CAPACITY } from "./inventory.js";
+import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, MEMORY_CAPACITY, romanRank } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
@@ -234,7 +234,7 @@ export class MemoryTerminal extends ApplicationV2 {
         return context.memory.map(item => {
             const flags = item.flags[MODULE_ID];
             const rarity = RARITY[flags.rarity] ?? RARITY.gray;
-            const ranked = (flags.max_rank ?? 1) > 1;
+            const ranked = (flags.max_rank ?? 1) > 1 || !!flags.stacking;
             const mergeable = context.atRest && canRankUp(item) && findDuplicateCrystal(this.actor, item);
             const classes = ['gd-tcard'];
             if (flags.is_active) classes.push('equipped');
@@ -253,7 +253,7 @@ export class MemoryTerminal extends ApplicationV2 {
         if (!selected) return '';
         const flags = selected.flags[MODULE_ID];
         const rarity = RARITY[flags.rarity] ?? RARITY.gray;
-        const ranked = (flags.max_rank ?? 1) > 1;
+        const ranked = (flags.max_rank ?? 1) > 1 || !!flags.stacking;
         const tags = [...(flags.tags ?? [])];
         if (flags.is_active && !flags.tagEmitter) emittedTags.forEach(t => { if (!tags.includes(t)) tags.push(t); });
 
@@ -261,7 +261,7 @@ export class MemoryTerminal extends ApplicationV2 {
 
         let forgeButton = '';
         if (atRest && canRankUp(selected)) {
-            const cost = FORGE_COST[(flags.rank ?? 1) + 1];
+            const cost = FORGE_COST[(flags.rank ?? 1) + 1] ?? 2;
             const crystal = findDuplicateCrystal(this.actor, selected);
             const reason = !crystal ? 'Нужен повторный кристалл в инвентаре' : hitDice < cost ? `Не хватает Костей Хитов (${hitDice})` : '';
             forgeButton = `<button type="button" class="gd-btn forge" data-action="forge" data-item-id="${selected.id}" ${reason ? 'disabled' : ''} title="${reason || 'Слить повторный кристалл: ранг +1'}"><i class="fas fa-hammer"></i> Слить · −${cost} КХ</button>`;
@@ -273,14 +273,14 @@ export class MemoryTerminal extends ApplicationV2 {
             <div class="gd-bigcard ${flags.is_active ? 'equipped' : ''}" style="--rarity: ${rarity.color}" data-action="openSheet" data-item-id="${selected.id}" title="Открыть лист навыка">
                 <div class="gd-bigcard-art" style="background-image: url('${selected.img}')"></div>
                 ${flags.is_active ? '<span class="gd-neon" aria-hidden="true"></span>' : ''}
-                ${ranked ? `<div class="gd-bigcard-plate">${RANK_LABELS[(flags.rank ?? 1) - 1]}</div>` : ''}
+                ${ranked ? `<div class="gd-bigcard-plate">${romanRank(flags.rank ?? 1)}</div>` : ''}
             </div>
             <h2 class="gd-feature-name">${esc(selected.name)}</h2>
             <div class="gd-chips">
                 <span class="gd-chip" style="--chip: ${rarity.color}">${rarity.label}</span>
                 <span class="gd-chip">${esc(flags.category ?? '')}</span>
                 ${tags.map(t => `<span class="gd-chip tag">${esc(t)}</span>`).join('')}
-                ${ranked ? `<span class="gd-chip">Ранг ${RANK_LABELS[(flags.rank ?? 1) - 1]}${(flags.rank ?? 1) < flags.max_rank ? ' · можно улучшить' : ''}</span>` : ''}
+                ${ranked ? `<span class="gd-chip">Ранг ${romanRank(flags.rank ?? 1)}${canRankUp(selected) ? ' · можно улучшить' : ''}</span>` : ''}
                 ${['purple', 'red'].includes(flags.rarity) ? '<span class="gd-chip unique">Уникальный</span>' : ''}
             </div>
             ${flags.drawback ? `<div class="gd-feature-drawback"><strong>Штраф:</strong> ${esc(flags.drawback)}</div>` : ''}

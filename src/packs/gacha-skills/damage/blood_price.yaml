@@ -1,0 +1,24 @@
+id: Savp3MOZomvNRcDU
+name: Кровавая цена
+rarity: blue
+tags:
+  - кровь
+  - проклятье
+description: Один раз в ход, попав атакой, заплатите кровью — цель получает дополнительный некротический урон, равный {damage}.
+activation: special
+uses: 1
+recovery: turn
+cost:
+  hp: '@details.level'
+damage:
+  - formula: (@prof)d6
+    type: necrotic
+ranks:
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@prof)d8
+        type: necrotic
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@prof)d10
+        type: necrotic

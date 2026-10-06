@@ -1,0 +1,29 @@
+id: 9YEVhJNSzdtzlVNy
+name: Игни
+rarity: green
+tags:
+  - огонь
+description: Действием выпустите поток огня. Каждое существо в 10-футовом конусе совершает спасбросок Ловкости и получает {damage}, при успехе — половину. Горючие предметы в конусе загораются.
+activation: action
+uses: 3
+recovery: long
+target:
+  type: cone
+  value: 10
+save:
+  ability: dex
+damage:
+  - formula: 2d6
+    type: fire
+ranks:
+  - text: Урон — {damage}.
+    damage:
+      - formula: 3d6
+        type: fire
+  - text: Урон — {damage}, конус 15 футов.
+    target:
+      type: cone
+      value: 15
+    damage:
+      - formula: 3d6
+        type: fire
