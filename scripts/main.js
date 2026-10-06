@@ -19,8 +19,9 @@ Hooks.once('init', () => {
         openTerminal: (actor) => {
             const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
             if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
-            const existing = Object.values(ui.windows).find(w => w instanceof MemoryTerminal && w.actor?.id === targetActor.id);
-            if (existing) existing.bringToTop(); else new MemoryTerminal(targetActor).render(true);
+            const existing = foundry.applications.instances?.get(`gachadnd-terminal-${targetActor.id}`);
+            if (existing) existing.render({ force: true }).then(() => existing.bringToFront?.());
+            else new MemoryTerminal(targetActor).render({ force: true });
         },
         openLootTerminal: () => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ У вас нет прав на генерацию лута.");
