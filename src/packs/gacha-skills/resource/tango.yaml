@@ -3,7 +3,7 @@ name: Танго
 rarity: blue
 tags:
   - яд
-description: Бонусным действием съешьте что-то растительное и восстановите {damage} HP.
+description: Бонусным действием съешьте что-то растительное и восстановите количество ПЗ, равное {damage}.
 activation: bonus
 uses: 3
 recovery: floor
@@ -13,7 +13,7 @@ damage:
 ranks:
   - text: 4 использования за этаж.
     uses: 4
-  - text: 4 использования, восстанавливает [[gacha 4d4 + 2 * @prof]] HP.
+  - text: 4 использования, восстанавливает 4d4 + 2 × бонус мастерства ПЗ.
     damage:
       - formula: 4d4 + 2 * @prof
         type: healing
