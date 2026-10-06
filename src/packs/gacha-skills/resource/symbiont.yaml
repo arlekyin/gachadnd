@@ -4,18 +4,18 @@ rarity: blue
 tags:
   - кровь
   - проклятье
-description: В начале каждого своего хода в бою активируйте навык и восстановите HP, равные бонусу мастерства.
+description: В начале каждого своего хода в бою активируйте навык и восстановите HP — [[/heal]].
 drawback: Если в начале хода ваши HP ниже половины максимума, совершите спасбросок Мудрости СЛ 12. При провале вы впадаете в ярость и атакуете ближайшее существо.
 activation: turnStart
 damage:
   - formula: "@prof"
     type: healing
 ranks:
-  - text: Восстанавливает бонус мастерства + модификатор Телосложения HP (не меньше бонуса мастерства).
+  - text: Восстанавливает [[/heal @prof + max(@abilities.con.mod, 0)]] (бонус мастерства + модификатор Телосложения, не меньше бонуса мастерства).
     damage:
       - formula: "@prof + max(@abilities.con.mod, 0)"
         type: healing
-  - text: Восстанавливает 2 × бонус мастерства + модификатор Телосложения HP.
+  - text: Восстанавливает [[/heal 2 * @prof + max(@abilities.con.mod, 0)]].
     damage:
       - formula: "2 * @prof + max(@abilities.con.mod, 0)"
         type: healing

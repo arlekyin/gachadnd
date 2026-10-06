@@ -227,6 +227,16 @@ function validateSkill(skill, folder) {
         });
     }
 
+    // [[/heal]] и [[/damage]] без формулы берут её из активности навыка — активность должна быть
+    const bareEnrichers = [skill.description, skill.drawback].filter(Boolean).join(' ')
+        .matchAll(/\[\[\/(heal|healing|damage)((?:\s+(?:average|extended|temp))*)\s*\]\]/g);
+    const damage = Array.isArray(skill.damage) ? skill.damage : [];
+    const hasHeal = isActive && damage.some(d => HEALING_TYPES.includes(d?.type));
+    const hasDamage = isActive && damage.some(d => DAMAGE_TYPES.includes(d?.type));
+    for (const [match, kind] of bareEnrichers) {
+        if (kind === 'damage' ? !hasDamage : !hasHeal) err('description', `${match} без формулы требует ${kind === 'damage' ? 'урона' : 'лечения'} в damage`);
+    }
+
     return errors;
 }
 

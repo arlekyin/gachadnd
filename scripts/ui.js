@@ -5,6 +5,14 @@
 import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped } from "./synergy.js";
 
+// Описание с обработкой обогатителей dnd5e ([[/heal]], [[/damage]], [[lookup @prof]]) по данным персонажа
+async function enrichDescription(item) {
+    const html = item.system?.description?.value;
+    if (!html) return '';
+    const editor = foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor;
+    return editor.enrichHTML(html, { relativeTo: item, rollData: item.getRollData?.(), secrets: item.isOwner, async: true });
+}
+
 export class MemoryTerminal extends Application {
     constructor(actor, options = {}) {
         super(options);
@@ -124,6 +132,10 @@ export class MemoryTerminal extends Application {
 
     async _renderInner(data) {
         const ctx = this.getData();
+        const descriptions = new Map();
+        for (const item of [...ctx.activeAbilities, ...ctx.passiveCrystals]) {
+            descriptions.set(item.id, await enrichDescription(item));
+        }
         const div = document.createElement("div");
         div.className = "gachadnd-terminal-wrapper";
         div.style.cssText = "display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #0b0a0a; color: #d0c9c0; font-family: var(--font-primary), sans-serif;";
@@ -196,7 +208,7 @@ export class MemoryTerminal extends Application {
                     ${this._generateUsesHtml(item)}
                 </div>
                 <div class="gachadnd-item-body">
-                    ${item.system?.description?.value || '<p>Описание отсутствует.</p>'}
+                    ${descriptions.get(item.id) || '<p>Описание отсутствует.</p>'}
                 </div>
             </div>
         `}).join('');
@@ -215,7 +227,7 @@ export class MemoryTerminal extends Application {
                     </div>
                 </div>
                 <div class="gachadnd-item-body">
-                    ${item.system?.description?.value || '<p>Пассивный бонус.</p>'}
+                    ${descriptions.get(item.id) || '<p>Пассивный бонус.</p>'}
                 </div>
             </div>
         `}).join('');
