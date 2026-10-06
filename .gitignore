@@ -16,3 +16,6 @@ npm-debug.log
 LOCK
 LOG
 LOG.old
+
+# Базы компендиумов собираются локально: npm run build
+packs/*/
