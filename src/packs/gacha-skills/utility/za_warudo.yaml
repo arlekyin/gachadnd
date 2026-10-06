@@ -9,6 +9,6 @@ description: "Вы на мгновение останавливаете врем
 activation: "action"
 range: "60"
 uses: 1
-recovery: "floor"
+recovery: long
 save:
   ability: "cha"
