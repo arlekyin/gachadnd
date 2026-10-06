@@ -3,7 +3,7 @@ name: Второе дыхание
 rarity: green
 tags:
   - кровь
-description: Бонусным действием восстановите HP — [[/heal]].
+description: Бонусным действием восстановите {damage} HP.
 activation: bonus
 uses: 1
 recovery: short
@@ -13,7 +13,7 @@ damage:
 ranks:
   - text: 2 использования за короткий отдых.
     uses: 2
-  - text: 2 использования, восстанавливает [[/heal 2d10 + @details.level]].
+  - text: 2 использования, восстанавливает [[gacha 2d10 + @details.level]] HP.
     damage:
       - formula: 2d10 + @details.level
         type: healing
