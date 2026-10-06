@@ -4,7 +4,7 @@
   "description": "Модуль интеграции гачи, активных слотов Тумана, синергий и драфта для D&D 5e.",
   "version": "1.0.0",
   "compatibility": {
-    "minimum": "11",
+    "minimum": "12",
     "verified": "12",
     "maximum": "13"
   },

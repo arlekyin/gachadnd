@@ -238,3 +238,255 @@
     color: #1eff00;
     text-shadow: 0 0 8px rgba(30, 255, 0, 0.6);
 }
+/* ==========================================
+   Терминал Тумана (ApplicationV2)
+   ========================================== */
+
+.gachadnd-terminal {
+  --gd-bg: #0b0a0a;
+  --gd-panel: #151313;
+  --gd-line: #3d3834;
+  --gd-text: #d0c9c0;
+  --gd-dim: #7a7062;
+  --gd-gold: #c9a75d;
+  --gd-green: #4eff5c;
+  --gd-red: #ff3b3b;
+  --gd-purple: #b057f5;
+}
+
+.gachadnd-terminal .window-content {
+  background: var(--gd-bg);
+  color: var(--gd-text);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Шапка: предел разума */
+.gachadnd-terminal .gd-header {
+  padding: 12px 16px 10px;
+  background: linear-gradient(180deg, #1c1a19 0%, #121110 100%);
+  border-bottom: 1px solid var(--gd-line);
+}
+.gachadnd-terminal .gd-header.overloaded {
+  background: linear-gradient(180deg, #380d12 0%, #1a0507 100%);
+  border-bottom-color: #990022;
+}
+.gachadnd-terminal .gd-cap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: "Modesto Condensed", serif;
+}
+.gachadnd-terminal .gd-cap-label {
+  font-size: 1.35em;
+  color: #ede6dc;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.gachadnd-terminal .gd-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+.gachadnd-terminal .gd-slot {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #5a524a;
+  border-radius: 2px;
+  background: #0d0c0c;
+}
+.gachadnd-terminal .gd-slot.extra { border-color: var(--gd-purple); border-style: dashed; }
+.gachadnd-terminal .gd-slot.filled { background: var(--gd-green); border-color: var(--gd-green); box-shadow: 0 0 4px var(--gd-green); }
+.gachadnd-terminal .gd-slot.filled.overload { background: var(--gd-red); border-color: var(--gd-red); box-shadow: 0 0 4px var(--gd-red); }
+.gachadnd-terminal .gd-cap-count { font-size: 1.35em; color: var(--gd-green); white-space: nowrap; }
+.gachadnd-terminal .overloaded .gd-cap-count { color: var(--gd-red); }
+.gachadnd-terminal .gd-cap-note { margin-top: 6px; font-size: 0.85em; }
+.gachadnd-terminal .gd-cap-note.extra { color: var(--gd-purple); }
+.gachadnd-terminal .gd-cap-note.overload { color: var(--gd-red); font-weight: bold; }
+
+/* Баннер Привала */
+.gachadnd-terminal .gd-rest-banner {
+  padding: 8px 16px;
+  background: rgba(255, 170, 0, 0.12);
+  border-bottom: 1px solid #6b4a10;
+  color: #ffcc66;
+  font-size: 0.9em;
+}
+
+/* Вкладки */
+.gachadnd-terminal .gd-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px;
+  background: #111;
+  border-bottom: 1px solid var(--gd-line);
+  font-family: "Modesto Condensed", serif;
+  flex: 0 0 auto;
+}
+.gachadnd-terminal .gd-tabs a {
+  padding: 10px 14px;
+  font-size: 1.25em;
+  color: #b5a998;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.gachadnd-terminal .gd-tabs a span { font-size: 0.75em; color: var(--gd-dim); margin-left: 4px; }
+.gachadnd-terminal .gd-tabs a:hover { color: #fff; }
+.gachadnd-terminal .gd-tabs a.active { color: var(--gd-gold); border-bottom-color: var(--gd-gold); background: rgba(201, 167, 93, 0.08); }
+
+.gachadnd-terminal .gd-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gachadnd-terminal .gd-empty {
+  margin: auto;
+  max-width: 360px;
+  text-align: center;
+  color: #6b6357;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* Сетка кристаллов */
+.gachadnd-terminal .gd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+.gachadnd-terminal .gd-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  background: var(--gd-panel);
+  border: 1px solid #2a2626;
+  border-top: 3px solid var(--rarity);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.gachadnd-terminal .gd-card:hover { opacity: 1; transform: translateY(-1px); }
+.gachadnd-terminal .gd-card.equipped { opacity: 1; box-shadow: 0 0 8px var(--rarity); border-color: var(--rarity); }
+.gachadnd-terminal .gd-card.selected { outline: 2px solid var(--gd-gold); outline-offset: 1px; opacity: 1; }
+.gachadnd-terminal .gd-card img { width: 48px; height: 48px; border: none; border-radius: 4px; }
+.gachadnd-terminal .gd-card-name {
+  width: 100%;
+  font-size: 0.8em;
+  text-align: center;
+  color: #ede6dc;
+  line-height: 1.15;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.gachadnd-terminal .gd-card-meta { min-height: 14px; display: flex; gap: 6px; align-items: center; }
+.gachadnd-terminal .gd-card-badge { position: absolute; top: 4px; right: 5px; color: var(--gd-green); font-size: 0.8em; }
+.gachadnd-terminal .gd-merge-mark { color: #ffaa00; font-size: 0.8em; }
+.gachadnd-terminal .gd-pips { color: var(--gd-gold); letter-spacing: 1px; font-size: 0.8em; }
+
+/* Панель выбранного кристалла */
+.gachadnd-terminal .gd-details {
+  margin-top: auto;
+  background: var(--gd-panel);
+  border: 1px solid var(--gd-line);
+  border-left: 4px solid var(--rarity);
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+.gachadnd-terminal .gd-details-head { display: flex; align-items: center; gap: 10px; }
+.gachadnd-terminal .gd-details-head img { width: 44px; height: 44px; border: 1px solid var(--rarity); border-radius: 4px; cursor: pointer; }
+.gachadnd-terminal .gd-details-title { flex: 1; min-width: 0; }
+.gachadnd-terminal .gd-details-name { font-family: "Modesto Condensed", serif; font-size: 1.45em; color: #f5efe6; }
+.gachadnd-terminal .gd-details-sub { font-size: 0.8em; color: var(--gd-dim); text-transform: uppercase; }
+.gachadnd-terminal .gd-tag { color: #b5a998; }
+.gachadnd-terminal .gd-details-desc {
+  margin: 10px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: #c9c1b5;
+}
+.gachadnd-terminal .gd-details-desc p { margin: 0 0 6px; }
+.gachadnd-terminal .gd-details-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.gachadnd-terminal .gd-btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 10px;
+  background: linear-gradient(180deg, #222 0%, #111 100%);
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #ede6dc;
+  font-family: "Modesto Condensed", serif;
+  font-size: 1.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.gachadnd-terminal .gd-btn:hover:not([disabled]) { filter: brightness(1.3); }
+.gachadnd-terminal .gd-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.gachadnd-terminal .gd-btn.equip { background: linear-gradient(180deg, #183318 0%, #0d1a0d 100%); border-color: #2da83b; color: var(--gd-green); }
+.gachadnd-terminal .gd-btn.unequip { color: #b5a998; }
+.gachadnd-terminal .gd-btn.forge { background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border-color: #ffaa00; color: #ffaa00; }
+
+/* Заряды */
+.gachadnd-terminal .gd-uses { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 13px; color: var(--gd-dim); }
+.gachadnd-terminal .gd-uses-input {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #ede6dc;
+}
+.gachadnd-terminal .gd-uses-period { margin-left: 4px; text-transform: uppercase; font-size: 11px; }
+
+/* Слоты */
+.gachadnd-terminal .gd-section {
+  margin: 4px 0 0;
+  border: none;
+  font-family: "Modesto Condensed", serif;
+  font-size: 1.05em;
+  color: var(--gd-dim);
+  text-transform: uppercase;
+}
+.gachadnd-terminal .gd-row {
+  background: var(--gd-panel);
+  border: 1px solid #2a2626;
+  border-left: 4px solid var(--rarity);
+  border-radius: 4px;
+}
+.gachadnd-terminal .gd-row-main { display: flex; align-items: center; gap: 10px; padding: 6px 10px; cursor: pointer; }
+.gachadnd-terminal .gd-row-main:hover { background: rgba(255, 255, 255, 0.03); }
+.gachadnd-terminal .gd-row-main img { width: 34px; height: 34px; border: none; border-radius: 3px; }
+.gachadnd-terminal .gd-row-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gachadnd-terminal .gd-row-name span { font-family: "Modesto Condensed", serif; font-size: 1.25em; color: #f5efe6; }
+.gachadnd-terminal .gd-row-name small { font-size: 0.75em; color: var(--gd-dim); text-transform: uppercase; }
+.gachadnd-terminal .gd-roll {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 0;
+  background: #1c1a19;
+  border: 1px solid var(--gd-gold);
+  border-radius: 4px;
+  color: var(--gd-gold);
+  cursor: pointer;
+}
+.gachadnd-terminal .gd-roll:hover { background: #2b261c; }
+.gachadnd-terminal .gd-row-desc { padding: 8px 12px; border-top: 1px solid #2a2626; font-size: 13px; color: #c9c1b5; }
+.gachadnd-terminal .gd-row-desc p { margin: 0 0 6px; }
