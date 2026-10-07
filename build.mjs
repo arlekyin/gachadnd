@@ -55,6 +55,29 @@ const SYNERGY_ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const SYNERGY_ACTIVATIONS = ['action', 'bonus', 'reaction', 'special'];
 const SYNERGY_TARGETS = ['radius', 'sphere', 'cone', 'line', 'cube', 'cylinder'];
 const SYNERGY_MODES = ['custom', 'multiply', 'add', 'downgrade', 'upgrade', 'override'];
+// Автоматизация (scripts/triggers.js): когда срабатывает и при каких условиях
+const TRIGGER_ON = ['damage_roll', 'damaged'];
+const TRIGGER_WHEN = ['self_wounded', 'self_bloodied', 'target_bloodied', 'hostile_target'];
+const TRIGGER_DAMAGE_TYPES = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
+
+function validateTrigger(trigger, f, err, feature) {
+    const { on, when, bonus, heal_self, reduce, ...extra } = trigger ?? {};
+    Object.keys(extra).forEach(k => err(`${f}.trigger.${k}`, 'неизвестное поле (допустимы: on, when, bonus, heal_self, reduce)'));
+    if (!TRIGGER_ON.includes(on)) return err(`${f}.trigger.on`, `допустимо: ${TRIGGER_ON.join(', ')}`);
+    (when ?? []).forEach(w => { if (!TRIGGER_WHEN.includes(w)) err(`${f}.trigger.when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`); });
+    if (on === 'damage_roll') {
+        if (!bonus && !heal_self) err(`${f}.trigger`, 'для damage_roll нужен bonus или heal_self');
+        if (bonus && (!bonus.formula || !TRIGGER_DAMAGE_TYPES.includes(bonus.type))) err(`${f}.trigger.bonus`, '{ formula, type } — тип урона dnd5e');
+        if (bonus?.double_when && !TRIGGER_WHEN.includes(bonus.double_when)) err(`${f}.trigger.bonus.double_when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`);
+        if (heal_self && !heal_self.formula) err(`${f}.trigger.heal_self.formula`, 'обязательное поле');
+        if (reduce) err(`${f}.trigger.reduce`, 'только для on: damaged');
+    }
+    if (on === 'damaged') {
+        if (!reduce?.formula) err(`${f}.trigger.reduce.formula`, 'обязательное поле');
+        if (!feature?.uses) err(`${f}.trigger`, 'реакции на урон нужна feature с зарядами — они и тратятся');
+        if (bonus || heal_self) err(`${f}.trigger`, 'bonus и heal_self — только для on: damage_roll');
+    }
+}
 
 function validateSynergy(syn) {
     const errs = [];
@@ -67,8 +90,9 @@ function validateSynergy(syn) {
     if (!Array.isArray(tiers) || !tiers.length) return [...errs, 'tiers: нужен хотя бы один порог'];
     tiers.forEach((t, i) => {
         const f = `tiers[${i}]`;
-        const { count, name, description, changes, feature, ...more } = t ?? {};
-        Object.keys(more).forEach(k => err(`${f}.${k}`, 'неизвестное поле (допустимы: count, name, description, changes, feature)'));
+        const { count, name, description, changes, feature, trigger, ...more } = t ?? {};
+        Object.keys(more).forEach(k => err(`${f}.${k}`, 'неизвестное поле (допустимы: count, name, description, changes, feature, trigger)'));
+        if (trigger) validateTrigger(trigger, f, err, feature);
         if (!Number.isInteger(count) || count < 1) err(`${f}.count`, 'число навыков с тегом — целое больше 0');
         if (typeof name !== 'string' || !name.trim()) err(`${f}.name`, 'обязательное поле');
         if (typeof description !== 'string' || !description.trim()) err(`${f}.description`, 'обязательное поле');

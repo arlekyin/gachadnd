@@ -8,6 +8,9 @@ tiers:
   - count: 4
     name: Кровавый щит
     description: Реакцией, когда вы получаете урон от атаки или заклинания врага, уменьшите этот урон на 1d10 + ваш уровень. Количество использований равно бонусу мастерства, они восстанавливаются после долгого отдыха.
+    trigger:
+      on: damaged
+      reduce: { formula: 1d10 + @details.level }
     feature:
       activation: reaction
       uses: prof

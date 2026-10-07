@@ -108,7 +108,7 @@ function makeGenerators({ items, risks, synergyDictionary }) {
             const dictionary = synergyDictionary;
             return Object.entries(dictionary).map(([tag, config]) => `<h3>${esc(tag)}</h3>` + table([
                 ['Навыков', 'Синергия', 'Эффект'],
-                ...config.thresholds.map(t => [String(t.count), esc(t.name), esc(t.desc ?? '')])
+                ...config.thresholds.map(t => [String(t.count), esc(t.name) + (t.trigger ? ' <em>(автоматически)</em>' : ''), esc(t.desc ?? '')])
             ])).join('\n');
         },
 
