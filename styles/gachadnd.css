@@ -682,7 +682,7 @@
   left: 0;
   width: 200%;
   height: 100%;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
   background-repeat: repeat;
 }
@@ -790,8 +790,15 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
+}
+/* Слой фона: сеть и затемнение низа. Обёртка без z-index — её дети встают в общий порядок окна:
+   туман и сеть (-2), над ними затемнение (-1), выше — интерфейс */
+.gachadnd-terminal .gd-backdrop { position: absolute; inset: 0; pointer-events: none; }
+.gachadnd-terminal .gd-backdrop-shade {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 45%; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(4, 7, 8, 0.55) 55%, rgba(4, 7, 8, 0.85));
 }
 
 /* Заголовок колоды и активные синергии */
