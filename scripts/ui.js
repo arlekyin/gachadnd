@@ -8,6 +8,7 @@
 import { MODULE_ID } from "./constants.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
 import { HOOKS, isAtRest, allowSkillChange } from "./memory-api.js";
+import { automationList, setPref } from "./triggers.js";
 import { MemoryAltar } from "./memory-altar.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { collectGlossary } from "./glossary.js";
@@ -231,7 +232,9 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             feature: selected ? this.#feature(selected, emittedTags, descriptions) : null,
             ring: this.#ring(naturalCap, absoluteCap, slotted),
             build: this.#build(tagCounts),
-            synergies: this.#synergies(synergyItems, synergyEffects, descriptions)
+            synergies: this.#synergies(synergyItems, synergyEffects, descriptions),
+            automation: automationList(actor),
+            canEditAutomation: actor.isOwner
         };
     }
 
@@ -382,6 +385,12 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                     el.classList.add(`fx-${this.fx.type}`);
                 });
         }
+
+        // Галочки автоматизации: «Включено» и «Спрашивать» у каждого срабатывания
+        this.element.querySelectorAll('.gd-auto input[data-pref]:not([data-bound])').forEach(input => {
+            input.dataset.bound = '1';
+            input.addEventListener('change', () => setPref(this.actor, input.dataset.pref, input.dataset.field, input.checked));
+        });
 
         this.element.querySelectorAll('.gd-uses-input:not([data-bound])').forEach(input => {
             input.dataset.bound = '1';
