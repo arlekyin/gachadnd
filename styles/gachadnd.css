@@ -299,8 +299,6 @@
 .gachadnd-terminal .window-content {
   background:
     radial-gradient(ellipse at 50% 35%, rgba(40, 140, 130, 0.22) 0%, transparent 60%),
-    radial-gradient(circle at 50% 40%, transparent 0 180px, rgba(80, 200, 180, 0.07) 181px 182px, transparent 183px),
-    radial-gradient(circle at 50% 40%, transparent 0 260px, rgba(80, 200, 180, 0.05) 261px 262px, transparent 263px),
     linear-gradient(180deg, #0c1414 0%, #080b0c 100%);
   overflow: hidden;
 }
@@ -739,6 +737,16 @@
   align-items: center;
 }
 .gachadnd-terminal .gd-chip.unique { --chip: #e6c87a; }
+/* Подложка под текстом навыка: тёмное стекло с мягкими краями — туман и сеть позади не спорят с текстом.
+   Без размытия фона: под ним непрерывно движутся туман и сеть, размытие пересчитывалось бы каждый кадр */
+.gachadnd-terminal .gd-feature-body {
+  width: calc(100% - 20px); margin: 22px 10px 10px; padding: 8px 14px 12px; border-radius: 14px;
+  display: flex; flex-direction: column; align-items: center;
+  background: linear-gradient(180deg, rgba(6, 11, 12, 0.62), rgba(6, 11, 12, 0.8) 30%, rgba(6, 11, 12, 0.8));
+  box-shadow: 0 0 0 1px rgba(95, 224, 184, 0.12), 0 0 10px 4px rgba(6, 11, 12, 0.5);
+}
+.gachadnd-terminal .gd-feature-body .gd-feature-name { margin-top: 8px; }
+.gachadnd-terminal .gd-chip { background: rgba(6, 11, 12, 0.6); }
 
 /* Характеристики навыка */
 .gachadnd-terminal .gd-stats {

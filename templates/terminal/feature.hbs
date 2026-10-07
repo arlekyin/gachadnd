@@ -6,6 +6,8 @@
             {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span>{{/if}}
             {{#if ranked}}<div class="gd-bigcard-plate">{{rank}}</div>{{/if}}
         </div>
+        {{!-- Подложка под текстом: туман и сеть позади не мешают читать --}}
+        <div class="gd-feature-body">
         <h2 class="gd-feature-name">{{name}}</h2>
         <div class="gd-chips">
             {{#each chips}}<span class="gd-chip {{cls}}" {{#if color}}style="--chip: {{color}}"{{/if}}>{{text}}</span>{{/each}}
@@ -26,6 +28,7 @@
             {{#if canUse}}<button type="button" class="gd-btn" data-action="use" data-item-id="{{id}}"><i class="fas fa-dice-d20"></i> Использовать</button>{{/if}}
             {{#each extensions}}<button type="button" class="gd-btn" data-action="extension" data-index="{{index}}" title="{{title}}"><i class="{{icon}}"></i> {{label}}</button>{{/each}}
             {{#if gm.personal}}<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="{{id}}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>{{/if}}
+        </div>
         </div>
     </div>
     {{/with}}
