@@ -97,6 +97,17 @@ export async function randomCrystal(rarity, requiredTag = null) {
     return buildCrystalData(await pack.getDocument(entry._id));
 }
 
+// Случайный кристалл ровно этой редкости с этим тегом (Резонанс); без подходящих — null
+export async function randomCrystalWithTag(rarity, tag) {
+    const pack = getSkillPack();
+    if (!pack) return null;
+    const index = await pack.getIndex({ fields: [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`] });
+    const pool = [...index].filter(e => e.flags?.[MODULE_ID]?.rarity === rarity && (e.flags?.[MODULE_ID]?.tags ?? []).includes(tag));
+    if (!pool.length) return null;
+    const entry = pool[Math.floor(Math.random() * pool.length)];
+    return buildCrystalData(await pack.getDocument(entry._id));
+}
+
 // Кристалл конкретного навыка — по id или имени
 export async function crystalForSkill({ skillId, skillName } = {}) {
     const pack = getSkillPack();

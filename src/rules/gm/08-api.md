@@ -10,6 +10,7 @@
 | `game.gachadnd.openShop()` | Магазин на текущем узле |
 | `game.gachadnd.openRisk()` | Риск на текущем узле |
 | `game.gachadnd.openDoomAltar()` | Алтарь Погибели на текущем узле |
+| `game.gachadnd.openMemoryAltar(actor)` | Алтарь Памяти персонажа (на Привале) |
 | `game.gachadnd.giveCrystal(actor, 'Имя навыка')` | выдать кристалл навыка |
 | `game.gachadnd.recoverUses('gachaRun')` | восстановить заряды «1 раз за забег» |
 

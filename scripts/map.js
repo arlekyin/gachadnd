@@ -7,6 +7,7 @@ import { onNodeEntered } from "./horsemen.js";
 import { DoomAltar } from "./altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
+import { announceRest } from "./memory-altar.js";
 import { getFloor } from "./economy.js";
 
 const MAP_DATA = {
@@ -373,6 +374,7 @@ export class GachaMapTerminal extends Application {
                 if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
                 if (nodeData.type === MAP_DATA.NODE_SHOP) ShopWindow.open();
                 if (nodeData.type === MAP_DATA.NODE_RISK) RiskWindow.open();
+                if (nodeData.type === MAP_DATA.NODE_REST) announceRest();
 
                 // Сообщение в чат
                 ChatMessage.create({
