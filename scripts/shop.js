@@ -16,7 +16,7 @@ import {
 
 import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "./socket.js";
 
-const { ApplicationV2 } = foundry.applications.api;
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const RARITY_COLORS = { gray: '#9d9d9d', green: '#1eff00', blue: '#0070dd', purple: '#a335ee', red: '#ff003c' };
 const ITEM_RARITY_LABELS = { common: 'обычный', uncommon: 'необычный', rare: 'редкий', veryRare: 'очень редкий', legendary: 'легендарный' };
@@ -167,21 +167,40 @@ onSocket('shopOp', message => {
 onSocket('openShop', () => ShopWindow.show());
 
 // ==========================================
-// ОКНО МАГАЗИНА
+// ОКНО МАГАЗИНА — ночная лавка
 // ==========================================
+//
+// Торговца в Лабиринте быть не должно, но он накопил столько вероятности, что позволил себе существовать:
+// маленькая викторианская лавка, где всегда ночь. Туман подступает к ней, но останавливается на границе света.
+// Части: facade — улица, вывеска, фонарь, туман (рисуется один раз, анимации не перезапускаются);
+// display — витрина с товарами и ставнями; counter — дверь, Торговец и касса; pawn — ломбард воспоминаний
+// (Очистка навыка); buyers — отряд, отражённый в мокрой мостовой.
 
-export class ShopWindow extends ApplicationV2 {
+const TEMPLATES = 'modules/gachadnd/templates/shop';
+const LIVE_PARTS = ['display', 'counter', 'pawn', 'buyers'];
+const SIGN = 'Торговец Тумана';
+// Буквы вывески, которые иногда гаснут: реальность лавки держится с усилием
+const FLICKER = { 2: 'flicker-a', 6: 'flicker-b', 11: 'flicker-c' };
+
+export class ShopWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         id: 'gachadnd-shop',
         classes: ['gachadnd-shop'],
         tag: 'div',
-        window: { title: 'Торговец Тумана', icon: 'fas fa-coins', resizable: true },
-        position: { width: 760, height: 680 },
+        window: { title: 'Торговец Тумана', icon: 'fas fa-store', resizable: true },
+        position: { width: 920, height: 780 },
         actions: {
             buy: ShopWindow.#onBuy,
             cleanse: ShopWindow.#onCleanse,
-            reroll: ShopWindow.#onReroll
+            reroll: ShopWindow.#onReroll,
+            buyer: ShopWindow.#onBuyer
         }
+    };
+
+    static PARTS = {
+        ...Object.fromEntries(['facade', ...LIVE_PARTS].map(id => [id, { template: `${TEMPLATES}/${id}.hbs` }])),
+        // Товар витрины — общий шаблон для банок, полки и подставки
+        display: { template: `${TEMPLATES}/display.hbs`, templates: [`${TEMPLATES}/ware.hbs`] }
     };
 
     // Мастер открывает магазин: при первом входе создаётся ассортимент, окно открывается у всех
@@ -199,8 +218,13 @@ export class ShopWindow extends ApplicationV2 {
 
     static show() {
         const existing = foundry.applications.instances?.get('gachadnd-shop');
-        if (existing) return existing.render({ force: true });
+        if (existing) return existing.render({ force: true, parts: LIVE_PARTS }).then(() => existing.bringToFront?.());
         return new ShopWindow().render({ force: true });
+    }
+
+    /** Перерисовать всё, кроме улицы: неон и туман продолжают движение */
+    refresh() {
+        if (this.rendered) return this.render({ parts: LIVE_PARTS });
     }
 
     #buyers() {
@@ -212,90 +236,111 @@ export class ShopWindow extends ApplicationV2 {
         return buyers.find(a => a.id === this.buyerId) ?? buyers.find(a => a.id === game.user.character?.id) ?? buyers[0] ?? null;
     }
 
-    async _renderHTML() {
+    async _prepareContext() {
         const found = currentShopNode();
-        if (!found?.node.shop) return '<p class="gd-shop-empty">Отряд не стоит у торговца.</p>';
-        const shop = found.node.shop;
-        const floor = shop.floor ?? getFloor();
+        const shop = found?.node.shop ?? null;
         const buyer = this.#buyer();
         this.buyerId = buyer?.id;
-        const discount = shopDiscount(buyer);
+        const context = {
+            open: !!shop,
+            sign: [...SIGN].map((ch, i) => ({ ch: ch === ' ' ? ' ' : ch, cls: FLICKER[i] ?? '' })),
+            buyers: this.#buyers().map(a => ({ id: a.id, name: a.name, img: a.img, gold: Math.floor(wealth(a)), active: a.id === buyer?.id })),
+            buyerName: buyer?.name ?? '—',
+            gold: buyer ? Math.floor(wealth(buyer)) : 0
+        };
+        if (!shop) return context;
 
-        const goodHtml = good => {
+        const floor = shop.floor ?? getFloor();
+        const gold = buyer ? wealth(buyer) : 0;
+        const ware = good => {
             const price = buyer ? priceFor(good, buyer) : good.price;
-            const color = good.kind === 'crystal' ? RARITY_COLORS[good.rarity] : '#d8c8a8';
-            const sub = good.kind === 'crystal' ? 'кристалл' : `${good.kind === 'magic' ? 'магический предмет' : 'расходник'}${good.rarity ? ` · ${ITEM_RARITY_LABELS[good.rarity] ?? good.rarity}` : ''}`;
-            return `
-                <div class="gd-good ${good.sold ? 'sold' : ''}" style="--good: ${color}">
-                    <img src="${good.img}" alt="">
-                    <div class="gd-good-name">${esc(good.name)}</div>
-                    <div class="gd-good-sub">${sub}</div>
-                    ${good.sold
-                        ? `<div class="gd-good-sold">Продано: ${esc(game.actors.get(good.sold)?.name ?? '')}</div>`
-                        : `<button type="button" data-action="buy" data-slot="${good.slot}" ${buyer && wealth(buyer) >= price ? '' : 'disabled'}>${price} зм</button>`}
-                </div>`;
+            const kindLabel = { crystal: 'кристалл', consumable: 'расходник', magic: 'магический предмет' }[good.kind];
+            return {
+                ...good, price,
+                color: good.kind === 'crystal' ? RARITY_COLORS[good.rarity] : good.kind === 'magic' ? '#ffcf7a' : '#f1d9b0',
+                sub: `${kindLabel}${good.kind !== 'crystal' && good.rarity ? ` · ${ITEM_RARITY_LABELS[good.rarity] ?? good.rarity}` : ''}`,
+                soldTo: good.sold ? game.actors.get(good.sold)?.name ?? '' : null,
+                affordable: !!buyer && gold >= price
+            };
         };
-        const section = (kind, title) => {
-            const goods = shop.goods.filter(g => g.kind === kind);
-            return goods.length ? `<h3>${title}</h3><div class="gd-goods">${goods.map(goodHtml).join('')}</div>` : '';
-        };
+        const goods = shop.goods.map(ware);
+        context.crystals = goods.filter(g => g.kind === 'crystal');
+        context.consumables = goods.filter(g => g.kind === 'consumable');
+        context.magic = goods.find(g => g.kind === 'magic') ?? null;
+        context.stockKey = shop.goods.map(g => g.slot).join();
 
-        const cleanseCost = buyer ? cleanseCostFor(buyer, floor) : 0;
+        context.floor = floor;
+        context.discount = shopDiscount(buyer);
+
         const rerollCost = buyer ? rerollCostFor(buyer, shop, floor) : 0;
+        context.reroll = { free: rerollVouchers(buyer) > 0, cost: rerollCost, can: !!buyer && gold >= rerollCost };
+
         const cleansable = buyer?.items.filter(i => isMemorySkill(i) && !i.flags[MODULE_ID].undeletable && !(i.flags[MODULE_ID].horseman && !i.flags[MODULE_ID].cleansed)) ?? [];
-
-        return `
-            <div class="gd-shop-head">
-                <span>Этаж ${floor}</span>
-                <label>Покупатель
-                    <select class="gd-shop-buyer">${this.#buyers().map(a => `<option value="${a.id}" ${a.id === buyer?.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
-                </label>
-                <span class="gd-shop-gold">${buyer ? `${Math.floor(wealth(buyer))} зм` : ''}${discount ? ` · скидка ${discount}%` : ''}</span>
-            </div>
-            ${section('crystal', 'Кристаллы')}
-            ${section('consumable', 'Расходники')}
-            ${section('magic', 'Магический предмет')}
-            <h3>Услуги</h3>
-            <div class="gd-services">
-                <div class="gd-service">
-                    <strong>Очистка</strong> — сжечь навык из Памяти
-                    <select class="gd-shop-cleanse">${cleansable.map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('')}</select>
-                    <button type="button" data-action="cleanse" ${cleansable.length && buyer && wealth(buyer) >= cleanseCost ? '' : 'disabled'}>${cleanseCost} зм${cleanseVouchers(buyer) ? ' · скидка 50%' : ''}</button>
-                </div>
-                <div class="gd-service">
-                    <strong>Обновить ассортимент</strong>
-                    <button type="button" data-action="reroll" ${buyer && wealth(buyer) >= rerollCost ? '' : 'disabled'}>${rerollVouchers(buyer) ? 'бесплатно' : `${rerollCost} зм`}</button>
-                </div>
-            </div>`;
+        if (!cleansable.some(i => i.id === this.cleanseId)) this.cleanseId = cleansable[0]?.id;
+        const cleanseCost = buyer ? cleanseCostFor(buyer, floor) : 0;
+        const pawned = Number(buyer?.getFlag(MODULE_ID, 'shop_cleanses')) || 0;
+        context.pawn = {
+            skills: cleansable.map(i => ({ id: i.id, name: i.name, selected: i.id === this.cleanseId })),
+            cost: cleanseCost, voucher: cleanseVouchers(buyer) > 0,
+            can: cleansable.length > 0 && !!buyer && gold >= cleanseCost,
+            ticket: String(pawned + 1).padStart(4, '0'),
+            pawned
+        };
+        return context;
     }
 
-    _replaceHTML(result, content) {
-        content.innerHTML = result;
+    _onRender(context, options) {
+        super._onRender(context, options);
+        const parts = options.parts ?? [];
+        const first = options.isFirstRender;
+
+        // Новая выкладка: ставни опускаются и поднимаются уже над другим товаром
+        if (parts.includes('display') && context.stockKey && this.#stockKey && context.stockKey !== this.#stockKey) {
+            this.element.querySelector('.gd-vitrine')?.classList.add('restock');
+        }
+        this.#stockKey = context.stockKey ?? null;
+
+        // Касса щёлкает, когда у того же покупателя изменилось золото
+        if (parts.includes('counter') && !first && this.#till?.buyer === this.buyerId && this.#till?.gold !== context.gold) {
+            this.element.querySelector('.gd-till')?.classList.add('ring');
+        }
+        this.#till = { buyer: this.buyerId, gold: context.gold };
+
+        // Ломбард ставит штамп «Принято», когда квитанция того же покупателя закрыта
+        if (parts.includes('pawn')) {
+            if (!first && this.#pawned?.buyer === this.buyerId && context.pawn && context.pawn.pawned > this.#pawned.count) {
+                this.element.querySelector('.gd-ticket')?.classList.add('accepted');
+            }
+            this.#pawned = { buyer: this.buyerId, count: context.pawn?.pawned ?? 0 };
+            this.element.querySelector('.gd-pawn-skill')?.addEventListener('change', event => { this.cleanseId = event.target.value; });
+        }
     }
 
-    _onRender() {
-        this.element.querySelector('.gd-shop-buyer')?.addEventListener('change', event => {
-            this.buyerId = event.target.value;
-            this.render();
-        });
-    }
+    #stockKey = null;
+    #till = null;
+    #pawned = null;
 
     static #onBuy(event, target) {
         if (this.buyerId) request({ op: 'buy', actorId: this.buyerId, slot: target.dataset.slot });
     }
 
     static #onCleanse() {
-        const itemId = this.element.querySelector('.gd-shop-cleanse')?.value;
-        if (this.buyerId && itemId) request({ op: 'cleanse', actorId: this.buyerId, itemId });
+        if (this.buyerId && this.cleanseId) request({ op: 'cleanse', actorId: this.buyerId, itemId: this.cleanseId });
     }
 
     static #onReroll() {
         if (this.buyerId) request({ op: 'reroll', actorId: this.buyerId });
     }
+
+    static #onBuyer(event, target) {
+        if (target.dataset.actorId === this.buyerId) return;
+        this.buyerId = target.dataset.actorId;
+        this.refresh();
+    }
 }
 
-// Магазин перерисовывается при изменении карты, золота или Памяти
-const rerenderShop = () => foundry.applications.instances?.get('gachadnd-shop')?.render();
+// Магазин перерисовывается при изменении карты, золота или Памяти — кроме улицы
+const rerenderShop = () => foundry.applications.instances?.get('gachadnd-shop')?.refresh?.();
 Hooks.on('updateScene', (scene, changes) => {
     if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) rerenderShop();
 });
