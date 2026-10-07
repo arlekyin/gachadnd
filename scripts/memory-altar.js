@@ -119,6 +119,7 @@ export class MemoryAltar extends ApplicationV2 {
     }
 
     #dived = false;
+    #ringShown = false;
     #physics = null;
     #drift = new Map();
 
@@ -226,7 +227,6 @@ export class MemoryAltar extends ApplicationV2 {
         const hdMax = Math.max(this.actor.system.attributes?.hd?.max ?? hd, hd);
         const merge = this.ritual === 'merge';
         const at = ({ x, y }) => `left: ${x.toFixed(2)}%; top: ${y.toFixed(2)}%`;
-        const tagColor = tag => `hsl(${Math.round(tags.indexOf(tag) * 360 / Math.max(tags.length, 1))}, 85%, 66%)`;
 
         // Ритуалы — дуга глифов слева
         const glyphs = Object.entries(RITUALS).map(([key, r]) => `
@@ -246,10 +246,11 @@ export class MemoryAltar extends ApplicationV2 {
         const skillForCrystal = new Map([...dupOf].map(([skill, crystal]) => [crystal, skill]));
         if (this.mergeId && !dupOf.has(this.mergeId)) this.mergeId = null;
 
-        // Предел разума: гнёзда на орбите, экипированные навыки занимают их по порядку
+        // Кольцо Памяти — только в Слиянии, где навыки в голове и есть цель ритуала.
+        // Гнёзда Предела разума: экипированные навыки занимают их по порядку
         const level = this.actor.system.details?.level || 1;
         const cap = 6 + Math.floor(level / 2);
-        const equipped = memory.filter(i => i.flags[MODULE_ID].is_active);
+        const equipped = merge ? memory.filter(i => i.flags[MODULE_ID].is_active) : [];
         const sockets = Math.max(cap, equipped.length);
         const orbitAt = n => {
             const angle = -Math.PI / 2 + (2 * Math.PI * n) / sockets;
@@ -267,21 +268,8 @@ export class MemoryAltar extends ApplicationV2 {
                     <span class="gd-node-name">${esc(item.name)}</span>
                 </div>`;
         }).join('');
-        const emptySockets = Array.from({ length: sockets - equipped.length }, (_, n) => `<div class="gd-socket" style="${at(orbitAt(equipped.length + n))}"></div>`).join('');
+        const emptySockets = !merge ? '' : Array.from({ length: sockets - equipped.length }, (_, n) => `<div class="gd-socket" style="${at(orbitAt(equipped.length + n))}"></div>`).join('');
 
-        // Нити сознания: общий тег связывает два навыка — из таких нитей и растут синергии
-        const threads = [];
-        const tagTotals = {};
-        for (const item of equipped) for (const t of item.flags[MODULE_ID].tags ?? []) tagTotals[t] = (tagTotals[t] ?? 0) + 1;
-        equipped.forEach((a, i) => equipped.slice(i + 1).forEach(b => {
-            const shared = (a.flags[MODULE_ID].tags ?? []).filter(t => (b.flags[MODULE_ID].tags ?? []).includes(t));
-            shared.forEach((tag, k) => {
-                const p = nodePos.get(a.id), q = nodePos.get(b.id);
-                const bend = 0.45 + 0.18 * k;
-                const c = { x: (p.x + q.x) / 2 + (CORE.x - (p.x + q.x) / 2) * bend, y: (p.y + q.y) / 2 + (CORE.y - (p.y + q.y) / 2) * bend };
-                threads.push(`<path d="M ${p.x} ${p.y} Q ${c.x} ${c.y} ${q.x} ${q.y}" style="--thread: ${tagColor(tag)}" data-a="${a.id}" data-b="${b.id}" vector-effect="non-scaling-stroke"/>`);
-            });
-        }));
         const flows = [];
 
         // Огонёк — кристалл или неэкипированный навык Памяти
@@ -337,38 +325,33 @@ export class MemoryAltar extends ApplicationV2 {
         }).join('');
         const emptyNote = drifting.length ? '' : '<div class="gd-fog-empty">Туман пуст.</div>';
 
-        // Легенда нитей — какие теги уже сплетены и насколько
-        const legend = Object.entries(tagTotals).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([tag, n]) => {
-            const next = dictionary[tag]?.thresholds?.find(t => t.count > n)?.count;
-            return `<div class="gd-legend-row" style="--thread: ${tagColor(tag)}"><i></i><span>${esc(tag)}</span><b>${n}${next ? ` / ${next}` : ''}</b></div>`;
-        }).join('');
-
         const svg = `<svg class="gd-links" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <g class="gd-threads">${threads.join('')}</g><g class="gd-flows">${flows.join('')}</g></svg>`;
+            <g class="gd-flows">${flows.join('')}</g></svg>`;
 
         const tagsHtml = this.ritual === 'resonate'
-            ? `<div class="gd-tags">${tags.map(t => `<button type="button" class="gd-tag ${t === this.tag ? 'active' : ''}" data-action="tag" data-tag="${t}" style="--thread: ${tagColor(t)}">${t}</button>`).join('')}</div>` : '';
+            ? `<div class="gd-tags">${tags.map(t => `<button type="button" class="gd-tag ${t === this.tag ? 'active' : ''}" data-action="tag" data-tag="${t}">${t}</button>`).join('')}</div>` : '';
         const cost = recipe.gain ? `+${recipe.gain} КХ` : recipe.cost ? `−${recipe.cost} КХ` : '';
         const pips = Array.from({ length: hdMax }, (_, i) => `<span class="gd-pip ${i < hd ? 'on' : ''}"></span>`).join('');
         const resultHtml = this.result
             ? `<div class="gd-result" style="--rarity: ${this.result.color}"><i class="fas ${this.result.icon}"></i><span>${esc(this.result.text)}</span></div>` : '';
         const dive = this.#dived ? '' : 'diving';
+        const ringIn = merge && !this.#ringShown;
+        this.#ringShown = merge;
         this.#dived = true;
 
         return `
-            <div class="gd-mindscape ${dive}" style="--glow: ${ritual.glow}">
+            <div class="gd-mindscape ${dive} ${ringIn ? 'ring-in' : ''}" style="--glow: ${ritual.glow}">
                 <div class="gd-fog"><i></i><i></i><i></i></div>
                 <aside class="gd-mind-side">
                     <h1>${ritual.name}</h1>
                     <div class="gd-subtitle">${ritual.text}</div>
                     <div class="gd-glyphs">${glyphs}</div>
                     ${tagsHtml}
-                    ${legend ? `<div class="gd-legend"><div class="gd-legend-title">Нити сознания</div>${legend}</div>` : ''}
                 </aside>
                 <div class="gd-mind-field">
                     ${svg}
-                    <div class="gd-orbit"></div>
-                    <div class="gd-core" style="${at(CORE)}"><span></span><em>${equipped.length} / ${cap}</em></div>
+                    ${merge ? `<div class="gd-orbit"></div>` : ''}
+                    <div class="gd-core" style="${at(CORE)}"><span></span>${merge ? `<em>${equipped.length} / ${cap}</em>` : ''}</div>
                     ${emptySockets}
                     ${nodes}
                     ${motes}
@@ -385,7 +368,7 @@ export class MemoryAltar extends ApplicationV2 {
             </div>`;
     }
 
-    // Физика огоньков и подсветка нитей узла
+    // Физика огоньков
     _onRender(context, options) {
         super._onRender?.(context, options);
         this.#physics?.destroy();
@@ -396,12 +379,6 @@ export class MemoryAltar extends ApplicationV2 {
             onDrop: (el, target) => this.#interact(el, target),
             onSettle: (key, pos) => this.#drift.set(key, pos)
         });
-        for (const node of field.querySelectorAll('.gd-node')) {
-            const id = node.dataset.itemId;
-            const lit = on => field.querySelectorAll(`.gd-threads path[data-a="${id}"], .gd-threads path[data-b="${id}"]`).forEach(p => p.classList.toggle('lit', on));
-            node.addEventListener('pointerenter', () => lit(true));
-            node.addEventListener('pointerleave', () => lit(false));
-        }
     }
 
     _onClose(options) {
