@@ -322,8 +322,13 @@
   cursor: pointer;
   filter: saturate(0.35) brightness(0.65);
   transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
+  /* Слой карты создан заранее: наведение только сдвигает готовый слой, а не выносит карту на новый
+     и не перерисовывает неон и перелив внутри — иначе они дёргались и тормозили */
+  transform: translateY(0);
+  will-change: transform;
 }
 .gachadnd-terminal .gd-tcard:hover { filter: saturate(0.8) brightness(0.9); transform: translateY(-2px); }
+.gachadnd-terminal .gd-tcard.equipped:hover { filter: none; }
 .gachadnd-terminal .gd-tcard.equipped {
   filter: none;
   border-color: #5fe0b8;
@@ -663,8 +668,8 @@
   position: absolute;
   inset: -100%;
   pointer-events: none;
-  mix-blend-mode: screen;
-  background: linear-gradient(to bottom right, transparent 34%, rgba(95, 224, 184, 0.2) 42%, rgba(95, 224, 184, 0.5) 50%, rgba(95, 224, 184, 0.2) 58%, transparent 66%);
+  /* Обычная прозрачность вместо режима наложения: наложение пересчитывается вместе со всей картой */
+  background: linear-gradient(to bottom right, transparent 34%, rgba(130, 240, 205, 0.12) 42%, rgba(150, 245, 215, 0.3) 50%, rgba(130, 240, 205, 0.12) 58%, transparent 66%);
   transform: translate(-33.4%, -33.4%);
   opacity: 0;
   will-change: transform, opacity;
