@@ -19,3 +19,6 @@ LOG.old
 
 # Базы компендиумов собираются локально: npm run build
 packs/*/
+
+# Создаётся build.mjs из src/synergies/*.yaml — не хранится в git
+scripts/synergy-tiers.js
