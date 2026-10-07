@@ -378,8 +378,8 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         for (const id of ['deck', 'feature']) {
             const part = options.parts?.includes(id) && this.element.querySelector(`[data-application-part="${id}"]`);
             if (!part) continue;
-            part.style.setProperty('--gd-phase-small', `-${now % 4500}ms`);
-            part.style.setProperty('--gd-phase-big', `-${now % 6000}ms`);
+            part.style.setProperty('--gd-phase-flicker', `-${now % 5300}ms`);
+            part.style.setProperty('--gd-phase-flash', `-${now % 11000}ms`);
         }
 
         // Анимация последнего действия (экипировка, снятие, слияние) — на картах этого навыка
