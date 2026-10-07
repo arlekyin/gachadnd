@@ -1,6 +1,12 @@
 <div class="gd-part-controls" style="--glow: {{ritual.glow}}">
+    {{!-- Итог ритуала — яркая надпись вверху экрана на тёмной полосе, подчёркнутая знаком; гаснет сама --}}
     {{#if result}}
-    <div class="gd-result" style="--rarity: {{result.color}}"><i class="fas {{result.icon}}"></i><span>{{result.text}}</span></div>
+    <div class="gd-banner" style="--rarity: {{result.color}}; animation-delay: -{{result.delay}}ms">
+        <span class="gd-banner-label">{{result.label}}</span>
+        <span class="gd-banner-title">{{result.title}}</span>
+        <span class="gd-banner-rule"><i></i><b></b><i></i></span>
+        <span class="gd-banner-sub">{{result.sub}}</span>
+    </div>
     {{/if}}
     <div class="gd-mind-hint">Огоньки можно брать, бросать и опускать в ядро</div>
     <div class="gd-mind-controls">

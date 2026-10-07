@@ -11,7 +11,7 @@
     <div class="gd-core" style="{{core.style}}"><i class="gd-core-heat"></i><span></span>{{#if ring}}<em>{{ring.filled}} / {{ring.cap}}</em>{{/if}}</div>
     {{#each sockets}}<div class="gd-socket" style="{{style}}"></div>{{/each}}
     {{#each nodes}}
-    <div class="gd-node {{cls}}" style="{{style}}" data-item-id="{{id}}" {{#if canMerge}}data-action="mergePick"{{/if}} title="{{title}}">
+    <div class="gd-node {{cls}}" style="{{style}}" data-item-id="{{id}}" {{#if canMerge}}data-action="mergePick"{{/if}}>
         {{!-- Навык в кольце — тело нейрона: ядро цвета редкости с ободком, к которому крепятся пряди --}}
         <span class="gd-node-disc"><b>{{rank}}</b></span>
         <span class="gd-node-name">{{name}}</span>
