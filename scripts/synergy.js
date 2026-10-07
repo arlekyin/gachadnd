@@ -4,62 +4,79 @@
 
 import { MODULE_ID } from "./main.js";
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-data.js";
+import { RECOVERY_VALUES } from "./recovery.js";
 
 const actorUpdateLocks = new Set();
 const actorUpdatePending = new Set();
 
 // Версия формата выдаваемых способностей синергий. Способности старой версии пересоздаются.
-const SYNERGY_FEATURE_VERSION = 2;
+const SYNERGY_FEATURE_VERSION = 3;
 
 // ==========================================
 // 0. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ==========================================
 
-function createSynergyFeature(name, icon, description, featureData) {
-    const activityId = foundry.utils.randomID ? foundry.utils.randomID() : Math.random().toString(36).substring(2, 10);
-    const { actionType, saveAbility, dc, damageParts, target } = featureData;
-    
-    let activityType = 'utility';
-    if (saveAbility) activityType = 'save';
-    else if (damageParts && damageParts.some(p => p[1] === 'healing' || p[1] === 'temphp')) activityType = 'heal';
-    else if (damageParts) activityType = 'damage';
-
-    let activityData = {
-        _id: activityId,
-        type: activityType,
-        name: 'Применить',
-        activation: { type: actionType || 'special', value: 1, condition: '' },
-        consumption: { targets: [] },
-        uses: { spent: 0, max: '', recovery: [] }
+/**
+ * Способность синергии из описания feature (src/synergies/*.yaml):
+ * заряды и перезарядка на предмете; лечение, спасбросок с уроном, урон или бросок — отдельными действиями.
+ * Сложность — универсальная. Заряды тратит первое действие.
+ */
+function createSynergyFeature(name, icon, description, feature) {
+    const activities = {};
+    const add = (type, label, extra = {}) => {
+        const id = foundry.utils.randomID();
+        activities[id] = {
+            _id: id,
+            type,
+            name: label,
+            activation: { type: feature.activation || 'special', value: 1, condition: '' },
+            consumption: {
+                targets: Object.keys(activities).length === 0 && feature.uses ? [{ type: 'itemUses', target: '', value: '1' }] : [],
+                scaling: { allowed: false, max: '' }
+            },
+            ...(feature.range ? { range: { value: String(feature.range), units: 'ft', special: '' } } : {}),
+            ...extra
+        };
     };
+    const template = feature.target
+        ? { target: { template: { count: '1', type: feature.target.type, size: String(feature.target.value), units: 'ft' }, affects: { type: 'creature' } } }
+        : {};
+    const parts = (feature.damage ?? []).map(d => ({ custom: { enabled: true, formula: String(d.formula) }, types: [d.type] }));
 
-    if (target) {
-        if (target.type === 'creature') {
-            activityData.target = { affects: { type: "creature", count: target.value ? String(target.value) : "1" } };
-        } else {
-            activityData.target = { template: { count: 1, type: target.type || 'radius', size: target.value ? String(target.value) : '', units: target.units || 'ft' } };
-        }
+    if (feature.heal) {
+        const healType = feature.heal.type ?? 'healing';
+        add('heal', healType === 'temphp' ? 'Временные ПЗ' : 'Лечение', {
+            healing: { custom: { enabled: true, formula: String(feature.heal.formula) }, types: [healType] },
+            ...(feature.save ? {} : template)
+        });
     }
-
-    if (saveAbility) {
-        activityData.save = { ability: [saveAbility], dc: { calculation: '', formula: String(dc) } };
+    if (feature.save) {
+        add('save', 'Спасбросок', {
+            save: { ability: [feature.save.ability], dc: { calculation: '', formula: UNIVERSAL_DC_FORMULA } },
+            damage: { onSave: feature.save.on_save ?? 'half', parts },
+            ...template
+        });
+    } else if (parts.length) {
+        add('damage', 'Урон', { damage: { parts }, ...template });
     }
-
-    if (damageParts && damageParts.length > 0) {
-        if (activityType === 'heal') {
-            activityData.healing = { custom: { enabled: true, formula: String(damageParts[0][0]) }, types: [damageParts[0][1]] };
-        } else {
-            activityData.damage = { parts: damageParts.map(p => ({ custom: { enabled: true, formula: String(p[0]) }, types: [p[1]] })) };
-        }
+    if (feature.roll) {
+        add('utility', feature.roll.name ?? 'Бросок', { roll: { formula: feature.roll.formula, name: feature.roll.name ?? '', prompt: false, visible: true } });
     }
+    if (!Object.keys(activities).length) add('utility', 'Применить', template);
 
+    const recovery = feature.uses ? RECOVERY_VALUES[feature.recovery] : null;
     return {
-        name: name,
+        name,
         type: 'feat',
         img: icon,
         system: {
             description: { value: `<p>${description}</p>` },
-            activities: { [activityId]: activityData }
+            uses: feature.uses ? {
+                max: feature.uses === 'prof' ? '@prof' : String(feature.uses),
+                spent: 0,
+                recovery: recovery?.period ? [{ period: recovery.period, type: 'recoverAll', formula: '' }] : []
+            } : { max: '', spent: 0, recovery: [] },
+            activities
         }
     };
 }
@@ -212,24 +229,27 @@ export async function updateActorSynergies(actor) {
 
         const earnedSynergies = [];
         let itemsToGrant = []; 
-        const currentDictionary = getSynergyDictionary(UNIVERSAL_DC_FORMULA);
+        const currentDictionary = getSynergyDictionary();
 
         for (const [tag, config] of Object.entries(currentDictionary)) {
             const count = tagCounts[tag] || 0;
             let highestMet = null;
+            const metChanges = [];
             let accumulatedDesc = "<ul style='margin: 0; padding-left: 15px;'>"; 
             
             for (const threshold of config.thresholds) {
                 if (count >= threshold.count) {
                     accumulatedDesc += `<li style='margin-bottom: 4px;'><strong>${threshold.name}:</strong> ${threshold.desc}</li>`;
                     highestMet = threshold;
-                    
-                    if (threshold.grantedFeature) {
+                    // Эффекты всех достигнутых порогов складываются: Сталь I действует и при 4 и 6 навыках
+                    metChanges.push(...(threshold.changes ?? []));
+
+                    if (threshold.feature) {
                         const featureData = createSynergyFeature(
-                            `[${tag.charAt(0).toUpperCase() + tag.slice(1)}] ${threshold.name.split(': ')[1]}`, 
-                            threshold.icon, 
-                            threshold.desc, 
-                            threshold.grantedFeature
+                            threshold.name,
+                            threshold.icon,
+                            threshold.desc,
+                            threshold.feature
                         );
                         featureData.flags = { [MODULE_ID]: { is_synergy_item: true, tagSource: tag, feature_version: SYNERGY_FEATURE_VERSION } };
                         itemsToGrant.push(featureData);
@@ -239,7 +259,7 @@ export async function updateActorSynergies(actor) {
             accumulatedDesc += "</ul>";
             
             if (highestMet) {
-                earnedSynergies.push({ tag, ...highestMet, fullDesc: accumulatedDesc });
+                earnedSynergies.push({ tag, ...highestMet, changes: metChanges, fullDesc: accumulatedDesc });
             }
         }
         
@@ -398,6 +418,9 @@ async function syncMemoryScaling(actor, memory, equipped, equippedTags = new Map
     if (!foundry.utils.objectsEqual(actor.getFlag(MODULE_ID, 'counts') ?? {}, counts)) {
         await actor.setFlag(MODULE_ID, 'counts', counts);
     }
+    // Бонус к универсальной Сложности (Разум I: +1 при 2 навыках с тегом «разум»); флаг нужен формуле всегда
+    const dcBonus = (tagCounts['разум'] ?? 0) >= 2 ? 1 : 0;
+    if (actor.getFlag(MODULE_ID, 'dc_bonus') !== dcBonus) await actor.setFlag(MODULE_ID, 'dc_bonus', dcBonus);
 }
 
 function scalingEffectData({ item, index, n, config }) {
@@ -424,3 +447,13 @@ Hooks.on('deleteCombat', (combat) => {
         if (combatant.actor?.getFlag(MODULE_ID, 'swapPending')) combatant.actor.unsetFlag(MODULE_ID, 'swapPending');
     }
 });
+
+// При запуске мира Мастер пересчитывает синергии персонажей игроков: обновляются способности синергий
+// новой версии и флаги, которые читают формулы (счётчики тегов, бонус Сложности)
+Hooks.once('ready', async () => {
+    if (!(game.user.isActiveGM ?? game.user.isGM)) return;
+    for (const actor of game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner && a.items.some(isMemorySkill))) {
+        await updateActorSynergies(actor);
+    }
+});
+

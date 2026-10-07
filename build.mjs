@@ -10,10 +10,9 @@ import path from 'path';
 import crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/recovery.js';
-import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from './scripts/synergy-data.js';
+import { UNIVERSAL_DC_FORMULA, makeSynergyDictionary } from './scripts/synergy-data.js';
 import { validateRisk } from './scripts/risk-schema.js';
 import { buildRules } from './tools/rules.mjs';
-const TAG_NAMES = Object.fromEntries(Object.entries(TAG_KEYS).map(([tag, key]) => [key, tag]));
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
 const DIST_DIR = './dist/packs/gacha-skills';
@@ -46,7 +45,81 @@ const CATEGORIES = {
     horseman: 'ВСАДНИК'
 };
 
-const TAGS = Object.keys(getSynergyDictionary(10));
+// ==========================================
+// СИНЕРГИИ ТЕГОВ: src/synergies/*.yaml → scripts/synergy-tiers.js
+// Собираются первыми: теги из них проверяются в навыках
+// ==========================================
+const SYNERGY_SRC_DIR = './src/synergies';
+const SYNERGY_OUT = './scripts/synergy-tiers.js';
+const SYNERGY_ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+const SYNERGY_ACTIVATIONS = ['action', 'bonus', 'reaction', 'special'];
+const SYNERGY_TARGETS = ['radius', 'sphere', 'cone', 'line', 'cube', 'cylinder'];
+const SYNERGY_MODES = ['custom', 'multiply', 'add', 'downgrade', 'upgrade', 'override'];
+
+function validateSynergy(syn) {
+    const errs = [];
+    const err = (field, msg) => errs.push(`${field}: ${msg}`);
+    const { tag, key, icon, tiers, ...rest } = syn ?? {};
+    Object.keys(rest).forEach(k => err(k, 'неизвестное поле (допустимы: tag, key, icon, tiers)'));
+    if (typeof tag !== 'string' || !tag.trim()) err('tag', 'обязательное поле');
+    if (!/^[a-z]+$/.test(String(key))) err('key', 'латиница в нижнем регистре — ключ для формул');
+    if (typeof icon !== 'string') err('icon', 'путь к иконке');
+    if (!Array.isArray(tiers) || !tiers.length) return [...errs, 'tiers: нужен хотя бы один порог'];
+    tiers.forEach((t, i) => {
+        const f = `tiers[${i}]`;
+        const { count, name, description, changes, feature, ...more } = t ?? {};
+        Object.keys(more).forEach(k => err(`${f}.${k}`, 'неизвестное поле (допустимы: count, name, description, changes, feature)'));
+        if (!Number.isInteger(count) || count < 1) err(`${f}.count`, 'число навыков с тегом — целое больше 0');
+        if (typeof name !== 'string' || !name.trim()) err(`${f}.name`, 'обязательное поле');
+        if (typeof description !== 'string' || !description.trim()) err(`${f}.description`, 'обязательное поле');
+        if (typeof description === 'string' && /(^|[^А-Яа-яA-Za-z])HP([^А-Яа-яA-Za-z]|$)|за этаж|длинн/i.test(description)) err(`${f}.description`, 'устаревшие термины: ПЗ, долгий отдых');
+        (changes ?? []).forEach((c, j) => {
+            if (!/^(system|flags)\.[A-Za-z0-9_.]+$/.test(String(c?.key))) err(`${f}.changes[${j}].key`, 'путь system. или flags.');
+            if (!SYNERGY_MODES.includes(c?.mode)) err(`${f}.changes[${j}].mode`, `допустимо: ${SYNERGY_MODES.join(', ')}`);
+        });
+        if (feature) {
+            const { activation, uses, recovery, range, target, save, damage, heal, roll, ...extra } = feature;
+            Object.keys(extra).forEach(k => err(`${f}.feature.${k}`, 'неизвестное поле'));
+            if (!SYNERGY_ACTIVATIONS.includes(activation)) err(`${f}.feature.activation`, `допустимо: ${SYNERGY_ACTIVATIONS.join(', ')}`);
+            if (uses !== undefined && uses !== 'prof' && !(Number.isInteger(uses) && uses > 0)) err(`${f}.feature.uses`, 'целое больше 0 или prof');
+            if (uses !== undefined && !(recovery in RECOVERY_VALUES)) err(`${f}.feature.recovery`, `допустимо: ${Object.keys(RECOVERY_VALUES).join(', ')}`);
+            if (target && (!SYNERGY_TARGETS.includes(target.type) || !Number.isFinite(target.value))) err(`${f}.feature.target`, '{ type, value }');
+            if (save && !SYNERGY_ABILITIES.includes(save.ability)) err(`${f}.feature.save.ability`, `допустимо: ${SYNERGY_ABILITIES.join(', ')}`);
+            if (save?.on_save && !['half', 'none', 'full'].includes(save.on_save)) err(`${f}.feature.save.on_save`, 'half, none, full');
+            if (damage && !Array.isArray(damage)) err(`${f}.feature.damage`, 'список { formula, type }');
+            if (heal && !heal.formula) err(`${f}.feature.heal.formula`, 'обязательное поле');
+            if (roll && !roll.formula) err(`${f}.feature.roll.formula`, 'обязательное поле');
+        }
+    });
+    return errs;
+}
+
+const synergies = [];
+const synergyErrors = [];
+for (const file of fs.readdirSync(SYNERGY_SRC_DIR).filter(f => f.endsWith('.yaml')).sort()) {
+    let syn;
+    try {
+        syn = yaml.load(fs.readFileSync(path.join(SYNERGY_SRC_DIR, file), 'utf8'));
+    } catch (e) {
+        synergyErrors.push(`synergies/${file}: ошибка YAML — ${e.message}`);
+        continue;
+    }
+    const errs = validateSynergy(syn);
+    if (synergies.some(s => s.tag === syn?.tag || s.key === syn?.key)) errs.push('tag/key: уже используется');
+    if (errs.length) errs.forEach(e => synergyErrors.push(`synergies/${file} → ${e}`));
+    else synergies.push(syn);
+}
+if (synergyErrors.length) {
+    console.error(`Сборка остановлена: ошибок в синергиях — ${synergyErrors.length}.\n`);
+    synergyErrors.forEach(e => console.error(`  ${e}`));
+    process.exit(1);
+}
+fs.writeFileSync(SYNERGY_OUT, `// Создано build.mjs из src/synergies/*.yaml — не редактировать вручную\nexport const SYNERGIES = ${JSON.stringify(synergies, null, 2)};\n`, 'utf8');
+
+const SYNERGY_DICTIONARY = makeSynergyDictionary(synergies);
+const TAGS = synergies.map(s => s.tag);
+const TAG_KEYS = Object.fromEntries(synergies.map(s => [s.tag, s.key]));
+const TAG_NAMES = Object.fromEntries(synergies.map(s => [s.key, s.tag]));
 
 const ACTIVATION_TYPES = [
     'none', 'action', 'bonus', 'reaction', 'minute', 'hour', 'day', 'longRest', 'shortRest',
@@ -732,7 +805,7 @@ for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm']) {
 // Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
 let journals = [];
 try {
-    journals = buildRules({ srcDir: './src/rules', distDir: './dist/packs', items, risks, stableId });
+    journals = buildRules({ srcDir: './src/rules', distDir: './dist/packs', items, risks, stableId, synergyDictionary: SYNERGY_DICTIONARY });
 } catch (e) {
     console.error(`Сборка правил остановлена: ${e.message}`);
     process.exit(1);
