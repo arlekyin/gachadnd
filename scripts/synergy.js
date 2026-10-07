@@ -5,6 +5,7 @@
 import { MODULE_ID } from "./constants.js";
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-data.js";
 import { RECOVERY_VALUES } from "./recovery.js";
+import { getSkillPack } from "./crystals.js";
 
 const actorUpdateLocks = new Set();
 const actorUpdatePending = new Set();
@@ -338,10 +339,11 @@ export async function updateActorSynergies(actor) {
 
         if (itemsToCreate.length > 0) {
             await actor.createEmbeddedDocuments("Item", itemsToCreate);
-            ui.notifications.info(`✨ Разум расширен: получены новые способности синергий!`);
+            ui.notifications.info(`✨ ${actor.name}: новые способности синергий — ${itemsToCreate.map(i => i.name).join(', ')}.`);
         }
 
         await syncMemoryScaling(actor, gachaItems, activeItems, equippedTags, tagCounts);
+        await syncCombatChanges(actor);
 
         console.log(`[GachaDND] === РАСЧЕТ УСПЕШНО ЗАВЕРШЕН ===`);
 
@@ -453,7 +455,71 @@ Hooks.on('deleteCombat', (combat) => {
 Hooks.once('ready', async () => {
     if (!(game.user.isActiveGM ?? game.user.isGM)) return;
     for (const actor of game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner && a.items.some(isMemorySkill))) {
+        await migrateCombatChanges(actor);
         await updateActorSynergies(actor);
     }
 });
 
+// Навыки, полученные до появления combat_changes (Берсерк), берут эти данные из компендиума
+async function migrateCombatChanges(actor) {
+    const pack = getSkillPack();
+    if (!pack) return;
+    for (const item of actor.items.filter(isMemorySkill)) {
+        const flags = item.flags[MODULE_ID];
+        if (flags.combat_changes || !flags.skill_id) continue;
+        const source = await pack.getDocument(flags.skill_id).catch(() => null);
+        const changes = source?.flags?.[MODULE_ID]?.combat_changes;
+        if (changes?.length) await item.setFlag(MODULE_ID, 'combat_changes', changes);
+    }
+}
+
+// ==========================================
+// 3. ЭФФЕКТЫ ТОЛЬКО В БОЮ (combat_changes)
+// ==========================================
+
+/**
+ * Экипированный навык с combat_changes (штраф Берсерка: КД −2) действует, пока персонаж в начатом бою.
+ * Эффект живёт на персонаже, как эффекты синергий; его включает начало боя и снимает конец.
+ * @param {Actor} actor
+ * @param {string} [endedCombatId]  Бой, который только что удалён, — его участие не считается.
+ */
+export async function syncCombatChanges(actor, endedCombatId = null) {
+    if (!actor) return;
+    const inCombat = !!game.combats?.some(c => c.id !== endedCombatId && c.started && c.combatants.some(cb => cb.actor?.id === actor.id));
+    const sources = inCombat
+        ? actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active && i.flags[MODULE_ID].combat_changes?.length)
+        : [];
+    const existing = actor.effects.filter(e => e.flags?.[MODULE_ID]?.combat_source);
+    const toDelete = existing.filter(e => !sources.some(i => i.id === e.flags[MODULE_ID].combat_source)).map(e => e.id);
+    const toCreate = sources.filter(i => !existing.some(e => e.flags[MODULE_ID].combat_source === i.id)).map(item => ({
+        name: `${item.name} (в бою)`,
+        img: item.img,
+        origin: item.uuid,
+        disabled: false,
+        changes: item.flags[MODULE_ID].combat_changes,
+        flags: { [MODULE_ID]: { combat_source: item.id } }
+    }));
+    if (toDelete.length) await actor.deleteEmbeddedDocuments('ActiveEffect', toDelete);
+    if (toCreate.length) await actor.createEmbeddedDocuments('ActiveEffect', toCreate);
+}
+
+function isActiveGM() {
+    return game.user.isActiveGM ?? (game.user.isGM && game.users.activeGM?.id === game.user.id);
+}
+
+// Начало и конец боя, вход и выход участника — эффекты «в бою» включаются и снимаются у Мастера
+const combatActors = combat => combat.combatants.map(cb => cb.actor).filter(Boolean);
+Hooks.on('updateCombat', (combat, changes) => {
+    if (!isActiveGM() || !('round' in changes)) return;
+    combatActors(combat).forEach(actor => syncCombatChanges(actor));
+});
+Hooks.on('deleteCombat', combat => {
+    if (!isActiveGM()) return;
+    combatActors(combat).forEach(actor => syncCombatChanges(actor, combat.id));
+});
+Hooks.on('createCombatant', combatant => {
+    if (isActiveGM()) syncCombatChanges(combatant.actor);
+});
+Hooks.on('deleteCombatant', combatant => {
+    if (isActiveGM()) syncCombatChanges(combatant.actor);
+});

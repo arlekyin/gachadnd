@@ -7,6 +7,10 @@ tags:
 description: Ваши атаки оружием наносят +2 урона.
 drawback: Пока вы в бою, ваш КД уменьшается на 2.
 activation: none
+combat_changes:
+  - key: system.attributes.ac.bonus
+    mode: add
+    value: '-2'
 changes:
   - key: system.bonuses.mwak.damage
     mode: add

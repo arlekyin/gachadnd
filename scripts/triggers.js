@@ -21,7 +21,9 @@ import { getSynergyDictionary } from "./synergy-data.js";
 import { onSocket, emit } from "./socket.js";
 
 const SETTING = 'automation';
-const HOSTILE = -1;
+const FRIENDLY = 1;
+// Условия, которым нужна выделенная цель
+const NEEDS_TARGET = ['target_bloodied', 'hostile_target'];
 
 export function registerTriggerSettings() {
     game.settings.register(MODULE_ID, SETTING, {
@@ -63,7 +65,9 @@ const CONDITIONS = {
     self_wounded: ({ actor }) => hp(actor).value < hp(actor).max,
     self_bloodied: ({ actor }) => hp(actor).value < hp(actor).max / 2,
     target_bloodied: ({ target }) => !!target?.actor && hp(target.actor).value < hp(target.actor).max / 2,
-    hostile_target: ({ target }) => (target?.document?.disposition ?? target?.disposition) === HOSTILE
+    // Враждебной считается любая не дружественная цель: нейтральное существо, на которое напали, — тоже враг
+    hostile_target: ({ actor, target }) => !!target?.actor && target.actor !== actor
+        && (target.document?.disposition ?? target.disposition) !== FRIENDLY
 };
 
 function conditionsMet(when = [], ctx) {
@@ -111,7 +115,12 @@ Hooks.on('dnd5e.preRollDamageV2', (config) => {
     const key = turnKey(actor);
     const fired = [];
     for (const trigger of activeTriggers(actor, 'damage_roll')) {
-        if (usedNow(actor, trigger, key) || !conditionsMet(trigger.trigger.when, ctx)) continue;
+        if (usedNow(actor, trigger, key)) continue;
+        if (!ctx.target && (trigger.trigger.when ?? []).some(w => NEEDS_TARGET.includes(w))) {
+            ui.notifications.info(`${trigger.name}: выделите цель перед броском урона, иначе синергия не сработает.`);
+            continue;
+        }
+        if (!conditionsMet(trigger.trigger.when, ctx)) continue;
         const { bonus } = trigger.trigger;
         if (bonus) {
             const doubled = bonus.double_when && CONDITIONS[bonus.double_when]?.(ctx);
@@ -134,9 +143,14 @@ Hooks.on('dnd5e.rollDamageV2', async (rolls, { subject } = {}) => {
         markUsed(actor, trigger, key);
         const heal = trigger.trigger.heal_self;
         if (!heal) continue;
-        const roll = await new Roll(heal.formula, actor.getRollData()).evaluate();
-        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${trigger.name}: лечение` });
-        await actor.applyDamage([{ value: roll.total, type: 'healing' }]);
+        try {
+            const roll = await new Roll(heal.formula, actor.getRollData()).evaluate();
+            await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${trigger.name}: лечение` });
+            await actor.applyDamage([{ value: roll.total, type: 'healing' }]);
+        } catch (err) {
+            console.error(`${MODULE_ID} | ${trigger.name}:`, err);
+            ui.notifications.error(`${trigger.name}: лечение не применилось — подробности в консоли (F12).`);
+        }
     }
 });
 
@@ -181,10 +195,11 @@ async function offerReaction({ actorId, tokenUuid, triggerId, amount }, local = 
     const item = trigger && featureItem(actor, trigger);
     if (!item || usesLeft(item) <= 0) return;
     const { formula } = trigger.trigger.reduce;
+    const shown = Roll.replaceFormulaData(formula, actor.getRollData(), { missing: '0' });
     const yes = await foundry.applications.api.DialogV2.confirm({
         window: { title: trigger.name },
         content: `<p><strong>${actor.name}</strong> получает ${amount} урона.</p>
-            <p>Реакцией уменьшить его на ${formula}? Осталось зарядов: ${usesLeft(item)}.</p>`,
+            <p>Реакцией уменьшить его на ${shown}? Осталось зарядов: ${usesLeft(item)}.</p>`,
         rejectClose: false
     });
     if (!yes) return;
