@@ -6,14 +6,16 @@
  * отряда пасть открывает очередной конь с кристаллом всадника в зубах. Когда персонаж забирает
  * всадника, пасти остальных коней закрываются. Управляет алтарём Мастер.
  *
- * Состояние алтаря хранится в узле карты этажа (флаг сцены floorMap): { blood, order, taken }.
+ * Состояние алтаря хранится в узле карты этажа (флаг сцены floorMap): { blood, order, taken, last }.
+ * Окно видят все: игроки смотрят, как копится кровь и раскрываются пасти, действует Мастер.
  */
 
 import { MODULE_ID } from "./constants.js";
 import { randomCrystal, buildCrystalData } from "./crystals.js";
 import { HORSEMEN, partyActors, getHorseman, hasTakenHorseman } from "./horsemen.js";
+import { emit, onSocket } from "./socket.js";
 
-const { ApplicationV2 } = foundry.applications.api;
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const THRESHOLD_STEP = 3;
 const RARITY_WEIGHTS = { gray: 600, green: 250, blue: 100, purple: 40, red: 9 };
@@ -54,19 +56,45 @@ async function chat(content) {
     });
 }
 
-export class DoomAltar extends ApplicationV2 {
+// ==========================================
+// ОКНО АЛТАРЯ
+// ==========================================
+//
+// Место самого Лабиринта — противоположность лавки Торговца: густой туман, красный свет, ни одного тёплого огня.
+// Части: backdrop — туман, камень, свечение (рисуется один раз); horses — четыре конских головы полукругом;
+// chalice — чаша крови с рисками порогов; party — отряд с ПЗ и жертвой.
+
+const TEMPLATES = 'modules/gachadnd/templates/doom';
+const LIVE_PARTS = ['horses', 'chalice', 'party'];
+// Где стоят кони: полукругом над чашей, ближние выше. Левые смотрят вправо, правые — влево
+const HORSE_SEATS = [
+    { x: 13, y: 50, facing: 'right' }, { x: 31, y: 24, facing: 'right' },
+    { x: 69, y: 24, facing: 'left' }, { x: 87, y: 50, facing: 'left' }
+];
+const STATUS_LABELS = {
+    absent: () => 'Пасть пуста — этот всадник уже в отряде',
+    closed: () => 'Пасть сомкнута',
+    open: () => 'Пасть открыта',
+    taken: doom => `Забран: ${game.actors.get(doom.taken?.actorId)?.name ?? ''}`,
+    locked: (doom, threshold) => `Откроется при ${threshold} крови`
+};
+
+export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         id: 'gachadnd-doom-altar',
         classes: ['gachadnd-doom'],
         tag: 'div',
         window: { title: 'Алтарь Погибели', icon: 'fas fa-horse-head', resizable: true },
-        position: { width: 720, height: 640 },
+        position: { width: 900, height: 780 },
         actions: {
             sacrifice: DoomAltar.#onSacrifice,
             take: DoomAltar.#onTake
         }
     };
 
+    static PARTS = Object.fromEntries(['backdrop', ...LIVE_PARTS].map(id => [id, { template: `${TEMPLATES}/${id}.hbs` }]));
+
+    // Мастер открывает алтарь — окно появляется у всех
     static async open() {
         if (!game.user.isGM) return ui.notifications.warn('Алтарём управляет Мастер.');
         const found = currentDoomNode();
@@ -75,9 +103,19 @@ export class DoomAltar extends ApplicationV2 {
         if (!found.node.doom) {
             await saveDoom(found.map, found.node.id, { blood: 0, order: Object.keys(HORSEMEN).sort(() => Math.random() - 0.5), taken: null });
         }
+        emit('openDoom');
+        return DoomAltar.show();
+    }
+
+    static show() {
         const existing = foundry.applications.instances?.get('gachadnd-doom-altar');
-        if (existing) return existing.render({ force: true });
+        if (existing) return existing.render({ force: true, parts: LIVE_PARTS }).then(() => existing.bringToFront?.());
         return new DoomAltar().render({ force: true });
+    }
+
+    /** Перерисовать всё, кроме тумана и камня */
+    refresh() {
+        if (this.rendered) return this.render({ parts: LIVE_PARTS });
     }
 
     #state() {
@@ -90,64 +128,106 @@ export class DoomAltar extends ApplicationV2 {
         return { ...found, doom };
     }
 
-    async _renderHTML() {
+    async _prepareContext() {
         const state = this.#state();
-        if (!state) return '<p class="gd-doom-empty">Отряд покинул узел Погибели.</p>';
+        const party = partyActors();
+        const context = { isGM: game.user.isGM, active: !!state };
+        if (!state) return context;
         const { doom } = state;
         const level = averageLevel();
-        const party = partyActors();
+        const step = THRESHOLD_STEP * level;
+        const max = step * doom.order.length;
         // Всадник, который уже есть у кого-то из отряда, на алтаре не появляется
         const held = new Set(party.map(a => getHorseman(a)?.flags[MODULE_ID].horseman ?? a.getFlag(MODULE_ID, 'horseman')).filter(Boolean));
+        const candidates = party.filter(a => !hasTakenHorseman(a)).map(a => ({ id: a.id, name: a.name }));
 
-        const horses = doom.order.map((key, i) => {
-            const threshold = THRESHOLD_STEP * (i + 1) * level;
+        context.horses = doom.order.map((key, i) => {
+            const threshold = step * (i + 1);
             const taken = doom.taken?.key === key;
             let status;
             if (held.has(key) && !taken) status = 'absent';
             else if (taken) status = 'taken';
             else if (doom.taken) status = 'closed';
             else status = doom.blood >= threshold ? 'open' : 'locked';
-            const label = {
-                absent: 'Конь без кристалла — этот всадник уже в отряде',
-                taken: `Забран: ${esc(game.actors.get(doom.taken?.actorId)?.name ?? '')}`,
-                closed: 'Пасть сомкнута',
-                locked: `Откроется при ${threshold} крови`,
-                open: 'Пасть открыта'
-            }[status];
-            const candidates = party.filter(a => !hasTakenHorseman(a));
-            return `
-                <div class="gd-horse ${status}">
-                    <i class="fas fa-horse-head"></i>
-                    <div class="gd-horse-name">${HORSEMEN[key]}</div>
-                    <div class="gd-horse-status">${label}</div>
-                    ${status === 'open' ? `
-                        <select data-horse="${key}">${candidates.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select>
-                        <button type="button" data-action="take" data-horse="${key}" ${candidates.length ? '' : 'disabled'}>Забрать</button>` : ''}
-                </div>`;
-        }).join('');
+            // Глаза разгораются, пока кровь подбирается к порогу этого коня
+            const heat = status === 'locked' ? Math.max(0, Math.min(1, (doom.blood - (threshold - step)) / step)) : status === 'open' ? 1 : 0;
+            return {
+                key, name: HORSEMEN[key], status, heat: heat.toFixed(2), ...HORSE_SEATS[i],
+                label: STATUS_LABELS[status](doom, threshold),
+                canTake: status === 'open' && game.user.isGM && candidates.length > 0
+            };
+        });
+        context.candidates = candidates;
 
-        const rows = party.map(a => {
+        const next = context.horses.find(h => h.status === 'locked');
+        context.chalice = {
+            blood: doom.blood, level,
+            fill: Math.min(1, doom.blood / max).toFixed(3),
+            next: next ? step * (doom.order.indexOf(next.key) + 1) : null,
+            marks: doom.order.map((key, i) => ({ at: ((i + 1) / doom.order.length * 100).toFixed(1), roman: ['I', 'II', 'III', 'IV'][i], reached: doom.blood >= step * (i + 1) })),
+            done: !!doom.taken
+        };
+        context.last = doom.last ?? null;
+
+        context.party = party.map(a => {
             const lvl = a.system.details?.level ?? 1;
             const hp = a.system.attributes?.hp?.value ?? 0;
-            return `
-                <div class="gd-doom-row">
-                    <span>${esc(a.name)}</span>
-                    <span class="gd-doom-hp">${hp} ПЗ</span>
-                    <button type="button" data-action="sacrifice" data-actor-id="${a.id}" ${hp > lvl ? '' : 'disabled'} title="Отдать ${lvl} ПЗ и получить кристалл с тегом «проклятье»">Жертва · −${lvl} ПЗ</button>
-                </div>`;
-        }).join('');
-
-        return `
-            <div class="gd-doom-blood">Кровь на постаменте: <strong>${doom.blood}</strong> · средний уровень отряда ${level}</div>
-            <div class="gd-horses">${horses}</div>
-            <div class="gd-doom-party">${rows || '<p>В отряде нет персонажей игроков.</p>'}</div>`;
+            const hpMax = a.system.attributes?.hp?.max || 1;
+            const horseman = getHorseman(a)?.flags[MODULE_ID].horseman ?? null;
+            return {
+                id: a.id, name: a.name, img: a.img, hp, hpMax, cost: lvl,
+                hpPct: Math.max(0, Math.min(100, hp / hpMax * 100)).toFixed(0),
+                canSacrifice: game.user.isGM && hp > lvl,
+                horseman, horsemanName: horseman ? HORSEMEN[horseman] : null
+            };
+        });
+        return context;
     }
 
-    _replaceHTML(result, content) {
-        content.innerHTML = result;
+    _onRender(context, options) {
+        super._onRender(context, options);
+        const parts = options.parts ?? [];
+        const first = options.isFirstRender;
+
+        // Пасти раскрываются и смыкаются движением — только при смене состояния, не при каждом открытии окна
+        if (parts.includes('horses')) {
+            const before = this.#statuses;
+            for (const horse of context.horses ?? []) {
+                const was = before?.[horse.key];
+                const el = this.element.querySelector(`.gd-horse[data-key="${horse.key}"]`);
+                if (!el || !was || was === horse.status) continue;
+                if (horse.status === 'open') el.classList.add('opening');
+                else if (horse.status === 'closed' && was === 'open') el.classList.add('closing');
+                else if (horse.status === 'taken') el.classList.add('giving');
+            }
+            this.#statuses = Object.fromEntries((context.horses ?? []).map(h => [h.key, h.status]));
+        }
+
+        // Кровь в чаше поднимается от прежнего уровня; новая жертва — капли и всплывающий проклятый кристалл
+        if (parts.includes('chalice') && context.chalice) {
+            const fill = this.element.querySelector('.gd-blood');
+            const now = Number(context.chalice.fill);
+            if (fill && this.#fill !== null && this.#fill !== now) {
+                fill.style.setProperty('--fill', this.#fill);
+                fill.getBoundingClientRect();
+                requestAnimationFrame(() => fill.style.setProperty('--fill', now));
+            }
+            this.#fill = now;
+            const at = context.last?.at ?? null;
+            if (!first && at && at !== this.#lastAt) {
+                this.element.querySelector('.gd-chalice')?.classList.add('offering');
+                this.element.querySelector(`.gd-offerer[data-actor-id="${context.last.actorId}"]`)?.classList.add('bleeding');
+            }
+            this.#lastAt = at;
+        }
     }
+
+    #statuses = null;
+    #fill = null;
+    #lastAt = null;
 
     static async #onSacrifice(event, target) {
+        if (!game.user.isGM) return;
         const state = this.#state();
         const actor = game.actors.get(target.dataset.actorId);
         if (!state || !actor) return;
@@ -159,12 +239,14 @@ export class DoomAltar extends ApplicationV2 {
         const crystal = await randomCrystal(rollRarity(), 'проклят');
         if (crystal) await actor.createEmbeddedDocuments('Item', [crystal]);
         state.doom.blood += level;
+        // Последняя жертва — чтобы у всех проиграть капли и всплывающий кристалл
+        state.doom.last = { actorId: actor.id, at: Date.now(), img: crystal?.img ?? null };
         await saveDoom(state.map, state.node.id, state.doom);
         await chat(`<strong>${esc(actor.name)}</strong> отдаёт постаменту ${level} ПЗ${crystal ? ` и получает <strong>${esc(crystal.name)}</strong>` : ''}. Кровь: ${state.doom.blood}.`);
-        this.render();
     }
 
     static async #onTake(event, target) {
+        if (!game.user.isGM) return;
         const state = this.#state();
         const key = target.dataset.horse;
         const actorId = this.element.querySelector(`select[data-horse="${key}"]`)?.value;
@@ -182,12 +264,15 @@ export class DoomAltar extends ApplicationV2 {
         state.doom.taken = { key, actorId: actor.id };
         await saveDoom(state.map, state.node.id, state.doom);
         await chat(`Конь отдаёт кристалл <strong>${HORSEMEN[key]}</strong> персонажу <strong>${esc(actor.name)}</strong>. Пасти остальных коней смыкаются.`);
-        this.render();
     }
 }
 
-// Алтарь перерисовывается, когда меняется карта этажа или ПЗ персонажей
+onSocket('openDoom', () => DoomAltar.show());
+
+// Алтарь перерисовывается, когда меняется карта этажа или ПЗ персонажей — туман и камень остаются
+const refreshAltar = () => foundry.applications.instances?.get('gachadnd-doom-altar')?.refresh?.();
 Hooks.on('updateScene', (scene, changes) => {
-    if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) foundry.applications.instances?.get('gachadnd-doom-altar')?.render();
+    if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) refreshAltar();
 });
-Hooks.on('updateActor', () => foundry.applications.instances?.get('gachadnd-doom-altar')?.render());
+Hooks.on('updateActor', refreshAltar);
+Hooks.on('createItem', refreshAltar);
