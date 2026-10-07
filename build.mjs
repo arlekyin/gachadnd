@@ -170,7 +170,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount'
+    'combat_changes', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -373,6 +373,8 @@ function validateSkill(skill, folder) {
         });
     };
     if (skill.changes !== undefined) checkChanges(skill.changes, 'changes');
+    // Эффекты, действующие только в начатом бою (например, штраф Берсерка); от ранга не зависят
+    if (skill.combat_changes !== undefined) checkChanges(skill.combat_changes, 'combat_changes');
 
     // Эффекты, сила которых зависит от состава Памяти или экипировки: объект или список объектов
     if (skill.memory_scaling !== undefined) {
@@ -660,6 +662,9 @@ function buildItem(skill, folder, rank = 1) {
                         ...entry,
                         changes: entry.changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
                     }))
+                } : {}),
+                ...(skill.combat_changes ? {
+                    combat_changes: skill.combat_changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
                 } : {}),
                 ...(skill.memory_bonus ? { memory_bonus: skill.memory_bonus } : {}),
                 ...(skill.undeletable ? { undeletable: true } : {}),
