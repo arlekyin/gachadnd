@@ -45,7 +45,7 @@ export function registerEconomySettings() {
     game.settings.settings.get(`${MODULE_ID}.runFloor`).onChange = () => {
         const map = foundry.applications.instances?.get('gachadnd-map-terminal');
         if (map?.rendered) map.render({ parts: ['header'] });
-        foundry.applications.instances?.get('gachadnd-shop')?.render();
+        foundry.applications.instances?.get('gachadnd-shop')?.refresh?.();
     };
 }
 

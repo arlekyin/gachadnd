@@ -1,0 +1,17 @@
+<section class="gd-pawn">
+    {{#if open}}
+    <div class="gd-ticket">
+        <span class="gd-ticket-head">Ломбард воспоминаний</span>
+        <span class="gd-ticket-no">Квитанция № {{pawn.ticket}} · этаж {{floor}}</span>
+        {{#if pawn.skills.length}}
+        <select class="gd-pawn-skill" title="Навык, который уйдёт из Памяти">{{#each pawn.skills}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}</select>
+        <span class="gd-ticket-line">Плата за хранение <b>{{pawn.cost}} зм</b></span>
+        <button type="button" data-action="cleanse" {{#unless pawn.can}}disabled{{/unless}} title="Навык навсегда уходит из Памяти">Сдать навык</button>
+        {{#if pawn.voucher}}<span class="gd-stamp discount">−50%</span>{{/if}}
+        {{else}}
+        <span class="gd-ticket-line empty">Сдавать нечего: в Памяти нет навыков, которые можно забыть.</span>
+        {{/if}}
+        <span class="gd-stamp accepted-stamp">Принято</span>
+    </div>
+    {{/if}}
+</section>

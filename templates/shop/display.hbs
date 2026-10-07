@@ -1,0 +1,23 @@
+<section class="gd-vitrine {{#unless open}}closed{{/unless}}">
+    <div class="gd-glass">
+        {{#if open}}
+        <div class="gd-shelf top">
+            {{#each crystals}}{{> "modules/gachadnd/templates/shop/ware.hbs"}}{{/each}}
+        </div>
+        <div class="gd-shelf middle">
+            {{#if magic}}{{#with magic}}<i class="gd-spot"></i>{{> "modules/gachadnd/templates/shop/ware.hbs"}}{{/with}}{{/if}}
+        </div>
+        <div class="gd-shelf low">
+            {{#each consumables}}{{> "modules/gachadnd/templates/shop/ware.hbs"}}{{/each}}
+        </div>
+        {{/if}}
+        <i class="gd-reflection"></i>
+    </div>
+    {{!-- Ставни: закрыты, если отряд не у Торговца; при новой выкладке опускаются и поднимаются --}}
+    <div class="gd-shutter"><span class="gd-shutter-plate">{{#if open}}Новая выкладка{{else}}Закрыто{{/if}}</span></div>
+    {{#if open}}
+    <button type="button" class="gd-restock" data-action="reroll" {{#unless reroll.can}}disabled{{/unless}} title="Опустить ставни и выложить другой товар">
+        <i class="fas fa-store-slash"></i> Новая выкладка · {{#if reroll.free}}даром{{else}}{{reroll.cost}} зм{{/if}}
+    </button>
+    {{/if}}
+</section>

@@ -858,25 +858,342 @@
 .gachadnd-doom-chat { padding: 8px; border: 1px solid #ff8000; background: #120806; color: #e8d8c8; }
 
 /* ==========================================
-   Магазин — Торговец Тумана
+   Магазин — ночная викторианская лавка
+   Торговец — аномалия, накопившая вероятность: тёплый свет газа и фиолетовый неон против тумана Лабиринта.
+   Улица (часть facade) рисуется один раз; анимации только transform и opacity
    ========================================== */
-.gachadnd-shop .window-content { background: radial-gradient(circle at 50% 0%, #1d1608 0%, #0a0907 70%); color: #e8dcc8; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-.gachadnd-shop h3 { margin: 6px 0 2px; border-bottom: 1px solid #3a3020; color: #ffd27a; font-size: 15px; letter-spacing: 0.05em; }
-.gachadnd-shop .gd-shop-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.gachadnd-shop .gd-shop-head label { display: flex; align-items: center; gap: 6px; }
-.gachadnd-shop .gd-shop-gold { color: #ffd27a; font-weight: bold; }
-.gachadnd-shop .gd-goods { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.gachadnd-shop .gd-good { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; text-align: center; border: 1px solid color-mix(in srgb, var(--good) 55%, transparent); background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 0 14px color-mix(in srgb, var(--good) 15%, transparent); }
-.gachadnd-shop .gd-good img { width: 48px; height: 48px; border: none; filter: drop-shadow(0 0 6px var(--good)); }
-.gachadnd-shop .gd-good-name { font-weight: bold; color: var(--good); font-size: 13px; }
-.gachadnd-shop .gd-good-sub { font-size: 11px; opacity: 0.75; }
-.gachadnd-shop .gd-good button { width: 100%; margin-top: auto; }
-.gachadnd-shop .gd-good.sold { opacity: 0.4; }
-.gachadnd-shop .gd-good-sold { font-size: 11px; margin-top: auto; }
-.gachadnd-shop .gd-services { display: flex; flex-direction: column; gap: 6px; }
-.gachadnd-shop .gd-service { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid #2c2618; background: rgba(0, 0, 0, 0.35); }
-.gachadnd-shop .gd-service:last-child { grid-template-columns: 1fr auto; }
-.gachadnd-shop-chat { padding: 8px; border: 1px solid #ffd27a; background: #120f06; color: #e8dcc8; }
+.gachadnd-shop {
+  --night: #0b0d1a;
+  --wood: #23140d;
+  --wood-light: #3a2216;
+  --brass: #c9a24a;
+  --brass-light: #f1d48a;
+  --neon: #c86bff;
+  --neon-core: #fbefff;
+  --gaslight: #ffb35a;
+  --paper-tag: #efe2c4;
+  --ink: #1b1410;
+}
+.gachadnd-shop .window-content {
+  position: relative; padding: 0; overflow: hidden; color: #eadfcf;
+  display: grid; grid-template-columns: minmax(0, 1fr) 230px; grid-template-rows: 104px minmax(0, 1fr) auto;
+  grid-template-areas: "sign sign" "display counter" "buyers pawn";
+  gap: 0 18px; padding: 0 22px 14px 22px;
+  background: linear-gradient(180deg, #070812 0%, var(--night) 40%, #120d12 100%) !important;
+  font-family: 'Signika', sans-serif;
+}
+.gachadnd-shop button { height: auto; line-height: 1.2; font-family: inherit; }
+
+/* ---------- Улица ---------- */
+.gachadnd-shop .gd-street { position: absolute; inset: 0; pointer-events: none; }
+.gachadnd-shop .gd-bricks {
+  position: absolute; inset: 0 0 18% 0; opacity: 0.55;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 18, 0.9), transparent 30%, transparent 70%, rgba(7, 8, 18, 0.85)),
+    repeating-linear-gradient(0deg, transparent 0 17px, rgba(0, 0, 0, 0.55) 17px 19px),
+    repeating-linear-gradient(90deg, transparent 0 40px, rgba(0, 0, 0, 0.5) 40px 42px),
+    linear-gradient(90deg, #2a1714, #3a1f19 50%, #2a1714);
+}
+/* Неоновая вывеска */
+.gachadnd-shop .gd-sign {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 28px 8px; border: 3px solid #1a0f0a; border-radius: 6px;
+  background: linear-gradient(180deg, #1b1020, #120a16); box-shadow: 0 0 0 1px #4a2a5a, 0 8px 18px rgba(0, 0, 0, 0.6), inset 0 0 22px rgba(200, 107, 255, 0.18);
+}
+.gachadnd-shop .gd-neon {
+  font-family: 'GD Caveat', cursive; font-weight: 700; font-size: 44px; line-height: 1; letter-spacing: 0.02em; color: var(--neon-core); white-space: nowrap;
+  text-shadow: 0 0 2px #fff, 0 0 6px var(--neon), 0 0 14px var(--neon), 0 0 28px rgba(200, 107, 255, 0.7);
+}
+.gachadnd-shop .gd-neon span { display: inline-block; }
+.gachadnd-shop .gd-neon .flicker-a { animation: gd-neon-flicker 7s infinite; }
+.gachadnd-shop .gd-neon .flicker-b { animation: gd-neon-flicker 11s 2.5s infinite; }
+.gachadnd-shop .gd-neon .flicker-c { animation: gd-neon-flicker 13s 5s infinite; }
+@keyframes gd-neon-flicker {
+  0%, 91%, 93.5%, 95%, 100% { opacity: 1; }
+  92%, 94.5% { opacity: 0.18; }
+}
+.gachadnd-shop .gd-sign-sub { font-family: 'Modesto Condensed', serif; font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; color: #e9c9ff; opacity: 0.75; }
+
+/* Газовый фонарь слева */
+.gachadnd-shop .gd-lamp { position: absolute; left: 10px; top: 10px; width: 120px; height: 120px; z-index: 1; }
+.gachadnd-shop .gd-lamp-arm { position: absolute; left: 0; top: 18px; width: 42px; height: 4px; background: #15100c; border-radius: 2px; }
+.gachadnd-shop .gd-lamp-head {
+  position: absolute; left: 34px; top: 20px; width: 20px; height: 28px;
+  background: linear-gradient(180deg, #2a2018 0 22%, #ffe2a8 22% 78%, #2a2018 78%); clip-path: polygon(20% 0, 80% 0, 100% 25%, 85% 100%, 15% 100%, 0 25%);
+}
+.gachadnd-shop .gd-lamp-glow {
+  position: absolute; left: -110px; top: -90px; width: 340px; height: 340px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 196, 120, 0.55), rgba(255, 179, 90, 0.18) 35%, transparent 65%);
+  animation: gd-gas 4.5s ease-in-out infinite alternate;
+}
+@keyframes gd-gas { from { opacity: 0.85; transform: scale(0.98); } to { opacity: 1; transform: scale(1.02); } }
+
+/* Ломбардный знак: три золотых шара */
+.gachadnd-shop .gd-pawnballs { position: absolute; right: 26px; top: 16px; width: 74px; height: 80px; }
+.gachadnd-shop .gd-pawnballs-bar { position: absolute; left: 6px; right: 6px; top: 0; height: 4px; background: #15100c; border-radius: 2px; }
+.gachadnd-shop .gd-pawnballs i:not(.gd-pawnballs-bar) {
+  position: absolute; width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c4, var(--brass) 45%, #6b4e18 100%); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.gachadnd-shop .gd-pawnballs i:nth-child(2) { left: 4px; top: 22px; }
+.gachadnd-shop .gd-pawnballs i:nth-child(3) { right: 4px; top: 22px; }
+.gachadnd-shop .gd-pawnballs i:nth-child(4) { left: 24px; top: 48px; }
+
+/* Мокрая мостовая: отражения света */
+.gachadnd-shop .gd-pavement {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 22%;
+  background:
+    radial-gradient(ellipse at 14% 0%, rgba(255, 179, 90, 0.22), transparent 45%),
+    radial-gradient(ellipse at 50% 0%, rgba(200, 107, 255, 0.18), transparent 55%),
+    repeating-linear-gradient(90deg, transparent 0 34px, rgba(0, 0, 0, 0.35) 34px 36px),
+    linear-gradient(180deg, #1a1620, #0c0b10);
+}
+
+/* Туман Лабиринта: подступает к лавке со всех сторон и останавливается на границе света */
+.gachadnd-shop .gd-fog i {
+  position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(175, 180, 205, 0.5), rgba(150, 155, 180, 0.2) 45%, transparent 70%);
+  z-index: 3; will-change: transform;
+}
+.gachadnd-shop .gd-fog .f1 { left: -12%; bottom: -14%; width: 46%; height: 46%; animation: gd-shop-fog 26s ease-in-out infinite alternate; }
+.gachadnd-shop .gd-fog .f2 { right: -14%; bottom: -16%; width: 50%; height: 48%; animation: gd-shop-fog 31s -9s ease-in-out infinite alternate-reverse; }
+.gachadnd-shop .gd-fog .f3 { left: -22%; top: 30%; width: 34%; height: 50%; animation: gd-shop-fog 23s -4s ease-in-out infinite alternate; }
+.gachadnd-shop .gd-fog .f4 { right: -22%; top: 26%; width: 34%; height: 54%; animation: gd-shop-fog 29s -15s ease-in-out infinite alternate-reverse; }
+.gachadnd-shop .gd-fog .f5 { left: 20%; bottom: -26%; width: 60%; height: 36%; animation: gd-shop-fog 35s -20s ease-in-out infinite alternate; }
+.gachadnd-shop .gd-fog .f6 { left: 30%; top: -24%; width: 44%; height: 30%; opacity: 0.6; animation: gd-shop-fog 27s -7s ease-in-out infinite alternate-reverse; }
+@keyframes gd-shop-fog { from { transform: translate(-4%, 2%) scale(1); } to { transform: translate(5%, -3%) scale(1.08); } }
+
+/* ---------- Витрина ---------- */
+.gachadnd-shop [data-application-part="display"] { grid-area: display; position: relative; z-index: 2; min-height: 0; }
+.gachadnd-shop [data-application-part="counter"] { grid-area: counter; position: relative; z-index: 2; min-height: 0; }
+.gachadnd-shop [data-application-part="pawn"] { grid-area: pawn; position: relative; z-index: 4; }
+.gachadnd-shop [data-application-part="buyers"] { grid-area: buyers; position: relative; z-index: 4; }
+
+.gachadnd-shop .gd-vitrine {
+  position: relative; height: 100%; display: flex; flex-direction: column;
+  padding: 12px 12px 10px; border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--wood-light), var(--wood)); box-shadow: 0 0 0 2px #120a06, inset 0 0 0 2px rgba(201, 162, 74, 0.35), 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+.gachadnd-shop .gd-glass {
+  position: relative; flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: space-around;
+  border: 2px solid #120a06; box-shadow: inset 0 0 0 1px rgba(201, 162, 74, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.75);
+  background: radial-gradient(ellipse at 50% 30%, #5a3416 0%, #2a170b 55%, #120a06 100%);
+}
+.gachadnd-shop .gd-reflection {
+  position: absolute; inset: 0; pointer-events: none; transition: opacity 0.4s;
+  background: linear-gradient(115deg, transparent 18%, rgba(255, 230, 200, 0.09) 22%, transparent 30%, transparent 58%, rgba(220, 180, 255, 0.07) 63%, transparent 70%);
+}
+.gachadnd-shop .gd-glass:hover .gd-reflection { opacity: 0.35; }
+
+/* Полки */
+.gachadnd-shop .gd-shelf { position: relative; display: flex; justify-content: space-evenly; align-items: flex-end; padding: 0 10px 8px; min-height: 0; }
+.gachadnd-shop .gd-shelf::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 8px;
+  background: linear-gradient(180deg, #6a3f1e, #2b170b); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+}
+.gachadnd-shop .gd-shelf.middle { justify-content: center; }
+.gachadnd-shop .gd-shelf.middle::after { left: 30%; right: 30%; }
+.gachadnd-shop .gd-spot {
+  position: absolute; left: 50%; bottom: 0; width: 220px; height: 260px; transform: translateX(-50%); pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(255, 220, 160, 0.12) 60%, rgba(255, 220, 160, 0.2)); clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%);
+}
+
+/* Товар: предмет на полке и бумажная бирка на нитке */
+.gachadnd-shop .gd-ware {
+  position: relative; width: auto; margin: 0; padding: 0; border: none; background: none; box-shadow: none; color: inherit; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+}
+.gachadnd-shop .gd-ware:hover, .gachadnd-shop .gd-ware:focus { box-shadow: none; outline: none; background: none; }
+.gachadnd-shop .gd-ware[disabled] { cursor: default; }
+.gachadnd-shop .gd-ware-body { position: relative; display: flex; align-items: flex-end; justify-content: center; transition: transform 0.25s; }
+.gachadnd-shop .gd-ware:not([disabled]):hover .gd-ware-body { transform: translateY(-4px); }
+.gachadnd-shop .gd-ware img { border: none; object-fit: contain; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.6)); }
+.gachadnd-shop .gd-ware.kind-consumable img { width: 56px; height: 56px; }
+.gachadnd-shop .gd-ware.kind-magic img { position: relative; width: 72px; height: 72px; margin-bottom: 18px; filter: drop-shadow(0 0 10px rgba(255, 207, 122, 0.55)) drop-shadow(0 4px 4px rgba(0, 0, 0, 0.6)); }
+.gachadnd-shop .gd-pedestal {
+  position: absolute; left: 50%; bottom: 0; width: 70px; height: 20px; transform: translateX(-50%);
+  border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, #6a1430, #3a0a1a); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Аптечная банка: внутри клубится свет редкости */
+.gachadnd-shop .gd-jar {
+  position: relative; width: 62px; height: 78px; display: flex; align-items: center; justify-content: center;
+  border-radius: 14px 14px 10px 10px; border: 1.5px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02) 30%, rgba(255, 255, 255, 0.02) 70%, rgba(255, 255, 255, 0.1));
+  box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.35);
+}
+.gachadnd-shop .gd-jar-lid { position: absolute; left: 8px; right: 8px; top: -9px; height: 10px; border-radius: 3px; background: linear-gradient(180deg, #8a6a2a, #4a3412); }
+.gachadnd-shop .gd-jar-glow {
+  position: absolute; inset: 10px 6px 6px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--good) 70%, transparent), transparent 70%);
+  animation: gd-jar-swirl 6s ease-in-out infinite alternate;
+}
+.gachadnd-shop .gd-ware:nth-child(2) .gd-jar-glow { animation-duration: 7.5s; animation-delay: -3s; }
+.gachadnd-shop .gd-ware:nth-child(3) .gd-jar-glow { animation-duration: 5.2s; animation-delay: -1.5s; }
+@keyframes gd-jar-swirl { from { opacity: 0.55; transform: scale(0.85) translateY(3px); } to { opacity: 1; transform: scale(1.08) translateY(-3px); } }
+.gachadnd-shop .gd-jar img {
+  position: relative; width: 50px; height: 50px; mix-blend-mode: screen; filter: none;
+  /* у значков кристаллов тёмный квадратный фон: края растворяются в банке */
+  -webkit-mask: radial-gradient(circle, #000 38%, transparent 68%); mask: radial-gradient(circle, #000 38%, transparent 68%);
+}
+
+/* Бирка: всегда видна цена, при наведении разворачивается название */
+.gachadnd-shop .gd-string { width: 1px; height: 10px; background: rgba(239, 226, 196, 0.6); }
+.gachadnd-shop .gd-tag {
+  position: relative; display: flex; flex-direction: column; align-items: center; min-width: 64px; max-width: 150px; padding: 3px 8px 4px;
+  color: var(--ink); background: var(--paper-tag); border-radius: 2px 2px 6px 6px; box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+  font-family: 'GD Caveat', cursive; line-height: 1.05; transform: rotate(-2deg); transition: transform 0.2s;
+}
+.gachadnd-shop .gd-ware:nth-child(even) .gd-tag { transform: rotate(2.5deg); }
+.gachadnd-shop .gd-tag::before { content: ''; position: absolute; top: 3px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #3a2a1a; }
+.gachadnd-shop .gd-tag-price { margin-top: 5px; font-size: 20px; font-weight: 700; }
+.gachadnd-shop .gd-tag-sold { font-size: 15px; opacity: 0.75; }
+/* Название и вид товара — продолжение бирки при наведении; лежит поверх соседей и не раздвигает полку */
+.gachadnd-shop .gd-tag-more {
+  position: absolute; left: 50%; top: calc(100% - 3px); width: max-content; max-width: 180px; padding: 2px 10px 5px; transform: translateX(-50%);
+  display: none; flex-direction: column; align-items: center; text-align: center;
+  background: var(--paper-tag); border-radius: 0 0 6px 6px; box-shadow: 0 5px 8px rgba(0, 0, 0, 0.5);
+}
+.gachadnd-shop .gd-tag-name { font-size: 18px; font-weight: 700; color: color-mix(in srgb, var(--good) 45%, var(--ink)); }
+.gachadnd-shop .gd-tag-sub { font-size: 15px; opacity: 0.75; }
+.gachadnd-shop .gd-ware:hover, .gachadnd-shop .gd-ware:focus-visible { z-index: 8; }
+.gachadnd-shop .gd-ware:hover .gd-tag, .gachadnd-shop .gd-ware:focus-visible .gd-tag { transform: rotate(0deg); }
+.gachadnd-shop .gd-ware:hover .gd-tag-more, .gachadnd-shop .gd-ware:focus-visible .gd-tag-more { display: flex; }
+
+/* Не по карману — товар уходит в тень; продан — на полке пусто, висит бирка «Продано» */
+.gachadnd-shop .gd-ware.poor:not(.sold) .gd-ware-body { opacity: 0.45; filter: saturate(0.4); }
+.gachadnd-shop .gd-ware.poor:not(.sold) .gd-tag-price { text-decoration: line-through; text-decoration-color: rgba(110, 29, 20, 0.7); }
+.gachadnd-shop .gd-ware.sold .gd-ware-body { opacity: 0; }
+.gachadnd-shop .gd-ware.sold .gd-tag { background: #d9cdb2; }
+.gachadnd-shop .gd-ware.sold .gd-tag-price { color: #6e1d14; }
+
+/* Ставни и кнопка новой выкладки */
+.gachadnd-shop .gd-shutter {
+  position: absolute; left: 12px; right: 12px; top: 12px; bottom: 10px; z-index: 6; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  background: repeating-linear-gradient(180deg, #4a4e57 0 14px, #2c2f36 14px 16px, #5a5f69 16px 18px);
+  box-shadow: inset 0 -6px 0 #1c1e22; transform: translateY(-104%); transform-origin: top;
+}
+.gachadnd-shop .gd-glass { clip-path: inset(0); }
+.gachadnd-shop .gd-vitrine { overflow: hidden; }
+.gachadnd-shop .gd-vitrine.closed .gd-shutter { transform: none; }
+.gachadnd-shop .gd-vitrine.restock .gd-shutter { animation: gd-shutter 1.6s ease-in-out; }
+@keyframes gd-shutter { 0% { transform: translateY(0); } 45% { transform: translateY(0); } 100% { transform: translateY(-104%); } }
+.gachadnd-shop .gd-shutter-plate {
+  padding: 4px 16px; font-family: 'Modesto Condensed', serif; font-size: 22px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #1b1410; background: linear-gradient(180deg, var(--brass-light), var(--brass)); border-radius: 3px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.gachadnd-shop .gd-restock {
+  align-self: center; margin: 8px 0 0; width: auto; padding: 4px 16px;
+  font-family: 'Modesto Condensed', serif; font-size: 17px; letter-spacing: 0.06em; color: #1b1410;
+  background: linear-gradient(180deg, var(--brass-light), var(--brass)); border: 1px solid #6b4e18; border-radius: 3px;
+}
+.gachadnd-shop .gd-restock:hover:not([disabled]) { box-shadow: 0 0 10px rgba(241, 212, 138, 0.6); }
+.gachadnd-shop .gd-restock[disabled] { filter: grayscale(0.7) brightness(0.7); }
+
+/* ---------- Дверь, Торговец, касса ---------- */
+.gachadnd-shop .gd-counter { height: 100%; display: flex; flex-direction: column; gap: 12px; }
+.gachadnd-shop .gd-door {
+  position: relative; flex: 1; min-height: 200px; border-radius: 4px 4px 0 0; overflow: hidden;
+  background: linear-gradient(180deg, var(--wood-light), var(--wood)); box-shadow: 0 0 0 2px #120a06, inset 0 0 0 2px rgba(201, 162, 74, 0.3), 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+.gachadnd-shop .gd-door-window {
+  position: absolute; left: 16px; right: 16px; top: 16px; height: 52%; overflow: hidden;
+  border: 2px solid #120a06; background: radial-gradient(ellipse at 50% 100%, #6a3c18, #2a170b 60%, #120a06);
+}
+/* Лавка закрыта: за дверью темно, Торговца нет */
+.gachadnd-shop .gd-counter.closed .gd-merchant { opacity: 0; }
+.gachadnd-shop .gd-counter.closed .gd-door-window { background: #0a0705; }
+.gachadnd-shop .gd-door-light { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255, 230, 200, 0.08) 36%, transparent 44%); }
+/* Силуэт Торговца за прилавком: цилиндр, лицо в тени, отблеск очков */
+.gachadnd-shop .gd-merchant { position: absolute; left: 50%; bottom: 0; width: 120px; height: 150px; transform: translateX(-50%); animation: gd-merchant 9s ease-in-out infinite alternate; }
+@keyframes gd-merchant { from { transform: translateX(-54%); } to { transform: translateX(-46%); } }
+.gachadnd-shop .gd-merchant i { position: absolute; background: #07050a; }
+.gachadnd-shop .gd-hat { left: 40px; top: 6px; width: 40px; height: 34px; border-radius: 3px 3px 0 0; box-shadow: 0 30px 0 -26px #07050a; }
+.gachadnd-shop .gd-hat::after { content: ''; position: absolute; left: -10px; right: -10px; bottom: -3px; height: 5px; border-radius: 3px; background: #07050a; }
+.gachadnd-shop .gd-head { left: 44px; top: 38px; width: 32px; height: 38px; border-radius: 45% 45% 40% 40%; }
+.gachadnd-shop .gd-coat { left: 14px; top: 72px; width: 92px; height: 90px; border-radius: 40% 40% 0 0; }
+.gachadnd-shop .gd-merchant .gd-glint { top: 52px; width: 8px; height: 4px; border-radius: 50%; background: rgba(255, 220, 160, 0.85); box-shadow: 0 0 6px rgba(255, 200, 120, 0.9); animation: gd-glint 6s ease-in-out infinite; }
+.gachadnd-shop .gd-glint.l { left: 49px; }
+.gachadnd-shop .gd-glint.r { left: 63px; }
+@keyframes gd-glint { 0%, 80%, 100% { opacity: 0.85; } 86% { opacity: 0.1; } }
+.gachadnd-shop .gd-door-sign {
+  position: absolute; left: 50%; top: calc(52% + 26px); transform: translateX(-50%) rotate(-3deg); padding: 2px 12px;
+  font-family: 'GD Caveat', cursive; font-size: 20px; font-weight: 700; color: var(--ink); background: var(--paper-tag); border-radius: 2px; box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+}
+.gachadnd-shop .gd-door-panel { position: absolute; left: 22px; right: 22px; bottom: 16px; height: 22%; border: 2px solid rgba(0, 0, 0, 0.45); box-shadow: inset 0 0 0 1px rgba(201, 162, 74, 0.25); }
+.gachadnd-shop .gd-door-knob { position: absolute; right: 26px; top: 66%; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3c4, var(--brass) 55%, #6b4e18); }
+
+/* Латунная касса */
+.gachadnd-shop .gd-till {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 10px 8px;
+  border-radius: 10px 10px 4px 4px; color: #1b1410;
+  background: linear-gradient(180deg, var(--brass-light), var(--brass) 55%, #8a6a2a); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), 0 6px 14px rgba(0, 0, 0, 0.6);
+}
+.gachadnd-shop .gd-till-window {
+  min-width: 120px; padding: 2px 10px; text-align: right; font-family: 'Modesto Condensed', serif; font-size: 30px; letter-spacing: 0.08em;
+  color: #fff1cf; background: #1b1410; border-radius: 3px; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+.gachadnd-shop .gd-till-label { font-size: 13px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gachadnd-shop .gd-till-discount { font-size: 12px; padding: 0 6px; color: #fff1cf; background: #6e1d14; border-radius: 2px; }
+.gachadnd-shop .gd-till.ring { animation: gd-till-ring 0.45s ease-out; }
+@keyframes gd-till-ring { 0% { transform: translateY(0); } 30% { transform: translateY(-5px) rotate(-1deg); } 60% { transform: translateY(1px) rotate(0.5deg); } 100% { transform: none; } }
+
+/* ---------- Ломбард воспоминаний ---------- */
+.gachadnd-shop .gd-pawn { margin-top: -96px; }
+.gachadnd-shop .gd-ticket {
+  position: relative; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 10px;
+  color: var(--ink); background: linear-gradient(180deg, #f3e8cc, #e2d2ab); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6);
+  /* перфорация квитанции сверху */
+  -webkit-mask: radial-gradient(circle 4px at 8px 0, transparent 98%, #000) -8px 0 / 16px 100% repeat-x;
+          mask: radial-gradient(circle 4px at 8px 0, transparent 98%, #000) -8px 0 / 16px 100% repeat-x;
+  transform: rotate(1.2deg);
+}
+.gachadnd-shop .gd-ticket-head { font-family: 'Modesto Condensed', serif; font-size: 16px; line-height: 1.1; letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px dashed rgba(27, 20, 16, 0.5); }
+.gachadnd-shop .gd-ticket-no { font-size: 11px; opacity: 0.7; }
+.gachadnd-shop .gd-ticket-line { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 12px; }
+.gachadnd-shop .gd-ticket-line b { font-family: 'GD Caveat', cursive; font-size: 20px; }
+.gachadnd-shop .gd-ticket-line.empty { font-family: 'GD Caveat', cursive; font-size: 16px; }
+.gachadnd-shop .gd-ticket select { width: 100%; height: 26px; color: var(--ink); background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(27, 20, 16, 0.4); font-family: 'GD Caveat', cursive; font-size: 17px; }
+.gachadnd-shop .gd-ticket button {
+  margin-top: 4px; padding: 4px; font-family: 'Modesto Condensed', serif; font-size: 16px; letter-spacing: 0.06em; color: #f3e8cc;
+  background: #3a1f19; border: 1px solid #1b1410; border-radius: 2px;
+}
+.gachadnd-shop .gd-ticket button:hover:not([disabled]) { background: #6e1d14; box-shadow: none; }
+.gachadnd-shop .gd-ticket button[disabled] { opacity: 0.5; }
+.gachadnd-shop .gd-stamp {
+  position: absolute; padding: 0 8px; border: 2px solid currentColor; border-radius: 4px;
+  font-family: 'Modesto Condensed', serif; font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none;
+}
+.gachadnd-shop .gd-stamp.discount { right: 10px; top: 30px; color: rgba(110, 29, 20, 0.8); transform: rotate(-12deg); }
+.gachadnd-shop .gd-stamp.accepted-stamp { left: 50%; top: 45%; color: rgba(110, 29, 20, 0.85); opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(2); }
+.gachadnd-shop .gd-ticket.accepted .gd-stamp.accepted-stamp { animation: gd-stamp 2.4s ease-out forwards; }
+@keyframes gd-stamp { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(2); } 12% { opacity: 1; transform: translate(-50%, -50%) rotate(-14deg) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(1); } }
+
+/* ---------- Отряд, отражённый в мокрой мостовой ---------- */
+.gachadnd-shop .gd-buyers { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; padding-top: 14px; }
+.gachadnd-shop .gd-buyer {
+  width: 86px; margin: 0; padding: 0; border: none; background: none; box-shadow: none; color: #eadfcf; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: 0.45; filter: blur(0.6px) saturate(0.6); transition: opacity 0.3s, filter 0.3s;
+}
+.gachadnd-shop .gd-buyer:hover { opacity: 0.8; filter: none; box-shadow: none; background: none; }
+.gachadnd-shop .gd-buyer.active { opacity: 1; filter: none; }
+.gachadnd-shop .gd-buyer img {
+  width: 58px; height: 58px; object-fit: cover; border: 2px solid rgba(234, 223, 207, 0.4); border-radius: 50%;
+  -webkit-mask: linear-gradient(180deg, #000 60%, rgba(0, 0, 0, 0.55)); mask: linear-gradient(180deg, #000 60%, rgba(0, 0, 0, 0.55));
+}
+.gachadnd-shop .gd-buyer.active img { border-color: var(--neon-core); box-shadow: 0 0 8px var(--neon), 0 0 16px rgba(200, 107, 255, 0.5); }
+.gachadnd-shop .gd-buyer-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.gachadnd-shop .gd-buyer b { font-family: 'GD Caveat', cursive; font-size: 17px; color: var(--brass-light); }
+.gachadnd-shop .gd-buyers-empty { font-family: 'GD Caveat', cursive; font-size: 18px; opacity: 0.8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gachadnd-shop .gd-neon span, .gachadnd-shop .gd-lamp-glow, .gachadnd-shop .gd-fog i, .gachadnd-shop .gd-jar-glow,
+  .gachadnd-shop .gd-merchant, .gachadnd-shop .gd-glint { animation: none; }
+}
+
+.gachadnd-shop-chat { padding: 8px 10px; border: 1px solid #c86bff; border-radius: 4px; background: linear-gradient(180deg, #1b1020, #120a16); color: #eadfcf; box-shadow: inset 0 0 12px rgba(200, 107, 255, 0.2); }
+.gachadnd-shop-chat strong { color: #f1d48a; }
 
 /* ==========================================
    Риск — испытание «испытай удачу»

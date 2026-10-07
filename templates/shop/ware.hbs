@@ -1,0 +1,12 @@
+<button type="button" class="gd-ware kind-{{kind}} {{#if soldTo}}sold{{/if}} {{#unless affordable}}poor{{/unless}}" data-action="buy" data-slot="{{slot}}" style="--good: {{color}}" {{#if soldTo}}disabled{{/if}}{{#unless affordable}} disabled{{/unless}}>
+    <span class="gd-ware-body">
+        {{#if (eq kind "crystal")}}<span class="gd-jar"><i class="gd-jar-lid"></i><i class="gd-jar-glow"></i><img src="{{img}}" alt=""></span>
+        {{else}}{{#if (eq kind "magic")}}<i class="gd-pedestal"></i>{{/if}}<img src="{{img}}" alt="">{{/if}}
+    </span>
+    <i class="gd-string"></i>
+    <span class="gd-tag">
+        <span class="gd-tag-price">{{#if soldTo}}Продано{{else}}{{price}} зм{{/if}}</span>
+        {{#if soldTo}}<span class="gd-tag-sold">{{soldTo}}</span>{{/if}}
+        <span class="gd-tag-more"><span class="gd-tag-name">{{name}}</span><span class="gd-tag-sub">{{sub}}</span></span>
+    </span>
+</button>
