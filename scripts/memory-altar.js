@@ -10,7 +10,9 @@
  *   Переплавка  — 3 кристалла одной редкости → случайный кристалл следующей редкости;
  *   Резонанс    — кристалл → случайный кристалл той же редкости с выбранным тегом (1 КХ);
  *   Расщепление — кристалл → Кости Хитов обратно (зелёный, синий — 1, фиолетовый — 2).
- * Воспоминания для ритуалов — кристаллы из инвентаря и неэкипированные навыки Памяти (они сгорают).
+ * Ингредиенты ритуалов — только кристаллы из инвентаря. Навыки Памяти уже стали частью
+ * персонажа: Алтарь их не сжигает — это делает Очистка в Магазине. В Слиянии неэкипированные
+ * навыки с повтором появляются в тумане как цели, а не как ингредиенты.
  * Красные и оранжевые кристаллы в ритуалах не участвуют. Повтор, который нельзя слить
  * (уникальный навык или максимальный ранг), в Переплавке считается за два кристалла.
  */
@@ -42,7 +44,7 @@ const RESONANCE_COST = 1;
 
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// Ингредиенты: кристаллы инвентаря и неэкипированные навыки Памяти серой–фиолетовой редкости
+// Ингредиенты: кристаллы инвентаря серой–фиолетовой редкости
 function ingredients(actor) {
     const list = [];
     for (const item of actor.items) {
@@ -56,17 +58,14 @@ function ingredients(actor) {
             for (let n = 0; n < (item.system?.quantity ?? 1); n++) {
                 list.push({ key: `${item.id}:${n}`, item, kind: 'crystal', rarity: flags.rarity, name, tags: flags.tags ?? [], weight });
             }
-        } else if (isMemorySkill(item) && !flags.is_active && !flags.undeletable && !flags.horseman) {
-            list.push({ key: item.id, item, kind: 'skill', rarity: flags.rarity, name: item.name, tags: flags.tags ?? [], weight: 1 });
         }
     }
     return list.sort((a, b) => RITUAL_RARITIES.indexOf(a.rarity) - RITUAL_RARITIES.indexOf(b.rarity) || a.name.localeCompare(b.name));
 }
 
-// Ингредиент уходит в ритуал: кристалл расходуется, навык Памяти сжигается
+// Ингредиент уходит в ритуал: кристалл расходуется
 async function spend(ingredient) {
-    if (ingredient.kind === 'crystal') await consumeCrystal(ingredient.item);
-    else await ingredient.item.delete();
+    await consumeCrystal(ingredient.item);
 }
 
 async function chat(actor, content) {
@@ -294,7 +293,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             }
             for (const i of all) {
                 if (i.key === dupKey) continue;
-                const skill = i.kind === 'skill' ? (dupOf.has(i.item.id) ? i.item.id : null) : skillForCrystal.get(i.item.id);
+                const skill = skillForCrystal.get(i.item.id);
                 views.set(i.key, skill
                     ? { cls: ['can-merge', ...(skill === this.mergeId ? ['chosen'] : [])], tap: 'merge', mergeSkill: skill }
                     : { cls: ['dim'] });
@@ -315,18 +314,24 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             }
         }
 
+        // Слияние: неэкипированные навыки с повтором — цели в тумане (не ингредиенты)
+        const targets = !merge ? [] : memory.filter(i => !i.flags[MODULE_ID].is_active && dupOf.has(i.id)).map(item => {
+            views.set(item.id, { cls: ['can-merge', ...(item.id === this.mergeId ? ['chosen'] : [])], tap: 'merge', mergeSkill: item.id });
+            return { key: item.id, item, kind: 'skill', rarity: item.flags[MODULE_ID].rarity, name: item.name, weight: 1 };
+        });
         // Место в тумане закрепляется за огоньком при первом появлении: выбор одного
         // не сдвигает раскладку остальных
-        const motes = all.map((ing, n) => {
-            if (!this.#drift.has(ing.key)) this.#drift.set(ing.key, fogPosition(n, all.length));
+        const fogItems = [...all, ...targets];
+        const motes = fogItems.map((ing, n) => {
+            if (!this.#drift.has(ing.key)) this.#drift.set(ing.key, fogPosition(n, fogItems.length));
             const view = views.get(ing.key) ?? { cls: [] };
             const pos = view.pos ?? this.#drift.get(ing.key);
             return {
                 key: ing.key, itemId: ing.item.id, kind: ing.kind, name: ing.name, view, pos,
                 cls: view.cls.join(' '), tap: view.tap ?? '', mergeSkill: view.mergeSkill ?? '',
                 icon: ing.kind === 'skill' ? 'fa-brain' : 'fa-gem', double: ing.weight > 1,
-                style: `${at(pos)}; --rarity: ${RARITY[ing.rarity].color}; --delay: ${bobPhase(ing.key)}s`,
-                title: `${ing.name}${ing.kind === 'skill' ? ' — навык из Памяти, сгорит в ритуале' : ''}${ing.weight > 1 ? ' — повтор без слияния, весит вдвое' : ''}`
+                style: `${at(pos)}; --rarity: ${RARITY[ing.rarity]?.color ?? '#c9a75d'}; --delay: ${bobPhase(ing.key)}s`,
+                title: `${ing.name}${ing.kind === 'skill' ? ' — навык из Памяти: бросьте в него повтор' : ''}${ing.weight > 1 ? ' — повтор без слияния, весит вдвое' : ''}`
             };
         });
 
@@ -456,10 +461,12 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     static #onRitual(event, target) {
+        // Цели Слияния (навыки Памяти) есть только в тумане Слияния — тогда туман перерисовывается
+        const fog = this.ritual === 'merge' || target.dataset.ritual === 'merge';
         this.ritual = target.dataset.ritual;
         this.slots = [];
         this.result = null;
-        this.#update(['side', 'stage', 'controls']);
+        this.#update(['side', 'stage', 'controls', ...(fog ? ['fog'] : [])]);
     }
 
     static #onTag(event, target) {
