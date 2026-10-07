@@ -5,7 +5,7 @@
         {{#each cards}}
         <div class="gd-tcard {{cls}}" style="--rarity: {{color}}" data-action="select" data-item-id="{{id}}" title="{{name}}">
             <div class="gd-tcard-art" style="background-image: url('{{img}}')"></div>
-            {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span>{{/if}}
+            {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span><span class="gd-neon gd-neon-line" aria-hidden="true"></span>{{/if}}
             {{#if ranked}}<span class="gd-tcard-badge">{{rank}}</span>{{/if}}
             {{#if mergeable}}<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>{{/if}}
             <div class="gd-tcard-name">{{name}}</div>
