@@ -25,6 +25,7 @@ import {
 } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { onSocket, emit } from "./socket.js";
+import { MindPhysics } from "./mind-physics.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -109,6 +110,8 @@ export class MemoryAltar extends ApplicationV2 {
     }
 
     #dived = false;
+    #physics = null;
+    #drift = new Map();
 
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-memory-altar'],
@@ -116,8 +119,6 @@ export class MemoryAltar extends ApplicationV2 {
         window: { title: 'Алтарь Памяти', icon: 'fas fa-campground', resizable: false },
         actions: {
             ritual: MemoryAltar.#onRitual,
-            pick: MemoryAltar.#onPick,
-            unslot: MemoryAltar.#onUnslot,
             tag: MemoryAltar.#onTag,
             mergePick: MemoryAltar.#onMergePick,
             conjure: MemoryAltar.#onConjure
@@ -193,8 +194,21 @@ export class MemoryAltar extends ApplicationV2 {
         return { smelt: 3, resonate: 1, split: 1 }[this.ritual] ?? 0;
     }
 
+    // Ошибка отрисовки не должна запирать Алтарь: состояние сбрасывается, и он рисуется заново
     async _renderHTML() {
-        const tags = Object.keys(getSynergyDictionary());
+        try {
+            return this.#html();
+        } catch (err) {
+            console.error(`${MODULE_ID} | Алтарь Памяти:`, err);
+            ui.notifications.error('Алтарь Памяти: ошибка отрисовки, выбор сброшен. Подробности в консоли (F12).');
+            Object.assign(this, { ritual: 'smelt', slots: [], mergeId: null, result: null });
+            return this.#html();
+        }
+    }
+
+    #html() {
+        const dictionary = getSynergyDictionary();
+        const tags = Object.keys(dictionary);
         this.tag ??= tags[0];
         const { all, pool, slotted } = this.#state();
         const ritual = RITUALS[this.ritual];
@@ -203,7 +217,7 @@ export class MemoryAltar extends ApplicationV2 {
         const hdMax = Math.max(this.actor.system.attributes?.hd?.max ?? hd, hd);
         const merge = this.ritual === 'merge';
         const at = ({ x, y }) => `left: ${x.toFixed(2)}%; top: ${y.toFixed(2)}%`;
-        const lines = [];
+        const tagColor = tag => `hsl(${Math.round(tags.indexOf(tag) * 360 / Math.max(tags.length, 1))}, 85%, 66%)`;
 
         // Ритуалы — дуга глифов слева
         const glyphs = Object.entries(RITUALS).map(([key, r]) => `
@@ -212,28 +226,59 @@ export class MemoryAltar extends ApplicationV2 {
                 <span class="gd-glyph-disc"><i class="fas ${r.icon}"></i></span>
             </button>`).join('');
 
-        // Орбита сознания — экипированные навыки Памяти; в Слиянии их можно выбрать
-        const mergeable = new Set(this.actor.items.filter(i => isMemorySkill(i) && canRankUp(i) && findDuplicateCrystal(this.actor, i)).map(i => i.id));
-        const equipped = this.actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active);
-        const nodePos = new Map();
-        const nodes = equipped.map((item, n) => {
-            const angle = -Math.PI / 2 + (2 * Math.PI * n) / equipped.length;
-            const pos = { x: CORE.x + ORBIT.rx * Math.cos(angle), y: CORE.y + ORBIT.ry * Math.sin(angle) };
-            nodePos.set(item.id, pos);
-            lines.push({ from: CORE, to: pos, cls: 'orbit' });
+        // Слияние: навык Памяти ↔ его повторный кристалл в инвентаре
+        const memory = this.actor.items.filter(isMemorySkill);
+        const dupOf = new Map();
+        for (const skill of memory) {
+            if (!canRankUp(skill)) continue;
+            const crystal = findDuplicateCrystal(this.actor, skill);
+            if (crystal) dupOf.set(skill.id, crystal.id);
+        }
+        const skillForCrystal = new Map([...dupOf].map(([skill, crystal]) => [crystal, skill]));
+        if (this.mergeId && !dupOf.has(this.mergeId)) this.mergeId = null;
+
+        // Предел разума: гнёзда на орбите, экипированные навыки занимают их по порядку
+        const level = this.actor.system.details?.level || 1;
+        const cap = 6 + Math.floor(level / 2);
+        const equipped = memory.filter(i => i.flags[MODULE_ID].is_active);
+        const sockets = Math.max(cap, equipped.length);
+        const orbitAt = n => {
+            const angle = -Math.PI / 2 + (2 * Math.PI * n) / sockets;
+            return { x: CORE.x + ORBIT.rx * Math.cos(angle), y: CORE.y + ORBIT.ry * Math.sin(angle) };
+        };
+        const nodePos = new Map(equipped.map((item, n) => [item.id, orbitAt(n)]));
+        const nodes = equipped.map(item => {
             const flags = item.flags[MODULE_ID];
-            const can = merge && mergeable.has(item.id);
+            const can = merge && dupOf.has(item.id);
+            const itemTags = flags.tags ?? [];
             return `
-                <div class="gd-node ${can ? 'can-merge' : ''} ${merge && item.id === this.mergeId ? 'chosen' : ''}" style="${at(pos)}; --rarity: ${RARITY[flags.rarity]?.color ?? '#c9a75d'}"
-                     ${can ? `data-action="mergePick" data-item-id="${item.id}"` : ''} title="${esc(item.name)} — ранг ${romanRank(flags.rank ?? 1)}">
+                <div class="gd-node ${can ? 'can-merge' : ''} ${merge && item.id === this.mergeId ? 'chosen' : ''}" style="${at(nodePos.get(item.id))}; --rarity: ${RARITY[flags.rarity]?.color ?? '#c9a75d'}"
+                     data-item-id="${item.id}" ${can ? 'data-action="mergePick"' : ''} title="${esc(item.name)} — ранг ${romanRank(flags.rank ?? 1)}${itemTags.length ? `\nТеги: ${esc(itemTags.join(', '))}` : ''}">
                     <span class="gd-node-disc"><i class="fas fa-brain"></i><b>${romanRank(flags.rank ?? 1)}</b></span>
                     <span class="gd-node-name">${esc(item.name)}</span>
                 </div>`;
         }).join('');
+        const emptySockets = Array.from({ length: sockets - equipped.length }, (_, n) => `<div class="gd-socket" style="${at(orbitAt(equipped.length + n))}"></div>`).join('');
+
+        // Нити сознания: общий тег связывает два навыка — из таких нитей и растут синергии
+        const threads = [];
+        const tagTotals = {};
+        for (const item of equipped) for (const t of item.flags[MODULE_ID].tags ?? []) tagTotals[t] = (tagTotals[t] ?? 0) + 1;
+        equipped.forEach((a, i) => equipped.slice(i + 1).forEach(b => {
+            const shared = (a.flags[MODULE_ID].tags ?? []).filter(t => (b.flags[MODULE_ID].tags ?? []).includes(t));
+            shared.forEach((tag, k) => {
+                const p = nodePos.get(a.id), q = nodePos.get(b.id);
+                const bend = 0.45 + 0.18 * k;
+                const c = { x: (p.x + q.x) / 2 + (CORE.x - (p.x + q.x) / 2) * bend, y: (p.y + q.y) / 2 + (CORE.y - (p.y + q.y) / 2) * bend };
+                threads.push(`<path d="M ${p.x} ${p.y} Q ${c.x} ${c.y} ${q.x} ${q.y}" style="--thread: ${tagColor(tag)}" data-a="${a.id}" data-b="${b.id}" vector-effect="non-scaling-stroke"/>`);
+            });
+        }));
+        const flows = [];
 
         // Огонёк — кристалл или неэкипированный навык Памяти
-        const mote = (ing, pos, { action = '', cls = '', delay = 0 } = {}) => `
-            <div class="gd-mote ${ing.kind} ${cls}" style="${at(pos)}; --rarity: ${RARITY[ing.rarity].color}; --delay: ${delay}s" ${action ? `data-action="${action}"` : ''} data-key="${ing.key}" data-item-id="${ing.item.id}"
+        const mote = (ing, pos, { tap = '', cls = '', delay = 0, mergeSkill = '' } = {}) => `
+            <div class="gd-mote ${ing.kind} ${cls}" style="${at(pos)}; --rarity: ${RARITY[ing.rarity].color}; --delay: ${delay}s" data-key="${ing.key}" data-item-id="${ing.item.id}"
+                 data-tap="${tap}" ${mergeSkill ? `data-merge-skill="${mergeSkill}"` : ''}
                  title="${esc(ing.name)}${ing.kind === 'skill' ? ' — навык из Памяти, сгорит в ритуале' : ''}${ing.weight > 1 ? ' — повтор без слияния, весит вдвое' : ''}">
                 <span class="gd-mote-body">
                     <span class="gd-mote-orb"><i class="fas ${ing.kind === 'skill' ? 'fa-brain' : 'fa-gem'}"></i>${ing.weight > 1 ? '<b>×2</b>' : ''}</span>
@@ -243,43 +288,53 @@ export class MemoryAltar extends ApplicationV2 {
 
         // Фокус у ядра: то, что сейчас погружено в ритуал
         let focus = '';
-        const dup = merge ? findDuplicateCrystal(this.actor, this.actor.items.get(this.mergeId)) : null;
-        const dupKey = dup ? `${dup.id}:0` : null;
+        let dupKey = null;
         if (merge) {
-            const chosen = this.actor.items.get(this.mergeId);
-            const target = nodePos.get(this.mergeId);
+            dupKey = this.mergeId ? `${dupOf.get(this.mergeId)}:0` : null;
             const ing = all.find(i => i.key === dupKey);
-            if (chosen && ing) {
-                focus = mote(ing, CORE, { cls: 'focused' });
-                if (target) lines.push({ from: CORE, to: target, cls: 'flow' });
+            if (ing) {
+                focus = mote(ing, CORE, { tap: 'unmerge', cls: 'focused' });
+                const target = nodePos.get(this.mergeId);
+                if (target) flows.push(`<line x1="${CORE.x}" y1="${CORE.y}" x2="${target.x}" y2="${target.y}" vector-effect="non-scaling-stroke"/>`);
             }
         } else {
             const limit = this.#slotLimit();
             const points = FOCUS[limit] ?? FOCUS[1];
             focus = points.map((pos, n) => {
                 const ing = slotted[n];
-                if (ing && limit > 1) lines.push({ from: pos, to: CORE, cls: 'flow' });
-                return ing ? mote(ing, pos, { action: 'unslot', cls: 'focused' }) : `<div class="gd-focus-empty" style="${at(pos)}"></div>`;
+                if (ing && limit > 1) flows.push(`<line x1="${pos.x}" y1="${pos.y}" x2="${CORE.x}" y2="${CORE.y}" vector-effect="non-scaling-stroke"/>`);
+                return ing ? mote(ing, pos, { tap: 'unslot', cls: 'focused' }) : `<div class="gd-focus-empty" style="${at(pos)}"></div>`;
             }).join('');
         }
 
-        // Туман: всё, что ещё не стало частью персонажа, дрейфует по краю
+        // Туман: всё, что ещё не стало частью персонажа; брошенные огоньки остаются там, где упали
         let drifting;
         if (merge) {
-            drifting = all.filter(i => i.key !== dupKey).map(i => ({ ing: i, action: i.kind === 'skill' && mergeable.has(i.item.id) ? 'mergePick' : '', cls: i.kind === 'skill' && mergeable.has(i.item.id) ? (i.item.id === this.mergeId ? 'can-merge chosen' : 'can-merge') : 'dim' }));
+            drifting = all.filter(i => i.key !== dupKey).map(i => {
+                const skill = i.kind === 'skill' ? (dupOf.has(i.item.id) ? i.item.id : null) : skillForCrystal.get(i.item.id);
+                return { ing: i, tap: skill ? 'merge' : '', mergeSkill: skill ?? '', cls: skill ? (skill === this.mergeId ? 'can-merge chosen' : 'can-merge') : 'dim' };
+            });
         } else {
             const smeltRarity = this.ritual === 'smelt' ? slotted[0]?.rarity : null;
-            drifting = pool.filter(i => !this.slots.includes(i.key)).map(i => ({ ing: i, action: 'pick', cls: smeltRarity && i.rarity !== smeltRarity ? 'dim' : '' }));
+            drifting = pool.filter(i => !this.slots.includes(i.key)).map(i => ({ ing: i, tap: 'pick', cls: smeltRarity && i.rarity !== smeltRarity ? 'off' : '' }));
+            // Неподходящие ритуалу воспоминания тоже плавают в тумане — их можно бросать
+            drifting.push(...all.filter(i => !pool.includes(i)).map(i => ({ ing: i, tap: '', cls: 'dim' })));
         }
-        const motes = drifting.map(({ ing, action, cls }, n) => mote(ing, fogPosition(n, drifting.length), { action, cls, delay: -(n * 0.7) % 6 })).join('');
-        const emptyNote = drifting.length ? '' : `<div class="gd-fog-empty">${merge ? 'Туман пуст.' : 'В тумане нет подходящих воспоминаний.'}</div>`;
+        const motes = drifting.map(({ ing, tap, cls, mergeSkill }, n) =>
+            mote(ing, this.#drift.get(ing.key) ?? fogPosition(n, drifting.length), { tap, cls, mergeSkill, delay: -(n * 0.7) % 6 })).join('');
+        const emptyNote = drifting.length ? '' : '<div class="gd-fog-empty">Туман пуст.</div>';
 
-        // Связи сознания — тонкие линии поверх тумана
-        const svg = `<svg class="gd-links" viewBox="0 0 100 100" preserveAspectRatio="none">${lines.map(l =>
-            `<line class="${l.cls}" x1="${l.from.x}" y1="${l.from.y}" x2="${l.to.x}" y2="${l.to.y}" vector-effect="non-scaling-stroke"/>`).join('')}</svg>`;
+        // Легенда нитей — какие теги уже сплетены и насколько
+        const legend = Object.entries(tagTotals).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([tag, n]) => {
+            const next = dictionary[tag]?.thresholds?.find(t => t.count > n)?.count;
+            return `<div class="gd-legend-row" style="--thread: ${tagColor(tag)}"><i></i><span>${esc(tag)}</span><b>${n}${next ? ` / ${next}` : ''}</b></div>`;
+        }).join('');
+
+        const svg = `<svg class="gd-links" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <g class="gd-threads">${threads.join('')}</g><g class="gd-flows">${flows.join('')}</g></svg>`;
 
         const tagsHtml = this.ritual === 'resonate'
-            ? `<div class="gd-tags">${tags.map(t => `<button type="button" class="gd-tag ${t === this.tag ? 'active' : ''}" data-action="tag" data-tag="${t}">${t}</button>`).join('')}</div>` : '';
+            ? `<div class="gd-tags">${tags.map(t => `<button type="button" class="gd-tag ${t === this.tag ? 'active' : ''}" data-action="tag" data-tag="${t}" style="--thread: ${tagColor(t)}">${t}</button>`).join('')}</div>` : '';
         const cost = recipe.gain ? `+${recipe.gain} КХ` : recipe.cost ? `−${recipe.cost} КХ` : '';
         const pips = Array.from({ length: hdMax }, (_, i) => `<span class="gd-pip ${i < hd ? 'on' : ''}"></span>`).join('');
         const resultHtml = this.result
@@ -295,16 +350,19 @@ export class MemoryAltar extends ApplicationV2 {
                     <div class="gd-subtitle">${ritual.text}</div>
                     <div class="gd-glyphs">${glyphs}</div>
                     ${tagsHtml}
+                    ${legend ? `<div class="gd-legend"><div class="gd-legend-title">Нити сознания</div>${legend}</div>` : ''}
                 </aside>
                 <div class="gd-mind-field">
                     ${svg}
                     <div class="gd-orbit"></div>
-                    <div class="gd-core" style="${at(CORE)}"><span></span></div>
+                    <div class="gd-core" style="${at(CORE)}"><span></span><em>${equipped.length} / ${cap}</em></div>
+                    ${emptySockets}
                     ${nodes}
                     ${motes}
                     ${focus}
                     ${resultHtml}
                     ${emptyNote}
+                    <div class="gd-mind-hint">Огоньки можно брать, бросать и опускать в ядро</div>
                     <div class="gd-mind-controls">
                         <div class="gd-recipe">${esc(recipe.note)}${recipe.short ? ` · <em>${recipe.short}</em>` : ''}</div>
                         <button type="button" class="gd-conjure" data-action="conjure" ${recipe.ready ? '' : 'disabled'}>${ritual.verb} ${cost ? `<b>${cost}</b>` : ''}</button>
@@ -312,6 +370,72 @@ export class MemoryAltar extends ApplicationV2 {
                     </div>
                 </div>
             </div>`;
+    }
+
+    // Физика огоньков и подсветка нитей узла
+    _onRender(context, options) {
+        super._onRender?.(context, options);
+        this.#physics?.destroy();
+        const field = this.element.querySelector('.gd-mind-field');
+        if (!field) return;
+        this.#physics = new MindPhysics(field, {
+            onTap: el => this.#interact(el, { type: 'tap' }),
+            onDrop: (el, target) => this.#interact(el, target),
+            onSettle: (key, pos) => this.#drift.set(key, pos)
+        });
+        for (const node of field.querySelectorAll('.gd-node')) {
+            const id = node.dataset.itemId;
+            const lit = on => field.querySelectorAll(`.gd-threads path[data-a="${id}"], .gd-threads path[data-b="${id}"]`).forEach(p => p.classList.toggle('lit', on));
+            node.addEventListener('pointerenter', () => lit(true));
+            node.addEventListener('pointerleave', () => lit(false));
+        }
+    }
+
+    _onClose(options) {
+        super._onClose?.(options);
+        this.#physics?.destroy();
+        this.#physics = null;
+    }
+
+    // Нажатие на огонёк или бросок в цель. Возвращает true, если цель его приняла
+    #interact(el, target) {
+        const { key, tap, mergeSkill } = el.dataset;
+        const focused = el.classList.contains('focused');
+        if (focused) {
+            if (target.type === 'tap' || target.type === 'away') {
+                if (this.ritual === 'merge') this.mergeId = null;
+                else this.slots = this.slots.filter(k => k !== key);
+                this.render();
+                return true;
+            }
+            return false;
+        }
+        if (tap === 'merge' && (target.type === 'tap' || target.type === 'core' || (target.type === 'node' && target.id === mergeSkill))) {
+            this.mergeId = mergeSkill;
+            this.result = null;
+            this.render();
+            return true;
+        }
+        if (tap === 'pick' && (target.type === 'tap' || target.type === 'core')) {
+            this.#pick(key);
+            return true;
+        }
+        if (target.type === 'tap' && el.classList.contains('dim')) ui.notifications.info('Это воспоминание не подходит выбранному ритуалу.');
+        return false;
+    }
+
+    #pick(key) {
+        // Переплавка: кристалл другой редкости начинает фокус заново
+        if (this.ritual === 'smelt') {
+            const { all } = this.#state();
+            const rarity = all.find(i => i.key === key)?.rarity;
+            const current = all.find(i => i.key === this.slots[0])?.rarity;
+            if (current && rarity !== current) this.slots = [];
+        }
+        if (this.slots.length >= this.#slotLimit()) this.slots.shift();
+        this.slots.push(key);
+        this.result = null;
+        this.render();
     }
 
     _replaceHTML(result, content) {
@@ -322,25 +446,6 @@ export class MemoryAltar extends ApplicationV2 {
         this.ritual = target.dataset.ritual;
         this.slots = [];
         this.result = null;
-        this.render();
-    }
-
-    static #onPick(event, target) {
-        // Переплавка: кристалл другой редкости начинает фокус заново
-        if (this.ritual === 'smelt') {
-            const { all } = this.#state();
-            const rarity = all.find(i => i.key === target.dataset.key)?.rarity;
-            const current = all.find(i => i.key === this.slots[0])?.rarity;
-            if (current && rarity !== current) this.slots = [];
-        }
-        if (this.slots.length >= this.#slotLimit()) this.slots.shift();
-        this.slots.push(target.dataset.key);
-        this.result = null;
-        this.render();
-    }
-
-    static #onUnslot(event, target) {
-        this.slots = this.slots.filter(key => key !== target.dataset.key);
         this.render();
     }
 
