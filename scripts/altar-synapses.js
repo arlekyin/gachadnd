@@ -250,3 +250,170 @@ export class AltarSynapses {
         ctx.globalCompositeOperation = 'source-over';
     }
 }
+
+/**
+ * Резонанс: пряди от ядра обвивают выбранный тег колеса.
+ * Пучок из пяти прядей выходит из края ядра, стягивается на середине пути, у тега расходится
+ * и обвивает его, каждая прядь — по своей дуге. При выборе другого тега пряди втягиваются в ядро
+ * и прорастают к новому. Экземпляр живёт дольше холста: слой ядра перерисовывается при смене тега,
+ * и пряди продолжают движение на новом холсте (attach).
+ */
+export class ResonanceWeave {
+    constructor() {
+        this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        this.grow = 0;          // доля прорастания: 0 — в ядре, 1 — тег обвит
+        this.target = null;     // тег, к которому растут пряди
+        this.wanted = null;     // выбранный тег
+        this.running = false;
+        this.last = 0;
+    }
+
+    /** Новый холст слоя ядра и выбранный тег */
+    attach(canvas, stage, tag) {
+        this.canvas = canvas;
+        this.stage = stage;
+        this.ctx = canvas.getContext('2d');
+        this.wanted = tag;
+        this.signature = '';
+        if (this.target === null) this.target = tag;
+        if (this.reducedMotion) { this.target = tag; this.grow = 1; }
+        this.start();
+    }
+
+    start() {
+        if (this.running) return;
+        this.running = true;
+        const loop = time => {
+            if (!this.running) return;
+            if (!this.canvas?.isConnected) { this.frame = requestAnimationFrame(loop); return; }
+            const dt = Math.min(0.1, (time - (this.last || time)) / 1000);
+            if (time - this.last >= FRAME_MS) {
+                this.last = time;
+                this.#step(dt);
+                this.#draw();
+            }
+            this.frame = requestAnimationFrame(loop);
+        };
+        this.frame = requestAnimationFrame(loop);
+    }
+
+    stop() {
+        this.running = false;
+        if (this.frame) cancelAnimationFrame(this.frame);
+        this.frame = null;
+    }
+
+    // Втягивание к ядру быстрее, прорастание — мягче
+    #step(dt) {
+        if (this.target !== this.wanted) {
+            this.grow = Math.max(0, this.grow - dt / 0.35);
+            if (this.grow === 0) { this.target = this.wanted; this.signature = ''; }
+        } else {
+            this.grow = Math.min(1, this.grow + dt / 0.7);
+        }
+    }
+
+    #measure() {
+        const width = this.stage.clientWidth, height = this.stage.clientHeight;
+        const core = this.stage.querySelector('.gd-core');
+        const tag = [...this.stage.querySelectorAll('.gd-wheel-tag')].find(el => el.dataset.tag === this.target);
+        if (!core || !tag || !width) return null;
+        const place = el => ({ x: parseFloat(el.style.left) / 100 * width, y: parseFloat(el.style.top) / 100 * height });
+        const glow = getComputedStyle(this.stage).getPropertyValue('--glow') || '#b066ff';
+        return { width, height, core: { ...place(core), r: core.offsetWidth / 2 }, tag: { ...place(tag), w: tag.offsetWidth, h: tag.offsetHeight }, color: rgb(glow) };
+    }
+
+    // Пряди как ломаные: пучок от ядра к тегу, затем дуга вокруг тега
+    #build(scene) {
+        const { core, tag } = scene;
+        const rand = random(`weave:${this.target}`);
+        const dir = Math.atan2(tag.y - core.y, tag.x - core.x);
+        const dist = Math.hypot(tag.x - core.x, tag.y - core.y);
+        const nx = -Math.sin(dir), ny = Math.cos(dir);
+        const rx = tag.w / 2 + 7, ry = tag.h / 2 + 6;
+        this.strands = [];
+        for (let k = 0; k < 5; k++) {
+            const f = k / 4 - 0.5;
+            const startA = dir + f * 0.9;
+            const start = [core.x + Math.cos(startA) * core.r, core.y + Math.sin(startA) * core.r];
+            // Вход на овал вокруг тега — со стороны ядра, пряди расходятся веером
+            const entryA = dir + Math.PI + f * 1.4;
+            const entry = [tag.x + Math.cos(entryA) * rx, tag.y + Math.sin(entryA) * ry];
+            const c1 = [core.x + Math.cos(dir) * dist * 0.35 + nx * f * 10, core.y + Math.sin(dir) * dist * 0.35 + ny * f * 10];
+            const c2 = [core.x + Math.cos(dir) * dist * 0.6 + nx * f * 4, core.y + Math.sin(dir) * dist * 0.6 + ny * f * 4];
+            const reach = cubic(start, c1, c2, entry);
+            const points = [];
+            for (let i = 0; i <= 24; i++) points.push(reach(i / 24));
+            // Обвивка: дуга по овалу, направление чередуется, размах от 150° до 260°
+            const sweep = (k % 2 ? 1 : -1) * (2.6 + rand() * 1.9);
+            const wobble = 1 + (rand() - 0.5) * 0.25;
+            for (let i = 1; i <= 26; i++) {
+                const a = entryA + sweep * i / 26;
+                const swell = 1 + Math.sin(i / 26 * Math.PI) * 0.12 * wobble;
+                points.push([tag.x + Math.cos(a) * rx * swell, tag.y + Math.sin(a) * ry * swell]);
+            }
+            const lengths = [0];
+            for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+            this.strands.push({ points, lengths, total: lengths.at(-1), split: 24, phase: rand() });
+        }
+    }
+
+    #draw() {
+        const scene = this.#measure();
+        if (!scene) return;
+        const signature = [scene.width, scene.height, scene.core.x, scene.core.y, scene.tag.x, scene.tag.y, scene.tag.w, this.target].join('|');
+        if (signature !== this.signature) {
+            this.signature = signature;
+            const ratio = Math.min(window.devicePixelRatio || 1, 2);
+            this.canvas.width = Math.round(scene.width * ratio);
+            this.canvas.height = Math.round(scene.height * ratio);
+            this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            this.#build(scene);
+        }
+        const ctx = this.ctx, color = scene.color;
+        ctx.clearRect(0, 0, scene.width, scene.height);
+        ctx.lineCap = 'round';
+        // Прорастание с плавным разгоном; дуги обвивки догоняют пучок
+        const ease = this.grow * this.grow * (3 - 2 * this.grow);
+        for (const s of this.strands) {
+            const limit = s.total * ease;
+            for (let i = 1; i < s.points.length && s.lengths[i - 1] < limit; i++) {
+                const u = s.lengths[i] / s.total;
+                const [x0, y0] = s.points[i - 1];
+                let [x1, y1] = s.points[i];
+                if (s.lengths[i] > limit) {
+                    const k = (limit - s.lengths[i - 1]) / (s.lengths[i] - s.lengths[i - 1]);
+                    x1 = x0 + (x1 - x0) * k; y1 = y0 + (y1 - y0) * k;
+                }
+                // Толще у ядра и на обвивке, тоньше посередине; цвет ритуала светлеет к тегу
+                const mid = i <= s.split ? Math.abs(i / s.split - 0.45) * 2 : 1;
+                ctx.lineWidth = 1.1 + 0.9 * mid;
+                ctx.strokeStyle = toward(color, Math.min(1, u * 0.9), 0.5 + u * 0.35);
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+            }
+        }
+        // Импульсы бегут от ядра к тегу, когда пряди обвили его
+        if (this.reducedMotion || this.grow < 1) return;
+        const now = Date.now() / 1000;
+        ctx.globalCompositeOperation = 'lighter';
+        this.strands.forEach((s, k) => {
+            if (k % 2) return;
+            const u = (now * 0.35 + s.phase) % 1;
+            const at = s.lengths.findIndex(l => l >= u * s.lengths[s.split]);
+            const [x, y] = s.points[Math.max(0, at)];
+            const g = ctx.createRadialGradient(x, y, 0, x, y, 5);
+            const fade = Math.min(1, u / 0.1, (1 - u) / 0.1);
+            g.addColorStop(0, `rgba(255, 255, 255, ${0.8 * fade})`);
+            g.addColorStop(0.4, `rgba(${color.join(', ')}, ${0.55 * fade})`);
+            g.addColorStop(1, `rgba(${color.join(', ')}, 0)`);
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalCompositeOperation = 'source-over';
+    }
+}
