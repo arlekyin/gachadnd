@@ -870,25 +870,14 @@
   animation: gd-doom-pulse 5s ease-in-out infinite alternate;
 }
 @keyframes gd-doom-pulse { from { opacity: 0.7; transform: scale(0.96); } to { opacity: 1; transform: scale(1.04); } }
-.gachadnd-doom .gd-doom-floor {
-  position: absolute; left: 50%; top: 58%; width: 760px; height: 190px; margin-left: -380px; border-radius: 50%;
-  background:
-    repeating-conic-gradient(from 8deg, rgba(0, 0, 0, 0.35) 0 2deg, transparent 2deg 30deg),
-    radial-gradient(ellipse, #2a1d1a 0%, #1a1110 55%, transparent 72%);
-  box-shadow: inset 0 0 0 2px rgba(138, 15, 10, 0.25);
+.gachadnd-doom .gd-doom-fog {
+  /* Туман гуще к краям и редеет к постаменту */
+  position: absolute; inset: 0; overflow: hidden;
+  -webkit-mask: radial-gradient(ellipse 62% 58% at 50% 46%, transparent 35%, #000 100%); mask: radial-gradient(ellipse 62% 58% at 50% 46%, transparent 35%, #000 100%);
 }
-.gachadnd-doom .gd-doom-fog i {
-  position: absolute; border-radius: 50%; will-change: transform;
-  background: radial-gradient(circle, rgba(120, 100, 105, 0.42), rgba(90, 70, 75, 0.16) 45%, transparent 70%);
-}
-.gachadnd-doom .gd-doom-fog .f1 { left: -18%; top: 5%; width: 50%; height: 60%; animation: gd-doom-fog 28s ease-in-out infinite alternate; }
-.gachadnd-doom .gd-doom-fog .f2 { right: -18%; top: 8%; width: 50%; height: 60%; animation: gd-doom-fog 33s -11s ease-in-out infinite alternate-reverse; }
-.gachadnd-doom .gd-doom-fog .f3 { left: 15%; top: -22%; width: 70%; height: 46%; animation: gd-doom-fog 26s -5s ease-in-out infinite alternate; }
-.gachadnd-doom .gd-doom-fog .f4 { left: -24%; bottom: -10%; width: 56%; height: 50%; animation: gd-doom-fog 31s -17s ease-in-out infinite alternate-reverse; }
-.gachadnd-doom .gd-doom-fog .f5 { right: -24%; bottom: -12%; width: 56%; height: 52%; animation: gd-doom-fog 29s -8s ease-in-out infinite alternate; }
-.gachadnd-doom .gd-doom-fog .f6 { left: 20%; bottom: -28%; width: 60%; height: 40%; opacity: 0.8; animation: gd-doom-fog 36s -21s ease-in-out infinite alternate-reverse; }
-.gachadnd-doom .gd-doom-fog .f7 { left: 35%; top: 30%; width: 30%; height: 26%; opacity: 0.35; animation: gd-doom-fog 24s -3s ease-in-out infinite alternate; }
-@keyframes gd-doom-fog { from { transform: translate(-5%, 3%) scale(1); } to { transform: translate(6%, -3%) scale(1.1); } }
+.gachadnd-doom .gd-doom-fog i { position: absolute; top: 0; left: 0; width: calc(100% + 640px); height: 100%; background-size: 640px 640px; will-change: transform; }
+.gachadnd-doom .gd-doom-fog .f1 { background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.0045'%20numOctaves='4'%20seed='7'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.58%20%200%200%200%200%200.44%20%200%200%200%200%200.46%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E"); opacity: 0.85; animation: gd-fog-drift 70s linear infinite; }
+.gachadnd-doom .gd-doom-fog .f2 { background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.008'%20numOctaves='4'%20seed='23'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.5%20%200%200%200%200%200.36%20%200%200%200%200%200.38%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E"); opacity: 0.6; animation: gd-fog-drift 44s linear infinite reverse; }
 
 /* ---------- Кони: силуэты по диагоналям ---------- */
 .gachadnd-doom .gd-horses { position: absolute; inset: 0; }
@@ -970,6 +959,14 @@
 /* ---------- Постамент с кровью ---------- */
 .gachadnd-doom .gd-chalice-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .gachadnd-doom .gd-chalice { position: relative; width: 220px; height: 280px; }
+/* Каменный круг лежит под ступенями постамента и движется вместе с ним при любой высоте окна */
+.gachadnd-doom .gd-altar-floor {
+  position: absolute; left: 50%; top: 93%; width: 540px; height: 130px; transform: translate(-50%, -50%); z-index: -1; border-radius: 50%; pointer-events: none;
+  background:
+    repeating-conic-gradient(from 8deg, rgba(0, 0, 0, 0.4) 0 2deg, transparent 2deg 30deg),
+    radial-gradient(closest-side, #2a1d1a 0%, #1a1110 70%, transparent 100%);
+  -webkit-mask: radial-gradient(closest-side, #000 70%, transparent 100%); mask: radial-gradient(closest-side, #000 70%, transparent 100%);
+}
 .gachadnd-doom .gd-chalice-svg { width: 100%; height: 100%; overflow: visible; }
 .gachadnd-doom .gd-basin-glow { fill: rgba(208, 36, 26, 0.5); filter: blur(18px); opacity: calc(0.2 + var(--fill) * 0.8); transition: opacity 1.4s; }
 .gachadnd-doom .gd-pillar { fill: #3a2e2a; stroke: #120a08; stroke-width: 2; }
@@ -1128,17 +1125,14 @@
 }
 
 /* Туман Лабиринта: подступает к лавке со всех сторон и останавливается на границе света */
-.gachadnd-shop .gd-fog i {
-  position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(175, 180, 205, 0.5), rgba(150, 155, 180, 0.2) 45%, transparent 70%);
-  z-index: 3; will-change: transform;
+.gachadnd-shop .gd-fog {
+  /* Туман подступает со всех сторон и редеет к витрине — на границе света лавки. Лежит за витриной и дверью */
+  position: absolute; inset: 0; overflow: hidden; z-index: 1; pointer-events: none;
+  -webkit-mask: radial-gradient(ellipse 60% 56% at 48% 48%, transparent 50%, #000 100%); mask: radial-gradient(ellipse 60% 56% at 48% 48%, transparent 50%, #000 100%);
 }
-.gachadnd-shop .gd-fog .f1 { left: -12%; bottom: -14%; width: 46%; height: 46%; animation: gd-shop-fog 26s ease-in-out infinite alternate; }
-.gachadnd-shop .gd-fog .f2 { right: -14%; bottom: -16%; width: 50%; height: 48%; animation: gd-shop-fog 31s -9s ease-in-out infinite alternate-reverse; }
-.gachadnd-shop .gd-fog .f3 { left: -22%; top: 30%; width: 34%; height: 50%; animation: gd-shop-fog 23s -4s ease-in-out infinite alternate; }
-.gachadnd-shop .gd-fog .f4 { right: -22%; top: 26%; width: 34%; height: 54%; animation: gd-shop-fog 29s -15s ease-in-out infinite alternate-reverse; }
-.gachadnd-shop .gd-fog .f5 { left: 20%; bottom: -26%; width: 60%; height: 36%; animation: gd-shop-fog 35s -20s ease-in-out infinite alternate; }
-.gachadnd-shop .gd-fog .f6 { left: 30%; top: -24%; width: 44%; height: 30%; opacity: 0.6; animation: gd-shop-fog 27s -7s ease-in-out infinite alternate-reverse; }
-@keyframes gd-shop-fog { from { transform: translate(-4%, 2%) scale(1); } to { transform: translate(5%, -3%) scale(1.08); } }
+.gachadnd-shop .gd-fog i { position: absolute; top: 0; left: 0; width: calc(100% + 640px); height: 100%; background-size: 640px 640px; will-change: transform; }
+.gachadnd-shop .gd-fog .f1 { background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.0045'%20numOctaves='4'%20seed='7'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.6%20%200%200%200%200%200.64%20%200%200%200%200%200.78%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E"); opacity: 0.75; animation: gd-fog-drift 80s linear infinite; }
+.gachadnd-shop .gd-fog .f2 { background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='640'%20height='640'%3E%3Cfilter%20id='f'%20x='0'%20y='0'%20width='1'%20height='1'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.008'%20numOctaves='4'%20seed='31'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.52%20%200%200%200%200%200.56%20%200%200%200%200%200.7%20%201.6%200%200%200%20-0.62'/%3E%3C/filter%3E%3Crect%20width='100%'%20height='100%'%20filter='url(%23f)'/%3E%3C/svg%3E"); opacity: 0.5; animation: gd-fog-drift 50s linear infinite reverse; }
 
 /* ---------- Витрина ---------- */
 .gachadnd-shop [data-application-part="display"] { grid-area: display; position: relative; z-index: 2; min-height: 0; }
