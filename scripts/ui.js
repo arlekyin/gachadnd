@@ -381,6 +381,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             part.style.setProperty('--gd-phase-drift', `-${now % 13000}ms`);
             part.style.setProperty('--gd-phase-flicker', `-${now % 5300}ms`);
             part.style.setProperty('--gd-phase-flash', `-${now % 11000}ms`);
+            part.style.setProperty('--gd-phase-sheen', `-${now % 9000}ms`);
         }
 
         // Анимация последнего действия (экипировка, снятие, слияние) — на картах этого навыка
