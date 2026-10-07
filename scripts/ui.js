@@ -220,7 +220,19 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             : [];
 
         const slotted = equipped.filter(occupiesSlot);
+        // Фон-сознание: нейроны навыков, связи по общим тегам, ступени синергий, перегрузка
+        const mind = {
+            neurons: memory.map(item => {
+                const flags = item.flags[MODULE_ID];
+                const tags = new Set(flags.tags ?? []);
+                if (flags.is_active && !flags.tagEmitter) emittedTags.forEach(t => tags.add(t));
+                return { id: item.id, color: (RARITY[flags.rarity] ?? RARITY.gray).color, active: !!flags.is_active, tags: [...tags] };
+            }),
+            tiers: Object.fromEntries(Object.entries(tagCounts).map(([tag, count]) => [tag, Math.floor(Math.min(count, 6) / 2)])),
+            overload: slotted.length > naturalCap
+        };
         return {
+            mind,
             atRest, hitDice, glossary,
             equippedCount: equipped.length,
             capacity: getMemoryCapacity(actor),
@@ -344,15 +356,15 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _onRender(context, options) {
         super._onRender(context, options);
-        // Фон-сеть создаётся вместе со своей частью; дальше ей только сообщают число экипированных
+        // Фон-сознание создаётся вместе со своей частью; дальше ему только сообщают сборку
         if (options.parts?.includes('backdrop')) {
             this.neural?.stop();
             const canvas = this.element.querySelector('canvas.gd-neural');
-            this.neural = canvas ? new NeuralBackground(canvas, this.actor.id, context.equippedCount) : null;
+            this.neural = canvas ? new NeuralBackground(canvas, this.actor.id, context.mind) : null;
             if (this.#idle) this.neural?.pause();
             else this.neural?.start();
         } else {
-            this.neural?.setActiveCount(context.equippedCount);
+            this.neural?.setMind(context.mind);
         }
 
         // Отрицательная задержка = текущая позиция в цикле от часов. Задаётся только новым
