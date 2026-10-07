@@ -17,7 +17,7 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4, override: 5 };
 
 /**
- * Словарь синергий: { тег: { key, thresholds: [{ count, name, icon, desc, changes, feature }] } }.
+ * Словарь синергий: { тег: { key, thresholds: [{ count, name, icon, desc, changes, feature, trigger }] } }.
  * @param {object[]} synergies  Данные синергий (по умолчанию — собранные из YAML).
  */
 export function makeSynergyDictionary(synergies = SYNERGIES) {
@@ -31,7 +31,8 @@ export function makeSynergyDictionary(synergies = SYNERGIES) {
                 icon: s.icon,
                 desc: t.description,
                 changes: (t.changes ?? []).map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode] ?? 2, value: String(c.value) })),
-                feature: t.feature ?? null
+                feature: t.feature ?? null,
+                trigger: t.trigger ?? null
             }))
         }];
     }));
