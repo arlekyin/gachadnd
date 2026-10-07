@@ -1000,6 +1000,7 @@
 .gachadnd-doom .gd-chalice.offering .gd-rising { animation: gd-rising 2.6s 0.9s ease-out; }
 @keyframes gd-rising { 0% { opacity: 0; transform: translateY(20px) scale(0.6); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-90px) scale(1.2); } }
 .gachadnd-doom .gd-blood-count { font-size: 15px; color: #ff9a6b; text-shadow: 0 1px 4px #000; }
+.gachadnd-doom .gd-curse-count { font-size: 13px; color: #c9a08a; opacity: 0.85; text-shadow: 0 1px 4px #000; }
 .gachadnd-doom .gd-blood-count b { font-family: 'Modesto Condensed', serif; font-size: 26px; color: #ff4a2a; text-shadow: 0 0 8px rgba(255, 60, 30, 0.7); }
 
 /* ---------- Отряд ---------- */

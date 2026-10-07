@@ -35,6 +35,8 @@ export function registerEconomySettings() {
         crystalPrices: { name: 'Цены кристаллов (доля базы)', hint: 'Серый / зелёный / синий / фиолетовый. Красные не продаются.', type: String, default: '0.2/0.5/1.2/3' },
         cleansePrice: { name: 'Очистка навыка (доля базы)', hint: 'Цена = база × доля × (1 + очисток за забег).', type: Number, default: 0.5 },
         rerollPrice: { name: 'Обновление ассортимента (доля базы)', hint: 'Цена = база × доля × (1 + обновлений в этом магазине).', type: Number, default: 0.2 },
+        doomHorseBlood: { name: 'Погибель: кровь на одного коня (× средний уровень)', hint: 'Конь № N открывает пасть при N × доля × средний уровень отряда крови.', type: Number, default: 12 },
+        doomCurseBlood: { name: 'Погибель: кровь за проклятый кристалл (× средний уровень)', hint: 'Каждые доля × средний уровень отряда крови на постаменте — кристалл с тегом «проклятье» тому, чья жертва добрала до отметки.', type: Number, default: 3 },
         shopConsumables: { name: 'Компендиум расходников магазина', hint: 'Например dnd5e.items. Берутся предметы типа «расходник».', type: String, default: 'dnd5e.items' },
         shopMagicItems: { name: 'Компендиум магических предметов магазина', hint: 'Например dnd5e.items. Берутся предметы с редкостью, кроме расходников.', type: String, default: 'dnd5e.items' }
     };
