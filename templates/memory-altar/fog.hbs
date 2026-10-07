@@ -1,0 +1,12 @@
+<div class="gd-part-fog {{#if diving}}diving{{/if}}" style="--glow: {{ritual.glow}}">
+    {{#each motes}}
+    <div class="gd-mote {{kind}} {{cls}}" style="{{style}}" data-key="{{key}}" data-item-id="{{itemId}}" data-tap="{{tap}}" data-merge-skill="{{mergeSkill}}" title="{{title}}">
+        <span class="gd-mote-body">
+            <span class="gd-mote-orb"><i class="fas {{icon}}"></i>{{#if double}}<b>×2</b>{{/if}}</span>
+            <span class="gd-mote-name">{{name}}</span>
+        </span>
+    </div>
+    {{else}}
+    <div class="gd-fog-empty">Туман пуст.</div>
+    {{/each}}
+</div>

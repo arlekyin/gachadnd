@@ -1,0 +1,19 @@
+<aside class="gd-part-side {{#if diving}}diving{{/if}}" style="--glow: {{ritual.glow}}">
+    <h1>{{ritual.name}}</h1>
+    <div class="gd-subtitle">{{ritual.text}}</div>
+    <div class="gd-glyphs">
+        {{#each glyphs}}
+        <button type="button" class="gd-glyph {{#if active}}active{{/if}}" data-action="ritual" data-ritual="{{key}}" style="--glow: {{glow}}" title="{{text}}">
+            <span class="gd-glyph-name">{{name}}</span>
+            <span class="gd-glyph-disc"><i class="fas {{icon}}"></i></span>
+        </button>
+        {{/each}}
+    </div>
+    {{#if tags}}
+    <div class="gd-tags">
+        {{#each tags}}
+        <button type="button" class="gd-tag {{#if active}}active{{/if}}" data-action="tag" data-tag="{{name}}">{{name}}</button>
+        {{/each}}
+    </div>
+    {{/if}}
+</aside>

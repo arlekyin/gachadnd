@@ -5,6 +5,8 @@
  * от краёв, ядра, узлов орбиты и друг от друга. Отпущенный над ядром или узлом огонёк
  * передаётся Алтарю как «бросок в цель», короткое нажатие — как выбор.
  * Цикл анимации работает только пока что-то движется; положение — через left/top в %.
+ * Поле огоньков и слой с ядром и узлами — разные части окна одного размера, поэтому
+ * препятствия ищутся в общем корне (obstacles).
  */
 
 const MOTE_RADIUS = 20;
@@ -23,9 +25,12 @@ export class MindPhysics {
      * @param {(el: HTMLElement) => void} handlers.onTap
      * @param {(el: HTMLElement, target: {type: 'core'|'node'|'away', id?: string}) => boolean} handlers.onDrop
      * @param {(key: string, pos: {x: number, y: number}) => void} handlers.onSettle  положение в % поля
+     * @param {Map<string, {vx: number, vy: number}>} [handlers.momentum]  полёт, прерванный перерисовкой
+     * @param {HTMLElement} [handlers.obstacles]  корень, где лежат ядро и узлы орбиты
      */
-    constructor(field, { onTap, onDrop, onSettle, momentum }) {
+    constructor(field, { onTap, onDrop, onSettle, momentum, obstacles }) {
         this.field = field;
+        this.obstacles = obstacles ?? field;
         this.onTap = onTap;
         this.onDrop = onDrop;
         this.onSettle = onSettle;
@@ -69,6 +74,19 @@ export class MindPhysics {
         return moving;
     }
 
+    /** Алтарь сменил огонькам роли (фокус) без перерисовки поля — обновить тела */
+    refresh() {
+        for (const b of this.bodies) {
+            const fixed = b.el.classList.contains('focused');
+            if (fixed && !b.fixed) {
+                b.vx = b.vy = 0;
+                b.el.classList.remove('flying');
+            }
+            b.fixed = fixed;
+        }
+        if (this.rect) this.#measure();
+    }
+
     destroy() {
         if (this.frame) cancelAnimationFrame(this.frame);
         this.frame = null;
@@ -90,9 +108,9 @@ export class MindPhysics {
             const r = el.getBoundingClientRect();
             return { x: (r.left - box.left + r.width / 2) / scale, y: (r.top - box.top + r.height / 2) / scale, r: r.width / 2 / scale + pad };
         };
-        const core = this.field.querySelector('.gd-core');
+        const core = this.obstacles.querySelector('.gd-core');
         this.core = core ? circle(core, 6) : null;
-        this.nodes = [...this.field.querySelectorAll('.gd-node')].map(el => ({ id: el.dataset.itemId, ...circle(el.querySelector('.gd-node-disc'), 4) }));
+        this.nodes = [...this.obstacles.querySelectorAll('.gd-node')].map(el => ({ id: el.dataset.itemId, ...circle(el.querySelector('.gd-node-disc'), 4) }));
         for (const b of this.bodies) {
             if (b.vx || b.vy) continue;
             b.x = parseFloat(b.el.style.left) / 100 * width;

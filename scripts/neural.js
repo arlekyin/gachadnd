@@ -30,6 +30,7 @@ export class NeuralBackground {
     constructor(canvas, key, activeCount = 0) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        this.key = key;
         this.activeCount = activeCount;
         this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         this.#build(key);
@@ -88,6 +89,13 @@ export class NeuralBackground {
         this.width = width;
         this.height = height;
         if (!this.running) this.#draw(performance.now());
+    }
+
+    // Экипировка изменилась: та же сеть, другое число импульсов. Канвас и цикл не пересоздаются
+    setActiveCount(count) {
+        if (count === this.activeCount) return;
+        this.activeCount = count;
+        this.#build(this.key);
     }
 
     start() {
