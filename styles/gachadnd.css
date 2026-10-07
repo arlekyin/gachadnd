@@ -670,27 +670,27 @@
   will-change: opacity;
   animation: gd-arcana-wash 5.3s ease-in-out var(--gd-phase-flicker, 0ms) infinite;
 }
+/* Отсвет: мягкая полоса в тоне кромки проходит по диагонали картинки — от левого верхнего угла
+   к правому нижнему. Слой втрое больше картинки и тех же пропорций, полоса лежит поперёк его диагонали,
+   поэтому сдвиг на треть по обеим осям ведёт её ровно по диагонали карты */
 .gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::after,
 .gachadnd-terminal .gd-bigcard.equipped .gd-bigcard-art::after {
   content: "";
   position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: -60%;
-  width: 45%;
+  inset: -100%;
   pointer-events: none;
   mix-blend-mode: screen;
-  background: linear-gradient(90deg, transparent, rgba(160, 255, 225, 0.08) 30%, rgba(200, 255, 236, 0.28) 50%, rgba(160, 255, 225, 0.08) 70%, transparent);
-  transform: skewX(-18deg) translateX(0);
+  background: linear-gradient(to bottom right, transparent 45%, rgba(95, 224, 184, 0.07) 48%, rgba(95, 224, 184, 0.16) 50%, rgba(95, 224, 184, 0.07) 52%, transparent 55%);
+  transform: translate(-33.4%, -33.4%);
   opacity: 0;
   will-change: transform, opacity;
-  animation: gd-arcana-sheen 9s ease-in-out var(--gd-phase-sheen, 0ms) infinite;
+  animation: gd-arcana-sheen 26s ease-in-out var(--gd-phase-sheen, 0ms) infinite;
 }
 .gachadnd-terminal .gd-tcard:nth-child(3n + 1) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-flicker, 0ms) - 1.7s); }
 .gachadnd-terminal .gd-tcard:nth-child(3n + 2) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-flicker, 0ms) - 3.4s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 1) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 2.2s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 2) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 4.9s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 3) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 7.1s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 1) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 7s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 2) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 15s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 3) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 21s); }
 /* Подсветка картинки — тот же неровный ритм, что у неона, но мягче */
 @keyframes gd-arcana-wash {
   0% { opacity: 0.75; } 6% { opacity: 0.5; } 9% { opacity: 0.85; } 15% { opacity: 0.6; } 22% { opacity: 0.95; }
@@ -698,12 +698,12 @@
   60% { opacity: 0.75; } 69% { opacity: 0.42; } 75% { opacity: 0.85; } 83% { opacity: 0.55; } 89% { opacity: 0.95; }
   95% { opacity: 0.65; } 100% { opacity: 0.75; }
 }
-/* Отсвет проходит редко: большую часть цикла его нет */
+/* Отсвет проходит редко — раз в 26 секунд, около 3 секунд; остальное время его нет */
 @keyframes gd-arcana-sheen {
-  0%, 70% { opacity: 0; transform: skewX(-18deg) translateX(0); }
-  72% { opacity: 1; }
-  86% { opacity: 1; }
-  90%, 100% { opacity: 0; transform: skewX(-18deg) translateX(420%); }
+  0%, 86% { opacity: 0; transform: translate(-33.4%, -33.4%); }
+  88% { opacity: 1; }
+  96% { opacity: 1; }
+  98%, 100% { opacity: 0; transform: translate(33.4%, 33.4%); }
 }
 
 /* Неравномерное кружение: рывки, замедления и короткие откаты назад */
