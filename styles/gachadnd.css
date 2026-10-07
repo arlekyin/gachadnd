@@ -652,58 +652,32 @@
 .gachadnd-terminal .gd-tcard:nth-child(4n + 1) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 6s), calc(var(--gd-phase-flash, 0ms) - 3.1s); }
 .gachadnd-terminal .gd-tcard:nth-child(4n + 2) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 11s), calc(var(--gd-phase-flash, 0ms) - 6.3s); }
 .gachadnd-terminal .gd-tcard:nth-child(4n + 3) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 2.5s), calc(var(--gd-phase-flash, 0ms) - 8.6s); }
-/* Перелив карт колоды: картинка экипированной карты изредка медленно наливается цветом кромки и гаснет,
-   а иногда по ней по диагонали проходит отсвет. Выбранная карта в центре не переливается — её смотрят.
-   Только прозрачность и сдвиг слоёв */
+/* Перелив карт колоды: раз в 23 секунды по картинке экипированной карты медленно проходит волна цвета
+   кромки — по диагонали, из левого верхнего угла в правый нижний; по пути она чуть проседает и снова
+   разгорается. Остальное время картинка чистая. Выбранная карта в центре не переливается — её смотрят.
+   Слой втрое больше картинки тех же пропорций, широкая полоса лежит поперёк его диагонали, поэтому сдвиг
+   на треть по обеим осям ведёт её ровно по диагонали карты. Только прозрачность и сдвиг */
 .gachadnd-terminal .gd-tcard.equipped .gd-tcard-art { overflow: hidden; }
 .gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(ellipse at 50% 110%, rgba(95, 224, 184, 0.35), transparent 60%),
-    linear-gradient(180deg, rgba(95, 224, 184, 0.16), rgba(95, 224, 184, 0.06) 45%, rgba(95, 224, 184, 0.2));
-  will-change: opacity;
-  animation: gd-arcana-wash 23s ease-in-out var(--gd-phase-wash, 0ms) infinite;
-}
-/* Отсвет: мягкая полоса в тоне кромки проходит по диагонали картинки — от левого верхнего угла
-   к правому нижнему. Слой втрое больше картинки и тех же пропорций, полоса лежит поперёк его диагонали,
-   поэтому сдвиг на треть по обеим осям ведёт её ровно по диагонали карты */
-.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::after {
   content: "";
   position: absolute;
   inset: -100%;
   pointer-events: none;
   mix-blend-mode: screen;
-  background: linear-gradient(to bottom right, transparent 45%, rgba(95, 224, 184, 0.07) 48%, rgba(95, 224, 184, 0.16) 50%, rgba(95, 224, 184, 0.07) 52%, transparent 55%);
+  background: linear-gradient(to bottom right, transparent 34%, rgba(95, 224, 184, 0.2) 42%, rgba(95, 224, 184, 0.5) 50%, rgba(95, 224, 184, 0.2) 58%, transparent 66%);
   transform: translate(-33.4%, -33.4%);
   opacity: 0;
   will-change: transform, opacity;
-  animation: gd-arcana-sheen 26s ease-in-out var(--gd-phase-sheen, 0ms) infinite;
+  animation: gd-arcana-wash 23s ease-in-out var(--gd-phase-wash, 0ms) infinite;
 }
 .gachadnd-terminal .gd-tcard:nth-child(3n + 1) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-wash, 0ms) - 8s); }
 .gachadnd-terminal .gd-tcard:nth-child(3n + 2) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-wash, 0ms) - 15s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 1) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 7s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 2) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 15s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 3) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 21s); }
-/* Подсветка картинки: почти всё время едва заметна; раз в 23 секунды около 8 секунд медленно
-   наливается цветом кромки, чуть проседает, снова поднимается и плавно гаснет */
 @keyframes gd-arcana-wash {
-  0%, 62% { opacity: 0.25; }
-  72% { opacity: 0.9; }
-  79% { opacity: 0.6; }
-  86% { opacity: 0.8; }
-  97%, 100% { opacity: 0.25; }
-}
-
-/* Отсвет проходит редко — раз в 26 секунд, около 3 секунд; остальное время его нет */
-@keyframes gd-arcana-sheen {
-  0%, 86% { opacity: 0; transform: translate(-33.4%, -33.4%); }
-  88% { opacity: 1; }
-  96% { opacity: 1; }
-  98%, 100% { opacity: 0; transform: translate(33.4%, 33.4%); }
+  0%, 62% { opacity: 0; transform: translate(-33.4%, -33.4%); }
+  68% { opacity: 0.9; }
+  77% { opacity: 0.55; }
+  86% { opacity: 0.85; }
+  97%, 100% { opacity: 0; transform: translate(33.4%, 33.4%); }
 }
 
 /* Неравномерное кружение: рывки, замедления и короткие откаты назад */
@@ -776,7 +750,6 @@
   .gachadnd-terminal .gd-neon::before,
   .gachadnd-terminal .gd-neon::after,
   .gachadnd-terminal .gd-tcard-art::before,
-  .gachadnd-terminal .gd-tcard-art::after,
   .gachadnd-terminal .fx-equip,
   .gachadnd-terminal .fx-unequip,
   .gachadnd-terminal .fx-merge { animation: none !important; }
