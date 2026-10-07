@@ -29,6 +29,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
+import { onRenderChatMessage } from "./chat-hooks.js";
 import { getSynergyDictionary } from "./synergy-data.js";
 import { onSocket, emit } from "./socket.js";
 
@@ -333,14 +334,13 @@ async function acceptOffer(id, button) {
 }
 
 function bindOffers(message, html) {
-    const root = html instanceof HTMLElement ? html : html?.[0];
+    const root = html;
     root?.querySelectorAll?.('[data-gd-offer]:not([data-bound])').forEach(button => {
         button.dataset.bound = '1';
         button.addEventListener('click', () => acceptOffer(button.dataset.gdOffer, button));
     });
 }
-Hooks.on('renderChatMessageHTML', bindOffers);
-Hooks.on('renderChatMessage', bindOffers);
+onRenderChatMessage(bindOffers);
 
 // ==========================================
 // ОКНА ВЛАДЕЛЬЦУ
@@ -454,7 +454,7 @@ async function offerTurnTriggers(actor, on) {
         const ask = getPref(source).ask;
         if (use) {
             if (!hasUse(source.item)) continue;
-            const drawback = source.item.flags?.[MODULE_ID]?.drawback;
+            const drawback = source.item.flags?.[MODULE_ID]?.drawback_lifted ? null : source.item.flags?.[MODULE_ID]?.drawback;
             const when = on === 'combat_start' ? 'Начало боя' : 'Начало хода';
             const ok = !ask || await confirm(source.name, `<p>${when}: использовать «${source.name}»?</p>${drawback ? `<p><strong>Штраф:</strong> ${drawback}</p>` : ''}`);
             if (ok) await source.item.use();

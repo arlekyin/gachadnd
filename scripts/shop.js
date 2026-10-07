@@ -47,7 +47,7 @@ async function saveShop(map, nodeId, shop) {
 // АССОРТИМЕНТ
 // ==========================================
 
-async function randomFromPack(packId, filter, count) {
+export async function randomFromPack(packId, filter, count) {
     const pack = game.packs.get(packId);
     if (!pack) {
         ui.notifications.warn(`Магазин: компендиум «${packId}» не найден. Укажите его в настройках модуля.`);
@@ -82,6 +82,17 @@ async function generateStock(floor) {
 // ==========================================
 // ОПЕРАЦИИ (выполняет Мастер)
 // ==========================================
+
+// Награды событий: скидка 50% на следующую Очистку и бесплатное обновление ассортимента
+const cleanseVouchers = actor => Number(actor?.getFlag(MODULE_ID, 'cleanse_vouchers')) || 0;
+const rerollVouchers = actor => Number(actor?.getFlag(MODULE_ID, 'reroll_vouchers')) || 0;
+function cleanseCostFor(actor, floor) {
+    const price = applyDiscount(cleansePrice(actor, floor), shopDiscount(actor));
+    return cleanseVouchers(actor) ? Math.round(price / 2) : price;
+}
+function rerollCostFor(actor, shop, floor) {
+    return rerollVouchers(actor) ? 0 : applyDiscount(rerollPrice(shop.rerolls ?? 0, floor), shopDiscount(actor));
+}
 
 function priceFor(good, actor) {
     return good.kind === 'magic' ? good.price : applyDiscount(good.price, shopDiscount(actor));
@@ -122,16 +133,20 @@ async function performShopOp({ op, userId, actorId, slot, itemId }) {
         const item = actor.items.get(itemId);
         const flags = item?.flags?.[MODULE_ID];
         if (!item || !isMemorySkill(item) || flags.undeletable || (flags.horseman && !flags.cleansed)) return deny('Этот навык не очистить.');
-        const price = applyDiscount(cleansePrice(actor, floor), shopDiscount(actor));
+        const voucher = cleanseVouchers(actor) > 0;
+        const price = cleanseCostFor(actor, floor);
         if (!(await pay(actor, price))) return deny(`${actor.name}: не хватает золота (${price} зм).`);
+        if (voucher) await actor.setFlag(MODULE_ID, 'cleanse_vouchers', cleanseVouchers(actor) - 1);
         await actor.setFlag(MODULE_ID, 'shop_cleanses', (actor.getFlag(MODULE_ID, 'shop_cleanses') ?? 0) + 1);
         await item.delete();
         return chat(`<strong>${esc(actor.name)}</strong> очищает Память от навыка «${esc(item.name)}» за ${price} зм.`);
     }
 
     if (op === 'reroll') {
-        const price = applyDiscount(rerollPrice(shop.rerolls ?? 0, floor), shopDiscount(actor));
+        const voucher = rerollVouchers(actor) > 0;
+        const price = rerollCostFor(actor, shop, floor);
         if (!(await pay(actor, price))) return deny(`${actor.name}: не хватает золота (${price} зм).`);
+        if (voucher) await actor.setFlag(MODULE_ID, 'reroll_vouchers', rerollVouchers(actor) - 1);
         shop.goods = await generateStock(floor);
         shop.rerolls = (shop.rerolls ?? 0) + 1;
         await saveShop(found.map, found.node.id, shop);
@@ -225,8 +240,8 @@ export class ShopWindow extends ApplicationV2 {
             return goods.length ? `<h3>${title}</h3><div class="gd-goods">${goods.map(goodHtml).join('')}</div>` : '';
         };
 
-        const cleanseCost = buyer ? applyDiscount(cleansePrice(buyer, floor), discount) : 0;
-        const rerollCost = buyer ? applyDiscount(rerollPrice(shop.rerolls ?? 0, floor), discount) : 0;
+        const cleanseCost = buyer ? cleanseCostFor(buyer, floor) : 0;
+        const rerollCost = buyer ? rerollCostFor(buyer, shop, floor) : 0;
         const cleansable = buyer?.items.filter(i => isMemorySkill(i) && !i.flags[MODULE_ID].undeletable && !(i.flags[MODULE_ID].horseman && !i.flags[MODULE_ID].cleansed)) ?? [];
 
         return `
@@ -245,11 +260,11 @@ export class ShopWindow extends ApplicationV2 {
                 <div class="gd-service">
                     <strong>Очистка</strong> — сжечь навык из Памяти
                     <select class="gd-shop-cleanse">${cleansable.map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('')}</select>
-                    <button type="button" data-action="cleanse" ${cleansable.length && buyer && wealth(buyer) >= cleanseCost ? '' : 'disabled'}>${cleanseCost} зм</button>
+                    <button type="button" data-action="cleanse" ${cleansable.length && buyer && wealth(buyer) >= cleanseCost ? '' : 'disabled'}>${cleanseCost} зм${cleanseVouchers(buyer) ? ' · скидка 50%' : ''}</button>
                 </div>
                 <div class="gd-service">
                     <strong>Обновить ассортимент</strong>
-                    <button type="button" data-action="reroll" ${buyer && wealth(buyer) >= rerollCost ? '' : 'disabled'}>${rerollCost} зм</button>
+                    <button type="button" data-action="reroll" ${buyer && wealth(buyer) >= rerollCost ? '' : 'disabled'}>${rerollVouchers(buyer) ? 'бесплатно' : `${rerollCost} зм`}</button>
                 </div>
             </div>`;
     }

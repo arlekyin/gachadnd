@@ -98,6 +98,15 @@ export function occupiesSlot(item) {
     return !(flags?.horseman && flags?.cleansed);
 }
 
+/**
+ * Естественный предел слотов Памяти: 6 + половина уровня + дополнительные слоты персонажа
+ * (флаг extra_slots — например, временный слот из награды события до конца этажа).
+ */
+export function naturalSlotCap(actor) {
+    const level = actor?.system?.details?.level || 1;
+    return 6 + Math.floor(level / 2) + (Number(actor?.getFlag?.(MODULE_ID, 'extra_slots')) || 0);
+}
+
 // Персонаж участвует в начатом бою — менять навыки нельзя (кроме Горячей замены)
 export function isInCombat(actor) {
     return !!game.combats?.some(c => c.started && c.combatants.some(cb => cb.actor?.id === actor?.id));
@@ -158,8 +167,7 @@ export async function updateActorSynergies(actor) {
         }
 
         // --- А. МАТЕМАТИКА ПЕРЕГРУЗКИ ---
-        const level = actor.system.details.level || 1;
-        const naturalCap = 6 + Math.floor(level / 2);
+        const naturalCap = naturalSlotCap(actor);
         const activeCount = activeItems.filter(occupiesSlot).length;
 
         const overloadCount = activeCount - naturalCap;
@@ -493,7 +501,7 @@ export async function syncCombatChanges(actor, endedCombatId = null) {
     if (!actor) return;
     const inCombat = !!game.combats?.some(c => c.id !== endedCombatId && c.started && c.combatants.some(cb => cb.actor?.id === actor.id));
     const sources = inCombat
-        ? actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active && i.flags[MODULE_ID].combat_changes?.length)
+        ? actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active && i.flags[MODULE_ID].combat_changes?.length && !i.flags[MODULE_ID].drawback_lifted)
         : [];
     const existing = actor.effects.filter(e => e.flags?.[MODULE_ID]?.combat_source);
     const toDelete = existing.filter(e => !sources.some(i => i.id === e.flags[MODULE_ID].combat_source)).map(e => e.id);

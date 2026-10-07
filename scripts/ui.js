@@ -6,7 +6,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
+import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
 import { HOOKS, isAtRest, allowSkillChange } from "./memory-api.js";
 import { MemoryAltar } from "./memory-altar.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
@@ -182,8 +182,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
 
     async _prepareContext() {
         const actor = this.actor;
-        const level = actor.system.details?.level || 1;
-        const naturalCap = 6 + Math.floor(level / 2);
+        const naturalCap = naturalSlotCap(actor);
 
         const memory = actor.items.filter(isMemorySkill)
             .sort((a, b) => (b.flags[MODULE_ID].is_active ? 1 : 0) - (a.flags[MODULE_ID].is_active ? 1 : 0) || a.name.localeCompare(b.name));
@@ -276,10 +275,11 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                 ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : []),
                 ...(flags.trigger ? [{ text: 'Срабатывает сам', cls: 'tag' }] : [])
             ],
-            drawback: flags.drawback && !flags.cleansed ? flags.drawback : null,
+            drawback: flags.drawback && !flags.cleansed && !flags.drawback_lifted ? flags.drawback : null,
             notes: view.notes,
             extensions: view.actions.map(({ label, icon, title }, index) => ({ index, label, icon, title })),
-            body: descriptionBody(descriptions.get(selected.id)) || '<p>Описание отсутствует.</p>',
+            // Снятый штраф (награда события) убирается и из текста описания
+            body: (flags.drawback_lifted ? descriptionBody(descriptions.get(selected.id)).replace(/<p><strong>Штраф:<\/strong>[\s\S]*?<\/p>/, '') : descriptionBody(descriptions.get(selected.id))) || '<p>Описание отсутствует.</p>',
             hiddenRanks: isGM && ranked && rank < flags.max_rank
                 ? (flags.rank_texts ?? []).slice(rank - 1).map((text, i) => ({ label: RANK_LABELS[rank + i], text }))
                 : null,
@@ -495,9 +495,8 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             }
         }
         if (equipping) {
-            const level = this.actor.system.details?.level || 1;
             const equipped = this.actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active);
-            const cap = 6 + Math.floor(level / 2) + getSlotBonus(equipped) + (Number(item.flags[MODULE_ID]?.slot_bonus) || 0);
+            const cap = naturalSlotCap(this.actor) + getSlotBonus(equipped) + (Number(item.flags[MODULE_ID]?.slot_bonus) || 0);
             // Сращённый всадник экипируется сверх лимита
             if (occupiesSlot(item) && equipped.filter(occupiesSlot).length >= cap) {
                 ui.notifications.error(`Достигнут абсолютный предел (${cap}).`);
