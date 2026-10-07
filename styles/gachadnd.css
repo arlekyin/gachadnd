@@ -911,57 +911,50 @@
    Книга ритуалов слева, котёл в центре, ингредиенты лентой снизу.
    Анимации только transform и opacity — их считает видеокарта.
    ========================================== */
-.gachadnd-memory-altar .window-content { padding: 0; overflow: hidden; background: #07060a; color: #f3e6d0; }
+/* Окно прозрачное: сквозь виньетку видна сцена Привала — она и есть окружение котла */
+.gachadnd-memory-altar,
+.application.gachadnd-memory-altar { background: transparent !important; border: none !important; box-shadow: none !important; }
+.gachadnd-memory-altar .window-header { background: rgba(8, 5, 3, 0.55) !important; border: none !important; }
+.gachadnd-memory-altar .window-content { padding: 0; overflow: hidden; background: transparent !important; color: #f3e6d0; }
+.gachadnd-memory-altar button { height: auto; line-height: 1.25; }
 .gachadnd-memory-altar .gd-cauldron-scene {
   height: 100%;
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  background:
-    radial-gradient(ellipse 55% 45% at 60% 62%, color-mix(in srgb, var(--flame) 22%, transparent) 0%, transparent 70%),
-    radial-gradient(ellipse at 50% 120%, #2a1206 0%, #0b0806 55%, #050407 100%);
-}
-
-/* Книга ритуалов */
-.gachadnd-memory-altar .gd-book {
-  grid-row: 1 / 3;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 22px 16px;
-  background: linear-gradient(90deg, rgba(20, 12, 8, 0.95) 0%, rgba(20, 12, 8, 0.75) 100%);
-  border-right: 1px solid #6b4a22;
-  box-shadow: inset -1px 0 0 rgba(255, 200, 120, 0.08);
-  overflow-y: auto;
+  background:
+    radial-gradient(ellipse 38% 46% at 50% 46%, color-mix(in srgb, var(--flame) 18%, rgba(6, 4, 3, 0.7)) 0%, rgba(6, 4, 3, 0.62) 55%, rgba(4, 3, 2, 0.15) 100%),
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
 }
-.gachadnd-memory-altar .gd-book h2 { margin: 0 0 6px; border: none; color: #e9c98a; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; text-align: center; }
-.gachadnd-memory-altar .gd-rite {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 10px;
-  align-items: center;
-  text-align: left;
-  padding: 10px 12px;
-  border: 1px solid #3d2b16;
-  background: rgba(0, 0, 0, 0.35);
-  color: #e8d6b8;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+
+/* Сцена: название, ячейки, котёл с медальонами, рецепт, кнопка, Кости Хитов */
+.gachadnd-memory-altar .gd-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+.gachadnd-memory-altar .gd-stage h1 { margin: 0; border: none; font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; color: #f6e4c2; text-shadow: 0 0 18px var(--flame), 0 2px 4px #000; }
+.gachadnd-memory-altar .gd-subtitle { margin-top: -6px; color: #e9c98a; font-size: 14px; text-shadow: 0 1px 3px #000; }
+.gachadnd-memory-altar .gd-altar-row { display: flex; align-items: center; gap: 24px; }
+.gachadnd-memory-altar .gd-medals { display: flex; flex-direction: column; gap: 34px; }
+
+/* Медальоны ритуалов */
+.gachadnd-memory-altar .gd-medal { width: 110px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0; border: none; background: none; color: #e8d6b8; cursor: pointer; }
+.gachadnd-memory-altar .gd-medal-disc {
+  width: 78px; height: 78px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid #8a6430;
+  background: radial-gradient(circle at 35% 30%, #3a2a1a 0%, #140d08 70%);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.55), inset 0 0 14px rgba(0, 0, 0, 0.8);
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
-.gachadnd-memory-altar .gd-rite i { grid-row: 1 / 3; font-size: 22px; color: var(--flame); text-shadow: 0 0 10px var(--flame); text-align: center; }
-.gachadnd-memory-altar .gd-rite-name { font-size: 16px; font-weight: bold; color: #f6e4c2; }
-.gachadnd-memory-altar .gd-rite-text { font-size: 12px; opacity: 0.7; line-height: 1.3; }
-.gachadnd-memory-altar .gd-rite:hover { border-color: #8a6430; }
-.gachadnd-memory-altar .gd-rite.active { border-color: var(--flame); background: linear-gradient(90deg, color-mix(in srgb, var(--flame) 22%, transparent) 0%, rgba(0, 0, 0, 0.35) 100%); box-shadow: 0 0 14px color-mix(in srgb, var(--flame) 35%, transparent); }
-.gachadnd-memory-altar .gd-hd { margin-top: auto; padding-top: 14px; border-top: 1px solid #3d2b16; text-align: center; color: #e9c98a; font-size: 13px; letter-spacing: 0.08em; }
-.gachadnd-memory-altar .gd-pips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
-.gachadnd-memory-altar .gd-pip { width: 14px; height: 14px; border-radius: 50%; border: 1px solid #b33a2a; background: #1a0b08; }
+.gachadnd-memory-altar .gd-medal-disc i { font-size: 30px; color: var(--flame); text-shadow: 0 0 12px var(--flame); }
+.gachadnd-memory-altar .gd-medal-name { font-size: 14px; font-weight: bold; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; }
+.gachadnd-memory-altar .gd-medal:hover .gd-medal-disc { transform: scale(1.06); border-color: #e9c98a; }
+.gachadnd-memory-altar .gd-medal.active .gd-medal-disc { border-color: var(--flame); box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.55), 0 0 26px var(--flame), inset 0 0 14px rgba(0, 0, 0, 0.6); transform: scale(1.1); }
+.gachadnd-memory-altar .gd-medal.active .gd-medal-name { color: #fff; }
+
+/* Кости Хитов под кнопкой */
+.gachadnd-memory-altar .gd-hd { text-align: center; color: #e9c98a; font-size: 13px; letter-spacing: 0.06em; text-shadow: 0 1px 3px #000; }
+.gachadnd-memory-altar .gd-pips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 6px; }
+.gachadnd-memory-altar .gd-pip { width: 14px; height: 14px; border-radius: 50%; border: 1px solid #b33a2a; background: rgba(26, 11, 8, 0.8); }
 .gachadnd-memory-altar .gd-pip.on { background: radial-gradient(circle at 35% 35%, #ff8a6a, #b3221a); box-shadow: 0 0 8px rgba(255, 70, 40, 0.7); }
 
-/* Сцена с котлом */
-.gachadnd-memory-altar .gd-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 18px; min-height: 0; overflow: hidden; }
-.gachadnd-memory-altar .gd-stage h1 { margin: 0; border: none; font-size: 30px; letter-spacing: 0.18em; text-transform: uppercase; color: #f6e4c2; text-shadow: 0 0 18px var(--flame); }
 .gachadnd-memory-altar .gd-slots { display: flex; align-items: center; gap: 14px; min-height: 96px; }
 .gachadnd-memory-altar .gd-slot { width: 124px; height: 88px; display: flex; align-items: center; justify-content: center; border: 1px dashed #8a6430; border-radius: 10px; background: radial-gradient(circle, rgba(255, 170, 70, 0.06), rgba(0, 0, 0, 0.45)); }
 .gachadnd-memory-altar .gd-slot.filled { border-style: solid; border-color: var(--flame); box-shadow: 0 0 16px color-mix(in srgb, var(--flame) 45%, transparent); }
@@ -1053,9 +1046,13 @@
 
 /* Лента ингредиентов */
 .gachadnd-memory-altar .gd-tray {
-  grid-column: 2;
-  display: flex; gap: 10px; overflow-x: auto; padding: 12px 16px;
-  border-top: 1px solid #6b4a22; background: rgba(12, 8, 6, 0.85);
+  align-self: center;
+  max-width: calc(100% - 40px);
+  margin: 0 20px 18px;
+  display: flex; gap: 10px; overflow-x: auto; padding: 10px 14px;
+  border: 1px solid #6b4a22; border-radius: 12px;
+  background: rgba(12, 8, 6, 0.78);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
 .gachadnd-memory-altar .gd-tray-empty { padding: 14px; opacity: 0.6; }
 .gachadnd-memory-altar .gd-crystal {
