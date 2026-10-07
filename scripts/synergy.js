@@ -455,21 +455,27 @@ Hooks.on('deleteCombat', (combat) => {
 Hooks.once('ready', async () => {
     if (!(game.user.isActiveGM ?? game.user.isGM)) return;
     for (const actor of game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner && a.items.some(isMemorySkill))) {
-        await migrateCombatChanges(actor);
+        await migrateSkillFlags(actor);
         await updateActorSynergies(actor);
     }
 });
 
-// Навыки, полученные до появления combat_changes (Берсерк), берут эти данные из компендиума
-async function migrateCombatChanges(actor) {
+// Навыки, полученные до появления новых полей (combat_changes — Берсерк, trigger — автоматизация),
+// берут эти данные из компендиума
+const MIGRATED_FLAGS = ['combat_changes', 'trigger'];
+async function migrateSkillFlags(actor) {
     const pack = getSkillPack();
     if (!pack) return;
     for (const item of actor.items.filter(isMemorySkill)) {
         const flags = item.flags[MODULE_ID];
-        if (flags.combat_changes || !flags.skill_id) continue;
+        if (!flags.skill_id || MIGRATED_FLAGS.every(key => flags[key])) continue;
         const source = await pack.getDocument(flags.skill_id).catch(() => null);
-        const changes = source?.flags?.[MODULE_ID]?.combat_changes;
-        if (changes?.length) await item.setFlag(MODULE_ID, 'combat_changes', changes);
+        const updates = {};
+        for (const key of MIGRATED_FLAGS) {
+            const value = source?.flags?.[MODULE_ID]?.[key];
+            if (value && !flags[key]) updates[`flags.${MODULE_ID}.${key}`] = value;
+        }
+        if (Object.keys(updates).length) await item.update(updates);
     }
 }
 
