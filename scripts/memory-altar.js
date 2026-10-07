@@ -1,5 +1,8 @@
 /**
- * Gacha Roguelike dnd5e — Алтарь Памяти (полноэкранная мастерская на Привале)
+ * Gacha Roguelike dnd5e — Алтарь Памяти: погружение в сознание персонажа на Привале
+ *
+ * В центре ядро сознания, на орбите — экипированные навыки Памяти. Кристаллы и
+ * неэкипированные навыки дрейфуют огоньками в тумане; выбранные стягиваются к ядру.
  *
  * Ритуалы за Кости Хитов:
  *   Слияние     — повторный кристалл растворяется в навыке Памяти и повышает его ранг
@@ -7,7 +10,7 @@
  *   Переплавка  — 3 кристалла одной редкости → случайный кристалл следующей редкости;
  *   Резонанс    — кристалл → случайный кристалл той же редкости с выбранным тегом (1 КХ);
  *   Расщепление — кристалл → Кости Хитов обратно (зелёный, синий — 1, фиолетовый — 2).
- * Ингредиенты — кристаллы из инвентаря и неэкипированные навыки Памяти (они сжигаются).
+ * Воспоминания для ритуалов — кристаллы из инвентаря и неэкипированные навыки Памяти (они сгорают).
  * Красные и оранжевые кристаллы в ритуалах не участвуют. Повтор, который нельзя слить
  * (уникальный навык или максимальный ранг), в Переплавке считается за два кристалла.
  */
@@ -69,13 +72,30 @@ async function chat(actor, content) {
     await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gachadnd-memory-altar-chat">${content}</div>` });
 }
 
-// Ритуалы: порядок в списке, подписи и цвет пламени котла
+// Ритуалы: порядок в дуге, подписи, глагол кнопки и цвет свечения сознания
 const RITUALS = {
-    merge: { name: 'Слияние', icon: 'fa-hammer', flame: '#ffb347', text: 'Повторный кристалл растворяется в навыке Памяти и повышает его ранг.' },
-    smelt: { name: 'Переплавка', icon: 'fa-fire', flame: '#ff6a2b', text: '3 кристалла одной редкости → случайный кристалл следующей редкости.' },
-    resonate: { name: 'Резонанс', icon: 'fa-gem', flame: '#b066ff', text: 'Кристалл → случайный кристалл той же редкости с выбранным тегом.' },
-    split: { name: 'Расщепление', icon: 'fa-burst', flame: '#5fe0b8', text: 'Кристалл → Кости Хитов обратно.' }
+    merge: { name: 'Слияние', verb: 'Слить', icon: 'fa-link', glow: '#e8c26a', text: 'Повторный кристалл растворяется в навыке Памяти и повышает его ранг.' },
+    smelt: { name: 'Переплавка', verb: 'Переплавить', icon: 'fa-fire', glow: '#ff7a3c', text: '3 воспоминания одной редкости сливаются в случайный кристалл следующей редкости.' },
+    resonate: { name: 'Резонанс', verb: 'Настроить', icon: 'fa-wave-square', glow: '#b066ff', text: 'Кристалл перестраивается на частоту выбранного тега — той же редкости.' },
+    split: { name: 'Расщепление', verb: 'Отпустить', icon: 'fa-wind', glow: '#5fe0b8', text: 'Кристалл рассеивается в туман и возвращает телу Кости Хитов.' }
 };
+
+// Геометрия сознания в процентах поля: ядро, орбита Памяти, точки фокуса
+const CORE = { x: 50, y: 46 };
+const ORBIT = { rx: 17, ry: 24 };
+const FOCUS = {
+    1: [CORE],
+    3: [-90, 30, 150].map(deg => ({ x: CORE.x + 8 * Math.cos(deg * Math.PI / 180), y: CORE.y + 11 * Math.sin(deg * Math.PI / 180) }))
+};
+
+// Огоньки тумана — по эллиптическому поясу, низ оставлен под кнопку
+function fogPosition(n, total) {
+    const from = 125, span = 290;
+    const deg = from + (span * (n + 0.5)) / Math.max(total, 1);
+    const outer = n % 2 === 1;
+    const rad = deg * Math.PI / 180;
+    return { x: CORE.x + (outer ? 43 : 32) * Math.cos(rad), y: CORE.y + (outer ? 41 : 33) * Math.sin(rad) };
+}
 
 export class MemoryAltar extends ApplicationV2 {
     constructor(actor, options = {}) {
@@ -87,6 +107,8 @@ export class MemoryAltar extends ApplicationV2 {
         this.mergeId = null;
         this.result = null;
     }
+
+    #dived = false;
 
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-memory-altar'],
@@ -151,19 +173,19 @@ export class MemoryAltar extends ApplicationV2 {
         if (this.ritual === 'smelt') {
             const rarity = slotted[0]?.rarity;
             const weight = slotted.reduce((sum, i) => sum + i.weight, 0);
-            if (!rarity) return { ready: false, note: 'Положите в котёл 3 кристалла одной редкости.' };
-            if (slotted.some(i => i.rarity !== rarity)) return { ready: false, note: 'Все кристаллы в котле должны быть одной редкости.' };
+            if (!rarity) return { ready: false, note: 'Притяните из тумана 3 воспоминания одной редкости.' };
+            if (slotted.some(i => i.rarity !== rarity)) return { ready: false, note: 'Все воспоминания в фокусе должны быть одной редкости.' };
             const smelt = SMELT[rarity];
             if (weight < 3) return { ready: false, cost: smelt.cost, note: `Ещё ${3 - weight} — нужно 3 кристалла редкости «${RARITY[rarity].label}».` };
             return { ready: hd >= smelt.cost, cost: smelt.cost, note: `Случайный кристалл редкости «${RARITY[smelt.to].label}»`, short: hd < smelt.cost ? 'Не хватает Костей Хитов' : null };
         }
         if (this.ritual === 'resonate') {
             const ing = slotted[0];
-            if (!ing) return { ready: false, cost: RESONANCE_COST, note: 'Положите в котёл один кристалл и выберите тег.' };
+            if (!ing) return { ready: false, cost: RESONANCE_COST, note: 'Притяните из тумана одно воспоминание и выберите тег.' };
             return { ready: hd >= RESONANCE_COST, cost: RESONANCE_COST, note: `Случайный кристалл редкости «${RARITY[ing.rarity].label}» с тегом «${this.tag}»`, short: hd < RESONANCE_COST ? 'Не хватает Костей Хитов' : null };
         }
         const ing = slotted[0];
-        if (!ing) return { ready: false, note: 'Положите в котёл зелёный, синий или фиолетовый кристалл.' };
+        if (!ing) return { ready: false, note: 'Притяните из тумана зелёное, синее или фиолетовое воспоминание.' };
         return { ready: true, gain: SPLIT[ing.rarity], note: `Кости Хитов: +${SPLIT[ing.rarity]}` };
     }
 
@@ -174,90 +196,121 @@ export class MemoryAltar extends ApplicationV2 {
     async _renderHTML() {
         const tags = Object.keys(getSynergyDictionary());
         this.tag ??= tags[0];
-        const { pool, slotted } = this.#state();
+        const { all, pool, slotted } = this.#state();
         const ritual = RITUALS[this.ritual];
         const recipe = this.#recipe(slotted);
         const hd = availableHitDice(this.actor);
-        const hdMax = this.actor.system.attributes?.hd?.max ?? hd;
+        const hdMax = Math.max(this.actor.system.attributes?.hd?.max ?? hd, hd);
+        const merge = this.ritual === 'merge';
+        const at = ({ x, y }) => `left: ${x.toFixed(2)}%; top: ${y.toFixed(2)}%`;
+        const lines = [];
 
-        // Медальоны ритуалов — дуга слева от котла
-        const medals = Object.entries(RITUALS).map(([key, r]) => `
-            <button type="button" class="gd-medal ${key === this.ritual ? 'active' : ''}" data-action="ritual" data-ritual="${key}" style="--flame: ${r.flame}" title="${r.text}">
-                <span class="gd-medal-name">${r.name}</span>
-                <span class="gd-medal-disc"><i class="fas ${r.icon}"></i></span>
+        // Ритуалы — дуга глифов слева
+        const glyphs = Object.entries(RITUALS).map(([key, r]) => `
+            <button type="button" class="gd-glyph ${key === this.ritual ? 'active' : ''}" data-action="ritual" data-ritual="${key}" style="--glow: ${r.glow}" title="${r.text}">
+                <span class="gd-glyph-name">${r.name}</span>
+                <span class="gd-glyph-disc"><i class="fas ${r.icon}"></i></span>
             </button>`).join('');
 
-        // Над котлом — ячейки ингредиентов
-        const crystalCard = (ing, action, extra = '') => `
-            <div class="gd-crystal ${ing.kind}" style="--rarity: ${RARITY[ing.rarity].color}" data-action="${action}" data-key="${ing.key}" ${extra}
+        // Орбита сознания — экипированные навыки Памяти; в Слиянии их можно выбрать
+        const mergeable = new Set(this.actor.items.filter(i => isMemorySkill(i) && canRankUp(i) && findDuplicateCrystal(this.actor, i)).map(i => i.id));
+        const equipped = this.actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active);
+        const nodePos = new Map();
+        const nodes = equipped.map((item, n) => {
+            const angle = -Math.PI / 2 + (2 * Math.PI * n) / equipped.length;
+            const pos = { x: CORE.x + ORBIT.rx * Math.cos(angle), y: CORE.y + ORBIT.ry * Math.sin(angle) };
+            nodePos.set(item.id, pos);
+            lines.push({ from: CORE, to: pos, cls: 'orbit' });
+            const flags = item.flags[MODULE_ID];
+            const can = merge && mergeable.has(item.id);
+            return `
+                <div class="gd-node ${can ? 'can-merge' : ''} ${merge && item.id === this.mergeId ? 'chosen' : ''}" style="${at(pos)}; --rarity: ${RARITY[flags.rarity]?.color ?? '#c9a75d'}"
+                     ${can ? `data-action="mergePick" data-item-id="${item.id}"` : ''} title="${esc(item.name)} — ранг ${romanRank(flags.rank ?? 1)}">
+                    <span class="gd-node-disc"><i class="fas fa-brain"></i><b>${romanRank(flags.rank ?? 1)}</b></span>
+                    <span class="gd-node-name">${esc(item.name)}</span>
+                </div>`;
+        }).join('');
+
+        // Огонёк — кристалл или неэкипированный навык Памяти
+        const mote = (ing, pos, { action = '', cls = '', delay = 0 } = {}) => `
+            <div class="gd-mote ${ing.kind} ${cls}" style="${at(pos)}; --rarity: ${RARITY[ing.rarity].color}; --delay: ${delay}s" ${action ? `data-action="${action}"` : ''} data-key="${ing.key}" data-item-id="${ing.item.id}"
                  title="${esc(ing.name)}${ing.kind === 'skill' ? ' — навык из Памяти, сгорит в ритуале' : ''}${ing.weight > 1 ? ' — повтор без слияния, весит вдвое' : ''}">
-                <i class="fas fa-gem"></i>
-                <span>${esc(ing.name)}</span>
-                ${ing.weight > 1 ? '<b class="gd-crystal-x2">×2</b>' : ''}
+                <span class="gd-mote-body">
+                    <span class="gd-mote-orb"><i class="fas ${ing.kind === 'skill' ? 'fa-brain' : 'fa-gem'}"></i>${ing.weight > 1 ? '<b>×2</b>' : ''}</span>
+                    <span class="gd-mote-name">${esc(ing.name)}</span>
+                </span>
             </div>`;
-        let slotsHtml = '';
-        if (this.ritual === 'merge') {
-            const item = this.actor.items.get(this.mergeId);
-            // Навык не покидает Память: в котёл опускается только повторный кристалл
-            const color = RARITY[item?.flags[MODULE_ID].rarity]?.color ?? '#ccc';
-            slotsHtml = item
-                ? `<div class="gd-mind" style="--rarity: ${color}"><i class="fas fa-brain"></i><span>${esc(item.name)}</span><small>в Памяти · ранг ${romanRank(item.flags[MODULE_ID].rank ?? 1)}</small></div>
-                   <div class="gd-slot-plus"><i class="fas fa-arrow-left"></i></div>
-                   <div class="gd-slot filled"><div class="gd-crystal" style="--rarity: ${color}"><i class="fas fa-gem"></i><span>${esc(item.name)}</span></div></div>`
-                : '<div class="gd-mind empty"><i class="fas fa-brain"></i><span>Навык в Памяти</span></div><div class="gd-slot-plus"><i class="fas fa-arrow-left"></i></div><div class="gd-slot"></div>';
-        } else {
-            for (let i = 0; i < this.#slotLimit(); i++) {
-                const ing = slotted[i];
-                slotsHtml += `<div class="gd-slot ${ing ? 'filled' : ''}">${ing ? crystalCard(ing, 'unslot') : ''}</div>`;
+
+        // Фокус у ядра: то, что сейчас погружено в ритуал
+        let focus = '';
+        const dup = merge ? findDuplicateCrystal(this.actor, this.actor.items.get(this.mergeId)) : null;
+        const dupKey = dup ? `${dup.id}:0` : null;
+        if (merge) {
+            const chosen = this.actor.items.get(this.mergeId);
+            const target = nodePos.get(this.mergeId);
+            const ing = all.find(i => i.key === dupKey);
+            if (chosen && ing) {
+                focus = mote(ing, CORE, { cls: 'focused' });
+                if (target) lines.push({ from: CORE, to: target, cls: 'flow' });
             }
+        } else {
+            const limit = this.#slotLimit();
+            const points = FOCUS[limit] ?? FOCUS[1];
+            focus = points.map((pos, n) => {
+                const ing = slotted[n];
+                if (ing && limit > 1) lines.push({ from: pos, to: CORE, cls: 'flow' });
+                return ing ? mote(ing, pos, { action: 'unslot', cls: 'focused' }) : `<div class="gd-focus-empty" style="${at(pos)}"></div>`;
+            }).join('');
         }
 
-        // Снизу — лента ингредиентов (для Слияния — навыки с повтором)
-        let tray;
-        if (this.ritual === 'merge') {
-            const forgeable = this.actor.items.filter(i => isMemorySkill(i) && canRankUp(i) && findDuplicateCrystal(this.actor, i));
-            tray = forgeable.map(item => `
-                <div class="gd-crystal ${item.id === this.mergeId ? 'chosen' : ''}" style="--rarity: ${RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#ccc'}" data-action="mergePick" data-item-id="${item.id}">
-                    <i class="fas fa-brain"></i><span>${esc(item.name)}</span><b class="gd-crystal-x2">${romanRank(item.flags[MODULE_ID].rank ?? 1)}</b>
-                </div>`).join('') || '<div class="gd-tray-empty">Нет навыков с повторным кристаллом в инвентаре.</div>';
+        // Туман: всё, что ещё не стало частью персонажа, дрейфует по краю
+        let drifting;
+        if (merge) {
+            drifting = all.filter(i => i.key !== dupKey).map(i => ({ ing: i, action: i.kind === 'skill' && mergeable.has(i.item.id) ? 'mergePick' : '', cls: i.kind === 'skill' && mergeable.has(i.item.id) ? (i.item.id === this.mergeId ? 'can-merge chosen' : 'can-merge') : 'dim' }));
         } else {
-            // В Переплавке кристаллы другой редкости приглушены: их выбор начнёт котёл заново
             const smeltRarity = this.ritual === 'smelt' ? slotted[0]?.rarity : null;
-            tray = pool.filter(i => !this.slots.includes(i.key))
-                .map(i => crystalCard(i, 'pick', smeltRarity && i.rarity !== smeltRarity ? 'data-dim="1"' : '')).join('')
-                || '<div class="gd-tray-empty">Нет подходящих кристаллов.</div>';
+            drifting = pool.filter(i => !this.slots.includes(i.key)).map(i => ({ ing: i, action: 'pick', cls: smeltRarity && i.rarity !== smeltRarity ? 'dim' : '' }));
         }
+        const motes = drifting.map(({ ing, action, cls }, n) => mote(ing, fogPosition(n, drifting.length), { action, cls, delay: -(n * 0.7) % 6 })).join('');
+        const emptyNote = drifting.length ? '' : `<div class="gd-fog-empty">${merge ? 'Туман пуст.' : 'В тумане нет подходящих воспоминаний.'}</div>`;
+
+        // Связи сознания — тонкие линии поверх тумана
+        const svg = `<svg class="gd-links" viewBox="0 0 100 100" preserveAspectRatio="none">${lines.map(l =>
+            `<line class="${l.cls}" x1="${l.from.x}" y1="${l.from.y}" x2="${l.to.x}" y2="${l.to.y}" vector-effect="non-scaling-stroke"/>`).join('')}</svg>`;
 
         const tagsHtml = this.ritual === 'resonate'
             ? `<div class="gd-tags">${tags.map(t => `<button type="button" class="gd-tag ${t === this.tag ? 'active' : ''}" data-action="tag" data-tag="${t}">${t}</button>`).join('')}</div>` : '';
-
         const cost = recipe.gain ? `+${recipe.gain} КХ` : recipe.cost ? `−${recipe.cost} КХ` : '';
-        const pips = Array.from({ length: Math.max(hdMax, hd) }, (_, i) => `<span class="gd-pip ${i < hd ? 'on' : ''}"></span>`).join('');
+        const pips = Array.from({ length: hdMax }, (_, i) => `<span class="gd-pip ${i < hd ? 'on' : ''}"></span>`).join('');
         const resultHtml = this.result
             ? `<div class="gd-result" style="--rarity: ${this.result.color}"><i class="fas ${this.result.icon}"></i><span>${esc(this.result.text)}</span></div>` : '';
+        const dive = this.#dived ? '' : 'diving';
+        this.#dived = true;
 
         return `
-            <div class="gd-cauldron-scene" style="--flame: ${ritual.flame}">
-                <div class="gd-stage">
+            <div class="gd-mindscape ${dive}" style="--glow: ${ritual.glow}">
+                <div class="gd-fog"><i></i><i></i><i></i></div>
+                <aside class="gd-mind-side">
                     <h1>${ritual.name}</h1>
                     <div class="gd-subtitle">${ritual.text}</div>
-                    <div class="gd-slots">${slotsHtml}</div>
-                    <div class="gd-altar-row">
-                        <div class="gd-medals">${medals}</div>
-                        <div class="gd-cauldron">
-                            <div class="gd-glow"></div>
-                            <div class="gd-pot"><div class="gd-brew"><i></i><i></i><i></i><i></i><i></i></div></div>
-                            <div class="gd-embers"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-                            ${resultHtml}
-                        </div>
-                        <div class="gd-medals-balance"></div>
-                    </div>
+                    <div class="gd-glyphs">${glyphs}</div>
                     ${tagsHtml}
-                    <div class="gd-recipe">${esc(recipe.note)}${recipe.short ? ` · <em>${recipe.short}</em>` : ''}</div>
-                    <button type="button" class="gd-conjure" data-action="conjure" ${recipe.ready ? '' : 'disabled'}>Сотворить ${cost ? `<b>${cost}</b>` : ''}</button>
-                    <div class="gd-hd"><span>Кости Хитов ${hd} / ${Math.max(hdMax, hd)}</span><div class="gd-pips">${pips}</div></div>
+                </aside>
+                <div class="gd-mind-field">
+                    ${svg}
+                    <div class="gd-orbit"></div>
+                    <div class="gd-core" style="${at(CORE)}"><span></span></div>
+                    ${nodes}
+                    ${motes}
+                    ${focus}
+                    ${resultHtml}
+                    ${emptyNote}
+                    <div class="gd-mind-controls">
+                        <div class="gd-recipe">${esc(recipe.note)}${recipe.short ? ` · <em>${recipe.short}</em>` : ''}</div>
+                        <button type="button" class="gd-conjure" data-action="conjure" ${recipe.ready ? '' : 'disabled'}>${ritual.verb} ${cost ? `<b>${cost}</b>` : ''}</button>
+                        <div class="gd-hd"><span>Кости Хитов ${hd} / ${hdMax}</span><div class="gd-pips">${pips}</div></div>
+                    </div>
                 </div>
-                <div class="gd-tray">${tray}</div>
             </div>`;
     }
 
@@ -273,7 +326,7 @@ export class MemoryAltar extends ApplicationV2 {
     }
 
     static #onPick(event, target) {
-        // Переплавка: кристалл другой редкости начинает котёл заново
+        // Переплавка: кристалл другой редкости начинает фокус заново
         if (this.ritual === 'smelt') {
             const { all } = this.#state();
             const rarity = all.find(i => i.key === target.dataset.key)?.rarity;
@@ -324,7 +377,7 @@ export class MemoryAltar extends ApplicationV2 {
         const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
         await forgeSkill(this.actor, item);
         this.mergeId = null;
-        return { text: `${item.name} — ранг ${romanRank(rank)}`, color: '#ffb347', icon: 'fa-hammer' };
+        return { text: `${item.name} — ранг ${romanRank(rank)}`, color: '#e8c26a', icon: 'fa-link' };
     }
 
     async #smelt(slotted) {
