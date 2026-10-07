@@ -21,9 +21,11 @@
  *   - кость добавляется к первому подходящему броску в ход; переброс урона тратит срабатывание;
  *   - источник полученного урона не известен: реакция предлагается на любой урон.
  * Общий выключатель — настройка мира «Автоматизация синергий и навыков» (Мастер). Кроме того,
- * у каждого персонажа для каждого срабатывания две галочки, как у реакций в Baldur's Gate 3
- * (Терминал → «Автоматизация»): «Включено» и «Спрашивать». Со «Спрашивать» доп. урон не
- * добавляется к броску сам, а предлагается кнопкой в чате; остальное — окном.
+ * у каждого игрока в настройках модуля окно «Срабатывания» (scripts/automation-settings.js): для
+ * каждого срабатывания две галочки, как у реакций в Baldur's Gate 3, — «Вкл.» и «Спрашивать».
+ * Галочки личные: Foundry v13 хранит их за пользователем, v12 — в браузере игрока. Решает тот
+ * клиент, который срабатывание обрабатывает: бросающий урон, владелец при реакции и в начале хода.
+ * Со «Спрашивать» доп. урон не добавляется к броску сам, а предлагается кнопкой в чате; остальное — окном.
  */
 
 import { MODULE_ID } from "./constants.js";
@@ -31,6 +33,7 @@ import { getSynergyDictionary } from "./synergy-data.js";
 import { onSocket, emit } from "./socket.js";
 
 const SETTING = 'automation';
+const PREFS = 'automationPrefs';
 const FRIENDLY = 1;
 // Условия, которым нужна выделенная цель
 const NEEDS_TARGET = ['target_bloodied', 'hostile_target', 'target_anomaly'];
@@ -40,6 +43,11 @@ export function registerTriggerSettings() {
         name: 'Автоматизация синергий и навыков',
         hint: 'Доп. урон «1 раз в ход» добавляется к броску урона сам, лечение после броска применяется само, реакции на урон и действия в начале хода и боя предлагаются владельцу окном. Выключите, чтобы пользоваться только кнопками.',
         scope: 'world', config: true, type: Boolean, default: true
+    });
+    // Личные галочки игрока: в v13 — за пользователем на сервере, в v12 — в браузере
+    game.settings.register(MODULE_ID, PREFS, {
+        scope: (game.release?.generation ?? 12) >= 13 ? 'user' : 'client',
+        config: false, type: Object, default: {}
     });
 }
 
@@ -64,7 +72,7 @@ function featureItem(actor, name) {
  * Срабатывания персонажа для события: { id, name, trigger, item, skill }.
  * item — навык (skill: true) или способность синергии (может отсутствовать).
  */
-export function activeTriggers(actor, on) {
+export function activeTriggers(actor, on, { all = false } = {}) {
     const counts = actor?.getFlag?.(MODULE_ID, 'counts') ?? {};
     const result = [];
     for (const config of Object.values(getSynergyDictionary())) {
@@ -80,50 +88,39 @@ export function activeTriggers(actor, on) {
         if (flags.trigger?.on !== on || !flags.is_active || flags.is_crystal_item) continue;
         result.push({ id: `skill:${item.id}`, prefKey: `skill-${flags.skill_id ?? item.id}`, name: item.name, trigger: flags.trigger, item, skill: true });
     }
-    return result.filter(source => getPref(actor, source).enabled);
+    return all ? result : result.filter(source => getPref(source).enabled);
 }
 
 // ==========================================
-// ГАЛОЧКИ ПЕРСОНАЖА: «ВКЛЮЧЕНО» И «СПРАШИВАТЬ»
+// ЛИЧНЫЕ ГАЛОЧКИ ИГРОКА: «ВКЛ.» И «СПРАШИВАТЬ»
 // ==========================================
 
-const TRIGGER_EVENTS = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
+export const TRIGGER_EVENTS = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
 // По умолчанию доп. урон добавляется сам, остальное спрашивается
 const DEFAULT_ASK = { damage_roll: false, damaged: true, turn_start: true, combat_start: true };
-const KIND_LABELS = {
-    damage_roll: source => source.trigger.heal_self ? 'лечение после урона' : 'доп. урон',
+export const KIND_LABELS = {
+    damage_roll: trigger => trigger.heal_self ? 'лечение после урона' : 'доп. урон',
     damaged: () => 'реакция на урон',
     turn_start: () => 'начало хода',
     combat_start: () => 'начало боя'
 };
 
-export function getPref(actor, source) {
-    const saved = actor?.getFlag?.(MODULE_ID, 'automation')?.[source.prefKey] ?? {};
+export function readPrefs() {
+    try {
+        return game.settings.get(MODULE_ID, PREFS) ?? {};
+    } catch (err) {
+        return {};
+    }
+}
+
+/** Галочки этого клиента для срабатывания: { enabled, ask } */
+export function getPref(source) {
+    const saved = readPrefs()[source.prefKey] ?? {};
     return { enabled: saved.enabled ?? true, ask: saved.ask ?? DEFAULT_ASK[source.trigger.on] };
 }
 
-export async function setPref(actor, prefKey, field, value) {
-    await actor.setFlag(MODULE_ID, `automation.${prefKey}`, { [field]: !!value });
-}
-
-/** Все срабатывания персонажа с галочками — для Терминала (включая выключенные) */
-export function automationList(actor) {
-    const counts = actor?.getFlag?.(MODULE_ID, 'counts') ?? {};
-    const list = [];
-    for (const config of Object.values(getSynergyDictionary())) {
-        for (const tier of config.thresholds) {
-            if (!tier.trigger || (counts[config.key] ?? 0) < tier.count) continue;
-            list.push({ prefKey: `syn-${config.key}-${tier.count}`, name: tier.name, trigger: tier.trigger });
-        }
-    }
-    for (const item of actor?.items ?? []) {
-        const flags = item.flags?.[MODULE_ID] ?? {};
-        if (!flags.trigger || !flags.is_active || flags.is_crystal_item) continue;
-        list.push({ prefKey: `skill-${flags.skill_id ?? item.id}`, name: item.name, trigger: flags.trigger });
-    }
-    return list
-        .filter(source => TRIGGER_EVENTS.includes(source.trigger.on))
-        .map(source => ({ ...source, kind: KIND_LABELS[source.trigger.on](source), ...getPref(actor, source) }));
+export async function savePrefs(prefs) {
+    await game.settings.set(MODULE_ID, PREFS, prefs);
 }
 
 const activityOf = item => item?.system?.activities?.contents?.[0] ?? [...(item?.system?.activities?.values?.() ?? [])][0] ?? null;
@@ -255,7 +252,7 @@ Hooks.on('dnd5e.preRollDamageV2', (config) => {
             continue;
         }
         if (!conditionsMet(trigger.when, ctx)) continue;
-        const ask = getPref(actor, source).ask;
+        const ask = getPref(source).ask;
         if (trigger.bonus) {
             const bonus = bonusRoll(source, ctx);
             if (!bonus) continue;
@@ -385,7 +382,7 @@ function reactionReady(source) {
 Hooks.on('dnd5e.applyDamage', (actor, amount) => {
     if (!enabled() || !(amount > 0) || !actor) return;
     // Предложение рассылает один клиент — тот, кто применил урон
-    for (const source of activeTriggers(actor, 'damaged')) {
+    for (const source of activeTriggers(actor, 'damaged', { all: true })) {
         if (!reactionReady(source)) continue;
         const message = { actorId: actor.id, tokenUuid: actor.token?.uuid ?? null, sourceId: source.id, amount, userId: responder(actor) };
         if (message.userId === game.user.id) enqueue(() => offerReaction(message, actor));
@@ -406,7 +403,7 @@ async function offerReaction(message, local = null) {
     const left = usesLeft(source.item);
     const charges = left === null ? '' : ` Осталось зарядов: ${left}.`;
 
-    const ask = getPref(actor, source).ask;
+    const ask = getPref(source).ask;
     // Навык, который просто используется реакцией (Блинк)
     if (use) {
         if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Использовать «${source.name}» реакцией?${charges}</p>`)) return;
@@ -454,7 +451,7 @@ Hooks.on('updateCombat', (combat, changes) => {
 async function offerTurnTriggers(actor, on) {
     for (const source of activeTriggers(actor, on)) {
         const { use, pay, advantage } = source.trigger;
-        const ask = getPref(actor, source).ask;
+        const ask = getPref(source).ask;
         if (use) {
             if (!hasUse(source.item)) continue;
             const drawback = source.item.flags?.[MODULE_ID]?.drawback;
