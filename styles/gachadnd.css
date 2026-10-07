@@ -1164,7 +1164,7 @@
 
 /* ==========================================
    Карта этажа — набросок чернилами от руки
-   Дрожащие пути, мазки кистью вокруг узлов, рисунки на полях. «Живые чернила» — смена трёх кадров искажения.
+   Дрожащие пути, мазки кистью вокруг узлов, рисунки на полях. «Живые чернила» — три кадра искажения, плавно перетекающие друг в друга.
    Шрифт Caveat (SIL OFL, assets/fonts/caveat)
    ========================================== */
 @font-face { font-family: 'GD Caveat'; font-weight: 400; font-display: swap; src: url('../assets/fonts/caveat/caveat-cyrillic-400-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -1174,9 +1174,10 @@
 
 .gachadnd-map {
   /* Цвета непрозрачные: фильтр чернил отсекает полупрозрачное, бледность задаётся оттенком */
-  --ink: #1d1916;
-  --ink-soft: #5f5850;
-  --ink-faint: #a29b90;
+  /* Сине-чёрные чернила перьевой ручки; бледнее — как разбавленные водой */
+  --ink: #161c33;
+  --ink-soft: #3f4a72;
+  --ink-faint: #8e95b0;
   --blood: #6e1d14;
   --paper: #d6d2c8;
 }
@@ -1215,22 +1216,24 @@
 .gachadnd-map .gd-map-board.empty { display: flex; align-items: center; justify-content: center; }
 .gachadnd-map .gd-map-fog { font-size: 24px; color: var(--ink-soft); transform: rotate(-3deg); }
 
-/* Живые чернила: три слоя путей с разным искажением, виден один — линии подрагивают, как в мультфильме,
-   где каждый кадр обведён заново. Слои меняются только прозрачностью, искажение не пересчитывается */
-.gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; will-change: opacity; animation: gd-ink-frame 1.2s linear infinite; }
-.gachadnd-map .gd-map-edges.frame-0 { filter: url(#gd-ink-0); }
-.gachadnd-map .gd-map-edges.frame-1 { filter: url(#gd-ink-1); animation-delay: -0.4s; }
-.gachadnd-map .gd-map-edges.frame-2 { filter: url(#gd-ink-2); animation-delay: -0.8s; }
-@keyframes gd-ink-frame { 0%, 33.32% { opacity: 1; } 33.33%, 100% { opacity: 0; } }
+/* Живые чернила: каждый рисунок — три слоя с разным искажением. Слои плавно перетекают друг в друга
+   (в каждый момент два из них, сумма прозрачности — единица), и штрих течёт, а не дёргается.
+   Анимируется только opacity: искажение посчитано один раз на слой */
+.gachadnd-map { --ink-cycle: 3.6s; }
+.gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.gachadnd-map .gd-map-edges, .gachadnd-map .gd-ink-layer { will-change: opacity; animation: gd-ink-flow var(--ink-cycle) linear infinite; animation-delay: var(--phase, 0s); }
+.gachadnd-map .frame-0 { filter: url(#gd-ink-0); }
+.gachadnd-map .frame-1 { filter: url(#gd-ink-1); animation-delay: calc(var(--phase, 0s) - var(--ink-cycle) / 3); }
+.gachadnd-map .frame-2 { filter: url(#gd-ink-2); animation-delay: calc(var(--phase, 0s) - var(--ink-cycle) * 2 / 3); }
+@keyframes gd-ink-flow { 0% { opacity: 1; } 33.333% { opacity: 0; } 66.667% { opacity: 0; } 100% { opacity: 1; } }
 .gachadnd-map .gd-map-edges path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: 2.6; stroke-dasharray: 1 9 3 8; }
 .gachadnd-map .gd-map-edges path.open { stroke: var(--ink); stroke-width: 4; stroke-dasharray: 13 8 7 9; }
 .gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-soft); stroke-width: 2.8; }
 
-/* Мелкие рисунки дрожат сменой фильтра: площадь маленькая, перерисовка дешёвая */
-.gachadnd-map .gd-ink-live { animation: gd-ink-live 1.2s linear infinite; }
-@keyframes gd-ink-live { 0% { filter: url(#gd-ink-0); } 33.33% { filter: url(#gd-ink-1); } 66.66% { filter: url(#gd-ink-2); } 100% { filter: url(#gd-ink-0); } }
-.gachadnd-map .gd-map-doodle { position: absolute; transform: translate(-50%, -50%) rotate(var(--turn)); pointer-events: none; overflow: visible; opacity: 0.8; }
+/* Рисунки на полях */
+.gachadnd-map .gd-map-doodle { position: absolute; transform: translate(-50%, -50%) rotate(var(--turn)); pointer-events: none; opacity: 0.85; }
+.gachadnd-map .gd-map-doodle .gd-ink-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .gachadnd-map .gd-map-doodle path { fill: none; stroke: var(--ink); stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Узлы: значок чернилами без кружка, вокруг — мазок кистью */
@@ -1247,6 +1250,7 @@
   position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
   transition: transform 0.2s;
 }
+.gachadnd-map .gd-map-mark .gd-ink-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .gachadnd-map .gd-map-mark i { font-size: 23px; color: color-mix(in srgb, var(--tint) 35%, var(--paper)); -webkit-text-stroke: 2.2px var(--ink); paint-order: stroke fill; }
 .gachadnd-map .gd-map-ring { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); overflow: visible; pointer-events: none; }
 .gachadnd-map .gd-map-ring path { fill: var(--ink); }
@@ -1281,8 +1285,8 @@
 .gachadnd-map .gd-map-legend i { font-size: 14px; color: color-mix(in srgb, var(--node) 30%, transparent); -webkit-text-stroke: 1px #2a2622; }
 
 @media (prefers-reduced-motion: reduce) {
-  .gachadnd-map .gd-map-edges, .gachadnd-map .gd-ink-live { animation: none; }
-  .gachadnd-map .gd-map-edges.frame-1, .gachadnd-map .gd-map-edges.frame-2 { display: none; }
+  .gachadnd-map .gd-map-edges, .gachadnd-map .gd-ink-layer { animation: none; }
+  .gachadnd-map .frame-1, .gachadnd-map .frame-2 { display: none; }
 }
 
 .gachadnd-map-chat { padding: 6px 10px; border: 1.5px solid rgba(42, 38, 34, 0.6); border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: #d6d2c8; color: #2a2622; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 18px; }
