@@ -29,12 +29,13 @@ export class MindPhysics {
         this.onTap = onTap;
         this.onDrop = onDrop;
         this.onSettle = onSettle;
-        this.bodies = [];
         this.frame = null;
         this.last = 0;
         this.drag = null;
-        this.#measure();
-        for (const el of field.querySelectorAll('.gd-mote')) this.#addBody(el);
+        // Размеры снимаются при первом касании: при первой отрисовке окно ещё
+        // не разложено, а поле идёт с анимацией погружения (масштаб)
+        this.rect = null;
+        this.bodies = [...field.querySelectorAll('.gd-mote')].map(el => ({ el, x: 0, y: 0, vx: 0, vy: 0, fixed: el.classList.contains('focused') }));
         this.onDown = this.#down.bind(this);
         this.onMove = this.#move.bind(this);
         this.onUp = this.#up.bind(this);
@@ -49,23 +50,27 @@ export class MindPhysics {
         window.removeEventListener('pointerup', this.onUp);
     }
 
-    // Размер поля и неподвижные препятствия: ядро и узлы орбиты
+    // Размер поля и неподвижные препятствия: ядро и узлы орбиты. Размер берётся
+    // из раскладки (offsetWidth), а не из getBoundingClientRect — тот искажён масштабом.
+    // Неподвижные огоньки заново читают своё место из стиля — он всегда истинен
     #measure() {
-        const rect = this.field.getBoundingClientRect();
-        this.rect = rect;
+        const box = this.field.getBoundingClientRect();
+        const width = this.field.offsetWidth || box.width;
+        const height = this.field.offsetHeight || box.height;
+        const scale = box.width / width || 1;
+        this.rect = { left: box.left, top: box.top, width, height, scale };
         const circle = (el, pad = 0) => {
             const r = el.getBoundingClientRect();
-            return { x: r.left - rect.left + r.width / 2, y: r.top - rect.top + r.height / 2, r: r.width / 2 + pad };
+            return { x: (r.left - box.left + r.width / 2) / scale, y: (r.top - box.top + r.height / 2) / scale, r: r.width / 2 / scale + pad };
         };
         const core = this.field.querySelector('.gd-core');
         this.core = core ? circle(core, 6) : null;
         this.nodes = [...this.field.querySelectorAll('.gd-node')].map(el => ({ id: el.dataset.itemId, ...circle(el.querySelector('.gd-node-disc'), 4) }));
-    }
-
-    #addBody(el) {
-        const x = parseFloat(el.style.left) / 100 * this.rect.width;
-        const y = parseFloat(el.style.top) / 100 * this.rect.height;
-        this.bodies.push({ el, x, y, vx: 0, vy: 0, fixed: el.classList.contains('focused') });
+        for (const b of this.bodies) {
+            if (b.vx || b.vy) continue;
+            b.x = parseFloat(b.el.style.left) / 100 * width;
+            b.y = parseFloat(b.el.style.top) / 100 * height;
+        }
     }
 
     #place(body) {
@@ -74,7 +79,7 @@ export class MindPhysics {
     }
 
     #local(event) {
-        return { x: event.clientX - this.rect.left, y: event.clientY - this.rect.top };
+        return { x: (event.clientX - this.rect.left) / this.rect.scale, y: (event.clientY - this.rect.top) / this.rect.scale };
     }
 
     #down(event) {
