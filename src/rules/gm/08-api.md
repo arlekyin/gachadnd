@@ -14,6 +14,8 @@
 | `game.gachadnd.setRest(true)` / `setRest(false)` | открыть или закрыть Привал без карты; при открытии у игроков открывается Алтарь Памяти |
 | `game.gachadnd.giveCrystal(actor, 'Имя навыка')` | выдать кристалл навыка |
 | `game.gachadnd.recoverUses('gachaRun')` | восстановить заряды «1 раз за забег» |
+| `game.gachadnd.eventRewards({ tier: 'notable', count: 3, title: 'Тайник' })` | награды события каждому персонажу отряда; `tier`: `small`, `notable`, `rare`, `floor` |
+| `game.gachadnd.openEventRewards()` | окно наград события |
 
 ## Настройки модуля
 

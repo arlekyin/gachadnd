@@ -18,7 +18,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { isMemorySkill } from "./synergy.js";
+import { isMemorySkill, naturalSlotCap } from "./synergy.js";
 import { getSynergyDictionary } from "./synergy-data.js";
 import { randomCrystal, randomCrystalWithTag, currentSkillName } from "./crystals.js";
 import {
@@ -259,8 +259,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (this.mergeId && !dupOf.has(this.mergeId)) this.mergeId = null;
 
         // Кольцо Памяти — только в Слиянии: гнёзда Предела разума, экипированные навыки по порядку
-        const level = this.actor.system.details?.level || 1;
-        const cap = 6 + Math.floor(level / 2);
+        const cap = naturalSlotCap(this.actor);
         const equipped = merge ? memory.filter(i => i.flags[MODULE_ID].is_active) : [];
         const sockets = Math.max(cap, equipped.length);
         const orbitAt = n => {

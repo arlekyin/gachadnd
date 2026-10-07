@@ -1,7 +1,7 @@
 /**
  * Gacha Roguelike dnd5e — Лабиринт: роглайк поверх Памяти
  *
- * Карта этажа, экономика, Магазин, Риск, Алтарь Погибели и Всадники. Лабиринт пользуется
+ * Карта этажа, экономика, Магазин, Риск, Алтарь Погибели, Всадники и награды событий. Лабиринт пользуется
  * Памятью напрямую, а Память узнаёт о нём только через свои точки расширения (memory-api.js):
  * запреты Риска и Всадников, Привал на карте, золото в добыче, плашки всадников в Терминале.
  */
@@ -13,10 +13,15 @@ import { ShopWindow } from "./shop.js";
 import { RiskWindow, registerRiskSettings } from "./risk.js";
 import { registerEconomySettings } from "./economy.js";
 import { addTokenTools } from "./controls.js";
+import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
     registerRiskSettings();
+    // Смена этажа закрывает временные слоты Памяти из наград событий
+    const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
+    const previous = floorSetting.onChange;
+    floorSetting.onChange = value => { previous?.(value); expireFloorSlots(); };
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
         openMapTerminal: () => {
             const existing = Object.values(ui.windows).find(w => w instanceof GachaMapTerminal);
@@ -24,7 +29,10 @@ Hooks.once('init', () => {
         },
         openDoomAltar: () => DoomAltar.open(),
         openShop: () => ShopWindow.open(),
-        openRisk: () => RiskWindow.open()
+        openRisk: () => RiskWindow.open(),
+        // Награды события: game.gachadnd.eventRewards({ tier: 'notable', count: 3 }) — каждому персонажу отряда
+        eventRewards: (config) => offerEventRewards(config),
+        openEventRewards: () => new EventRewardsWindow().render({ force: true })
     });
 });
 
