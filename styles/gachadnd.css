@@ -1164,7 +1164,7 @@
 
 /* ==========================================
    Карта этажа — набросок чернилами от руки
-   Дрожащие пути, мазки кистью вокруг узлов, рисунки на полях. «Живые чернила» — три кадра искажения, плавно перетекающие друг в друга.
+   Наклонённый лист, дрожащие пути, мазки кистью вокруг узлов, рисунки на полях. «Живые чернила» — плавное перетекание формы штрихов.
    Шрифт Caveat (SIL OFL, assets/fonts/caveat)
    ========================================== */
 @font-face { font-family: 'GD Caveat'; font-weight: 400; font-display: swap; src: url('../assets/fonts/caveat/caveat-cyrillic-400-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -1173,72 +1173,66 @@
 @font-face { font-family: 'GD Caveat'; font-weight: 700; font-display: swap; src: url('../assets/fonts/caveat/caveat-latin-700-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 .gachadnd-map {
-  /* Цвета непрозрачные: фильтр чернил отсекает полупрозрачное, бледность задаётся оттенком */
-  /* Сине-чёрные чернила перьевой ручки; бледнее — как разбавленные водой */
-  --ink: #161c33;
-  --ink-soft: #3f4a72;
-  --ink-faint: #8e95b0;
+  /* Чёрные чернила разных оттенков; бледные — как разбавленные водой. Цвета непрозрачные:
+     фильтр расплывания отсекает полупрозрачное, бледность задаётся оттенком */
+  --ink: #141210;
+  --ink-warm: #2b231d;
+  --ink-cool: #22252a;
+  --ink-soft: #4a4541;
+  --ink-faint: #8f8a84;
   --blood: #6e1d14;
-  --paper: #d6d2c8;
+  --paper: #d8d3c7;
+  --paper-texture: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='300'%20height='300'%3E%3Cfilter%20id='p'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='3'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.2%20%200%200%200%200%200.18%20%200%200%200%200%200.15%20%200%200%200%200.16%200'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23p)'/%3E%3C/svg%3E");
 }
 .gachadnd-map .window-content {
   position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden;
   color: var(--ink); font-family: 'GD Caveat', 'Modesto Condensed', cursive;
-  background:
-    /* пятна и затёртые края */
-    radial-gradient(ellipse at 22% 18%, rgba(120, 110, 95, 0.14), transparent 38%),
-    radial-gradient(ellipse at 78% 70%, rgba(110, 100, 85, 0.12), transparent 42%),
-    radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(70, 64, 56, 0.28) 100%),
-    /* волокна бумаги */
-    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='300'%20height='300'%3E%3Cfilter%20id='p'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='3'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.2%20%200%200%200%200%200.18%20%200%200%200%200%200.15%20%200%200%200%200.16%200'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23p)'/%3E%3C/svg%3E"),
-    var(--paper) !important;
+  background: radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(60, 55, 48, 0.25) 100%), var(--paper-texture), var(--paper) !important;
 }
 .gachadnd-map button { height: auto; line-height: 1.2; }
 
-/* Шапка и подвал отчёркнуты от поля неровной линией от руки */
+/* Шапка и подвал отчёркнуты неровной линией от руки */
 .gachadnd-map .gd-map-header, .gachadnd-map .gd-map-footer {
-  background: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='6'%20preserveAspectRatio='none'%3E%3Cpath%20d='M1%203.5%20C30%201.5%2060%205%2095%203%20S170%201.8%20239%203.6'%20fill='none'%20stroke='%232a2622'%20stroke-opacity='0.6'%20stroke-width='1.6'%20stroke-linecap='round'/%3E%3C/svg%3E") left bottom / 100% 6px no-repeat;
+  background: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='6'%20preserveAspectRatio='none'%3E%3Cpath%20d='M1%203.5%20C30%201.5%2060%205%2095%203%20S170%201.8%20239%203.6'%20fill='none'%20stroke='%23141210'%20stroke-opacity='0.75'%20stroke-width='2.2'%20stroke-linecap='round'/%3E%3C/svg%3E") left bottom / 100% 6px no-repeat;
 }
 .gachadnd-map .gd-map-footer { background-position: left top; }
-.gachadnd-map .gd-map-header { display: flex; align-items: center; gap: 12px; padding: 8px 16px; }
+.gachadnd-map .gd-map-header { display: flex; align-items: center; gap: 14px; padding: 10px 20px; }
 .gachadnd-map .gd-map-title { display: flex; flex-direction: column; line-height: 1; }
-.gachadnd-map .gd-map-caption { font-size: 26px; font-weight: 700; transform: rotate(-1.5deg); }
-.gachadnd-map .gd-map-floor { font-size: 18px; color: var(--ink-soft); }
-.gachadnd-map .gd-map-floor strong { font-size: 22px; color: var(--blood); }
-.gachadnd-map .gd-map-gm { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 17px; }
-.gachadnd-map .gd-map-gm input { width: 40px; height: 24px; text-align: center; font-family: inherit; font-size: 17px; color: var(--ink); background: transparent; border: none; border-bottom: 1px solid var(--ink-soft); border-radius: 0; }
-.gachadnd-map .gd-map-gm button { width: auto; padding: 1px 10px; font-family: inherit; font-size: 17px; color: var(--ink); background: transparent; border: 1.5px solid var(--ink-soft); border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
-.gachadnd-map .gd-map-gm button:hover { background: rgba(42, 38, 34, 0.07); box-shadow: none; }
+.gachadnd-map .gd-map-caption { font-size: 34px; font-weight: 700; transform: rotate(-1.5deg); }
+.gachadnd-map .gd-map-floor { font-size: 22px; color: var(--ink-soft); }
+.gachadnd-map .gd-map-floor strong { font-size: 27px; color: var(--blood); }
+.gachadnd-map .gd-map-gm { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 20px; }
+.gachadnd-map .gd-map-gm input { width: 44px; height: 28px; text-align: center; font-family: inherit; font-size: 20px; color: var(--ink); background: transparent; border: none; border-bottom: 2px solid var(--ink-soft); border-radius: 0; }
+.gachadnd-map .gd-map-gm button { width: auto; padding: 2px 12px; font-family: inherit; font-size: 20px; color: var(--ink); background: transparent; border: 2px solid var(--ink); border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+.gachadnd-map .gd-map-gm button:hover { background: rgba(20, 18, 16, 0.07); box-shadow: none; }
 
-/* Поле */
+/* Поле: стол, на нём наклонённый лист карты */
 .gachadnd-map .gd-map-defs { position: absolute; width: 0; height: 0; }
-.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; perspective: 1300px; perspective-origin: 50% 0%; background: radial-gradient(ellipse at 50% 40%, rgba(40, 36, 32, 0.05), rgba(40, 36, 32, 0.3)); }
 .gachadnd-map .gd-map-board.empty { display: flex; align-items: center; justify-content: center; }
-.gachadnd-map .gd-map-fog { font-size: 24px; color: var(--ink-soft); transform: rotate(-3deg); }
+.gachadnd-map .gd-map-fog { font-size: 28px; color: var(--ink-soft); transform: rotate(-3deg); }
+.gachadnd-map .gd-map-plane {
+  position: absolute; inset: 8px 22px 10px; transform-origin: 50% 100%; transform: rotateX(16deg);
+  background: radial-gradient(ellipse at 25% 20%, rgba(120, 110, 95, 0.14), transparent 40%), radial-gradient(ellipse at 75% 75%, rgba(110, 100, 85, 0.12), transparent 42%), var(--paper-texture), var(--paper);
+  box-shadow: 0 14px 22px rgba(20, 18, 16, 0.35), 0 2px 4px rgba(20, 18, 16, 0.3);
+}
 
-/* Живые чернила: каждый рисунок — три слоя с разным искажением. Слои плавно перетекают друг в друга
-   (в каждый момент два из них, сумма прозрачности — единица), и штрих течёт, а не дёргается.
-   Анимируется только opacity: искажение посчитано один раз на слой */
-.gachadnd-map { --ink-cycle: 3.6s; }
+/* Живые чернила: у каждой линии, кольца и рисунка три формы, SVG плавно перетекает между ними.
+   Фильтр делает штрих расплывшимся, как от пера */
+.gachadnd-map .gd-ink { filter: url(#gd-ink-bleed); }
 .gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.gachadnd-map .gd-map-edges, .gachadnd-map .gd-ink-layer { will-change: opacity; animation: gd-ink-flow var(--ink-cycle) linear infinite; animation-delay: var(--phase, 0s); }
-.gachadnd-map .frame-0 { filter: url(#gd-ink-0); }
-.gachadnd-map .frame-1 { filter: url(#gd-ink-1); animation-delay: calc(var(--phase, 0s) - var(--ink-cycle) / 3); }
-.gachadnd-map .frame-2 { filter: url(#gd-ink-2); animation-delay: calc(var(--phase, 0s) - var(--ink-cycle) * 2 / 3); }
-@keyframes gd-ink-flow { 0% { opacity: 1; } 33.333% { opacity: 0; } 66.667% { opacity: 0; } 100% { opacity: 1; } }
 .gachadnd-map .gd-map-edges path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: 2.6; stroke-dasharray: 1 9 3 8; }
-.gachadnd-map .gd-map-edges path.open { stroke: var(--ink); stroke-width: 4; stroke-dasharray: 13 8 7 9; }
-.gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-soft); stroke-width: 2.8; }
+.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: 3; stroke-dasharray: 1 11 4 10; }
+.gachadnd-map .gd-map-edges path.open { stroke: var(--ink); stroke-width: 5; stroke-dasharray: 16 10 8 11; }
+.gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-warm); stroke-width: 3.4; }
 
 /* Рисунки на полях */
-.gachadnd-map .gd-map-doodle { position: absolute; transform: translate(-50%, -50%) rotate(var(--turn)); pointer-events: none; opacity: 0.85; }
-.gachadnd-map .gd-map-doodle .gd-ink-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.gachadnd-map .gd-map-doodle path { fill: none; stroke: var(--ink); stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.gachadnd-map .gd-map-doodle { position: absolute; transform: translate(-50%, -50%) rotate(var(--turn)); pointer-events: none; overflow: visible; }
+.gachadnd-map .gd-map-doodle path { fill: none; stroke: var(--ink-warm); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Узлы: значок чернилами без кружка, вокруг — мазок кистью */
+/* Узлы: значок чернилами без кружка, вокруг — мазок кистью. Значок чуть покачивается */
 .gachadnd-map .gd-map-node {
-  position: absolute; transform: translate(-50%, -22px); z-index: 2;
+  position: absolute; transform: translate(-50%, -27px); z-index: 2;
   width: auto; margin: 0; padding: 0; border: none; background: none; box-shadow: none;
   display: flex; flex-direction: column; align-items: center; gap: 0; cursor: pointer; color: var(--ink);
   /* кнопки не наследуют шрифт — подписи пишутся тем же почерком, что и вся карта */
@@ -1246,48 +1240,52 @@
 }
 .gachadnd-map .gd-map-node:hover, .gachadnd-map .gd-map-node:focus { box-shadow: none; outline: none; background: none; }
 .gachadnd-map .gd-map-mark {
-  --tint: color-mix(in srgb, var(--node) 35%, #2a2622);
-  position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  --tint: color-mix(in srgb, var(--node) 35%, #141210);
+  position: relative; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;
   transition: transform 0.2s;
 }
-.gachadnd-map .gd-map-mark .gd-ink-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.gachadnd-map .gd-map-mark i { font-size: 23px; color: color-mix(in srgb, var(--tint) 35%, var(--paper)); -webkit-text-stroke: 2.2px var(--ink); paint-order: stroke fill; }
-.gachadnd-map .gd-map-ring { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); overflow: visible; pointer-events: none; }
+.gachadnd-map .gd-map-mark i {
+  font-size: 28px; color: color-mix(in srgb, var(--tint) 35%, var(--paper)); -webkit-text-stroke: 2.4px var(--ink); paint-order: stroke fill;
+  animation: gd-ink-sway 5.5s ease-in-out infinite alternate;
+}
+.gachadnd-map .gd-map-node:nth-child(3n + 1) .gd-map-mark i { animation-duration: 6.5s; animation-delay: -2s; }
+.gachadnd-map .gd-map-node:nth-child(3n + 2) .gd-map-mark i { animation-duration: 4.8s; animation-delay: -3.5s; }
+@keyframes gd-ink-sway { from { transform: rotate(-3deg) translateY(1px); } to { transform: rotate(3deg) translateY(-1px); } }
+.gachadnd-map .gd-map-ring { position: absolute; left: 50%; top: 50%; width: 80px; height: 80px; transform: translate(-50%, -50%); overflow: visible; pointer-events: none; }
 .gachadnd-map .gd-map-ring path { fill: var(--ink); }
-.gachadnd-map .gd-map-label { font-size: 18px; line-height: 1; padding: 0 4px; white-space: nowrap; text-shadow: 0 0 3px var(--paper), 0 0 3px var(--paper); }
+.gachadnd-map .gd-map-label { font-size: 23px; line-height: 1; padding: 0 4px; white-space: nowrap; text-shadow: 0 0 3px var(--paper), 0 0 3px var(--paper), 0 0 6px var(--paper); }
 .gachadnd-map .gd-map-node:hover .gd-map-mark { transform: rotate(-6deg) scale(1.1); }
 .gachadnd-map .gd-map-node.locked .gd-map-mark i { color: var(--paper); -webkit-text-stroke-color: var(--ink-faint); }
 .gachadnd-map .gd-map-node.locked .gd-map-label { color: var(--ink-faint); }
 .gachadnd-map .gd-map-node.visited .gd-map-mark i { color: var(--paper); -webkit-text-stroke-color: var(--ink-soft); }
-.gachadnd-map .gd-map-node.visited .gd-map-ring path { fill: var(--ink-soft); }
+.gachadnd-map .gd-map-node.visited .gd-map-ring path { fill: var(--ink-cool); }
 .gachadnd-map .gd-map-node.visited .gd-map-label { color: var(--ink-soft); }
 .gachadnd-map .gd-map-node.reachable .gd-map-label { font-weight: 700; }
 
 /* Отряд: толстый мазок кровавыми чернилами */
 .gachadnd-map .gd-map-node.current { z-index: 3; }
-.gachadnd-map .gd-map-node.current .gd-map-ring { width: 72px; height: 72px; }
+.gachadnd-map .gd-map-node.current .gd-map-ring { width: 88px; height: 88px; }
 .gachadnd-map .gd-map-node.current .gd-map-ring path { fill: var(--blood); }
 .gachadnd-map .gd-map-node.current .gd-map-mark i { color: color-mix(in srgb, var(--blood) 35%, var(--paper)); -webkit-text-stroke-color: var(--blood); }
 .gachadnd-map .gd-map-node.current .gd-map-label { font-weight: 700; color: var(--blood); }
-.gachadnd-map .gd-map-node.type-boss { transform: translate(-50%, -28px); }
-.gachadnd-map .gd-map-node.type-boss .gd-map-mark { width: 56px; height: 56px; }
-.gachadnd-map .gd-map-node.type-boss .gd-map-mark i { font-size: 32px; -webkit-text-stroke-width: 2.8px; }
-.gachadnd-map .gd-map-node.type-boss .gd-map-ring { width: 82px; height: 82px; }
+.gachadnd-map .gd-map-node.type-boss { transform: translate(-50%, -34px); }
+.gachadnd-map .gd-map-node.type-boss .gd-map-mark { width: 68px; height: 68px; }
+.gachadnd-map .gd-map-node.type-boss .gd-map-mark i { font-size: 40px; -webkit-text-stroke-width: 3px; }
+.gachadnd-map .gd-map-node.type-boss .gd-map-ring { width: 100px; height: 100px; }
 
 /* Подвал: где отряд и что на этаже */
-.gachadnd-map .gd-map-footer { display: flex; flex-direction: column; gap: 2px; padding: 8px 16px; font-size: 18px; }
-.gachadnd-map .gd-map-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.gachadnd-map .gd-map-footer { display: flex; flex-direction: column; gap: 4px; padding: 10px 20px; font-size: 22px; }
+.gachadnd-map .gd-map-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .gachadnd-map .gd-map-here { font-weight: 700; color: var(--blood); }
 .gachadnd-map .gd-map-next { color: var(--ink-soft); }
-.gachadnd-map .gd-map-next b { margin-left: 6px; font-weight: 700; color: color-mix(in srgb, var(--node) 35%, #2a2622); }
-.gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 12px; }
-.gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 4px; }
-.gachadnd-map .gd-map-legend i { font-size: 14px; color: color-mix(in srgb, var(--node) 30%, transparent); -webkit-text-stroke: 1px #2a2622; }
+.gachadnd-map .gd-map-next b { margin-left: 6px; font-weight: 700; color: color-mix(in srgb, var(--node) 35%, #141210); }
+.gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 14px; }
+.gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 5px; }
+.gachadnd-map .gd-map-legend i { font-size: 17px; color: color-mix(in srgb, var(--node) 30%, var(--paper)); -webkit-text-stroke: 1.4px #141210; paint-order: stroke fill; }
 
 @media (prefers-reduced-motion: reduce) {
-  .gachadnd-map .gd-map-edges, .gachadnd-map .gd-ink-layer { animation: none; }
-  .gachadnd-map .frame-1, .gachadnd-map .frame-2 { display: none; }
+  .gachadnd-map .gd-map-mark i { animation: none; }
 }
 
-.gachadnd-map-chat { padding: 6px 10px; border: 1.5px solid rgba(42, 38, 34, 0.6); border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: #d6d2c8; color: #2a2622; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 18px; }
-.gachadnd-map-chat i { color: color-mix(in srgb, var(--node, #2a2622) 35%, #2a2622); }
+.gachadnd-map-chat { padding: 6px 10px; border: 2px solid #141210; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: #d8d3c7; color: #141210; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 20px; }
+.gachadnd-map-chat i { color: color-mix(in srgb, var(--node, #141210) 35%, #141210); }
