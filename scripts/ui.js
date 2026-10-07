@@ -126,7 +126,32 @@ export class MemoryTerminal extends ApplicationV2 {
     // Изменения документов приходят пачками (экипировка, пересчёт синергий) — перерисовка одна
     #debouncedRender = foundry.utils.debounce(() => this.render(), 50);
 
+    /**
+     * Анимации Терминала (неон, туман, нейросеть) работают, только пока Терминал в фокусе.
+     * Клик в другое окно — лист персонажа, чат, сцену — ставит их на паузу: рядом с тяжёлым листом
+     * постоянная анимация заставляет браузер перерисовывать страницу каждый кадр.
+     */
+    #idle = false;
+    #onPointerDown = event => this.#setIdle(!this.element?.contains(event.target));
+    #onVisibility = () => this.#setIdle(document.hidden || this.#idle);
+
+    #setIdle(idle) {
+        if (!this.element) return;
+        this.#idle = idle;
+        this.element.classList.toggle('gd-idle', idle);
+        if (idle) this.neural?.pause();
+        else this.neural?.start();
+    }
+
+    _onFirstRender(context, options) {
+        super._onFirstRender?.(context, options);
+        document.addEventListener('pointerdown', this.#onPointerDown, true);
+        document.addEventListener('visibilitychange', this.#onVisibility);
+    }
+
     _onClose(options) {
+        document.removeEventListener('pointerdown', this.#onPointerDown, true);
+        document.removeEventListener('visibilitychange', this.#onVisibility);
         this.neural?.stop();
         this.neural = null;
         return super._onClose?.(options);
@@ -248,6 +273,7 @@ export class MemoryTerminal extends ApplicationV2 {
             return `
                 <div class="${classes.join(' ')}" style="--rarity: ${rarity.color}" data-action="select" data-item-id="${item.id}" title="${esc(item.name)}">
                     <div class="gd-tcard-art" style="background-image: url('${item.img}')"></div>
+                    ${flags.is_active ? '<span class="gd-neon" aria-hidden="true"></span>' : ''}
                     ${ranked ? `<span class="gd-tcard-badge">${flags.rank ?? 1}</span>` : ''}
                     ${mergeable ? '<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>' : ''}
                     <div class="gd-tcard-name">${esc(item.name)}</div>
@@ -383,7 +409,8 @@ export class MemoryTerminal extends ApplicationV2 {
         this.neural?.stop();
         const canvas = this.element.querySelector('canvas.gd-neural');
         this.neural = canvas ? new NeuralBackground(canvas, this.actor.id, Number(canvas.dataset.active) || 0) : null;
-        this.neural?.start();
+        if (this.#idle) this.neural?.pause();
+        else this.neural?.start();
 
         // Отрицательная задержка = текущая позиция в цикле: неон продолжает движение после перерисовки
         const now = Date.now();
