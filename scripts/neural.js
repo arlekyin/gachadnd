@@ -1,13 +1,20 @@
 /**
- * Gacha Roguelike dnd5e — Фон Терминала: нейронная сеть с электрическими всполохами
+ * Gacha Roguelike dnd5e — Фон Терминала: сознание персонажа
  *
- * Рисуется на <canvas> собственным циклом (~30 кадров в секунду): нагрузка постоянная,
- * в отличие от анимаций SVG, которые со временем перерисовываются всё дороже.
- * Сеть строится детерминированно по ключу (id персонажа), положение импульсов
- * считается от часов, поэтому перерисовка окна не сбрасывает движение.
+ * Каждый навык Памяти — нейрон: экипированный светится ядром цвета редкости, остальные спят.
+ * Навыки с общим тегом связаны изогнутыми отростками, по ним бегут импульсы цвета тега;
+ * на пороге синергии (2 / 4 / 6) связь толще и импульсов больше. Заполнение сверх естественного
+ * предела — часть связей мерцает красным. Под нейронами — тусклая сеть, чтобы пустая Память не была голой.
+ *
+ * Фон дополняет окно и не спорит с ним: всё приглушено. Неподвижное (сеть, отростки, связи)
+ * рисуется на отдельный холст один раз при смене сборки или размера; в каждом кадре — только
+ * импульсы и дыхание ядер (~30 кадров в секунду). Положения выводятся из id персонажа и навыков,
+ * фаза импульсов — из часов, поэтому перерисовка окна не сбрасывает движение.
  */
 
 const FRAME_MS = 33;
+const TIER_STEP = 2;
+const MAX_TIER = 3;
 
 // Детерминированный генератор псевдослучайных чисел (mulberry32)
 function random(seedText) {
@@ -21,21 +28,43 @@ function random(seedText) {
     };
 }
 
+const rgba = (hex, alpha) => {
+    const n = parseInt(String(hex).replace('#', ''), 16) || 0;
+    return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
+
+// Цвет тега: свой оттенок из имени, приглушённый — теги различимы, но не кричат
+function tagColor(tag) {
+    let h = 0;
+    for (const char of tag) h = (Math.imul(h, 31) + char.charCodeAt(0)) | 0;
+    const hue = Math.abs(h) % 360;
+    const s = 0.45, l = 0.66;
+    const k = n => (n + hue / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+    return `#${[f(0), f(8), f(4)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Квадратичная кривая: точка по параметру t
+const quad = (ax, ay, cx, cy, bx, by) => t => {
+    const u = 1 - t;
+    return [u * u * ax + 2 * u * t * cx + t * t * bx, u * u * ay + 2 * u * t * cy + t * t * by];
+};
+
 export class NeuralBackground {
     /**
      * @param {HTMLCanvasElement} canvas
-     * @param {string} key          Ключ сети (id персонажа).
-     * @param {number} activeCount  Число экипированных навыков: от него зависят импульсы и всполохи.
+     * @param {string} key  Ключ персонажа: от него зависят фоновая сеть и места нейронов.
+     * @param {object} mind { neurons: [{ id, color, active, tags }], tiers: { тег: ступень }, overload }
      */
-    constructor(canvas, key, activeCount = 0) {
+    constructor(canvas, key, mind) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        this.layer = document.createElement('canvas');
         this.key = key;
-        this.activeCount = activeCount;
         this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        this.#build(key);
-        this.bolts = [];
-        this.nextBolt = performance.now() + 800;
+        this.#buildDust();
+        this.setMind(mind, { redraw: false });
         this.last = 0;
         this.running = false;
         this.resizeObserver = new ResizeObserver(() => this.#resize());
@@ -43,39 +72,73 @@ export class NeuralBackground {
         this.#resize();
     }
 
-    // Узлы в относительных координатах 0..1, связи — с двумя ближайшими соседями
-    #build(key) {
-        const rand = random(key);
-        this.nodes = Array.from({ length: 48 }, () => ({
-            x: 0.02 + rand() * 0.96,
-            y: 0.03 + rand() * 0.94,
-            r: 1.2 + rand() * 2,
-            period: 3000 + rand() * 4000,
-            shift: rand() * 10000
-        }));
+    // Фоновая сеть: тусклые клетки и связи с двумя ближайшими соседями
+    #buildDust() {
+        const rand = random(`${this.key}:dust`);
+        this.dust = Array.from({ length: 40 }, () => ({ x: 0.02 + rand() * 0.96, y: 0.03 + rand() * 0.94, shift: rand() * 10000, period: 3000 + rand() * 4000 }));
+        this.dustEdges = [];
         const seen = new Set();
-        this.edges = [];
-        this.nodes.forEach((a, i) => {
-            this.nodes
-                .map((b, j) => ({ j, d: Math.hypot(a.x - b.x, (a.y - b.y) * 0.7) }))
-                .filter(n => n.j !== i)
-                .sort((p, q) => p.d - q.d)
-                .slice(0, 2)
+        this.dust.forEach((a, i) => {
+            this.dust.map((b, j) => ({ j, d: Math.hypot(a.x - b.x, (a.y - b.y) * 0.7) }))
+                .filter(n => n.j !== i).sort((p, q) => p.d - q.d).slice(0, 2)
                 .forEach(({ j }) => {
                     const id = i < j ? `${i}-${j}` : `${j}-${i}`;
-                    if (seen.has(id)) return;
-                    seen.add(id);
-                    this.edges.push({ a: i, b: j, glow: 0 });
+                    if (!seen.has(id)) { seen.add(id); this.dustEdges.push([i, j]); }
                 });
         });
-        const pulseCount = Math.min(this.edges.length, 6 + this.activeCount * 3);
-        this.pulses = Array.from({ length: pulseCount }, () => ({
-            edge: Math.floor(rand() * this.edges.length),
-            period: 2500 + rand() * 3500,
-            shift: rand() * 10000,
-            reverse: rand() < 0.5
-        }));
-        this.rand = rand;
+    }
+
+    /** Сборка изменилась: те же места у тех же навыков, новые связи. Холст и цикл не пересоздаются */
+    setMind(mind = {}, { redraw = true } = {}) {
+        const placed = this.neurons ?? [];
+        const taken = [];
+        this.neurons = (mind.neurons ?? []).map(n => {
+            const old = placed.find(p => p.id === n.id);
+            const spot = old ? { x: old.x, y: old.y } : this.#place(n.id, [...taken, ...placed.filter(p => (mind.neurons ?? []).some(m => m.id === p.id))]);
+            taken.push(spot);
+            const rand = random(`${this.key}:${n.id}:branches`);
+            const branches = old?.branches ?? Array.from({ length: 5 + Math.floor(rand() * 3) }, () => ({
+                ang: rand() * Math.PI * 2, len: 22 + rand() * 34, bend: (rand() - 0.5) * 0.8, fork: rand() < 0.6 ? (rand() - 0.5) * 1.2 : null
+            }));
+            return { ...n, ...spot, branches, phase: rand() * 6 };
+        });
+        this.tiers = mind.tiers ?? {};
+        this.overload = !!mind.overload;
+
+        // Связи: пара экипированных навыков с общим тегом
+        this.links = [];
+        const active = this.neurons.filter(n => n.active);
+        for (let i = 0; i < active.length; i++) {
+            for (let j = i + 1; j < active.length; j++) {
+                for (const tag of active[i].tags.filter(t => active[j].tags.includes(t))) {
+                    const rand = random(`${this.key}:${active[i].id}:${active[j].id}:${tag}`);
+                    this.links.push({
+                        a: active[i], b: active[j], tag, color: tagColor(tag),
+                        tier: Math.min(MAX_TIER, this.tiers[tag] ?? 0),
+                        bend: (rand() - 0.5) * 0.5,
+                        pulses: Array.from({ length: MAX_TIER + 1 }, () => ({ off: rand(), speed: 0.05 + rand() * 0.05 })),
+                        flicker: rand() < 0.5
+                    });
+                }
+            }
+        }
+        if (redraw) this.#paintLayer();
+    }
+
+    // Место нового нейрона: случайное по ключу навыка, подальше от уже стоящих и в открытых местах фона —
+    // под колодой слева и под синергиями справа. Центр занят картой и текстом, правый верх — кольцом
+    #place(id, others) {
+        const rand = random(`${this.key}:${id}:spot`);
+        const open = p => (p.x < 0.37 && p.y > 0.32) || (p.x > 0.75 && p.y > 0.6);
+        let best = null;
+        for (let i = 0; i < 60; i++) {
+            const p = { x: 0.04 + rand() * 0.92, y: 0.06 + rand() * 0.9 };
+            if (!open(p)) continue;
+            const gap = others.length ? Math.min(...others.map(o => Math.hypot(o.x - p.x, (o.y - p.y) * 0.75))) : 1;
+            if (!best || gap > best.gap) best = { ...p, gap };
+            if (gap > 0.2) break;
+        }
+        return best ? { x: best.x, y: best.y } : { x: 0.04 + rand() * 0.3, y: 0.4 + rand() * 0.55 };
     }
 
     #resize() {
@@ -83,19 +146,81 @@ export class NeuralBackground {
         const width = this.canvas.clientWidth;
         const height = this.canvas.clientHeight;
         if (!width || !height) return;
-        this.canvas.width = Math.round(width * ratio);
-        this.canvas.height = Math.round(height * ratio);
-        this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        for (const c of [this.canvas, this.layer]) {
+            c.width = Math.round(width * ratio);
+            c.height = Math.round(height * ratio);
+            c.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
+        }
+        this.ratio = ratio;
         this.width = width;
         this.height = height;
+        this.#paintLayer();
         if (!this.running) this.#draw(performance.now());
     }
 
-    // Экипировка изменилась: та же сеть, другое число импульсов. Канвас и цикл не пересоздаются
-    setActiveCount(count) {
-        if (count === this.activeCount) return;
-        this.activeCount = count;
-        this.#build(this.key);
+    // Кривая связи: изгиб к центру окна, чтобы связи огибали середину, как отростки
+    #curve(a, b, bend) {
+        const w = this.width, h = this.height;
+        const ax = a.x * w, ay = a.y * h, bx = b.x * w, by = b.y * h;
+        const mx = (ax + bx) / 2, my = (ay + by) / 2, dx = bx - ax, dy = by - ay;
+        return quad(ax, ay, mx - dy * bend + (w / 2 - mx) * 0.3, my + dx * bend + (h / 2 - my) * 0.3, bx, by);
+    }
+
+    // Отросток с утончением: отрезки убывающей толщины
+    #taper(ctx, at, from, to, w0, w1, color) {
+        const n = 16;
+        ctx.strokeStyle = color;
+        for (let i = 0; i < n; i++) {
+            const [x0, y0] = at(from + (to - from) * i / n);
+            const [x1, y1] = at(from + (to - from) * (i + 1) / n);
+            ctx.lineWidth = w0 + (w1 - w0) * (i / n);
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+        }
+    }
+
+    // Неподвижная часть: фоновая сеть, отростки нейронов, связи без мерцания
+    #paintLayer() {
+        const ctx = this.layer.getContext('2d');
+        const w = this.width, h = this.height;
+        if (!w || !h) return;
+        ctx.clearRect(0, 0, w, h);
+        ctx.lineCap = 'round';
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(95, 224, 184, 0.06)';
+        for (const [i, j] of this.dustEdges) {
+            ctx.beginPath();
+            ctx.moveTo(this.dust[i].x * w, this.dust[i].y * h);
+            ctx.lineTo(this.dust[j].x * w, this.dust[j].y * h);
+            ctx.stroke();
+        }
+
+        for (const link of this.links) {
+            if (this.overload && link.flicker) continue;
+            const at = this.#curve(link.a, link.b, link.bend);
+            const color = rgba(link.color, 0.07 + link.tier * 0.04);
+            const width = 1.4 + link.tier * 0.7;
+            this.#taper(ctx, at, 0.06, 0.5, width, 0.6, color);
+            this.#taper(ctx, at, 0.94, 0.5, width, 0.6, color);
+        }
+
+        for (const n of this.neurons) {
+            const x = n.x * w, y = n.y * h;
+            const color = n.active ? rgba(n.color, 0.14) : 'rgba(120, 140, 136, 0.07)';
+            for (const br of n.branches) {
+                const ex = x + Math.cos(br.ang) * br.len, ey = y + Math.sin(br.ang) * br.len;
+                const at = quad(x, y, x + Math.cos(br.ang + br.bend) * br.len * 0.55, y + Math.sin(br.ang + br.bend) * br.len * 0.55, ex, ey);
+                this.#taper(ctx, at, 0.15, 1, n.active ? 1.8 : 1, 0.2, color);
+                if (br.fork !== null) {
+                    const [fx, fy] = at(0.6);
+                    const angle = br.ang + br.fork, length = br.len * 0.45;
+                    this.#taper(ctx, t => [fx + Math.cos(angle) * length * t, fy + Math.sin(angle) * length * t], 0, 1, n.active ? 1 : 0.6, 0.2, color);
+                }
+            }
+        }
     }
 
     start() {
@@ -125,101 +250,76 @@ export class NeuralBackground {
         this.resizeObserver.disconnect();
     }
 
-    // Электрический всполох: ломаная молния между двумя узлами, подсвечивает соседние связи
-    #spawnBolt(time) {
-        const edge = this.edges[Math.floor(Math.random() * this.edges.length)];
-        const neighbours = this.edges.filter(e => e !== edge && (e.a === edge.a || e.b === edge.a || e.a === edge.b || e.b === edge.b));
-        const target = neighbours.length && Math.random() < 0.6 ? neighbours[Math.floor(Math.random() * neighbours.length)] : null;
-        const chain = [edge, target].filter(Boolean);
-        chain.forEach(e => { e.glow = 1; });
-        this.bolts.push({
-            born: time,
-            life: 280 + Math.random() * 220,
-            segments: chain.map(e => this.#jagged(this.nodes[e.a], this.nodes[e.b]))
-        });
-        // Чем больше экипировано навыков, тем чаще всполохи: от ~4 с до ~1 с
-        const base = Math.max(900, 4200 - this.activeCount * 260);
-        this.nextBolt = time + base * (0.6 + Math.random() * 0.8);
-    }
-
-    #jagged(a, b) {
-        const points = [[a.x, a.y]];
-        const steps = 6;
-        for (let i = 1; i < steps; i++) {
-            const t = i / steps;
-            const jitter = 0.018;
-            points.push([a.x + (b.x - a.x) * t + (Math.random() - 0.5) * jitter, a.y + (b.y - a.y) * t + (Math.random() - 0.5) * jitter]);
-        }
-        points.push([b.x, b.y]);
-        return points;
-    }
-
-    #draw(time) {
+    #draw() {
         const { ctx, width: w, height: h } = this;
         if (!w || !h) return;
         const now = Date.now();
+        const still = this.reducedMotion;
         ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(this.layer, 0, 0, w, h);
+        ctx.lineCap = 'round';
 
-        if (!this.reducedMotion && time >= this.nextBolt) this.#spawnBolt(time);
-
-        // Связи
-        ctx.lineWidth = 1;
-        for (const e of this.edges) {
-            const a = this.nodes[e.a];
-            const b = this.nodes[e.b];
-            ctx.strokeStyle = `rgba(95, 224, 184, ${0.1 + e.glow * 0.5})`;
-            ctx.beginPath();
-            ctx.moveTo(a.x * w, a.y * h);
-            ctx.lineTo(b.x * w, b.y * h);
-            ctx.stroke();
-            e.glow = Math.max(0, e.glow - 0.06);
-        }
-
-        // Импульсы — короткий светящийся штрих вдоль связи
-        if (!this.reducedMotion) {
-            ctx.lineCap = 'round';
-            for (const p of this.pulses) {
-                const e = this.edges[p.edge];
-                const [a, b] = p.reverse ? [this.nodes[e.b], this.nodes[e.a]] : [this.nodes[e.a], this.nodes[e.b]];
-                const t = ((now + p.shift) % p.period) / p.period;
-                const alpha = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
-                const x = a.x + (b.x - a.x) * t;
-                const y = a.y + (b.y - a.y) * t;
-                const tail = Math.max(0, t - 0.08);
-                const gradient = ctx.createLinearGradient((a.x + (b.x - a.x) * tail) * w, (a.y + (b.y - a.y) * tail) * h, x * w, y * h);
-                gradient.addColorStop(0, 'rgba(200, 255, 240, 0)');
-                gradient.addColorStop(1, `rgba(200, 255, 240, ${0.85 * alpha})`);
-                ctx.strokeStyle = gradient;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo((a.x + (b.x - a.x) * tail) * w, (a.y + (b.y - a.y) * tail) * h);
-                ctx.lineTo(x * w, y * h);
-                ctx.stroke();
+        // Перегрузка разума: часть связей мерцает красным
+        if (this.overload) {
+            for (const link of this.links.filter(l => l.flicker)) {
+                const on = still ? 0.6 : (Math.sin(now / 110 + link.bend * 40) > 0.2 ? 1 : 0.3);
+                const at = this.#curve(link.a, link.b, link.bend);
+                const color = rgba('#ff5a46', (0.1 + link.tier * 0.04) * on);
+                const width = 1.4 + link.tier * 0.7;
+                this.#taper(ctx, at, 0.06, 0.5, width, 0.6, color);
+                this.#taper(ctx, at, 0.94, 0.5, width, 0.6, color);
             }
         }
 
-        // Узлы мерцают
-        for (const n of this.nodes) {
-            const pulse = 0.5 + 0.5 * Math.sin(((now + n.shift) / n.period) * Math.PI * 2);
-            ctx.fillStyle = `rgba(127, 232, 200, ${0.15 + pulse * 0.45})`;
+        // Мелкие клетки фоновой сети мерцают
+        for (const d of this.dust) {
+            const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(((now + d.shift) / d.period) * Math.PI * 2);
+            ctx.fillStyle = `rgba(127, 232, 200, ${0.06 + pulse * 0.1})`;
             ctx.beginPath();
-            ctx.arc(n.x * w, n.y * h, n.r, 0, Math.PI * 2);
+            ctx.arc(d.x * w, d.y * h, 1.3, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Всполохи: яркое ядро и широкое свечение, быстро гаснут
-        this.bolts = this.bolts.filter(bolt => time - bolt.born < bolt.life);
-        for (const bolt of this.bolts) {
-            const fade = 1 - (time - bolt.born) / bolt.life;
-            for (const segment of bolt.segments) {
-                for (const [width, color] of [[6, `rgba(95, 224, 184, ${0.18 * fade})`], [1.6, `rgba(235, 255, 250, ${0.95 * fade})`]]) {
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = width;
+        // Импульсы цвета тега; на пороге синергии их больше и они чуть ярче
+        if (!still) {
+            for (const link of this.links) {
+                const at = this.#curve(link.a, link.b, link.bend);
+                const color = this.overload && link.flicker ? '#ff5a46' : link.color;
+                for (const p of link.pulses.slice(0, 1 + link.tier)) {
+                    const t = ((now / 1000) * p.speed * (1 + link.tier * 0.3) + p.off) % 1;
+                    const fade = Math.min(1, t / 0.1, (1 - t) / 0.1);
+                    const [x, y] = at(t);
+                    const r = 4 + link.tier;
+                    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+                    g.addColorStop(0, rgba('#ffffff', 0.32 * fade));
+                    g.addColorStop(0.4, rgba(color, 0.22 * fade));
+                    g.addColorStop(1, rgba(color, 0));
+                    ctx.fillStyle = g;
                     ctx.beginPath();
-                    segment.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
-                    ctx.stroke();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
+        }
+
+        // Ядра: экипированные медленно дышат цветом редкости, спящие — тусклые
+        for (const n of this.neurons) {
+            const x = n.x * w, y = n.y * h;
+            const breath = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 1600 + n.phase);
+            const r = n.active ? 12 + breath * 3 : 7;
+            const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+            if (n.active) {
+                g.addColorStop(0, rgba('#ffffff', 0.32 + breath * 0.08));
+                g.addColorStop(0.3, rgba(n.color, 0.22 + breath * 0.06));
+            } else {
+                g.addColorStop(0, 'rgba(150, 170, 165, 0.14)');
+                g.addColorStop(0.3, 'rgba(120, 140, 136, 0.07)');
+            }
+            g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
         }
     }
 }
