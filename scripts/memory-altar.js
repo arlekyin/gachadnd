@@ -89,6 +89,15 @@ const FOCUS = {
     3: [-90, 30, 150].map(deg => ({ x: CORE.x + 8 * Math.cos(deg * Math.PI / 180), y: CORE.y + 11 * Math.sin(deg * Math.PI / 180) }))
 };
 
+// Фаза покачивания огонька привязана к часам и ключу, а не к моменту отрисовки:
+// после перерисовки огонёк продолжает движение с той же точки, а не прыгает в начало
+const BOB_PERIOD = 6;
+function bobPhase(key) {
+    let hash = 0;
+    for (const ch of key) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+    return -((Date.now() / 1000 + (Math.abs(hash) % 600) / 100) % BOB_PERIOD);
+}
+
 // Огоньки тумана — по эллиптическому поясу, низ оставлен под кнопку
 function fogPosition(n, total) {
     const from = 125, span = 290;
@@ -324,7 +333,7 @@ export class MemoryAltar extends ApplicationV2 {
         // сдвигал бы раскладку остальных
         const motes = drifting.map(({ ing, tap, cls, mergeSkill }, n) => {
             if (!this.#drift.has(ing.key)) this.#drift.set(ing.key, fogPosition(n, drifting.length));
-            return mote(ing, this.#drift.get(ing.key), { tap, cls, mergeSkill, delay: -(n * 0.7) % 6 });
+            return mote(ing, this.#drift.get(ing.key), { tap, cls, mergeSkill, delay: bobPhase(ing.key) });
         }).join('');
         const emptyNote = drifting.length ? '' : '<div class="gd-fog-empty">Туман пуст.</div>';
 

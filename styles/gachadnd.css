@@ -1057,8 +1057,7 @@
 .gachadnd-memory-altar .gd-mote.off { opacity: 0.45; }
 .gachadnd-memory-altar .gd-mote.held { z-index: 6; cursor: grabbing; }
 .gachadnd-memory-altar .gd-mote.held .gd-mote-orb { transform: scale(1.3); }
-.gachadnd-memory-altar .gd-mote.held .gd-mote-body,
-.gachadnd-memory-altar .gd-mote.flying .gd-mote-body { animation: none; }
+/* Покачивание не выключается в полёте: перезапуск анимации дал бы рывок при остановке */
 .gachadnd-memory-altar .gd-mote.can-merge .gd-mote-orb { box-shadow: 0 0 0 1px var(--glow); }
 .gachadnd-memory-altar .gd-mote.chosen .gd-mote-orb { box-shadow: 0 0 0 2px var(--glow), 0 0 20px var(--glow); }
 .gachadnd-memory-altar .gd-mote.focused { z-index: 4; }
