@@ -23,10 +23,7 @@ Hooks.once('init', () => {
     const previous = floorSetting.onChange;
     floorSetting.onChange = value => { previous?.(value); expireFloorSlots(); };
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
-        openMapTerminal: () => {
-            const existing = Object.values(ui.windows).find(w => w instanceof GachaMapTerminal);
-            if (existing) existing.bringToTop(); else new GachaMapTerminal().render(true);
-        },
+        openMapTerminal: () => GachaMapTerminal.open(),
         openDoomAltar: () => DoomAltar.open(),
         openShop: () => ShopWindow.open(),
         openRisk: () => RiskWindow.open(),

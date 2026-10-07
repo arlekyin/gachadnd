@@ -43,7 +43,8 @@ export function registerEconomySettings() {
     }
     // Номер этажа задаётся на карте этажа; перерисовка открытых окон при его изменении
     game.settings.settings.get(`${MODULE_ID}.runFloor`).onChange = () => {
-        Object.values(ui.windows).forEach(w => w.constructor?.name === 'GachaMapTerminal' && w.render(false));
+        const map = foundry.applications.instances?.get('gachadnd-map-terminal');
+        if (map?.rendered) map.render({ parts: ['header'] });
         foundry.applications.instances?.get('gachadnd-shop')?.render();
     };
 }

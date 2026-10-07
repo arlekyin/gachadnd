@@ -172,227 +172,158 @@ Hooks.on('updateScene', (scene, changes) => {
     if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) notifyRestChanged();
 });
 
-export class GachaMapTerminal extends Application {
-    constructor(options = {}) {
-        super(options);
-        this.currentMap = canvas.scene?.getFlag(MODULE_ID, 'floorMap') || null;
+// ==========================================
+// ОКНО КАРТЫ
+// ==========================================
+
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+const TEMPLATES = 'modules/gachadnd/templates/map';
+const MAP_ID = 'gachadnd-map-terminal';
+const NODE_HINTS = {
+    shop: 'щёлкните ещё раз, чтобы открыть Магазин',
+    risk: 'щёлкните ещё раз, чтобы открыть Риск',
+    doom: 'щёлкните ещё раз, чтобы открыть Алтарь Погибели'
+};
+// Порядок типов в легенде
+const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'boss'];
+
+/**
+ * Карта этажа: части header (этаж, создание этажа у Мастера), board (узлы и пути), footer (где отряд,
+ * куда дальше, состав этажа). Перемещение отряда перерисовывает только board и footer — у всех
+ * клиентов, через изменение флага сцены.
+ */
+export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
+    static DEFAULT_OPTIONS = {
+        id: MAP_ID,
+        classes: ['gachadnd-map'],
+        tag: 'div',
+        window: { title: 'Карта Разлома', icon: 'fas fa-map-marked-alt', resizable: true },
+        position: { width: 560, height: 760 },
+        actions: {
+            node: GachaMapTerminal.#onNode,
+            generate: GachaMapTerminal.#onGenerate
+        }
+    };
+
+    static PARTS = Object.fromEntries(['header', 'board', 'footer'].map(id => [id, { template: `${TEMPLATES}/${id}.hbs` }]));
+
+    static open() {
+        const existing = foundry.applications.instances?.get(MAP_ID);
+        if (existing) return existing.render({ force: true }).then(() => existing.bringToFront?.());
+        return new GachaMapTerminal().render({ force: true });
     }
 
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "gachadnd-map-terminal",
-            template: null,
-            width: 540,
-            height: 750,
-            resizable: true,
-            classes: ["dnd5e2", "gacha-dark-theme"]
-        });
+    get map() {
+        return canvas.scene?.getFlag(MODULE_ID, 'floorMap') ?? null;
     }
 
-    get title() {
-        return `Карта Разлома`;
-    }
-
-    async _renderInner(data) {
-        // Подгружаем актуальную карту из сцены
-        this.currentMap = canvas.scene?.getFlag(MODULE_ID, 'floorMap') || this.currentMap;
-
-        const div = document.createElement("div");
-        div.style.cssText = "display: flex; flex-direction: column; height: 100%; background: #0b0a0a; color: #d0c9c0; font-family: 'Modesto Condensed', serif; position: relative;";
-
-        // CSS для анимации пульсации текущего узла
-        const styleHtml = `
-            <style>
-                @keyframes gacha-pulse {
-                    0% { box-shadow: 0 0 10px #00ffff, inset 0 0 8px rgba(0,255,255,0.4); }
-                    50% { box-shadow: 0 0 25px #00ffff, inset 0 0 15px rgba(0,255,255,0.8); }
-                    100% { box-shadow: 0 0 10px #00ffff, inset 0 0 8px rgba(0,255,255,0.4); }
-                }
-                .gacha-node-current { animation: gacha-pulse 2s infinite; border-color: #00ffff !important; z-index: 10 !important; }
-                .gacha-node-visited { filter: saturate(0.5); opacity: 0.85; }
-            </style>
-        `;
-
-        // Номер этажа забега: виден всем; Мастер задаёт номер следующего этажа при создании карты
+    async _prepareContext() {
+        const map = this.map;
         const floor = getFloor();
-        const nextFloor = this.currentMap?.visitedNodes?.length ? floor + 1 : floor;
-        let controlPanel = `
-            <div style="padding: 8px 10px; border-bottom: 1px solid #3d3834; background: #110f0e; text-align: center; color: #ffaa00; font-size: 1.25em; letter-spacing: 0.08em; z-index: 10;">ЭТАЖ ${floor}</div>`;
-        if (game.user.isGM) {
-            controlPanel += `
-                <div style="padding: 10px; border-bottom: 1px solid #3d3834; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #161414; z-index: 10;">
-                    <div style="color: #7a7062; font-size: 1.1em;" title="Номер нового этажа. От него зависят цены и награды золотом.">Этаж: <input type="number" id="gacha-map-floor" value="${nextFloor}" min="1" max="20" style="width: 40px; background: #000; color: #ffaa00; border: 1px solid #444; text-align: center;"></div>
-                    <div style="color: #7a7062; font-size: 1.1em;">Узлов: <input type="number" id="gacha-map-length" value="6" min="3" max="15" style="width: 40px; background: #000; color: #ffaa00; border: 1px solid #444; text-align: center;"></div>
-                    <button id="gacha-generate-map-btn" style="width: 150px; padding: 4px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border: 1px solid #ffaa00; color: #ffaa00; font-weight: bold; cursor: pointer;">Создать Этаж</button>
-                </div>
-            `;
-        }
+        const context = {
+            floor,
+            nextFloor: map?.visitedNodes?.length ? floor + 1 : floor,
+            isGM: game.user.isGM,
+            hasMap: !!map?.nodes?.length
+        };
+        if (!context.hasMap) return context;
 
-        let mapHtml = `<div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; color: #555; font-size: 1.2em; font-style: italic;">Карта скрыта в тумане...</div>`;
+        const { rows, nodes, currentNodeId, visitedNodes = [] } = map;
+        const current = nodes.find(n => n.id === currentNodeId) ?? null;
+        const reachable = new Set(current ? current.next : nodes.filter(n => n.type === MAP_DATA.NODE_START).map(n => n.id));
+        const visited = new Set(visitedNodes);
 
-        if (this.currentMap) {
-            const { rows, nodes, currentNodeId, visitedNodes = [] } = this.currentMap;
-            const rowCount = rows.length;
-            
-            let svgLines = '';
-            let htmlNodes = '';
-            const nodeCoords = {};
-            
-            // Расчет координат
-            rows.forEach((row, r) => {
-                const w = row.length;
-                const rowY = 90 - (r / (rowCount - 1)) * 80; 
-                row.forEach((node, c) => {
-                    const nodeX = 10 + ((c + 0.5) / w) * 80;
-                    nodeCoords[node.id] = { x: nodeX, y: rowY };
-                });
-            });
+        // Координаты в процентах поля: Вход внизу, Босс вверху
+        const coords = {};
+        rows.forEach((row, r) => {
+            const y = 92 - (r / Math.max(1, rows.length - 1)) * 82;
+            row.forEach((node, c) => { coords[node.id] = { x: 12 + ((c + 0.5) / row.length) * 76, y }; });
+        });
 
-            // Отрисовка линий
-            nodes.forEach(node => {
-                const start = nodeCoords[node.id];
-                node.next.forEach(nextId => {
-                    const end = nodeCoords[nextId];
-                    
-                    // Если оба узла посещены, значит отряд прошел по этому пути
-                    const isTraversed = visitedNodes.includes(node.id) && visitedNodes.includes(nextId);
-                    
-                    const lineColor = isTraversed ? '#00ccff' : '#3d3834';
-                    const lineWidth = isTraversed ? '4' : '3';
-                    const lineDash = isTraversed ? 'none' : '5,5';
-                    const lineGlow = isTraversed ? 'filter="url(#glow)"' : '';
+        const look = node => ({ color: MAP_DATA.COLORS[node.type] ?? node.color, icon: MAP_DATA.ICONS[node.type] ?? node.icon, label: MAP_DATA.LABELS[node.type] ?? node.label });
+        context.nodes = nodes.map(node => {
+            const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
+            return { id: node.id, ...coords[node.id], ...look(node), cls: `${state} type-${node.type}`, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
+        });
 
-                    svgLines += `<line x1="${start.x}%" y1="${start.y}%" x2="${end.x}%" y2="${end.y}%" stroke="${lineColor}" stroke-width="${lineWidth}" stroke-dasharray="${lineDash}" style="transition: all 0.3s;" />`;
-                });
-            });
+        // Пути: пройденный — светится, доступный — пунктир, остальные — едва видны.
+        // Кривая Безье со стороны рядов, чтобы пересечения читались
+        context.edges = nodes.flatMap(node => node.next.map(nextId => {
+            const a = coords[node.id], b = coords[nextId];
+            const mid = (a.y + b.y) / 2;
+            const traversed = visited.has(node.id) && visited.has(nextId);
+            const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
+            return {
+                d: `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} C ${a.x.toFixed(2)} ${mid.toFixed(2)}, ${b.x.toFixed(2)} ${mid.toFixed(2)}, ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
+                cls: traversed ? 'traversed' : open ? 'open' : 'faint'
+            };
+        }));
 
-            // Отрисовка узлов
-            nodes.forEach(node => {
-                const pos = nodeCoords[node.id];
-                const isCurrent = node.id === currentNodeId;
-                const isVisited = visitedNodes.includes(node.id);
-
-                let nodeClass = "gacha-map-node";
-                if (isCurrent) nodeClass += " gacha-node-current";
-                else if (isVisited) nodeClass += " gacha-node-visited";
-
-                // Перекрашиваем посещенные узлы в голубой
-                const borderColor = isVisited ? '#0070dd' : node.color;
-                const iconColor = isVisited ? '#00ccff' : node.color;
-                const bg = isCurrent ? '#002233' : '#111';
-
-                htmlNodes += `
-                    <div class="${nodeClass}" data-node-id="${node.id}" style="position: absolute; left: ${pos.x}%; top: ${pos.y}%; transform: translate(-50%, -50%); width: 44px; height: 44px; background: ${bg}; border: 2px solid ${borderColor}; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px ${borderColor}44, inset 0 0 8px rgba(0,0,0,0.8); cursor: pointer; z-index: 5; transition: all 0.3s;" title="${node.label}">
-                        <i class="fas ${node.icon}" style="color: ${iconColor}; font-size: 1.2em; text-shadow: 0 0 5px ${iconColor}; transition: all 0.3s;"></i>
-                    </div>
-                `;
-            });
-
-            mapHtml = `
-                <div style="flex-grow: 1; position: relative; overflow: hidden; background: radial-gradient(circle at center, #1a1816 0%, #050404 100%);">
-                    <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;">
-                        ${svgLines}
-                    </svg>
-                    ${htmlNodes}
-                </div>
-            `;
-        }
-
-        div.innerHTML = styleHtml + controlPanel + mapHtml;
-        return $(div);
+        context.current = current ? look(current) : null;
+        context.next = current ? current.next.map(id => look(nodes.find(n => n.id === id))) : [];
+        const counts = {};
+        for (const node of nodes) if (!['start'].includes(node.type)) counts[node.type] = (counts[node.type] ?? 0) + 1;
+        context.legend = LEGEND_ORDER.filter(t => counts[t]).map(t => ({ ...look({ type: t }), count: counts[t] }));
+        return context;
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
-        const element = html instanceof jQuery ? html[0] : html;
+    static async #onGenerate() {
+        if (!game.user.isGM) return;
+        const length = parseInt(this.element.querySelector('[name="length"]')?.value) || 6;
+        // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
+        const floor = Math.max(1, parseInt(this.element.querySelector('[name="floor"]')?.value) || getFloor());
+        await game.settings.set(MODULE_ID, 'runFloor', floor);
+        if (canvas.scene) await canvas.scene.setFlag(MODULE_ID, 'floorMap', generateMapGraph(length));
+    }
 
-        // Генерация новой карты
-        const genBtn = element.querySelector('#gacha-generate-map-btn');
-        if (genBtn && game.user.isGM) {
-            genBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                const length = parseInt(element.querySelector('#gacha-map-length').value) || 6;
-                // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
-                const floor = Math.max(1, parseInt(element.querySelector('#gacha-map-floor').value) || getFloor());
-                await game.settings.set(MODULE_ID, 'runFloor', floor);
-                this.currentMap = generateMapGraph(length);
-                
-                if (canvas.scene) {
-                    await canvas.scene.setFlag(MODULE_ID, 'floorMap', this.currentMap);
-                }
-                this.render(false);
-            });
+    // Перемещение отряда: только Мастер, только по путям вперёд или на пройденный узел
+    static async #onNode(event, target) {
+        if (!game.user.isGM) return ui.notifications.warn('Перемещать отряд может только Мастер.');
+        const mapData = foundry.utils.deepClone(this.map);
+        if (!mapData) return;
+        mapData.visitedNodes ??= [];
+        const nodeId = target.dataset.nodeId;
+        const nodeData = mapData.nodes.find(n => n.id === nodeId);
+        if (!nodeData) return;
+
+        if (!mapData.currentNodeId) {
+            if (nodeData.type !== MAP_DATA.NODE_START) return ui.notifications.warn('Путешествие должно начинаться с начальной точки (Вход).');
+        } else {
+            // Щелчок по текущему узлу снова открывает его окно
+            if (mapData.currentNodeId === nodeId) return openNodeWindow(nodeData.type);
+            const currentNode = mapData.nodes.find(n => n.id === mapData.currentNodeId);
+            if (!currentNode.next.includes(nodeId) && !mapData.visitedNodes.includes(nodeId)) {
+                return ui.notifications.warn('Отряд может двигаться только по связанным линиям вперёд!');
+            }
         }
 
-        // Клик по узлам (Перемещение отряда)
-        element.querySelectorAll('.gacha-map-node').forEach(nodeEl => {
-            nodeEl.addEventListener('click', async (e) => {
-                if (!game.user.isGM) {
-                    ui.notifications.warn("Перемещать отряд может только Мастер.");
-                    return;
-                }
+        mapData.currentNodeId = nodeId;
+        if (!mapData.visitedNodes.includes(nodeId)) mapData.visitedNodes.push(nodeId);
+        // Флаг сцены расходится всем клиентам; их карты перерисуются хуком updateScene
+        if (canvas.scene) await canvas.scene.setFlag(MODULE_ID, 'floorMap', mapData);
 
-                const nodeId = e.currentTarget.dataset.nodeId;
-                let mapData = foundry.utils.deepClone(this.currentMap);
-                if (!mapData.visitedNodes) mapData.visitedNodes = [];
+        // Серия Войны и штраф проклятой Войны; окна узлов
+        await onNodeEntered(nodeData.type);
+        openNodeWindow(nodeData.type);
+        if (nodeData.type === MAP_DATA.NODE_REST) announceRest();
 
-                const nodeData = mapData.nodes.find(n => n.id === nodeId);
-                if (!nodeData) return;
-
-                // Валидация перемещения
-                if (!mapData.currentNodeId) {
-                    // Если путешествие еще не начато, можно кликнуть только на Старт
-                    if (nodeData.type !== 'start') {
-                        ui.notifications.warn("Путешествие должно начинаться с начальной точки (Вход).");
-                        return;
-                    }
-                } else {
-                    // Если отряд уже где-то стоит
-                    // Клик по текущей комнате; на Погибели открывает алтарь
-                    if (mapData.currentNodeId === nodeId) {
-                        if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
-                        if (nodeData.type === MAP_DATA.NODE_SHOP) ShopWindow.open();
-                        if (nodeData.type === MAP_DATA.NODE_RISK) RiskWindow.open();
-                        return;
-                    }
-                    
-                    const currentNode = mapData.nodes.find(n => n.id === mapData.currentNodeId);
-                    if (!currentNode.next.includes(nodeId) && !mapData.visitedNodes.includes(nodeId)) {
-                        ui.notifications.warn("Отряд может двигаться только по связанным линиям вперед!");
-                        return;
-                    }
-                }
-
-                // Обновляем состояние карты
-                mapData.currentNodeId = nodeId;
-                if (!mapData.visitedNodes.includes(nodeId)) {
-                    mapData.visitedNodes.push(nodeId);
-                }
-
-                // Сохраняем в Сцену (это автоматически разошлет обновленную карту всем игрокам)
-                this.currentMap = mapData;
-                if (canvas.scene) {
-                    await canvas.scene.setFlag(MODULE_ID, 'floorMap', mapData);
-                }
-                
-                // Перерисовываем интерфейс
-                this.render(false);
-
-                // Серия Войны и штраф проклятой Войны; на Погибели — алтарь
-                await onNodeEntered(nodeData.type);
-                if (nodeData.type === MAP_DATA.NODE_DOOM) DoomAltar.open();
-                if (nodeData.type === MAP_DATA.NODE_SHOP) ShopWindow.open();
-                if (nodeData.type === MAP_DATA.NODE_RISK) RiskWindow.open();
-                if (nodeData.type === MAP_DATA.NODE_REST) announceRest();
-
-                // Сообщение в чат
-                ChatMessage.create({
-                    speaker: ChatMessage.getSpeaker({ alias: "Путеводитель Тумана" }),
-                    content: `<div style="padding: 10px; background: #0b0a0a; border: 1px solid #00ccff; border-radius: 4px; color: #ede6dc; font-family: 'Modesto Condensed', serif; text-align: center; box-shadow: inset 0 0 15px rgba(0, 204, 255, 0.2);">
-                        <h3 style="margin: 0; color: #00ccff; text-shadow: 0 0 5px #00ccff;"><i class="fas ${nodeData.icon}"></i> Отряд входит в зону: ${nodeData.label.toUpperCase()}</h3>
-                    </div>`
-                });
-            });
+        const label = MAP_DATA.LABELS[nodeData.type] ?? nodeData.label;
+        ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ alias: 'Путеводитель Тумана' }),
+            content: `<div class="gachadnd-map-chat" style="--node: ${MAP_DATA.COLORS[nodeData.type]}"><i class="fas ${MAP_DATA.ICONS[nodeData.type]}"></i> Отряд входит в зону: <strong>${label}</strong></div>`
         });
     }
 }
+
+function openNodeWindow(type) {
+    if (type === MAP_DATA.NODE_DOOM) DoomAltar.open();
+    if (type === MAP_DATA.NODE_SHOP) ShopWindow.open();
+    if (type === MAP_DATA.NODE_RISK) RiskWindow.open();
+}
+
+// Карта изменилась (перемещение, новый этаж) — поле и строка состояния перерисовываются у всех
+Hooks.on('updateScene', (scene, changes) => {
+    if (scene.id !== canvas.scene?.id || !foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) return;
+    const app = foundry.applications.instances?.get(MAP_ID);
+    if (app?.rendered) app.render({ parts: ['header', 'board', 'footer'] });
+});
