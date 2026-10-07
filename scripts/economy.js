@@ -6,7 +6,8 @@
  * Магические предметы продаются по цене из компендиума; их редкость открывается с этажом.
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
+import { HOOKS } from "./memory-api.js";
 
 // Награды золотом: доля базы этажа (минимум–максимум)
 export const GOLD_SHARE = {
@@ -127,3 +128,11 @@ export async function pay(actor, price) {
 export async function addGold(actor, gold) {
     await actor.update({ 'system.currency.gp': (Number(actor.system.currency?.gp) || 0) + gold });
 }
+
+// Подключение к добыче Памяти: золото комнаты растёт с этажом — База(Э) × доля комнаты
+Hooks.on(HOOKS.lootGenerated, loot => {
+    const gold = rollGold(loot.roomType);
+    if (gold <= 0) return;
+    if (loot.actor) loot.tasks.push(addGold(loot.actor, gold));
+    loot.lines.push(`<div style="text-align: center; margin-top: 8px; color: #ffd27a; font-size: 1.15em;"><i class="fas fa-coins"></i> ${gold} зм · этаж ${getFloor()}</div>`);
+});

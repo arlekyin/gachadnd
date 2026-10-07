@@ -25,7 +25,7 @@ import {
     canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, romanRank,
     isCrystalItem, isUsableCrystal, availableHitDice, spendHitDice, restoreHitDice, consumeCrystal
 } from "./inventory.js";
-import { isPartyAtRest } from "./map.js";
+import { isAtRest } from "./memory-api.js";
 import { onSocket, emit } from "./socket.js";
 import { MindPhysics } from "./mind-physics.js";
 
@@ -163,7 +163,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         actor ??= game.user.character ?? canvas.tokens?.controlled[0]?.actor;
         if (!actor) return ui.notifications.warn('Выберите своего персонажа.');
         if (!actor.isOwner) return ui.notifications.warn('Алтарь открывается только для своего персонажа.');
-        if (!isPartyAtRest() && !game.user.isGM) return ui.notifications.warn('Алтарь Памяти доступен только на Привале.');
+        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn('Алтарь Памяти доступен только на Привале.');
         const existing = foundry.applications.instances?.get(`gachadnd-memory-altar-${actor.id}`);
         if (existing) return existing.render({ force: true });
         return new MemoryAltar(actor, { position: MemoryAltar.#fullscreen() }).render({ force: true });

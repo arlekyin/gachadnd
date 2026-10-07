@@ -5,13 +5,11 @@
  * Вкладка «Слоты» — компактный список экипированного для быстрого доступа в бою.
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
-import { HORSEMEN, isHorseman, isCleansed, cleanseHorseman, addCleanseProgress } from "./horsemen.js";
-import { isRiskActive } from "./risk.js";
+import { HOOKS, isAtRest, allowSkillChange } from "./memory-api.js";
 import { MemoryAltar } from "./memory-altar.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
-import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
 import { NeuralBackground } from "./neural.js";
@@ -125,8 +123,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             openSheet: MemoryTerminal.#onOpenSheet,
             openAltar: MemoryTerminal.#onOpenAltar,
             editPersonal: MemoryTerminal.#onEditPersonal,
-            horsemanProgress: MemoryTerminal.#onHorsemanProgress,
-            horsemanCleanse: MemoryTerminal.#onHorsemanCleanse
+            extension: MemoryTerminal.#onExtension
         }
     };
 
@@ -150,6 +147,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
      * постоянная анимация заставляет браузер перерисовывать страницу каждый кадр.
      */
     #idle = false;
+    #extensions = [];
     #onPointerDown = event => this.#setIdle(!this.element?.contains(event.target));
     #onVisibility = () => this.#setIdle(document.hidden || this.#idle);
 
@@ -199,7 +197,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!memory.some(i => i.id === this.selectedId)) this.selectedId = memory[0]?.id ?? null;
         const selected = memory.find(i => i.id === this.selectedId) ?? null;
 
-        const atRest = isPartyAtRest();
+        const atRest = isAtRest();
         const hitDice = actor.system.attributes?.hd?.value ?? 0;
 
         const synergyItems = actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item);
@@ -263,7 +261,10 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         const tags = [...(flags.tags ?? [])];
         if (flags.is_active && !flags.tagEmitter) emittedTags.forEach(t => { if (!tags.includes(t)) tags.push(t); });
         const isGM = !!game.user?.isGM;
-        const cursed = flags.horseman && !flags.cleansed;
+        // Плашки и кнопки от подключённых систем (например, Всадников Лабиринта)
+        const view = { notes: [], actions: [] };
+        Hooks.callAll(HOOKS.terminalSkillView, selected, view);
+        this.#extensions = view.actions.map(a => a.run);
         return {
             id: selected.id, name: selected.name, img: selected.img, color: rarity.color,
             equipped: !!flags.is_active, ranked, rank: romanRank(rank),
@@ -275,21 +276,15 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                 ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : [])
             ],
             drawback: flags.drawback && !flags.cleansed ? flags.drawback : null,
-            horseman: flags.horseman ? {
-                cleansed: !!flags.cleansed,
-                text: `${HORSEMEN[flags.horseman]} · ${flags.cleansed ? 'сращён' : `проклят${flags.cleanse_goal ? ` · сращивание ${flags.cleanse_progress ?? 0} / ${flags.cleanse_goal}` : ''}`}`
-            } : null,
+            notes: view.notes,
+            extensions: view.actions.map(({ label, icon, title }, index) => ({ index, label, icon, title })),
             body: descriptionBody(descriptions.get(selected.id)) || '<p>Описание отсутствует.</p>',
             hiddenRanks: isGM && ranked && rank < flags.max_rank
                 ? (flags.rank_texts ?? []).slice(rank - 1).map((text, i) => ({ label: RANK_LABELS[rank + i], text }))
                 : null,
             stats: statsRows(selected),
             canUse: !!flags.is_active && hasActivities(selected),
-            gm: {
-                progress: cursed && isGM && !!flags.cleanse_goal,
-                cleanse: cursed && isGM,
-                personal: !!flags.personal && isGM
-            }
+            gm: { personal: !!flags.personal && isGM }
         };
     }
 
@@ -420,15 +415,9 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#renderContent(['side']);
     }
 
-    static async #onHorsemanProgress(event, target) {
-        const item = this.actor.items.get(target.dataset.itemId);
-        if (item && game.user.isGM) await addCleanseProgress(item, 1);
-        this.#renderContent();
-    }
-
-    static async #onHorsemanCleanse(event, target) {
-        const item = this.actor.items.get(target.dataset.itemId);
-        if (item && game.user.isGM) await cleanseHorseman(item);
+    // Кнопка от подключённой системы: её действие и перерисовка
+    static async #onExtension(event, target) {
+        await this.#extensions[Number(target.dataset.index)]?.();
         this.#renderContent();
     }
 
@@ -481,15 +470,8 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         target.disabled = true;
 
         const equipping = !item.flags[MODULE_ID]?.is_active;
-        if (!equipping && isHorseman(item) && !isCleansed(item)) {
-            ui.notifications.warn(`${item.name}: проклятого всадника снять нельзя.`);
-            return this.#renderContent();
-        }
-
-        if (isRiskActive() && !game.user.isGM) {
-            ui.notifications.warn('Во время испытания Риска навыки менять нельзя.');
-            return this.#renderContent();
-        }
+        // Запреты извне (Риск, проклятый всадник) — через точку расширения Памяти
+        if (!allowSkillChange(this.actor, item, equipping)) return this.#renderContent();
         // В бою навыки не меняются; Горячая замена разрешает одну пару «снять → экипировать»
         let usesSwap = false;
         if (isInCombat(this.actor) && !game.user.isGM) {
@@ -551,7 +533,5 @@ for (const hook of ['createActiveEffect', 'updateActiveEffect', 'deleteActiveEff
 }
 Hooks.on('updateActor', actor => rerender(actor));
 
-// Перемещение отряда по карте этажа меняет доступность слияния на Привале
-Hooks.on('updateScene', (scene, changes) => {
-    if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) rerender(null);
-});
+// Привал открылся или закрылся: баннер и значки слияния
+Hooks.on(HOOKS.restChanged, () => rerender(null));

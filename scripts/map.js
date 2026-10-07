@@ -2,12 +2,13 @@
  * Gacha Roguelike dnd5e — Интерактивная Карта Этажа
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 import { onNodeEntered } from "./horsemen.js";
 import { DoomAltar } from "./altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
 import { announceRest } from "./memory-altar.js";
+import { HOOKS, notifyRestChanged } from "./memory-api.js";
 import { getFloor } from "./economy.js";
 
 const MAP_DATA = {
@@ -162,6 +163,14 @@ export function isPartyAtRest(scene = canvas.scene) {
     const node = map?.nodes?.find(n => n.id === map.currentNodeId);
     return node?.type === 'rest';
 }
+
+// Подключение к Памяти: отряд на узле Привала — Привал открыт
+Hooks.on(HOOKS.queryRest, state => {
+    if (isPartyAtRest()) state.atRest = true;
+});
+Hooks.on('updateScene', (scene, changes) => {
+    if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) notifyRestChanged();
+});
 
 export class GachaMapTerminal extends Application {
     constructor(options = {}) {

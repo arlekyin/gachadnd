@@ -7,8 +7,9 @@
  * Остальные эффекты применяет Мастер.
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 import { isMemorySkill, setSkillEquipped } from "./synergy.js";
+import { HOOKS } from "./memory-api.js";
 
 export const HORSEMEN = {
     hunger: 'Голод',
@@ -96,6 +97,61 @@ Hooks.on('createItem', async (item, options, userId) => {
         await whisperOwners(actor, `<strong>Голод</strong> пожирает неэкипированные навыки: ${eaten.map(i => i.name).join(', ') || 'нечего есть'}.`);
     }
     Hooks.callAll('gachadnd.synergyUpdated', actor);
+});
+
+// ==========================================
+// ПОДКЛЮЧЕНИЕ К ПАМЯТИ
+// ==========================================
+
+// Поглощение кристалла: всадник — один на персонажа; проклятый Голод просит кристалл себе
+Hooks.on(HOOKS.preAbsorbCrystal, (actor, crystal, usageConfig) => {
+    if (crystal.flags?.[MODULE_ID]?.horseman && getHorseman(actor)) {
+        ui.notifications.warn(`⚠️ У персонажа ${actor.name} уже есть всадник.`);
+        return false;
+    }
+    const hunger = getHorseman(actor, 'hunger');
+    if (hunger && !isCleansed(hunger) && !usageConfig?.gachadndToMemory) {
+        chooseHungerOrMemory(actor, crystal);
+        return false;
+    }
+});
+
+async function chooseHungerOrMemory(actor, crystal) {
+    const choice = await foundry.applications.api.DialogV2.wait({
+        window: { title: crystal.name },
+        content: '<p>Голод ждёт. Скормить кристалл ему или поглотить навык в Память?</p>',
+        buttons: [
+            { action: 'feed', label: 'Скормить Голоду', icon: 'fas fa-skull', default: true },
+            { action: 'memory', label: 'В Память', icon: 'fas fa-brain' }
+        ],
+        rejectClose: false
+    });
+    if (choice === 'feed') return feedHunger(actor, crystal);
+    if (choice === 'memory') {
+        const activity = crystal.system.activities?.contents?.[0] ?? [...(crystal.system.activities?.values?.() ?? [])][0];
+        return activity?.use({ gachadndToMemory: true });
+    }
+}
+
+// Проклятого всадника снять нельзя
+Hooks.on(HOOKS.preChangeSkill, (actor, item, equipping) => {
+    if (equipping || !isHorseman(item) || isCleansed(item)) return;
+    ui.notifications.warn(`${item.name}: проклятого всадника снять нельзя.`);
+    return false;
+});
+
+// Терминал: плашка всадника и кнопки Мастера — прогресс и сращивание
+Hooks.on(HOOKS.terminalSkillView, (item, view) => {
+    if (!isHorseman(item)) return;
+    const flags = item.flags[MODULE_ID];
+    const cleansed = isCleansed(item);
+    view.notes.push({
+        cls: `gd-horseman ${cleansed ? 'cleansed' : ''}`,
+        text: `🐎 ${HORSEMEN[flags.horseman]} · ${cleansed ? 'сращён' : `проклят${flags.cleanse_goal ? ` · сращивание ${flags.cleanse_progress ?? 0} / ${flags.cleanse_goal}` : ''}`}`
+    });
+    if (cleansed || !game.user?.isGM) return;
+    if (flags.cleanse_goal) view.actions.push({ label: 'Прогресс', icon: 'fas fa-plus', title: 'Видит только Мастер', run: () => addCleanseProgress(item, 1) });
+    view.actions.push({ label: 'Срастить', icon: 'fas fa-horse-head', title: 'Видит только Мастер', run: () => cleanseHorseman(item) });
 });
 
 // ==========================================

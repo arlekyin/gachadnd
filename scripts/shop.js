@@ -6,7 +6,7 @@
  * Покупают игроки сами: запрос уходит Мастеру через сокет модуля, Мастер списывает золото и выдаёт товар.
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 import { randomCrystal, crystalForSkill } from "./crystals.js";
 import { isMemorySkill } from "./synergy.js";
 import {

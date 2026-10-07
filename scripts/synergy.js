@@ -2,7 +2,7 @@
  * Gacha Roguelike dnd5e — Расчёт капов, Синергий и Выдача Навыков
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-data.js";
 import { RECOVERY_VALUES } from "./recovery.js";
 
