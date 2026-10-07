@@ -42,6 +42,7 @@ const RITUAL_RARITIES = Object.keys(RARITY);
 const SMELT = { gray: { to: 'green', cost: 1 }, green: { to: 'blue', cost: 1 }, blue: { to: 'purple', cost: 2 } };
 const SPLIT = { green: 1, blue: 1, purple: 2 };
 const RESONANCE_COST = 1;
+const BANNER_MS = 5000;
 
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -65,22 +66,11 @@ function ingredients(actor) {
 }
 
 // Карточка воспоминания: что за навык в огоньке или узле кольца — без похода в инвентарь
-// Описание — первый абзац навыка без разметки; у ссылок Foundry остаётся подпись, у бросков — формула;
-// у кристалла описание берётся после вводной строки
-function plainDescription(html, crystal) {
-    let text = String(html ?? '');
-    if (crystal && text.includes('<hr')) text = text.slice(text.indexOf('<hr'));
-    text = text
-        .replace(/@\w+\[[^\]]*\](?:\{([^}]*)\})?/g, (m, label) => label ?? '')
-        .replace(/\[\[\/?(?:r|roll|damage|heal)?\s*([^\]]*)\]\]/gi, '$1')
-        .replace(/<\/(p|li|div|h\d)>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
-    const first = text.split('\n').map(t => t.replace(/\s+/g, ' ').trim()).find(t => t.length > 0) ?? '';
-    return first.length > 240 ? `${first.slice(0, 240).replace(/\s+\S*$/, '')}…` : first;
+function memoryCard(item, kind) {
+    return { item, ...memoryCardHead(item, kind) };
 }
 
-function memoryCard(item, kind) {
+function memoryCardHead(item, kind) {
     const flags = item.flags?.[MODULE_ID] ?? {};
     const rarity = RARITY[flags.rarity] ?? { label: '', color: '#c9a75d' };
     const crystal = kind === 'crystal';
@@ -90,8 +80,26 @@ function memoryCard(item, kind) {
         name: crystal ? currentSkillName(flags, item.name) : item.name,
         color: rarity.color,
         rank: !crystal && (max > 1 || flags.stacking) ? `Ранг ${romanRank(flags.rank ?? 1)}${max > 1 ? ` из ${romanRank(max)}` : ''}` : '',
-        tags: flags.tags ?? [],
-        text: plainDescription(item.system?.description?.value, crystal)
+        tags: flags.tags ?? []
+    };
+}
+
+// Полное описание навыка с обогатителями Foundry; шапка (вид, редкость) и вводная кристалла — до последней черты
+async function enrichedBody(item) {
+    const html = String(item.system?.description?.value ?? '');
+    const body = html.includes('<hr') ? html.slice(html.indexOf('>', html.lastIndexOf('<hr')) + 1) : html;
+    const editor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+    if (!editor?.enrichHTML) return body;
+    return editor.enrichHTML(body, { relativeTo: item, rollData: item.getRollData?.(), secrets: item.isOwner });
+}
+
+// Итог ритуала с новым кристаллом: навык, редкость, теги
+function crystalBanner(label, crystal, rarity) {
+    const flags = crystal.flags?.[MODULE_ID] ?? {};
+    const tags = flags.tags ?? [];
+    return {
+        label, title: currentSkillName(flags, crystal.name), color: RARITY[rarity]?.color ?? '#c9a75d',
+        sub: `${RARITY[rarity]?.label ?? ''} кристалл${tags.length ? ` · ${tags.join(', ')}` : ''}`
     };
 }
 
@@ -174,6 +182,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #flareId = null;
     #drift = new Map();
     #cards = new Map();
+    #bodies = new Map();
+    #cardFor = null;
     #momentum = null;
 
     static DEFAULT_OPTIONS = {
@@ -331,12 +341,10 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const nodes = equipped.map(item => {
             const flags = item.flags[MODULE_ID];
             const canMerge = dupOf.has(item.id);
-            const itemTags = flags.tags ?? [];
             return {
                 id: item.id, name: item.name, rank: romanRank(flags.rank ?? 1), canMerge,
                 cls: [canMerge && 'can-merge', item.id === this.mergeId && 'chosen'].filter(Boolean).join(' '),
-                style: `${at(nodePos.get(item.id))}; --rarity: ${RARITY[flags.rarity]?.color ?? '#c9a75d'}`,
-                title: `${item.name} — ранг ${romanRank(flags.rank ?? 1)}${itemTags.length ? `\nТеги: ${itemTags.join(', ')}` : ''}`
+                style: `${at(nodePos.get(item.id))}; --rarity: ${RARITY[flags.rarity]?.color ?? '#c9a75d'}`
             };
         });
 
@@ -388,7 +396,10 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         // не сдвигает раскладку остальных
         const fogItems = [...all, ...targets];
         this.#cards = new Map([
-            ...fogItems.map(ing => [ing.key, memoryCard(ing.item, ing.kind)]),
+            ...fogItems.map(ing => [ing.key, {
+                ...memoryCard(ing.item, ing.kind),
+                note: ing.kind === 'skill' ? 'Навык из Памяти: бросьте в него повторный кристалл' : ing.weight > 1 ? 'Повтор без слияния — в Переплавке весит вдвое' : ''
+            }]),
             ...equipped.map(item => [item.id, memoryCard(item, 'skill')])
         ]);
         const motes = fogItems.map((ing, n) => {
@@ -399,8 +410,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
                 key: ing.key, itemId: ing.item.id, kind: ing.kind, name: ing.name, view, pos,
                 cls: view.cls.join(' '), tap: view.tap ?? '', mergeSkill: view.mergeSkill ?? '',
                 double: ing.weight > 1,
-                style: `${at(pos)}; --rarity: ${RARITY[ing.rarity]?.color ?? '#c9a75d'}; --delay: ${bobPhase(ing.key)}s`,
-                title: `${ing.name}${ing.kind === 'skill' ? ' — навык из Памяти: бросьте в него повтор' : ''}${ing.weight > 1 ? ' — повтор без слияния, весит вдвое' : ''}`
+                style: `${at(pos)}; --rarity: ${RARITY[ing.rarity]?.color ?? '#c9a75d'}; --delay: ${bobPhase(ing.key)}s`
             };
         });
 
@@ -424,7 +434,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             sockets: merge ? Array.from({ length: sockets - equipped.length }, (_, n) => ({ style: at(orbitAt(equipped.length + n)) })) : [],
             cost: recipe.gain ? `+${recipe.gain} КХ` : recipe.cost ? `−${recipe.cost} КХ` : '',
             hd: { value: hdValue, max: hdMax, pips: Array.from({ length: hdMax }, (_, i) => i < hdValue) },
-            result: this.result,
+            // Баннер итога: продолжает с того же места при перерисовке, через 5 секунд исчезает
+            result: this.result && Date.now() - this.result.at < BANNER_MS ? { ...this.result, delay: Date.now() - this.result.at } : null,
             diving: !this.#dived,
             ringIn: merge && !this.#ringShown
         };
@@ -493,14 +504,30 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #showCard(card, el) {
         const data = this.#cards.get(el.dataset.key ?? el.dataset.itemId);
         if (!data) return card.classList.remove('show');
+        const token = Symbol();
+        this.#cardFor = token;
         card.style.setProperty('--rarity', data.color);
+        const body = this.#bodies.get(data.item.id);
         card.innerHTML = `
             <div class="gd-card-kind">${esc(data.kind)}</div>
             <div class="gd-card-name">${esc(data.name)}</div>
             ${data.rank ? `<div class="gd-card-rank">${esc(data.rank)}</div>` : ''}
             ${data.tags.length ? `<div class="gd-card-tags">${data.tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
-            ${data.text ? `<div class="gd-card-text">${esc(data.text)}</div>` : ''}`;
-        // Справа от огонька, а у правого края — слева; по высоте — рядом с ним, в пределах окна
+            ${data.note ? `<div class="gd-card-note">${esc(data.note)}</div>` : ''}
+            <div class="gd-card-text">${body ?? ''}</div>`;
+        this.#placeCard(card, el);
+        card.classList.add('show');
+        if (body !== undefined) return;
+        enrichedBody(data.item).then(html => {
+            this.#bodies.set(data.item.id, html);
+            if (this.#cardFor !== token) return;
+            card.querySelector('.gd-card-text').innerHTML = html;
+            this.#placeCard(card, el);
+        });
+    }
+
+    // Справа от огонька, а у правого края — слева; по высоте — рядом с ним, в пределах окна
+    #placeCard(card, el) {
         const box = card.parentElement.getBoundingClientRect();
         const anchor = (el.querySelector('.gd-mote-orb, .gd-node-disc') ?? el).getBoundingClientRect();
         const width = card.offsetWidth, height = card.offsetHeight;
@@ -509,7 +536,6 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const top = Math.max(12, Math.min(box.height - height - 12, anchor.top - box.top + anchor.height / 2 - height / 2));
         card.style.left = `${Math.max(12, left)}px`;
         card.style.top = `${top}px`;
-        card.classList.add('show');
     }
 
     #part(id) {
@@ -627,7 +653,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         }[this.ritual]();
         if (done) {
             this.slots = [];
-            this.result = done;
+            this.result = { ...done, at: Date.now() };
         }
         this.#update(['stage', 'controls']);
     }
@@ -639,7 +665,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         await forgeSkill(this.actor, item);
         this.mergeId = null;
         this.#flareId = item.id;
-        return { text: `${item.name} — ранг ${romanRank(rank)}`, color: '#e8c26a', icon: 'fa-link' };
+        const max = item.flags[MODULE_ID].max_rank ?? rank;
+        return { label: 'Слияние', title: item.name, sub: `Ранг ${romanRank(rank)} из ${romanRank(max)}`, color: RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#e8c26a' };
     }
 
     async #smelt(slotted) {
@@ -660,7 +687,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         for (const ing of used) await spend(ing);
         await this.actor.createEmbeddedDocuments('Item', [result]);
         await chat(this.actor, `<strong>Переплавка:</strong> ${used.map(i => esc(i.name)).join(', ')} → <strong>${esc(result.name)}</strong>`);
-        return { text: result.name, color: RARITY[smelt.to].color, icon: 'fa-gem' };
+        return crystalBanner('Переплавка', result, smelt.to);
     }
 
     async #resonate(slotted) {
@@ -675,7 +702,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         await spend(ing);
         await this.actor.createEmbeddedDocuments('Item', [result]);
         await chat(this.actor, `<strong>Резонанс «${esc(this.tag)}»:</strong> ${esc(ing.name)} → <strong>${esc(result.name)}</strong>`);
-        return { text: result.name, color: RARITY[ing.rarity].color, icon: 'fa-gem' };
+        return crystalBanner(`Резонанс · ${this.tag}`, result, ing.rarity);
     }
 
     async #split(slotted) {
@@ -690,7 +717,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         await spend(ing);
         const restored = await restoreHitDice(this.actor, gain);
         await chat(this.actor, `<strong>Расщепление:</strong> ${esc(ing.name)} → +${restored} КХ`);
-        return { text: `Кости Хитов +${restored}`, color: '#5fe0b8', icon: 'fa-heart' };
+        const hd = availableHitDice(this.actor);
+        return { label: 'Расщепление', title: `Кости Хитов +${restored}`, sub: `${ing.name} рассеялся в тумане · Кости Хитов ${hd}`, color: '#5fe0b8' };
     }
 }
 

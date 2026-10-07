@@ -1,6 +1,6 @@
 <div class="gd-part-fog {{#if diving}}diving{{/if}}" style="--glow: {{ritual.glow}}">
     {{#each motes}}
-    <div class="gd-mote {{kind}} {{cls}}" style="{{style}}" data-key="{{key}}" data-item-id="{{itemId}}" data-tap="{{tap}}" data-merge-skill="{{mergeSkill}}" title="{{title}}">
+    <div class="gd-mote {{kind}} {{cls}}" style="{{style}}" data-key="{{key}}" data-item-id="{{itemId}}" data-tap="{{tap}}" data-merge-skill="{{mergeSkill}}">
         <span class="gd-mote-body">
             {{!-- Кристалл — неусвоенное воспоминание: клочья тумана вокруг тлеющей искры; навык — тело нейрона --}}
             <span class="gd-mote-orb">{{#if (eq kind "skill")}}<i class="gd-soma"></i>{{else}}<span class="gd-wisp"><i></i><i></i><i></i><i></i><i></i><i></i></span><i class="gd-spark"></i>{{/if}}{{#if double}}<b>×2</b>{{/if}}</span>
