@@ -64,6 +64,37 @@ function ingredients(actor) {
     return list.sort((a, b) => RITUAL_RARITIES.indexOf(a.rarity) - RITUAL_RARITIES.indexOf(b.rarity) || a.name.localeCompare(b.name));
 }
 
+// Карточка воспоминания: что за навык в огоньке или узле кольца — без похода в инвентарь
+// Описание — первый абзац навыка без разметки; у ссылок Foundry остаётся подпись, у бросков — формула;
+// у кристалла описание берётся после вводной строки
+function plainDescription(html, crystal) {
+    let text = String(html ?? '');
+    if (crystal && text.includes('<hr')) text = text.slice(text.indexOf('<hr'));
+    text = text
+        .replace(/@\w+\[[^\]]*\](?:\{([^}]*)\})?/g, (m, label) => label ?? '')
+        .replace(/\[\[\/?(?:r|roll|damage|heal)?\s*([^\]]*)\]\]/gi, '$1')
+        .replace(/<\/(p|li|div|h\d)>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+    const first = text.split('\n').map(t => t.replace(/\s+/g, ' ').trim()).find(t => t.length > 0) ?? '';
+    return first.length > 240 ? `${first.slice(0, 240).replace(/\s+\S*$/, '')}…` : first;
+}
+
+function memoryCard(item, kind) {
+    const flags = item.flags?.[MODULE_ID] ?? {};
+    const rarity = RARITY[flags.rarity] ?? { label: '', color: '#c9a75d' };
+    const crystal = kind === 'crystal';
+    const max = flags.max_rank ?? 1;
+    return {
+        kind: crystal ? `Кристалл · ${rarity.label.toLowerCase()}` : `Навык Памяти · ${rarity.label.toLowerCase()}${flags.is_active ? ' · экипирован' : ''}`,
+        name: crystal ? currentSkillName(flags, item.name) : item.name,
+        color: rarity.color,
+        rank: !crystal && (max > 1 || flags.stacking) ? `Ранг ${romanRank(flags.rank ?? 1)}${max > 1 ? ` из ${romanRank(max)}` : ''}` : '',
+        tags: flags.tags ?? [],
+        text: plainDescription(item.system?.description?.value, crystal)
+    };
+}
+
 // Ингредиент уходит в ритуал: кристалл расходуется
 async function spend(ingredient) {
     await consumeCrystal(ingredient.item);
@@ -139,6 +170,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #synapses = null;
     #flareId = null;
     #drift = new Map();
+    #cards = new Map();
     #momentum = null;
 
     static DEFAULT_OPTIONS = {
@@ -324,6 +356,10 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         // Место в тумане закрепляется за огоньком при первом появлении: выбор одного
         // не сдвигает раскладку остальных
         const fogItems = [...all, ...targets];
+        this.#cards = new Map([
+            ...fogItems.map(ing => [ing.key, memoryCard(ing.item, ing.kind)]),
+            ...equipped.map(item => [item.id, memoryCard(item, 'skill')])
+        ]);
         const motes = fogItems.map((ing, n) => {
             if (!this.#drift.has(ing.key)) this.#drift.set(ing.key, fogPosition(n, fogItems.length));
             const view = views.get(ing.key) ?? { cls: [] };
@@ -368,6 +404,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         super._onRender(context, options);
         this.element.style.setProperty('--glow', context.ritual.glow);
         this.#dived = true;
+        this.#bindCard();
         if (options.parts?.includes('stage')) {
             this.#ringShown = !!context.ring;
             // Связи кольца живут вместе со слоем ядра; после слияния по прядям навыка уходит вспышка
@@ -388,6 +425,49 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             obstacles: this.element
         });
         this.#momentum = null;
+    }
+
+    // Карточка живёт вне частей окна: перерисовка частей её не трогает. Наведение на огонёк или узел
+    // кольца показывает её рядом с ним; при захвате огонька она прячется
+    #bindCard() {
+        const content = this.element.querySelector('.window-content');
+        if (!content || content.querySelector('.gd-memory-card')) return;
+        const card = document.createElement('div');
+        card.className = 'gd-memory-card';
+        content.append(card);
+        const target = event => event.target.closest?.('.gd-mote, .gd-node');
+        content.addEventListener('pointerover', event => {
+            const el = target(event);
+            if (!el || content.querySelector('.gd-mote.held')) return;
+            this.#showCard(card, el);
+        });
+        content.addEventListener('pointerout', event => {
+            const el = target(event);
+            if (el && !el.contains(event.relatedTarget)) card.classList.remove('show');
+        });
+        content.addEventListener('pointerdown', () => card.classList.remove('show'));
+    }
+
+    #showCard(card, el) {
+        const data = this.#cards.get(el.dataset.key ?? el.dataset.itemId);
+        if (!data) return card.classList.remove('show');
+        card.style.setProperty('--rarity', data.color);
+        card.innerHTML = `
+            <div class="gd-card-kind">${esc(data.kind)}</div>
+            <div class="gd-card-name">${esc(data.name)}</div>
+            ${data.rank ? `<div class="gd-card-rank">${esc(data.rank)}</div>` : ''}
+            ${data.tags.length ? `<div class="gd-card-tags">${data.tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
+            ${data.text ? `<div class="gd-card-text">${esc(data.text)}</div>` : ''}`;
+        // Справа от огонька, а у правого края — слева; по высоте — рядом с ним, в пределах окна
+        const box = card.parentElement.getBoundingClientRect();
+        const anchor = (el.querySelector('.gd-mote-orb, .gd-node-disc') ?? el).getBoundingClientRect();
+        const width = card.offsetWidth, height = card.offsetHeight;
+        let left = anchor.right - box.left + 18;
+        if (left + width > box.width - 12) left = anchor.left - box.left - 18 - width;
+        const top = Math.max(12, Math.min(box.height - height - 12, anchor.top - box.top + anchor.height / 2 - height / 2));
+        card.style.left = `${Math.max(12, left)}px`;
+        card.style.top = `${top}px`;
+        card.classList.add('show');
     }
 
     #part(id) {
