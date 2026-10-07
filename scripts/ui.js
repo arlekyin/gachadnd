@@ -359,17 +359,32 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             this.neural?.setActiveCount(context.equippedCount);
         }
 
-        // Отрицательная задержка = текущая позиция в цикле: неон продолжает движение после перерисовки
+        // Отрицательная задержка = текущая позиция в цикле от часов. Задаётся только новым
+        // элементам: части, нарисованной сейчас, — для неона; окну — один раз, для тумана.
+        // Смена задержки у уже идущей анимации сдвигает её фазу — туман и неон дёргались
         const now = Date.now();
-        this.element.style.setProperty('--gd-phase-small', `-${now % 4500}ms`);
-        this.element.style.setProperty('--gd-phase-big', `-${now % 6000}ms`);
-        this.element.style.setProperty('--gd-phase-fog', `-${now % 90000}ms`);
-        this.element.style.setProperty('--gd-phase-fog2', `-${now % 55000}ms`);
+        if (options.isFirstRender) {
+            this.element.style.setProperty('--gd-phase-fog', `-${now % 90000}ms`);
+            this.element.style.setProperty('--gd-phase-fog2', `-${now % 55000}ms`);
+        }
+        for (const id of ['deck', 'feature']) {
+            const part = options.parts?.includes(id) && this.element.querySelector(`[data-application-part="${id}"]`);
+            if (!part) continue;
+            part.style.setProperty('--gd-phase-small', `-${now % 4500}ms`);
+            part.style.setProperty('--gd-phase-big', `-${now % 6000}ms`);
+        }
 
         // Анимация последнего действия (экипировка, снятие, слияние) — на картах этого навыка
-        if (this.fx && Date.now() - this.fx.time < 1500) {
+        // Действие вызывает несколько перерисовок подряд (предмет, синергии); новая карта
+        // продолжает анимацию с прошедшего момента, а не запускает её заново
+        const elapsed = this.fx ? now - this.fx.time : Infinity;
+        if (elapsed < 1500) {
             this.element.querySelectorAll(`[data-item-id="${this.fx.id}"].gd-tcard, [data-item-id="${this.fx.id}"].gd-bigcard`)
-                .forEach(el => el.classList.add(`fx-${this.fx.type}`));
+                .forEach(el => {
+                    if (el.classList.contains(`fx-${this.fx.type}`)) return;
+                    el.style.setProperty('animation-delay', `-${elapsed}ms`, 'important');
+                    el.classList.add(`fx-${this.fx.type}`);
+                });
         }
 
         this.element.querySelectorAll('.gd-uses-input:not([data-bound])').forEach(input => {
