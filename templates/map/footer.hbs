@@ -3,7 +3,7 @@
     <div class="gd-map-status">
         {{#if current}}
         <span class="gd-map-here" style="--node: {{current.color}}"><i class="fas {{current.icon}}"></i> {{current.label}}</span>
-        {{#if next.length}}<span class="gd-map-next">дальше: {{#each next}}<b style="--node: {{color}}">{{label}}</b>{{/each}}</span>{{else}}<span class="gd-map-next">этаж пройден</span>{{/if}}
+        {{#if next.length}}<span class="gd-map-next">дальше — {{#each next}}<b style="--node: {{color}}">{{label}}</b>{{/each}}</span>{{else}}<span class="gd-map-next">этаж пройден</span>{{/if}}
         {{else}}
         <span class="gd-map-next">Отряд у Входа — путь начинается с него</span>
         {{/if}}

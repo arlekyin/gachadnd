@@ -1163,83 +1163,128 @@
 .gachadnd-event-rewards-window .gd-check { justify-content: flex-start; }
 
 /* ==========================================
-   Карта этажа (ApplicationV2, части header · board · footer)
-   Анимации только transform и opacity
+   Карта этажа — пергамент в духе карты Мародёров
+   Чернила, сгибы, рукописные подписи, следы отряда вдоль пройденных путей.
+   Шрифт Caveat (SIL OFL, assets/fonts/caveat). Анимации только transform и opacity
    ========================================== */
+@font-face { font-family: 'GD Caveat'; font-weight: 400; font-display: swap; src: url('../assets/fonts/caveat/caveat-cyrillic-400-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'GD Caveat'; font-weight: 400; font-display: swap; src: url('../assets/fonts/caveat/caveat-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'GD Caveat'; font-weight: 700; font-display: swap; src: url('../assets/fonts/caveat/caveat-cyrillic-700-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'GD Caveat'; font-weight: 700; font-display: swap; src: url('../assets/fonts/caveat/caveat-latin-700-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+.gachadnd-map {
+  --ink: #3a2414;
+  --ink-soft: rgba(58, 36, 20, 0.55);
+  --ink-faint: rgba(58, 36, 20, 0.22);
+  --paper: #e9d7b0;
+}
 .gachadnd-map .window-content {
-  display: flex; flex-direction: column; padding: 0; overflow: hidden;
-  color: #d0c9c0; font-family: 'Modesto Condensed', serif;
-  background: radial-gradient(ellipse at 50% 40%, #12201e 0%, #080b0c 75%);
+  position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  color: var(--ink); font-family: 'GD Caveat', 'Modesto Condensed', cursive;
+  background:
+    /* сгибы: вертикальный и два горизонтальных */
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(90, 60, 30, 0.18) 50%, rgba(255, 245, 220, 0.25) calc(50% + 1px), transparent calc(50% + 3px)),
+    linear-gradient(180deg, transparent calc(33% - 1px), rgba(90, 60, 30, 0.14) 33%, rgba(255, 245, 220, 0.2) calc(33% + 1px), transparent calc(33% + 3px)),
+    linear-gradient(180deg, transparent calc(66% - 1px), rgba(90, 60, 30, 0.14) 66%, rgba(255, 245, 220, 0.2) calc(66% + 1px), transparent calc(66% + 3px)),
+    /* пятна и потемневшие края */
+    radial-gradient(ellipse at 20% 15%, rgba(150, 100, 50, 0.18), transparent 35%),
+    radial-gradient(ellipse at 80% 75%, rgba(140, 90, 40, 0.16), transparent 40%),
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(110, 70, 30, 0.45) 100%),
+    /* волокна бумаги */
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='300'%20height='300'%3E%3Cfilter%20id='p'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='3'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.35%20%200%200%200%200%200.22%20%200%200%200%200%200.1%20%200%200%200%200.18%200'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23p)'/%3E%3C/svg%3E"),
+    linear-gradient(160deg, #efdfba 0%, #e3cc9c 55%, #d8bd88 100%) !important;
 }
 .gachadnd-map button { height: auto; line-height: 1.2; }
 
-.gachadnd-map .gd-map-header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid rgba(95, 224, 184, 0.18); background: rgba(5, 10, 10, 0.75); }
-.gachadnd-map .gd-map-floor { display: flex; align-items: baseline; gap: 6px; text-transform: uppercase; letter-spacing: 0.12em; color: #9fd9c8; }
-.gachadnd-map .gd-map-floor strong { font-size: 1.8em; color: #e6c87a; text-shadow: 0 0 10px rgba(230, 200, 122, 0.5); }
-.gachadnd-map .gd-map-gm { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: var(--font-primary, sans-serif); font-size: 12px; color: #9fb3ae; }
-.gachadnd-map .gd-map-gm input { width: 44px; height: 24px; text-align: center; background: #050808; color: #e6c87a; border: 1px solid #2f4440; }
-.gachadnd-map .gd-map-gm button { width: auto; padding: 4px 10px; border: 1px solid #c9a75d; background: linear-gradient(180deg, #2a1f0c, #140e05); color: #e6c87a; }
+/* Шапка: название рукописью, этаж римскими цифрами */
+.gachadnd-map .gd-map-header { display: flex; align-items: center; gap: 12px; padding: 8px 16px 6px; border-bottom: 2px double var(--ink-soft); }
+.gachadnd-map .gd-map-title { display: flex; flex-direction: column; line-height: 1; }
+.gachadnd-map .gd-map-caption { font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
+.gachadnd-map .gd-map-floor { font-size: 18px; color: var(--ink-soft); }
+.gachadnd-map .gd-map-floor strong { font-size: 22px; color: #7a1f12; }
+.gachadnd-map .gd-map-gm { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.gachadnd-map .gd-map-gm input { width: 40px; height: 24px; text-align: center; font-family: inherit; font-size: 17px; color: var(--ink); background: rgba(255, 248, 230, 0.45); border: none; border-bottom: 1px solid var(--ink-soft); border-radius: 0; }
+.gachadnd-map .gd-map-gm button { width: auto; padding: 2px 10px; font-family: inherit; font-size: 17px; color: var(--ink); background: rgba(255, 248, 230, 0.35); border: 1px solid var(--ink-soft); border-radius: 3px; }
+.gachadnd-map .gd-map-gm button:hover { background: rgba(255, 248, 230, 0.6); box-shadow: none; }
 
+/* Поле: пути чернилами */
 .gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .gachadnd-map .gd-map-board.empty { display: flex; align-items: center; justify-content: center; }
-.gachadnd-map .gd-map-fog { font-style: italic; color: #5d6b67; font-size: 1.2em; }
+.gachadnd-map .gd-map-fog { font-size: 24px; color: var(--ink-soft); }
 .gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gachadnd-map .gd-map-edges path { fill: none; stroke-linecap: round; }
-.gachadnd-map .gd-map-edges path.faint { stroke: rgba(160, 190, 185, 0.16); stroke-width: 2; stroke-dasharray: 4 6; }
-.gachadnd-map .gd-map-edges path.open { stroke: rgba(230, 200, 122, 0.75); stroke-width: 2.5; stroke-dasharray: 7 6; }
-.gachadnd-map .gd-map-edges path.traversed { stroke: #5fe0b8; stroke-width: 3.5; filter: drop-shadow(0 0 4px rgba(95, 224, 184, 0.8)); }
+.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: 1.5; stroke-dasharray: 2 5; }
+.gachadnd-map .gd-map-edges path.open { stroke: var(--ink-soft); stroke-width: 2; stroke-dasharray: 8 5; }
+.gachadnd-map .gd-map-edges path.traversed { stroke: rgba(58, 36, 20, 0.35); stroke-width: 1.5; }
 
-/* Узел: медальон цвета типа; текущий — пульсирующее кольцо, доступный — подсвечен */
+/* Следы отряда вдоль пройденных путей; последний переход проявляется шаг за шагом */
+.gachadnd-map .gd-map-steps { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.gachadnd-map .gd-step { position: absolute; width: 5px; height: 9px; border-radius: 50% 50% 45% 45%; background: var(--ink); opacity: 0.75; }
+.gachadnd-map .gd-step::after { content: ''; position: absolute; left: 0.5px; top: 10px; width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
+.gachadnd-map .gd-step.fresh { opacity: 0; animation: gd-step-in 0.35s ease-out forwards; }
+@keyframes gd-step-in { from { opacity: 0; } to { opacity: 0.75; } }
+
+/* Узлы: чернильные кружки, цвет типа — только оттенком чернил */
 .gachadnd-map .gd-map-node {
-  /* Точка узла — центр медальона, подпись ниже: пути сходятся в центр круга */
-  position: absolute; transform: translate(-50%, -23px); z-index: 2;
+  position: absolute; transform: translate(-50%, -21px); z-index: 2;
   width: auto; margin: 0; padding: 0; border: none; background: none; box-shadow: none;
-  display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 0; cursor: pointer; color: var(--ink);
+  /* кнопки не наследуют шрифт — подписи пишутся тем же почерком, что и вся карта */
+  font-family: inherit;
 }
-.gachadnd-map .gd-map-node:hover, .gachadnd-map .gd-map-node:focus { box-shadow: none; outline: none; }
+.gachadnd-map .gd-map-node:hover, .gachadnd-map .gd-map-node:focus { box-shadow: none; outline: none; background: none; }
 .gachadnd-map .gd-map-disc {
-  position: relative; width: 46px; height: 46px; border-radius: 50%;
+  --tint: color-mix(in srgb, var(--node) 45%, #3a2414);
+  position: relative; width: 42px; height: 42px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  border: 2px solid var(--node); background: radial-gradient(circle at 40% 35%, #1d2626, #070a0a 75%);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--node) 30%, transparent), inset 0 0 10px rgba(0, 0, 0, 0.8);
+  border: 2px solid var(--tint); background: #ead8b2;
+  box-shadow: 0 0 0 3px #ead8b2, 0 0 0 4px var(--ink-faint);
   transition: transform 0.2s;
 }
-.gachadnd-map .gd-map-disc i { font-size: 19px; color: var(--node); text-shadow: 0 0 6px var(--node); }
-.gachadnd-map .gd-map-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9fb3ae; text-shadow: 0 1px 3px #000; white-space: nowrap; }
-.gachadnd-map .gd-map-node:hover .gd-map-disc { transform: scale(1.1); }
-/* Приглушение — цветом, а не прозрачностью: медальон остаётся непрозрачным и закрывает пути */
-.gachadnd-map .gd-map-node.locked .gd-map-disc { border-color: color-mix(in srgb, var(--node) 35%, #1a2222); box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8); }
-.gachadnd-map .gd-map-node.locked .gd-map-disc i { opacity: 0.4; text-shadow: none; }
-.gachadnd-map .gd-map-node.locked .gd-map-label { opacity: 0.45; }
-.gachadnd-map .gd-map-node.visited .gd-map-disc { border-color: #2c7a64; }
-.gachadnd-map .gd-map-node.visited .gd-map-disc i { color: #5fe0b8; text-shadow: none; opacity: 0.8; }
-.gachadnd-map .gd-map-node.visited .gd-map-label { opacity: 0.7; }
-.gachadnd-map .gd-map-node.reachable .gd-map-disc { box-shadow: 0 0 16px color-mix(in srgb, var(--node) 60%, transparent), inset 0 0 10px rgba(0, 0, 0, 0.8); }
-.gachadnd-map .gd-map-node.reachable .gd-map-label { color: #f0e6d0; }
+.gachadnd-map .gd-map-disc i { font-size: 18px; color: var(--tint); }
+.gachadnd-map .gd-map-label { font-size: 18px; line-height: 1; padding: 0 4px; background: radial-gradient(ellipse, rgba(234, 216, 178, 0.95) 40%, transparent 75%); white-space: nowrap; }
+.gachadnd-map .gd-map-node:hover .gd-map-disc { transform: rotate(-4deg) scale(1.08); }
+.gachadnd-map .gd-map-node.locked .gd-map-disc { border-color: var(--ink-faint); box-shadow: 0 0 0 3px #ead8b2; }
+.gachadnd-map .gd-map-node.locked .gd-map-disc i,
+.gachadnd-map .gd-map-node.locked .gd-map-label { opacity: 0.4; }
+.gachadnd-map .gd-map-node.visited .gd-map-disc { border-style: dashed; }
+.gachadnd-map .gd-map-node.visited .gd-map-disc i { opacity: 0.55; }
+.gachadnd-map .gd-map-node.visited .gd-map-label { opacity: 0.7; text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+.gachadnd-map .gd-map-node.reachable .gd-map-disc { border-width: 2.5px; box-shadow: 0 0 0 3px #ead8b2, 0 0 0 5px var(--ink-soft); }
+.gachadnd-map .gd-map-node.reachable .gd-map-label { font-weight: 700; }
+
+/* Отряд: чернильная лента с подписью, вокруг узла медленно кружит пунктир */
 .gachadnd-map .gd-map-node.current { z-index: 3; }
-.gachadnd-map .gd-map-node.current .gd-map-disc { transform: scale(1.15); border-color: #e4fff5; background: radial-gradient(circle at 40% 35%, #1f4a40, #071412 75%); }
-.gachadnd-map .gd-map-node.current .gd-map-label { color: #e4fff5; font-weight: bold; }
+.gachadnd-map .gd-map-node.current .gd-map-disc { border-color: #7a1f12; }
+.gachadnd-map .gd-map-node.current .gd-map-disc i { color: #7a1f12; }
 .gachadnd-map .gd-map-node.current .gd-map-disc::after {
-  content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #5fe0b8;
-  animation: gd-map-pulse 2.2s ease-out infinite;
+  content: ''; position: absolute; inset: -9px; border-radius: 50%;
+  border: 1.5px dashed #7a1f12; animation: gd-map-orbit 14s linear infinite;
 }
-@keyframes gd-map-pulse { from { transform: scale(0.85); opacity: 0.9; } to { transform: scale(1.45); opacity: 0; } }
-.gachadnd-map .gd-map-node.type-boss { transform: translate(-50%, -29px); }
-.gachadnd-map .gd-map-node.type-boss .gd-map-disc { width: 58px; height: 58px; }
+.gachadnd-map .gd-map-node.current .gd-map-label { font-weight: 700; color: #7a1f12; }
+.gachadnd-map .gd-map-node.current .gd-map-label::before {
+  content: 'Отряд'; display: block; margin: 1px auto 0; width: max-content; padding: 0 8px;
+  font-size: 14px; font-weight: 400; color: #f3e6c8; background: #7a1f12;
+  clip-path: polygon(0 0, 100% 0, 92% 50%, 100% 100%, 0 100%, 8% 50%);
+}
+@keyframes gd-map-orbit { to { transform: rotate(360deg); } }
+.gachadnd-map .gd-map-node.type-boss { transform: translate(-50%, -27px); }
+.gachadnd-map .gd-map-node.type-boss .gd-map-disc { width: 54px; height: 54px; border-width: 3px; }
 .gachadnd-map .gd-map-node.type-boss .gd-map-disc i { font-size: 24px; }
 
-.gachadnd-map .gd-map-footer { display: flex; flex-direction: column; gap: 6px; padding: 8px 14px; border-top: 1px solid rgba(95, 224, 184, 0.18); background: rgba(5, 10, 10, 0.75); font-family: var(--font-primary, sans-serif); font-size: 12px; }
-.gachadnd-map .gd-map-footer:empty { display: none; }
-.gachadnd-map .gd-map-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #9fb3ae; }
-.gachadnd-map .gd-map-here { color: var(--node); font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; }
-.gachadnd-map .gd-map-next b { margin-left: 6px; color: var(--node); font-weight: normal; }
-.gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 10px; }
-.gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 4px; color: #d0c9c0; }
-.gachadnd-map .gd-map-legend i { color: var(--node); }
+/* Подвал: где отряд и что на этаже */
+.gachadnd-map .gd-map-footer { display: flex; flex-direction: column; gap: 2px; padding: 6px 16px 8px; border-top: 2px double var(--ink-soft); font-size: 18px; }
+.gachadnd-map .gd-map-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.gachadnd-map .gd-map-here { font-weight: 700; color: #7a1f12; }
+.gachadnd-map .gd-map-next { color: var(--ink-soft); }
+.gachadnd-map .gd-map-next b { margin-left: 6px; font-weight: 700; color: color-mix(in srgb, var(--node) 45%, #3a2414); }
+.gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 12px; }
+.gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 4px; }
+.gachadnd-map .gd-map-legend i { font-size: 13px; color: color-mix(in srgb, var(--node) 45%, #3a2414); }
 
 @media (prefers-reduced-motion: reduce) {
-  .gachadnd-map .gd-map-node.current .gd-map-disc::after { animation: none; }
+  .gachadnd-map .gd-map-node.current .gd-map-disc::after, .gachadnd-map .gd-step.fresh { animation: none; opacity: 0.75; }
 }
 
-.gachadnd-map-chat { padding: 8px 10px; border: 1px solid var(--node, #5fe0b8); border-radius: 4px; background: #0b0d0d; color: #ede6dc; text-align: center; }
-.gachadnd-map-chat i { color: var(--node, #5fe0b8); }
+.gachadnd-map-chat { padding: 6px 10px; border: 1px solid rgba(58, 36, 20, 0.55); border-radius: 3px; background: linear-gradient(160deg, #efdfba, #dcc290); color: #3a2414; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 18px; }
+.gachadnd-map-chat i { color: color-mix(in srgb, var(--node, #3a2414) 45%, #3a2414); }

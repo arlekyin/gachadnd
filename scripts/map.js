@@ -197,7 +197,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         id: MAP_ID,
         classes: ['gachadnd-map'],
         tag: 'div',
-        window: { title: 'Карта Разлома', icon: 'fas fa-map-marked-alt', resizable: true },
+        window: { title: 'Карта Разлома', icon: 'fas fa-scroll', resizable: true },
         position: { width: 560, height: 760 },
         actions: {
             node: GachaMapTerminal.#onNode,
@@ -220,8 +220,10 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
     async _prepareContext() {
         const map = this.map;
         const floor = getFloor();
+        const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
         const context = {
             floor,
+            floorRoman: ROMAN[floor - 1] ?? floor,
             nextFloor: map?.visitedNodes?.length ? floor + 1 : floor,
             isGM: game.user.isGM,
             hasMap: !!map?.nodes?.length
@@ -255,9 +257,14 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
             return {
                 d: `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} C ${a.x.toFixed(2)} ${mid.toFixed(2)}, ${b.x.toFixed(2)} ${mid.toFixed(2)}, ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
-                cls: traversed ? 'traversed' : open ? 'open' : 'faint'
+                cls: traversed ? 'traversed' : open ? 'open' : 'faint',
+                from: node.id, to: nextId, a, b, traversed
             };
         }));
+        // Порядок пройденных путей — для следов: последний шаг отряда проявляется заново
+        const order = visitedNodes;
+        context.steps = context.edges.filter(e => e.traversed && order.indexOf(e.to) === order.indexOf(e.from) + 1)
+            .map(e => ({ a: e.a, b: e.b, fresh: e.to === currentNodeId }));
 
         context.current = current ? look(current) : null;
         context.next = current ? current.next.map(id => look(nodes.find(n => n.id === id))) : [];
@@ -265,6 +272,42 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         for (const node of nodes) if (!['start'].includes(node.type)) counts[node.type] = (counts[node.type] ?? 0) + 1;
         context.legend = LEGEND_ORDER.filter(t => counts[t]).map(t => ({ ...look({ type: t }), count: counts[t] }));
         return context;
+    }
+
+    // Следы отряда, как на карте Мародёров: отпечатки вдоль пройденных путей.
+    // Ставятся после отрисовки — нужен настоящий размер поля, чтобы шаги шли вдоль кривой
+    _onRender(context, options) {
+        super._onRender(context, options);
+        const board = this.element.querySelector('.gd-map-board');
+        const layer = board?.querySelector('.gd-map-steps');
+        if (!layer || !context.steps?.length) return;
+        const width = board.clientWidth, height = board.clientHeight;
+        const html = [];
+        for (const step of context.steps) {
+            const p0 = { x: step.a.x * width / 100, y: step.a.y * height / 100 };
+            const p3 = { x: step.b.x * width / 100, y: step.b.y * height / 100 };
+            const p1 = { x: p0.x, y: (p0.y + p3.y) / 2 }, p2 = { x: p3.x, y: (p0.y + p3.y) / 2 };
+            const at = t => {
+                const u = 1 - t;
+                return {
+                    x: u ** 3 * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t ** 3 * p3.x,
+                    y: u ** 3 * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t ** 3 * p3.y
+                };
+            };
+            // Шаг каждые ~18 пикселей, кроме кругов узлов на концах
+            const length = Math.hypot(p3.x - p0.x, p3.y - p0.y) * 1.15;
+            const count = Math.max(2, Math.floor((length - 56) / 18));
+            for (let i = 0; i < count; i++) {
+                const t = (30 / length) + (i / Math.max(1, count - 1)) * (1 - 60 / length);
+                const p = at(t), q = at(Math.min(1, t + 0.01));
+                const angle = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI + 90;
+                const side = i % 2 ? 1 : -1;
+                const nx = Math.cos((angle) * Math.PI / 180) * 4 * side, ny = Math.sin((angle) * Math.PI / 180) * 4 * side;
+                const delay = step.fresh ? `animation-delay: ${(i * 0.12).toFixed(2)}s;` : '';
+                html.push(`<i class="gd-step ${step.fresh ? 'fresh' : ''}" style="left: ${(p.x + nx).toFixed(1)}px; top: ${(p.y + ny).toFixed(1)}px; transform: translate(-50%, -50%) rotate(${angle.toFixed(0)}deg); ${delay}"></i>`);
+            }
+        }
+        layer.innerHTML = html.join('');
     }
 
     static async #onGenerate() {
