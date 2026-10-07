@@ -9,6 +9,7 @@ import { MODULE_ID } from "./main.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
 import { HORSEMEN, isHorseman, isCleansed, cleanseHorseman, addCleanseProgress } from "./horsemen.js";
 import { isRiskActive } from "./risk.js";
+import { MemoryAltar } from "./memory-altar.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { isPartyAtRest } from "./map.js";
 import { collectGlossary } from "./glossary.js";
@@ -113,6 +114,7 @@ export class MemoryTerminal extends ApplicationV2 {
             use: MemoryTerminal.#onUse,
             expand: MemoryTerminal.#onExpand,
             openSheet: MemoryTerminal.#onOpenSheet,
+            openAltar: MemoryTerminal.#onOpenAltar,
             editPersonal: MemoryTerminal.#onEditPersonal,
             horsemanProgress: MemoryTerminal.#onHorsemanProgress,
             horsemanCleanse: MemoryTerminal.#onHorsemanCleanse
@@ -224,7 +226,8 @@ export class MemoryTerminal extends ApplicationV2 {
     }
 
     #restBannerHtml({ hitDice }) {
-        return `<div class="gd-rest-banner"><i class="fas fa-campground"></i> Привал · Кости Хитов: <strong>${hitDice}</strong> · слияние повторных кристаллов доступно</div>`;
+        return `<div class="gd-rest-banner"><i class="fas fa-campground"></i> Привал · Кости Хитов: <strong>${hitDice}</strong>
+            <button type="button" class="gd-btn forge" data-action="openAltar"><i class="fas fa-fire-alt"></i> Алтарь Памяти</button></div>`;
     }
 
     // ==========================================
@@ -291,13 +294,6 @@ export class MemoryTerminal extends ApplicationV2 {
 
         const body = descriptionBody(descriptions.get(selected.id));
 
-        let forgeButton = '';
-        if (atRest && canRankUp(selected)) {
-            const cost = FORGE_COST[(flags.rank ?? 1) + 1] ?? 2;
-            const crystal = findDuplicateCrystal(this.actor, selected);
-            const reason = !crystal ? 'Нужен повторный кристалл в инвентаре' : hitDice < cost ? `Не хватает Костей Хитов (${hitDice})` : '';
-            forgeButton = `<button type="button" class="gd-btn forge" data-action="forge" data-item-id="${selected.id}" ${reason ? 'disabled' : ''} title="${reason || 'Слить повторный кристалл: ранг +1'}"><i class="fas fa-hammer"></i> Слить · −${cost} КХ</button>`;
-        }
         const useButton = flags.is_active && hasActivities(selected)
             ? `<button type="button" class="gd-btn" data-action="use" data-item-id="${selected.id}"><i class="fas fa-dice-d20"></i> Использовать</button>` : '';
 
@@ -328,7 +324,6 @@ export class MemoryTerminal extends ApplicationV2 {
                     ${flags.is_active ? '<i class="fas fa-power-off"></i> Снять' : '<i class="fas fa-bolt"></i> Экипировать'}
                 </button>
                 ${useButton}
-                ${forgeButton}
                 ${flags.horseman && !flags.cleansed && game.user?.isGM && flags.cleanse_goal ? `<button type="button" class="gd-btn" data-action="horsemanProgress" data-item-id="${selected.id}" title="Видит только Мастер"><i class="fas fa-plus"></i> Прогресс</button>` : ''}
                 ${flags.horseman && !flags.cleansed && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="horsemanCleanse" data-item-id="${selected.id}" title="Видит только Мастер"><i class="fas fa-horse-head"></i> Срастить</button>` : ''}
                 ${flags.personal && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="${selected.id}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>` : ''}
@@ -481,6 +476,10 @@ export class MemoryTerminal extends ApplicationV2 {
         if (text === null || text === undefined) return;
         await setPersonalEffect(item, text);
         this.render();
+    }
+
+    static #onOpenAltar() {
+        MemoryAltar.open(this.actor);
     }
 
     static #onOpenSheet(event, target) {

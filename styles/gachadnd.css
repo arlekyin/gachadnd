@@ -905,3 +905,48 @@
 .gachadnd-risk .gd-risk-log { font-size: 12px; opacity: 0.8; max-height: 140px; overflow-y: auto; border-top: 1px solid #241a30; padding-top: 6px; }
 .gachadnd-risk .gd-risk-end { font-size: 16px; text-align: center; color: #ffd27a; padding: 10px; }
 .gachadnd-risk-chat { padding: 8px; border: 1px solid #a335ee; background: #0e0814; color: #e4dcef; }
+
+/* ==========================================
+   Алтарь Памяти — мастерская на Привале (во весь экран слева от чата)
+   ========================================== */
+.gachadnd-memory-altar .window-content {
+  background: radial-gradient(ellipse at 50% 100%, #3a1d06 0%, #140b05 45%, #07070a 100%);
+  color: #f1e3cf;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+.gachadnd-memory-altar .gd-ma-head { display: flex; justify-content: space-between; align-items: center; font-size: 18px; letter-spacing: 0.06em; color: #ffb35c; text-shadow: 0 0 10px rgba(255, 140, 40, 0.5); }
+.gachadnd-memory-altar .gd-ma-hd strong { color: #fff; font-size: 22px; }
+.gachadnd-memory-altar .gd-ma-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 18px; }
+@container (max-width: 900px) { .gachadnd-memory-altar .gd-ma-body { grid-template-columns: 1fr; overflow-y: auto; } }
+.gachadnd-memory-altar h3 { margin: 0 0 8px; border-bottom: 1px solid #4a2e14; color: #ffcf8a; font-size: 16px; display: flex; justify-content: space-between; align-items: baseline; }
+.gachadnd-memory-altar .gd-link { width: auto; border: none; background: none; color: #c99a62; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.gachadnd-memory-altar .gd-ma-ingredients { display: flex; flex-direction: column; min-height: 0; }
+.gachadnd-memory-altar .gd-ing-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-content: start; padding: 4px; }
+.gachadnd-memory-altar .gd-ing {
+  position: relative;
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rarity) 18%, #0d0a08) 0%, #0b0907 100%);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.gachadnd-memory-altar .gd-ing:hover { transform: translateY(-2px); }
+.gachadnd-memory-altar .gd-ing.skill { border-style: dashed; }
+.gachadnd-memory-altar .gd-ing.picked { box-shadow: 0 0 0 2px #ffb35c, 0 0 18px rgba(255, 150, 50, 0.55); }
+.gachadnd-memory-altar .gd-ing-name { font-weight: bold; color: var(--rarity); font-size: 13px; }
+.gachadnd-memory-altar .gd-ing-meta { font-size: 11px; opacity: 0.75; margin-top: 4px; }
+.gachadnd-memory-altar .gd-ma-rituals { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.gachadnd-memory-altar .gd-ritual { padding: 12px 14px; border: 1px solid #4a2e14; background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 0 20px rgba(255, 120, 30, 0.08); display: flex; flex-direction: column; gap: 6px; }
+.gachadnd-memory-altar .gd-ritual p { margin: 0; font-size: 13px; opacity: 0.85; }
+.gachadnd-memory-altar .gd-ritual-note { font-size: 12px; color: #ffcf8a; min-height: 16px; }
+.gachadnd-memory-altar .gd-ritual-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+.gachadnd-memory-altar .gd-ritual-row button { width: auto; }
+.gachadnd-memory-altar .gd-ritual button { background: linear-gradient(180deg, #5a2f0c 0%, #2c1606 100%); border: 1px solid #ff9a3c; color: #ffd9a8; }
+.gachadnd-memory-altar .gd-ritual button[disabled] { opacity: 0.4; }
+.gachadnd-memory-altar-chat { padding: 8px; border: 1px solid #ff9a3c; background: #140b05; color: #f1e3cf; }

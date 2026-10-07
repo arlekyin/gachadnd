@@ -157,13 +157,59 @@ export async function announceRankUp(actor, item, rank, note = '') {
 // Цена улучшения на Привале в Костях Хитов: ранг II — 1, ранг III — 2
 export const FORGE_COST = { 2: 1, 3: 2 };
 
+// Кости Хитов: тратятся с самых маленьких, возвращаются в самые большие
+export function availableHitDice(actor) {
+    return getHitDice(actor)?.value ?? 0;
+}
+
+export async function spendHitDice(actor, count) {
+    const hd = getHitDice(actor);
+    if (!hd || hd.value < count) return false;
+    const classes = [...hd.classes].sort((a, b) =>
+        parseInt(a.system.hd.denomination.slice(1)) - parseInt(b.system.hd.denomination.slice(1)));
+    const updates = [];
+    let left = count;
+    for (const cls of classes) {
+        const take = Math.min(left, cls.system.hd.value);
+        if (take > 0) updates.push({ _id: cls.id, 'system.hd.spent': cls.system.hd.spent + take });
+        left -= take;
+        if (!left) break;
+    }
+    await actor.updateEmbeddedDocuments('Item', updates);
+    return true;
+}
+
+export async function restoreHitDice(actor, count) {
+    const hd = getHitDice(actor);
+    if (!hd) return 0;
+    const classes = [...hd.classes].filter(c => c.system.hd.spent > 0).sort((a, b) =>
+        parseInt(b.system.hd.denomination.slice(1)) - parseInt(a.system.hd.denomination.slice(1)));
+    const updates = [];
+    let left = count;
+    for (const cls of classes) {
+        const give = Math.min(left, cls.system.hd.spent);
+        if (give > 0) updates.push({ _id: cls.id, 'system.hd.spent': cls.system.hd.spent - give });
+        left -= give;
+        if (!left) break;
+    }
+    if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);
+    return count - left;
+}
+
+// Расход одного кристалла: стопка уменьшается, последний удаляется
+export async function consumeCrystal(crystal) {
+    const quantity = crystal.system?.quantity ?? 1;
+    if (quantity > 1) await crystal.update({ 'system.quantity': quantity - 1 });
+    else await crystal.delete();
+}
+
 function getHitDice(actor) {
     const hd = actor.system?.attributes?.hd;
     return hd?.classes ? hd : null;
 }
 
 // Кристалл пригоден для слияния: есть в количестве и не израсходован
-function isUsableCrystal(crystal) {
+export function isUsableCrystal(crystal) {
     if ((crystal.system?.quantity ?? 1) <= 0) return false;
     const uses = crystal.system?.uses;
     if (uses?.max) return (uses.value ?? (Number(uses.max) - (uses.spent ?? 0))) > 0;
@@ -184,23 +230,8 @@ export async function forgeSkill(actor, item) {
     if (!crystal) return ui.notifications.warn(`⚠️ Для слияния нужен повторный кристалл «${item.name}» в инвентаре.`);
     const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
     const cost = FORGE_COST[rank] ?? 2;
-    const hd = getHitDice(actor);
-    if (!hd || hd.value < cost) return ui.notifications.warn(`⚠️ Не хватает Костей Хитов: нужно ${cost}, доступно ${hd?.value ?? 0}.`);
-
-    const classes = [...hd.classes].sort((a, b) =>
-        parseInt(a.system.hd.denomination.slice(1)) - parseInt(b.system.hd.denomination.slice(1)));
-    const updates = [];
-    let left = cost;
-    for (const cls of classes) {
-        const take = Math.min(left, cls.system.hd.value);
-        if (take > 0) updates.push({ _id: cls.id, 'system.hd.spent': cls.system.hd.spent + take });
-        left -= take;
-        if (!left) break;
-    }
-    await actor.updateEmbeddedDocuments('Item', updates);
-    const quantity = crystal.system?.quantity ?? 1;
-    if (quantity > 1) await crystal.update({ 'system.quantity': quantity - 1 });
-    else await crystal.delete();
+    if (!(await spendHitDice(actor, cost))) return ui.notifications.warn(`⚠️ Не хватает Костей Хитов: нужно ${cost}, доступно ${availableHitDice(actor)}.`);
+    await consumeCrystal(crystal);
     await rankUpSkill(item);
     await announceRankUp(actor, item, rank, `Привал: слит повторный кристалл, потрачено Костей Хитов — ${cost}`);
 }
@@ -278,7 +309,7 @@ async function absorbCrystal(actor, item) {
     return true;
 }
 
-function isCrystalItem(item) {
+export function isCrystalItem(item) {
     if (!item) return false;
     const isCrystal = item.getFlag(MODULE_ID, 'is_crystal_item');
     return isCrystal || item.name.startsWith('Кристалл:');

@@ -17,6 +17,7 @@ import { DoomAltar } from "./altar.js";
 import { ShopWindow } from "./shop.js";
 import { registerSocket } from "./socket.js";
 import { RiskWindow, registerRiskSettings } from "./risk.js";
+import { MemoryAltar } from "./memory-altar.js";
 import { registerEconomySettings } from "./economy.js";
 
 
@@ -48,6 +49,7 @@ Hooks.once('init', () => {
         openDoomAltar: () => DoomAltar.open(),
         openShop: () => ShopWindow.open(),
         openRisk: () => RiskWindow.open(),
+        openMemoryAltar: (actor) => MemoryAltar.open(actor),
         // Кристалл навыка вручную: game.gachadnd.giveCrystal(actor, 'Фус-Ро-Да')
         giveCrystal: (actor, skillName) => giveCrystal(actor, { skillName }),
         // Восстановление зарядов по периоду: 'gachaRun', 'gachaScene' или стандартный период dnd5e
