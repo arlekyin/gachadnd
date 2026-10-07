@@ -24,7 +24,7 @@ export class MindPhysics {
      * @param {(el: HTMLElement, target: {type: 'core'|'node'|'away', id?: string}) => boolean} handlers.onDrop
      * @param {(key: string, pos: {x: number, y: number}) => void} handlers.onSettle  положение в % поля
      */
-    constructor(field, { onTap, onDrop, onSettle }) {
+    constructor(field, { onTap, onDrop, onSettle, momentum }) {
         this.field = field;
         this.onTap = onTap;
         this.onDrop = onDrop;
@@ -40,6 +40,33 @@ export class MindPhysics {
         this.onMove = this.#move.bind(this);
         this.onUp = this.#up.bind(this);
         field.addEventListener('pointerdown', this.onDown);
+
+        // Полёт, прерванный перерисовкой, продолжается с той же скоростью
+        const carried = this.bodies.filter(b => momentum?.has(b.el.dataset.key));
+        if (carried.length) {
+            this.#measure();
+            for (const b of carried) {
+                const { vx, vy } = momentum.get(b.el.dataset.key);
+                b.vx = vx;
+                b.vy = vy;
+                b.el.classList.add('flying');
+            }
+            this.#start();
+        }
+    }
+
+    /** Огоньки в полёте: место в % поля и скорость — чтобы пережить перерисовку */
+    snapshot() {
+        const moving = new Map();
+        if (!this.rect) return moving;
+        // Полёт замирает до новой физики: кадры между снимком и перерисовкой не теряются
+        if (this.frame) cancelAnimationFrame(this.frame);
+        this.frame = null;
+        for (const b of this.bodies) {
+            if (b.fixed || b === this.drag?.body || !(b.vx || b.vy)) continue;
+            moving.set(b.el.dataset.key, { ...this.#percent(b), vx: b.vx, vy: b.vy });
+        }
+        return moving;
     }
 
     destroy() {

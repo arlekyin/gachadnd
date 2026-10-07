@@ -122,6 +122,7 @@ export class MemoryAltar extends ApplicationV2 {
     #ringShown = false;
     #physics = null;
     #drift = new Map();
+    #momentum = null;
 
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-memory-altar'],
@@ -368,6 +369,14 @@ export class MemoryAltar extends ApplicationV2 {
             </div>`;
     }
 
+    // Огоньки в полёте запоминают место и скорость до перерисовки, иначе они
+    // вернулись бы туда, где лежали раньше
+    async _preRender(context, options) {
+        await super._preRender?.(context, options);
+        this.#momentum = this.#physics?.snapshot() ?? new Map();
+        for (const [key, { x, y }] of this.#momentum) this.#drift.set(key, { x, y });
+    }
+
     // Физика огоньков
     _onRender(context, options) {
         super._onRender?.(context, options);
@@ -377,8 +386,10 @@ export class MemoryAltar extends ApplicationV2 {
         this.#physics = new MindPhysics(field, {
             onTap: el => this.#interact(el, { type: 'tap' }),
             onDrop: (el, target) => this.#interact(el, target),
-            onSettle: (key, pos) => this.#drift.set(key, pos)
+            onSettle: (key, pos) => this.#drift.set(key, pos),
+            momentum: this.#momentum
         });
+        this.#momentum = null;
     }
 
     _onClose(options) {
