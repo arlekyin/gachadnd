@@ -61,15 +61,15 @@ async function chat(content) {
 // ==========================================
 //
 // Место самого Лабиринта — противоположность лавки Торговца: густой туман, красный свет, ни одного тёплого огня.
-// Части: backdrop — туман, камень, свечение (рисуется один раз); horses — четыре конских головы полукругом;
-// chalice — чаша крови с рисками порогов; party — отряд с ПЗ и жертвой.
+// Части: backdrop — туман, камень, свечение (рисуется один раз); horses — четыре силуэта коней по диагоналям;
+// chalice — постамент с кровью и рисками порогов; party — отряд с ПЗ и жертвой.
 
 const TEMPLATES = 'modules/gachadnd/templates/doom';
 const LIVE_PARTS = ['horses', 'chalice', 'party'];
-// Где стоят кони: полукругом над чашей, ближние выше. Левые смотрят вправо, правые — влево
+// Кони стоят по диагоналям вокруг постамента и смотрят на него: левые — вправо, правые — влево
 const HORSE_SEATS = [
-    { x: 13, y: 50, facing: 'right' }, { x: 31, y: 24, facing: 'right' },
-    { x: 69, y: 24, facing: 'left' }, { x: 87, y: 50, facing: 'left' }
+    { x: 17, y: 24, facing: 'right' }, { x: 83, y: 24, facing: 'left' },
+    { x: 17, y: 68, facing: 'right' }, { x: 83, y: 68, facing: 'left' }
 ];
 const STATUS_LABELS = {
     absent: () => 'Пасть пуста — этот всадник уже в отряде',
@@ -189,7 +189,7 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const parts = options.parts ?? [];
         const first = options.isFirstRender;
 
-        // Пасти раскрываются и смыкаются движением — только при смене состояния, не при каждом открытии окна
+        // Пробуждение, отказ и закрытие коней играются только при смене состояния, не при каждом открытии окна
         if (parts.includes('horses')) {
             const before = this.#statuses;
             for (const horse of context.horses ?? []) {
@@ -203,9 +203,9 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             this.#statuses = Object.fromEntries((context.horses ?? []).map(h => [h.key, h.status]));
         }
 
-        // Кровь в чаше поднимается от прежнего уровня; новая жертва — капли и всплывающий проклятый кристалл
+        // Кровь в постаменте поднимается от прежнего уровня; новая жертва — капли и всплывающий проклятый кристалл
         if (parts.includes('chalice') && context.chalice) {
-            const fill = this.element.querySelector('.gd-blood');
+            const fill = this.element.querySelector('.gd-chalice');
             const now = Number(context.chalice.fill);
             if (fill && this.#fill !== null && this.#fill !== now) {
                 fill.style.setProperty('--fill', this.#fill);
