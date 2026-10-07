@@ -311,7 +311,7 @@
   align-content: start;
   overflow-y: auto;
   /* Запас под свечение неона: колода прокручивается и обрезала бы его у краёв */
-  padding: 12px 12px 12px 10px;
+  padding: 10px 10px 10px 8px;
 }
 .gachadnd-terminal .gd-tcard {
   position: relative;
@@ -569,79 +569,119 @@
    Динамические эффекты Терминала
    ========================================== */
 
-/* Неон экипированных карт, как у арканы Hades II: тонкая яркая кромка и широкое свечение.
-   Свечение дрожит неровно — то ярче, то тише, как живой газ в трубке; изредка по кромке
-   пробегает вспышка цвета редкости. Кромка неподвижна, меняется только прозрачность слоёв
-   свечения — это идёт на видеокарте. Фаза — от часов (ui.js), перерисовка её не сбрасывает */
+/* Неон экипированных карт, как у арканы Hades II: тонкая кромка, по которой всё время ходят светлые
+   и тёмные участки. Участки движутся неравномерно — то быстрее, то медленнее, иногда откатываются назад;
+   изредка часть кромки перетекает в цвет редкости. Свет заперт маской в узком кольце вокруг карты,
+   внутри кольца вращается заранее нарисованный слой с мягкими пятнами — анимация идёт на видеокарте.
+   Фаза — от часов (ui.js), перерисовка её не сбрасывает */
 .gachadnd-terminal .gd-tcard.equipped,
 .gachadnd-terminal .gd-bigcard.equipped {
-  --neon: #6dffc9;
-  --neon-core: #eafff7;
+  --neon: #5fe0b8;
+  --neon-hot: #d9fff1;
 }
 .gachadnd-terminal .gd-tcard.equipped {
-  background: linear-gradient(180deg, #1f5a4a 0%, #0f3229 100%);
+  background: linear-gradient(180deg, #1c4f42 0%, #0e2d25 100%);
   border-color: transparent;
+  box-shadow: 0 0 6px rgba(95, 224, 184, 0.28), 0 0 14px rgba(95, 224, 184, 0.1);
 }
-.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art { border-color: rgba(228, 255, 245, 0.55); }
+.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art { border-color: rgba(228, 255, 245, 0.5); }
 .gachadnd-terminal .gd-bigcard.equipped {
-  background: linear-gradient(170deg, #1f5a4a 0%, #0c2e26 100%);
+  background: linear-gradient(170deg, #1c4f42 0%, #0c2e26 100%);
   border-color: transparent;
-  box-shadow: 0 0 0 2px #0b1214;
+  box-shadow: 0 0 0 2px #0b1214, 0 0 10px rgba(95, 224, 184, 0.3), 0 0 24px rgba(95, 224, 184, 0.12);
 }
 
-/* Кромка: тонкая светлая линия с узким ореолом */
+/* Кольцо: узкая полоса по контуру, тусклая сама по себе — светлые места дают пятна внутри */
 .gachadnd-terminal .gd-tcard.equipped > .gd-neon,
 .gachadnd-terminal .gd-bigcard.equipped > .gd-neon {
   position: absolute;
-  inset: -2px;
-  border-radius: 8px;
-  border: 1.5px solid var(--neon-core);
-  box-shadow: 0 0 2px var(--neon), inset 0 0 2px var(--neon);
+  inset: -3px;
+  padding: 5px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(95, 224, 184, 0.2);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
   pointer-events: none;
   z-index: 1;
 }
-.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -4px; border-radius: 13px; border-width: 2px; }
-/* Свечение: широкое, снаружи и чуть внутрь; дрожит неровно */
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -5px; padding: 8px; border-radius: 14px; }
+/* Два кольца с одними и теми же пятнами в одной фазе: широкое — мягкое свечение, тонкое — яркая линия по кромке */
+.gachadnd-terminal .gd-tcard.equipped > .gd-neon:not(.gd-neon-line),
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon:not(.gd-neon-line) { opacity: 0.55; }
+.gachadnd-terminal .gd-tcard.equipped > .gd-neon-line { inset: -1px; padding: 1.5px; border-radius: 7px; background: rgba(160, 255, 225, 0.32); }
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon-line { inset: -2px; padding: 2px; border-radius: 12px; background: rgba(160, 255, 225, 0.32); }
+/* Светлые участки цвета неона: слой с мягкими пятнами кружит неравномерно и дрожит яркостью */
 .gachadnd-terminal .gd-neon::before,
 .gachadnd-terminal .gd-neon::after {
   content: "";
   position: absolute;
-  inset: -1.5px;
-  border-radius: inherit;
+  left: 50%;
+  top: 50%;
+  width: 240%;
+  aspect-ratio: 1;
   pointer-events: none;
-  will-change: opacity;
+  will-change: transform, opacity;
 }
 .gachadnd-terminal .gd-neon::before {
-  box-shadow: 0 0 6px 1px var(--neon), 0 0 16px 3px color-mix(in srgb, var(--neon) 70%, transparent), 0 0 30px 6px color-mix(in srgb, var(--neon) 35%, transparent), inset 0 0 10px color-mix(in srgb, var(--neon) 45%, transparent);
-  animation: gd-arcana-flicker 5.3s ease-in-out var(--gd-phase-flicker, 0ms) infinite;
+  background:
+    radial-gradient(circle at 50% 18%, var(--neon-hot) 0, var(--neon) 5%, transparent 15%),
+    radial-gradient(circle at 80% 62%, var(--neon) 0, transparent 13%),
+    radial-gradient(circle at 26% 70%, var(--neon-hot) 0, var(--neon) 4%, transparent 11%),
+    radial-gradient(circle at 18% 30%, var(--neon) 0, transparent 9%);
+  transform: translate(-50%, -50%);
+  animation:
+    gd-arcana-drift 13s ease-in-out var(--gd-phase-drift, 0ms) infinite,
+    gd-arcana-flicker 5.3s ease-in-out var(--gd-phase-flicker, 0ms) infinite;
 }
-/* Вспышка цвета редкости: почти всё время погашена, изредка коротко вспыхивает и тут же дрожа гаснет */
+/* Цвет редкости: свой слой кружит в другую сторону и почти всё время погашен */
 .gachadnd-terminal .gd-neon::after {
   opacity: 0;
-  box-shadow: 0 0 5px 1px var(--rarity), 0 0 18px 4px color-mix(in srgb, var(--rarity) 75%, transparent), 0 0 34px 8px color-mix(in srgb, var(--rarity) 35%, transparent);
-  animation: gd-arcana-flash 11s linear var(--gd-phase-flash, 0ms) infinite;
+  background:
+    radial-gradient(circle at 70% 20%, var(--rarity) 0, transparent 16%),
+    radial-gradient(circle at 30% 78%, var(--rarity) 0, transparent 13%);
+  transform: translate(-50%, -50%);
+  animation:
+    gd-arcana-drift-back 17s ease-in-out var(--gd-phase-drift, 0ms) infinite,
+    gd-arcana-flash 11s ease-in-out var(--gd-phase-flash, 0ms) infinite;
 }
-.gachadnd-terminal .gd-bigcard.equipped > .gd-neon::before {
-  box-shadow: 0 0 8px 1px var(--neon), 0 0 24px 5px color-mix(in srgb, var(--neon) 70%, transparent), 0 0 48px 10px color-mix(in srgb, var(--neon) 35%, transparent), inset 0 0 16px color-mix(in srgb, var(--neon) 45%, transparent);
+/* Карты не в такт: постоянный сдвиг к общей фазе */
+.gachadnd-terminal .gd-tcard:nth-child(3n + 1) > .gd-neon::before { animation-delay: calc(var(--gd-phase-drift, 0ms) - 4.1s), calc(var(--gd-phase-flicker, 0ms) - 1.7s); }
+.gachadnd-terminal .gd-tcard:nth-child(3n + 2) > .gd-neon::before { animation-delay: calc(var(--gd-phase-drift, 0ms) - 8.7s), calc(var(--gd-phase-flicker, 0ms) - 3.4s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 1) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 6s), calc(var(--gd-phase-flash, 0ms) - 3.1s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 2) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 11s), calc(var(--gd-phase-flash, 0ms) - 6.3s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 3) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 2.5s), calc(var(--gd-phase-flash, 0ms) - 8.6s); }
+/* Неравномерное кружение: рывки, замедления и короткие откаты назад */
+@keyframes gd-arcana-drift {
+  0% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  11% { transform: translate(-50%, -50%) rotate(46deg) scale(1.06); }
+  19% { transform: translate(-50%, -50%) rotate(58deg) scale(1); }
+  27% { transform: translate(-50%, -50%) rotate(41deg) scale(0.95); }
+  42% { transform: translate(-50%, -50%) rotate(150deg) scale(1.04); }
+  55% { transform: translate(-50%, -50%) rotate(176deg) scale(1); }
+  63% { transform: translate(-50%, -50%) rotate(232deg) scale(1.07); }
+  71% { transform: translate(-50%, -50%) rotate(219deg) scale(0.97); }
+  86% { transform: translate(-50%, -50%) rotate(318deg) scale(1.03); }
+  100% { transform: translate(-50%, -50%) rotate(360deg) scale(1); }
 }
-.gachadnd-terminal .gd-bigcard.equipped > .gd-neon::after {
-  box-shadow: 0 0 8px 1px var(--rarity), 0 0 26px 6px color-mix(in srgb, var(--rarity) 75%, transparent), 0 0 52px 12px color-mix(in srgb, var(--rarity) 35%, transparent);
+@keyframes gd-arcana-drift-back {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  23% { transform: translate(-50%, -50%) rotate(-74deg); }
+  31% { transform: translate(-50%, -50%) rotate(-61deg); }
+  58% { transform: translate(-50%, -50%) rotate(-190deg); }
+  77% { transform: translate(-50%, -50%) rotate(-262deg); }
+  100% { transform: translate(-50%, -50%) rotate(-360deg); }
 }
-/* Карты дрожат и вспыхивают не в такт: постоянный сдвиг к общей фазе */
-.gachadnd-terminal .gd-tcard:nth-child(3n + 1) > .gd-neon::before { animation-delay: calc(var(--gd-phase-flicker, 0ms) - 1.7s); }
-.gachadnd-terminal .gd-tcard:nth-child(3n + 2) > .gd-neon::before { animation-delay: calc(var(--gd-phase-flicker, 0ms) - 3.4s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 1) > .gd-neon::after { animation-delay: calc(var(--gd-phase-flash, 0ms) - 3.1s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 2) > .gd-neon::after { animation-delay: calc(var(--gd-phase-flash, 0ms) - 6.3s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 3) > .gd-neon::after { animation-delay: calc(var(--gd-phase-flash, 0ms) - 8.6s); }
 @keyframes gd-arcana-flicker {
-  0% { opacity: 0.85; } 6% { opacity: 0.64; } 9% { opacity: 0.94; } 15% { opacity: 0.78; } 22% { opacity: 1; }
-  29% { opacity: 0.7; } 32% { opacity: 0.9; } 40% { opacity: 0.62; } 51% { opacity: 0.98; } 57% { opacity: 0.74; }
-  60% { opacity: 0.88; } 69% { opacity: 0.58; } 75% { opacity: 0.93; } 83% { opacity: 0.71; } 89% { opacity: 1; }
-  95% { opacity: 0.79; } 100% { opacity: 0.85; }
+  0% { opacity: 0.8; } 6% { opacity: 0.55; } 9% { opacity: 0.9; } 15% { opacity: 0.68; } 22% { opacity: 0.95; }
+  29% { opacity: 0.6; } 32% { opacity: 0.84; } 40% { opacity: 0.5; } 51% { opacity: 0.92; } 57% { opacity: 0.66; }
+  60% { opacity: 0.8; } 69% { opacity: 0.48; } 75% { opacity: 0.88; } 83% { opacity: 0.62; } 89% { opacity: 0.95; }
+  95% { opacity: 0.7; } 100% { opacity: 0.8; }
 }
 @keyframes gd-arcana-flash {
-  0%, 62% { opacity: 0; } 63.5% { opacity: 0.9; } 65% { opacity: 0.35; } 66.5% { opacity: 0.8; }
-  69% { opacity: 0.2; } 71% { opacity: 0.45; } 75%, 100% { opacity: 0; }
+  0%, 55% { opacity: 0; } 61% { opacity: 0.75; } 64% { opacity: 0.4; } 68% { opacity: 0.85; }
+  74% { opacity: 0.3; } 79% { opacity: 0.5; } 86%, 100% { opacity: 0; }
 }
 
 /* Терминал не в фокусе — все анимации на паузе */

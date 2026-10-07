@@ -3,7 +3,7 @@
     <div class="gd-feature-inner">
         <div class="gd-bigcard {{#if equipped}}equipped{{/if}}" style="--rarity: {{color}}" data-action="openSheet" data-item-id="{{id}}" title="Открыть лист навыка">
             <div class="gd-bigcard-art" style="background-image: url('{{img}}')"></div>
-            {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span>{{/if}}
+            {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span><span class="gd-neon gd-neon-line" aria-hidden="true"></span>{{/if}}
             {{#if ranked}}<div class="gd-bigcard-plate">{{rank}}</div>{{/if}}
         </div>
         {{!-- Подложка под текстом: туман и сеть позади не мешают читать --}}
