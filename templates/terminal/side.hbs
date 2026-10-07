@@ -1,0 +1,40 @@
+<aside class="gd-side {{#unless cardsPresent}}gd-hidden{{/unless}}">
+    <div class="gd-ring {{#if ring.overloaded}}overloaded{{/if}}">
+        <svg viewBox="0 0 128 128">
+            {{#each ring.segments}}<circle class="{{cls}}" cx="64" cy="64" r="52" stroke-dasharray="{{dash}}"/>{{/each}}
+        </svg>
+        <div class="gd-ring-count"><span>{{ring.filled}}</span>/{{ring.naturalCap}}</div>
+        <div class="gd-ring-label">Предел разума</div>
+        {{#if ring.extra}}<div class="gd-ring-note extra">Абсолютный предел {{ring.absoluteCap}}</div>{{/if}}
+        {{#if ring.overloaded}}<div class="gd-ring-note overload">Перегруз: −2 к Инт, Мдр и Хар за слот сверх {{ring.naturalCap}}</div>{{/if}}
+    </div>
+    {{#if build.length}}
+    <div class="gd-build"><div class="gd-build-title">Синергии сборки</div>
+        {{#each build}}
+        <div class="gd-build-row"><span class="gd-build-tag">{{tag}}</span><span class="gd-build-pips">{{#each pips}}<span class="{{this}}"></span>{{/each}}</span><span class="gd-build-count">{{count}}</span></div>
+        {{/each}}
+    </div>
+    {{/if}}
+    {{#if synergies.length}}
+    <div class="gd-synergies"><div class="gd-build-title">Активные синергии</div>
+        {{#each synergies}}
+        <div class="gd-syn {{#if open}}open{{/if}} {{#if system}}system{{/if}}">
+            <div class="gd-syn-main" data-action="expand" data-doc-id="{{id}}">
+                <img src="{{img}}">
+                <div class="gd-syn-name"><span>{{name}}</span><small>{{kind}}</small></div>
+                {{#if rollable}}{{{usesHtml}}}<button type="button" class="gd-roll" data-action="use" data-item-id="{{id}}" title="Использовать"><i class="fas fa-dice-d20"></i></button>{{/if}}
+            </div>
+            {{#if open}}<div class="gd-syn-desc">{{{desc}}}</div>{{/if}}
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+    <div class="gd-glossary">
+        {{#each glossary}}
+        <div class="gd-term {{#if accent}}accent{{/if}}">
+            <div class="gd-term-title">{{title}}</div>
+            <div class="gd-term-text">{{{text}}}</div>
+        </div>
+        {{/each}}
+    </div>
+</aside>

@@ -1,0 +1,33 @@
+<div class="gd-feature {{#unless feature}}gd-hidden{{/unless}}">
+    {{#with feature}}
+    <div class="gd-feature-inner">
+        <div class="gd-bigcard {{#if equipped}}equipped{{/if}}" style="--rarity: {{color}}" data-action="openSheet" data-item-id="{{id}}" title="Открыть лист навыка">
+            <div class="gd-bigcard-art" style="background-image: url('{{img}}')"></div>
+            {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span>{{/if}}
+            {{#if ranked}}<div class="gd-bigcard-plate">{{rank}}</div>{{/if}}
+        </div>
+        <h2 class="gd-feature-name">{{name}}</h2>
+        <div class="gd-chips">
+            {{#each chips}}<span class="gd-chip {{cls}}" {{#if color}}style="--chip: {{color}}"{{/if}}>{{text}}</span>{{/each}}
+        </div>
+        {{#if drawback}}<div class="gd-feature-drawback"><strong>Штраф:</strong> {{drawback}}</div>{{/if}}
+        {{#if horseman}}<div class="gd-horseman {{#if horseman.cleansed}}cleansed{{/if}}">🐎 {{horseman.text}}</div>{{/if}}
+        <div class="gd-feature-text">{{{body}}}</div>
+        {{#if hiddenRanks}}
+        <div class="gd-gm-ranks"><div class="gd-gm-ranks-title"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер</div>
+            {{#each hiddenRanks}}<div><strong>Ранг {{label}}:</strong> {{text}}</div>{{/each}}
+        </div>
+        {{/if}}
+        <dl class="gd-stats">{{#each stats}}<dt>{{label}}</dt><dd>{{{html}}}</dd>{{/each}}</dl>
+        <div class="gd-details-actions">
+            <button type="button" class="gd-btn {{#if equipped}}unequip{{else}}equip{{/if}}" data-action="toggleEquip" data-item-id="{{id}}">
+                {{#if equipped}}<i class="fas fa-power-off"></i> Снять{{else}}<i class="fas fa-bolt"></i> Экипировать{{/if}}
+            </button>
+            {{#if canUse}}<button type="button" class="gd-btn" data-action="use" data-item-id="{{id}}"><i class="fas fa-dice-d20"></i> Использовать</button>{{/if}}
+            {{#if gm.progress}}<button type="button" class="gd-btn" data-action="horsemanProgress" data-item-id="{{id}}" title="Видит только Мастер"><i class="fas fa-plus"></i> Прогресс</button>{{/if}}
+            {{#if gm.cleanse}}<button type="button" class="gd-btn" data-action="horsemanCleanse" data-item-id="{{id}}" title="Видит только Мастер"><i class="fas fa-horse-head"></i> Срастить</button>{{/if}}
+            {{#if gm.personal}}<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="{{id}}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>{{/if}}
+        </div>
+    </div>
+    {{/with}}
+</div>

@@ -1,0 +1,19 @@
+<div class="gd-deck-wrap {{#unless cards.length}}empty{{/unless}}">
+    {{#if cards.length}}
+    <div class="gd-deck-title">Память <span>{{cards.length}} / {{capacity}}</span></div>
+    <div class="gd-deck">
+        {{#each cards}}
+        <div class="gd-tcard {{cls}}" style="--rarity: {{color}}" data-action="select" data-item-id="{{id}}" title="{{name}}">
+            <div class="gd-tcard-art" style="background-image: url('{{img}}')"></div>
+            {{#if equipped}}<span class="gd-neon" aria-hidden="true"></span>{{/if}}
+            {{#if ranked}}<span class="gd-tcard-badge">{{rank}}</span>{{/if}}
+            {{#if mergeable}}<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>{{/if}}
+            <div class="gd-tcard-name">{{name}}</div>
+        </div>
+        {{/each}}
+        {{#each emptySlots}}<div class="gd-tcard empty" title="Свободная ячейка Памяти"><i class="fas fa-plus"></i></div>{{/each}}
+    </div>
+    {{else}}
+    <div class="gd-empty">Память пуста.<br>Кристаллы выпадают после боёв и продаются в Магазине — поглотите кристалл из инвентаря, чтобы навык появился здесь.</div>
+    {{/if}}
+</div>

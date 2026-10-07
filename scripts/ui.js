@@ -16,7 +16,11 @@ import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
 import { NeuralBackground } from "./neural.js";
 
-const { ApplicationV2 } = foundry.applications.api;
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+const TEMPLATES = 'modules/gachadnd/templates/terminal';
+// Фон-сеть рисуется один раз и переживает перерисовки остальных частей
+const CONTENT_PARTS = ['banner', 'deck', 'feature', 'side'];
 
 const RARITY = {
     gray: { label: 'Серый', color: '#9d9d9d' },
@@ -67,7 +71,7 @@ function statsRows(item) {
         const periodLabel = period ? (CONFIG.DND5E.limitedUsePeriods?.[period]?.label ?? uses.period) : '';
         rows.push(['Заряды', `<input type="text" class="gd-uses-input" data-item-id="${item.id}" data-max="${uses.max}" value="${uses.value}"> / ${uses.max}${periodLabel ? ` · ${esc(periodLabel)}` : ''}`, true]);
     }
-    return rows;
+    return rows.map(([label, value, raw]) => ({ label, html: raw ? value : esc(value) }));
 }
 
 function hasActivities(item) {
@@ -94,7 +98,12 @@ function usesHtml(item, { editable = true } = {}) {
     return `<span class="gd-uses">${value}<span class="gd-uses-max">/ ${uses.max}</span>${uses.period ? `<span class="gd-uses-period">${uses.period}</span>` : ''}</span>`;
 }
 
-export class MemoryTerminal extends ApplicationV2 {
+/**
+ * Окно из частей: backdrop (canvas нейросети), banner (Привал), deck (колода Памяти),
+ * feature (выбранный навык), side (Предел разума, синергии, справочник).
+ * Выбор карты перерисовывает только feature и side; в колоде меняется класс на месте.
+ */
+export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
     constructor(actor, options = {}) {
         super({ id: `gachadnd-terminal-${actor.id}`, ...options });
         this.actor = actor;
@@ -121,12 +130,19 @@ export class MemoryTerminal extends ApplicationV2 {
         }
     };
 
+    static PARTS = Object.fromEntries(['backdrop', ...CONTENT_PARTS].map(id => [id, { template: `${TEMPLATES}/${id}.hbs`, scrollable: { deck: ['.gd-deck'], side: ['.gd-glossary'] }[id] }]));
+
     get title() {
         return `Терминал Тумана: ${this.actor.name}`;
     }
 
     // Изменения документов приходят пачками (экипировка, пересчёт синергий) — перерисовка одна
-    #debouncedRender = foundry.utils.debounce(() => this.render(), 50);
+    #debouncedRender = foundry.utils.debounce(() => this.#renderContent(), 50);
+
+    // Всё, кроме фона-сети
+    #renderContent(parts = CONTENT_PARTS) {
+        return this.render(this.rendered ? { parts } : { force: true });
+    }
 
     /**
      * Анимации Терминала (неон, туман, нейросеть) работают, только пока Терминал в фокусе.
@@ -206,206 +222,142 @@ export class MemoryTerminal extends ApplicationV2 {
             ? collectGlossary(selected.system?.description?.value, selected.flags[MODULE_ID].tags ?? [], tagCounts)
             : [];
 
+        const slotted = equipped.filter(occupiesSlot);
         return {
-            tagCounts, glossary,
-            naturalCap, absoluteCap, memory, equipped, emittedTags, selected,
-            atRest, hitDice, synergyItems, synergyEffects, descriptions,
-            slotted: equipped.filter(occupiesSlot),
-            overloaded: equipped.filter(occupiesSlot).length > naturalCap
+            atRest, hitDice, glossary,
+            equippedCount: equipped.length,
+            capacity: getMemoryCapacity(actor),
+            cards: this.#cards(memory, selected, atRest),
+            emptySlots: Array.from({ length: Math.max(0, getMemoryCapacity(actor) - memory.length) }),
+            cardsPresent: memory.length > 0,
+            feature: selected ? this.#feature(selected, emittedTags, descriptions) : null,
+            ring: this.#ring(naturalCap, absoluteCap, slotted),
+            build: this.#build(tagCounts),
+            synergies: this.#synergies(synergyItems, synergyEffects, descriptions)
         };
     }
 
     // ==========================================
-    // ОТРИСОВКА
+    // ВИД: данные для шаблонов частей
     // ==========================================
 
-    async _renderHTML(context) {
-        return `
-            ${context.atRest ? this.#restBannerHtml(context) : ''}
-            ${this.#altarHtml(context)}`;
-    }
-
-    #restBannerHtml({ hitDice }) {
-        return `<div class="gd-rest-banner"><i class="fas fa-campground"></i> Привал · Кости Хитов: <strong>${hitDice}</strong>
-            <button type="button" class="gd-btn forge" data-action="openAltar"><i class="fas fa-fire-alt"></i> Алтарь Памяти</button></div>`;
-    }
-
-    // ==========================================
-    // ПАМЯТЬ: СЕТКА · КАРТА · СПРАВОЧНИК
-    // ==========================================
-
-    #altarHtml(context) {
-        if (!context.memory.length) {
-            return `<div class="gd-altar empty"><div class="gd-empty">Память пуста.<br>Кристаллы выпадают после боёв и продаются в Магазине — поглотите кристалл из инвентаря, чтобы навык появился здесь.</div></div>`;
-        }
-        return `
-            <div class="gd-altar">
-                <canvas class="gd-neural" data-active="${context.equipped.length}"></canvas>
-                <div class="gd-deck-wrap">
-                    <div class="gd-deck-title">Память <span>${context.memory.length} / ${getMemoryCapacity(this.actor)}</span></div>
-                    <div class="gd-deck">${this.#deckHtml(context)}</div>
-                </div>
-                <div class="gd-feature"><div class="gd-feature-inner">${this.#featureHtml(context)}</div></div>
-                <aside class="gd-side">
-                    ${this.#ringHtml(context)}
-                    ${this.#buildHtml(context)}
-                    ${this.#synergiesHtml(context)}
-                    <div class="gd-glossary">${context.glossary.map(g => `
-                        <div class="gd-term ${g.accent ? 'accent' : ''}">
-                            <div class="gd-term-title">${esc(g.title)}</div>
-                            <div class="gd-term-text">${g.text}</div>
-                        </div>`).join('')}
-                    </div>
-                </aside>
-            </div>`;
-    }
-
-    #deckHtml(context) {
-        // Свободные ячейки Памяти — пустыми картами, как закрытые карты Арканы
-        const empty = Math.max(0, getMemoryCapacity(this.actor) - context.memory.length);
-        const emptyHtml = Array.from({ length: empty }, () =>
-            '<div class="gd-tcard empty" title="Свободная ячейка Памяти"><i class="fas fa-plus"></i></div>').join('');
-        return context.memory.map(item => {
+    #cards(memory, selected, atRest) {
+        return memory.map(item => {
             const flags = item.flags[MODULE_ID];
-            const rarity = RARITY[flags.rarity] ?? RARITY.gray;
             const ranked = (flags.max_rank ?? 1) > 1 || !!flags.stacking;
-            const mergeable = context.atRest && canRankUp(item) && findDuplicateCrystal(this.actor, item);
-            const classes = ['gd-tcard'];
-            if (flags.is_active) classes.push('equipped');
-            if (item.id === context.selected?.id) classes.push('selected');
-            return `
-                <div class="${classes.join(' ')}" style="--rarity: ${rarity.color}" data-action="select" data-item-id="${item.id}" title="${esc(item.name)}">
-                    <div class="gd-tcard-art" style="background-image: url('${item.img}')"></div>
-                    ${flags.is_active ? '<span class="gd-neon" aria-hidden="true"></span>' : ''}
-                    ${ranked ? `<span class="gd-tcard-badge">${flags.rank ?? 1}</span>` : ''}
-                    ${mergeable ? '<span class="gd-tcard-merge" title="Можно слить"><i class="fas fa-hammer"></i></span>' : ''}
-                    <div class="gd-tcard-name">${esc(item.name)}</div>
-                </div>`;
-        }).join('') + emptyHtml;
+            return {
+                id: item.id, name: item.name, img: item.img,
+                color: (RARITY[flags.rarity] ?? RARITY.gray).color,
+                cls: [flags.is_active && 'equipped', item.id === selected?.id && 'selected'].filter(Boolean).join(' '),
+                equipped: !!flags.is_active, ranked, rank: flags.rank ?? 1,
+                mergeable: !!(atRest && canRankUp(item) && findDuplicateCrystal(this.actor, item))
+            };
+        });
     }
 
-    #featureHtml({ selected, emittedTags, atRest, hitDice, descriptions }) {
-        if (!selected) return '';
+    #feature(selected, emittedTags, descriptions) {
         const flags = selected.flags[MODULE_ID];
         const rarity = RARITY[flags.rarity] ?? RARITY.gray;
         const ranked = (flags.max_rank ?? 1) > 1 || !!flags.stacking;
+        const rank = flags.rank ?? 1;
         const tags = [...(flags.tags ?? [])];
         if (flags.is_active && !flags.tagEmitter) emittedTags.forEach(t => { if (!tags.includes(t)) tags.push(t); });
-
-        const body = descriptionBody(descriptions.get(selected.id));
-
-        const useButton = flags.is_active && hasActivities(selected)
-            ? `<button type="button" class="gd-btn" data-action="use" data-item-id="${selected.id}"><i class="fas fa-dice-d20"></i> Использовать</button>` : '';
-
-        return `
-            <div class="gd-bigcard ${flags.is_active ? 'equipped' : ''}" style="--rarity: ${rarity.color}" data-action="openSheet" data-item-id="${selected.id}" title="Открыть лист навыка">
-                <div class="gd-bigcard-art" style="background-image: url('${selected.img}')"></div>
-                ${flags.is_active ? '<span class="gd-neon" aria-hidden="true"></span>' : ''}
-                ${ranked ? `<div class="gd-bigcard-plate">${romanRank(flags.rank ?? 1)}</div>` : ''}
-            </div>
-            <h2 class="gd-feature-name">${esc(selected.name)}</h2>
-            <div class="gd-chips">
-                <span class="gd-chip" style="--chip: ${rarity.color}">${rarity.label}</span>
-                <span class="gd-chip">${esc(flags.category ?? '')}</span>
-                ${tags.map(t => `<span class="gd-chip tag">${esc(t)}</span>`).join('')}
-                ${ranked ? `<span class="gd-chip">Ранг ${romanRank(flags.rank ?? 1)}${canRankUp(selected) ? ' · можно улучшить' : ''}</span>` : ''}
-                ${['purple', 'red'].includes(flags.rarity) ? '<span class="gd-chip unique">Уникальный</span>' : ''}
-            </div>
-            ${flags.drawback && !flags.cleansed ? `<div class="gd-feature-drawback"><strong>Штраф:</strong> ${esc(flags.drawback)}</div>` : ''}
-            ${flags.horseman ? `<div class="gd-horseman ${flags.cleansed ? 'cleansed' : ''}">🐎 ${HORSEMEN[flags.horseman]} · ${flags.cleansed ? 'сращён' : `проклят${flags.cleanse_goal ? ` · сращивание ${flags.cleanse_progress ?? 0} / ${flags.cleanse_goal}` : ''}`}</div>` : ''}
-            <div class="gd-feature-text">${body || '<p>Описание отсутствует.</p>'}</div>
-            ${game.user?.isGM && ranked && (flags.rank ?? 1) < flags.max_rank ? `
-                <div class="gd-gm-ranks"><div class="gd-gm-ranks-title"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер</div>
-                ${(flags.rank_texts ?? []).slice((flags.rank ?? 1) - 1).map((t, i) => `<div><strong>Ранг ${RANK_LABELS[(flags.rank ?? 1) + i]}:</strong> ${esc(t)}</div>`).join('')}
-                </div>` : ''}
-            <dl class="gd-stats">${statsRows(selected).map(([k, v, raw]) => `<dt>${k}</dt><dd>${raw ? v : esc(v)}</dd>`).join('')}</dl>
-            <div class="gd-details-actions">
-                <button type="button" class="gd-btn ${flags.is_active ? 'unequip' : 'equip'}" data-action="toggleEquip" data-item-id="${selected.id}">
-                    ${flags.is_active ? '<i class="fas fa-power-off"></i> Снять' : '<i class="fas fa-bolt"></i> Экипировать'}
-                </button>
-                ${useButton}
-                ${flags.horseman && !flags.cleansed && game.user?.isGM && flags.cleanse_goal ? `<button type="button" class="gd-btn" data-action="horsemanProgress" data-item-id="${selected.id}" title="Видит только Мастер"><i class="fas fa-plus"></i> Прогресс</button>` : ''}
-                ${flags.horseman && !flags.cleansed && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="horsemanCleanse" data-item-id="${selected.id}" title="Видит только Мастер"><i class="fas fa-horse-head"></i> Срастить</button>` : ''}
-                ${flags.personal && game.user?.isGM ? `<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="${selected.id}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>` : ''}
-            </div>`;
+        const isGM = !!game.user?.isGM;
+        const cursed = flags.horseman && !flags.cleansed;
+        return {
+            id: selected.id, name: selected.name, img: selected.img, color: rarity.color,
+            equipped: !!flags.is_active, ranked, rank: romanRank(rank),
+            chips: [
+                { text: rarity.label, color: rarity.color },
+                { text: flags.category ?? '' },
+                ...tags.map(t => ({ text: t, cls: 'tag' })),
+                ...(ranked ? [{ text: `Ранг ${romanRank(rank)}${canRankUp(selected) ? ' · можно улучшить' : ''}` }] : []),
+                ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : [])
+            ],
+            drawback: flags.drawback && !flags.cleansed ? flags.drawback : null,
+            horseman: flags.horseman ? {
+                cleansed: !!flags.cleansed,
+                text: `${HORSEMEN[flags.horseman]} · ${flags.cleansed ? 'сращён' : `проклят${flags.cleanse_goal ? ` · сращивание ${flags.cleanse_progress ?? 0} / ${flags.cleanse_goal}` : ''}`}`
+            } : null,
+            body: descriptionBody(descriptions.get(selected.id)) || '<p>Описание отсутствует.</p>',
+            hiddenRanks: isGM && ranked && rank < flags.max_rank
+                ? (flags.rank_texts ?? []).slice(rank - 1).map((text, i) => ({ label: RANK_LABELS[rank + i], text }))
+                : null,
+            stats: statsRows(selected),
+            canUse: !!flags.is_active && hasActivities(selected),
+            gm: {
+                progress: cursed && isGM && !!flags.cleanse_goal,
+                cleanse: cursed && isGM,
+                personal: !!flags.personal && isGM
+            }
+        };
     }
 
     // Активные синергии: способности (с кнопкой броска) и эффекты; клик раскрывает описание
-    #synergiesHtml({ synergyItems, synergyEffects, descriptions }) {
-        const docs = [
+    #synergies(synergyItems, synergyEffects, descriptions) {
+        return [
             ...synergyItems.map(doc => ({ doc, kind: 'способность', rollable: hasActivities(doc) })),
             ...synergyEffects.map(doc => ({ doc, kind: doc.flags[MODULE_ID]?.is_system_effect ? 'дебафф системы' : 'эффект', system: !!doc.flags[MODULE_ID]?.is_system_effect }))
-        ];
-        if (!docs.length) return '';
-        const rows = docs.map(({ doc, kind, rollable, system }) => {
-            const open = this.expanded.has(doc.id);
-            return `
-                <div class="gd-syn ${open ? 'open' : ''} ${system ? 'system' : ''}">
-                    <div class="gd-syn-main" data-action="expand" data-doc-id="${doc.id}">
-                        <img src="${doc.img}">
-                        <div class="gd-syn-name"><span>${esc(doc.name)}</span><small>${kind}</small></div>
-                        ${rollable ? usesHtml(doc) : ''}
-                        ${rollable ? `<button type="button" class="gd-roll" data-action="use" data-item-id="${doc.id}" title="Использовать"><i class="fas fa-dice-d20"></i></button>` : ''}
-                    </div>
-                    ${open ? `<div class="gd-syn-desc">${descriptionBody(descriptions.get(doc.id)) || '<p>Описание отсутствует.</p>'}</div>` : ''}
-                </div>`;
-        }).join('');
-        return `<div class="gd-synergies"><div class="gd-build-title">Активные синергии</div>${rows}</div>`;
+        ].map(({ doc, kind, rollable, system }) => ({
+            id: doc.id, img: doc.img, name: doc.name, kind, rollable: !!rollable, system: !!system,
+            open: this.expanded.has(doc.id),
+            usesHtml: rollable ? usesHtml(doc) : '',
+            desc: descriptionBody(descriptions.get(doc.id)) || '<p>Описание отсутствует.</p>'
+        }));
     }
 
     // Прогресс синергий по всем тегам экипированных навыков: ступени 2/4/6
-    #buildHtml({ tagCounts }) {
-        const tags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-        if (!tags.length) return '';
-        const rows = tags.map(([tag, count]) => {
-            const pips = Array.from({ length: 6 }, (_, i) =>
-                `<span class="${i < count ? 'on' : ''} ${i % 2 ? 'step' : ''}"></span>`).join('');
-            return `<div class="gd-build-row"><span class="gd-build-tag">${esc(tag)}</span><span class="gd-build-pips">${pips}</span><span class="gd-build-count">${count}</span></div>`;
-        }).join('');
-        return `<div class="gd-build"><div class="gd-build-title">Синергии сборки</div>${rows}</div>`;
+    #build(tagCounts) {
+        return Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, count]) => ({
+            tag, count,
+            pips: Array.from({ length: 6 }, (_, i) => [i < count && 'on', i % 2 && 'step'].filter(Boolean).join(' '))
+        }));
     }
 
     // Кольцо «Предела разума» из сегментов, как счётчик Хватки в Hades II
-    #ringHtml({ naturalCap, absoluteCap, slotted: equipped, overloaded }) {
+    #ring(naturalCap, absoluteCap, slotted) {
         const r = 52;
         const c = 2 * Math.PI * r;
         const step = c / absoluteCap;
         const gap = Math.min(6, step * 0.3);
         const seg = step - gap;
-        const segments = (from, to, cls) => {
-            if (to <= from) return '';
+        const segment = (from, to, cls) => {
+            if (to <= from) return null;
             const dash = [`0 ${(step * from).toFixed(2)}`];
             for (let i = from; i < to; i++) dash.push(`${seg.toFixed(2)} ${gap.toFixed(2)}`);
             dash.push(`0 ${c.toFixed(2)}`);
-            return `<circle class="${cls}" cx="64" cy="64" r="${r}" stroke-dasharray="${dash.join(' ')}"/>`;
+            return { cls, dash: dash.join(' ') };
         };
-        const filled = equipped.length;
-        return `
-            <div class="gd-ring ${overloaded ? 'overloaded' : ''}">
-                <svg viewBox="0 0 128 128">
-                    ${segments(0, naturalCap, 'gd-ring-base')}
-                    ${segments(naturalCap, absoluteCap, 'gd-ring-extra')}
-                    ${segments(0, Math.min(filled, naturalCap), 'gd-ring-fill')}
-                    ${segments(naturalCap, Math.min(filled, absoluteCap), 'gd-ring-over')}
-                </svg>
-                <div class="gd-ring-count"><span>${filled}</span>/${naturalCap}</div>
-                <div class="gd-ring-label">Предел разума</div>
-                ${absoluteCap > naturalCap ? `<div class="gd-ring-note extra">Абсолютный предел ${absoluteCap}</div>` : ''}
-                ${overloaded ? `<div class="gd-ring-note overload">Перегруз: −2 к Инт, Мдр и Хар за слот сверх ${naturalCap}</div>` : ''}
-            </div>`;
+        const filled = slotted.length;
+        return {
+            filled, naturalCap, absoluteCap,
+            extra: absoluteCap > naturalCap,
+            overloaded: filled > naturalCap,
+            segments: [
+                segment(0, naturalCap, 'gd-ring-base'),
+                segment(naturalCap, absoluteCap, 'gd-ring-extra'),
+                segment(0, Math.min(filled, naturalCap), 'gd-ring-fill'),
+                segment(naturalCap, Math.min(filled, absoluteCap), 'gd-ring-over')
+            ].filter(Boolean)
+        };
     }
 
-    _replaceHTML(result, content) {
-        content.innerHTML = result;
-    }
+    // ==========================================
+    // ОТРИСОВКА ЧАСТЕЙ
+    // ==========================================
 
-    _onRender() {
-        // Фон-сеть: старый цикл отрисовки останавливается, новый запускается на свежем canvas
-        this.neural?.stop();
-        const canvas = this.element.querySelector('canvas.gd-neural');
-        this.neural = canvas ? new NeuralBackground(canvas, this.actor.id, Number(canvas.dataset.active) || 0) : null;
-        if (this.#idle) this.neural?.pause();
-        else this.neural?.start();
+    _onRender(context, options) {
+        super._onRender(context, options);
+        // Фон-сеть создаётся вместе со своей частью; дальше ей только сообщают число экипированных
+        if (options.parts?.includes('backdrop')) {
+            this.neural?.stop();
+            const canvas = this.element.querySelector('canvas.gd-neural');
+            this.neural = canvas ? new NeuralBackground(canvas, this.actor.id, context.equippedCount) : null;
+            if (this.#idle) this.neural?.pause();
+            else this.neural?.start();
+        } else {
+            this.neural?.setActiveCount(context.equippedCount);
+        }
 
         // Отрицательная задержка = текущая позиция в цикле: неон продолжает движение после перерисовки
         const now = Date.now();
@@ -420,7 +372,8 @@ export class MemoryTerminal extends ApplicationV2 {
                 .forEach(el => el.classList.add(`fx-${this.fx.type}`));
         }
 
-        this.element.querySelectorAll('.gd-uses-input').forEach(input => {
+        this.element.querySelectorAll('.gd-uses-input:not([data-bound])').forEach(input => {
+            input.dataset.bound = '1';
             input.addEventListener('click', event => event.stopPropagation());
             input.addEventListener('change', async event => {
                 const item = this.actor.items.get(event.currentTarget.dataset.itemId);
@@ -438,27 +391,30 @@ export class MemoryTerminal extends ApplicationV2 {
     // ДЕЙСТВИЯ
     // ==========================================
 
+    // Колода не перерисовывается: выделение переносится на месте, неон карт не сбивается
     static #onSelect(event, target) {
         this.selectedId = target.dataset.itemId;
-        this.render();
+        this.element.querySelectorAll('.gd-tcard.selected').forEach(el => el.classList.remove('selected'));
+        target.classList.add('selected');
+        this.#renderContent(['feature', 'side']);
     }
 
     static #onExpand(event, target) {
         const id = target.dataset.docId;
         if (this.expanded.has(id)) this.expanded.delete(id); else this.expanded.add(id);
-        this.render();
+        this.#renderContent(['side']);
     }
 
     static async #onHorsemanProgress(event, target) {
         const item = this.actor.items.get(target.dataset.itemId);
         if (item && game.user.isGM) await addCleanseProgress(item, 1);
-        this.render();
+        this.#renderContent();
     }
 
     static async #onHorsemanCleanse(event, target) {
         const item = this.actor.items.get(target.dataset.itemId);
         if (item && game.user.isGM) await cleanseHorseman(item);
-        this.render();
+        this.#renderContent();
     }
 
     // Мастер вписывает личный эффект в копию навыка этого персонажа
@@ -475,7 +431,7 @@ export class MemoryTerminal extends ApplicationV2 {
         });
         if (text === null || text === undefined) return;
         await setPersonalEffect(item, text);
-        this.render();
+        this.#renderContent();
     }
 
     static #onOpenAltar() {
@@ -501,7 +457,7 @@ export class MemoryTerminal extends ApplicationV2 {
             this.fx = { id: item.id, type: 'merge', time: Date.now() };
             playTerminalSound('merge');
         }
-        this.render();
+        this.#renderContent();
     }
 
     static async #onToggleEquip(event, target) {
@@ -512,12 +468,12 @@ export class MemoryTerminal extends ApplicationV2 {
         const equipping = !item.flags[MODULE_ID]?.is_active;
         if (!equipping && isHorseman(item) && !isCleansed(item)) {
             ui.notifications.warn(`${item.name}: проклятого всадника снять нельзя.`);
-            return this.render();
+            return this.#renderContent();
         }
 
         if (isRiskActive() && !game.user.isGM) {
             ui.notifications.warn('Во время испытания Риска навыки менять нельзя.');
-            return this.render();
+            return this.#renderContent();
         }
         // В бою навыки не меняются; Горячая замена разрешает одну пару «снять → экипировать»
         let usesSwap = false;
@@ -525,7 +481,7 @@ export class MemoryTerminal extends ApplicationV2 {
             if (equipping) {
                 if (!this.actor.getFlag(MODULE_ID, 'swapPending')) {
                     ui.notifications.warn('В бою навыки менять нельзя.');
-                    return this.render();
+                    return this.#renderContent();
                 }
                 usesSwap = true;
             } else {
@@ -533,7 +489,7 @@ export class MemoryTerminal extends ApplicationV2 {
                     && i.flags[MODULE_ID].combat_swap && (Number(i.system.uses?.max) || 0) > (i.system.uses?.spent || 0));
                 if (!swap) {
                     ui.notifications.warn('В бою навыки менять нельзя.');
-                    return this.render();
+                    return this.#renderContent();
                 }
                 await swap.update({ 'system.uses.spent': (swap.system.uses.spent || 0) + 1 });
                 await this.actor.setFlag(MODULE_ID, 'swapPending', true);
@@ -547,7 +503,7 @@ export class MemoryTerminal extends ApplicationV2 {
             // Сращённый всадник экипируется сверх лимита
             if (occupiesSlot(item) && equipped.filter(occupiesSlot).length >= cap) {
                 ui.notifications.error(`Достигнут абсолютный предел (${cap}).`);
-                return this.render();
+                return this.#renderContent();
             }
         }
 
@@ -556,7 +512,7 @@ export class MemoryTerminal extends ApplicationV2 {
         this.fx = { id: item.id, type: equipping ? 'equip' : 'unequip', time: Date.now() };
         playTerminalSound(equipping ? 'equip' : 'unequip');
         await updateActorSynergies(this.actor);
-        this.render();
+        this.#renderContent();
     }
 }
 
