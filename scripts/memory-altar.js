@@ -28,7 +28,7 @@ import {
 import { isAtRest } from "./memory-api.js";
 import { onSocket, emit } from "./socket.js";
 import { MindPhysics } from "./mind-physics.js";
-import { AltarSynapses } from "./altar-synapses.js";
+import { AltarSynapses, ResonanceWeave } from "./altar-synapses.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -179,6 +179,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #ringShown = false;
     #physics = null;
     #synapses = null;
+    #weave = new ResonanceWeave();
     #flareId = null;
     #drift = new Map();
     #cards = new Map();
@@ -414,11 +415,10 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             };
         });
 
-        // Резонанс: теги колесом вокруг ядра, от ядра к выбранному тянется нить
+        // Резонанс: теги колесом вокруг ядра; выбранный обвивают пряди от ядра (ResonanceWeave)
         const wheel = this.ritual !== 'resonate' ? [] : tags.map((name, n) => {
             const angle = -Math.PI / 2 + (2 * Math.PI * n) / tags.length;
             const pos = { x: CORE.x + WHEEL.rx * Math.cos(angle), y: CORE.y + WHEEL.ry * Math.sin(angle) };
-            if (name === this.tag) flows.push({ x1: CORE.x, y1: CORE.y, x2: pos.x, y2: pos.y, cls: 'thread' });
             return { name, active: name === this.tag, style: at(pos) };
         });
         // Переплавка накаляет ядро по мере заполнения гнёзд
@@ -467,6 +467,10 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             this.#synapses?.start();
             if (this.#flareId) this.#synapses?.flare(this.#flareId);
             this.#flareId = null;
+            // Пряди Резонанса переживают перерисовку: при смене тега втягиваются и прорастают к новому
+            const weave = this.#part('stage')?.querySelector('canvas.gd-weave');
+            if (weave) this.#weave.attach(weave, this.#part('stage'), this.tag);
+            else this.#weave.stop();
         }
         if (!options.parts?.includes('fog')) return this.#physics?.refresh();
         this.#physics?.destroy();
@@ -548,6 +552,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#physics = null;
         this.#synapses?.stop();
         this.#synapses = null;
+        this.#weave.stop();
     }
 
     // Новые роли огоньков применяются к уже нарисованному туману: класс, действие,

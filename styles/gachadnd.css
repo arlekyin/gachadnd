@@ -1602,13 +1602,12 @@
 .gachadnd-memory-altar .gd-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gachadnd-memory-altar .gd-links { z-index: 1; }
 /* Холст связей кольца — под ядром и узлами */
-.gachadnd-memory-altar .gd-synapses { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.gachadnd-memory-altar .gd-synapses,
+.gachadnd-memory-altar .gd-weave { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 .gachadnd-memory-altar .gd-flows line { stroke: var(--glow); stroke-width: 2; stroke-dasharray: 6 6; opacity: 0.85; }
 /* Переплавка: треугольник гнёзд — грань тлеет, горит, когда заняты оба конца */
 .gachadnd-memory-altar .gd-flows line.edge { stroke-dasharray: none; stroke-width: 1.5; opacity: 0.22; }
 .gachadnd-memory-altar .gd-flows line.edge.lit { stroke-width: 2.5; opacity: 0.95; filter: drop-shadow(0 0 4px var(--glow)); }
-/* Резонанс: нить от ядра к выбранному тегу */
-.gachadnd-memory-altar .gd-flows line.thread { stroke-dasharray: none; stroke-width: 2; opacity: 0.8; filter: drop-shadow(0 0 4px var(--glow)); }
 
 /* Накал ядра в Переплавке: свечение растёт с каждым воспоминанием в гнезде */
 .gachadnd-memory-altar .gd-core-heat {

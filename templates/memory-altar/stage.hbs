@@ -17,7 +17,8 @@
         <span class="gd-node-name">{{name}}</span>
     </div>
     {{/each}}
-    {{!-- Резонанс: колесо тегов вокруг ядра --}}
+    {{!-- Резонанс: колесо тегов вокруг ядра; пряди от ядра обвивают выбранный --}}
+    {{#if wheel.length}}<canvas class="gd-weave"></canvas>{{/if}}
     {{#each wheel}}<button type="button" class="gd-wheel-tag {{#if active}}active{{/if}}" style="{{style}}" data-action="tag" data-tag="{{name}}">{{name}}</button>{{/each}}
     {{!-- Расщепление: кристалл у ядра рассыпается искрами --}}
     {{#if shards}}<div class="gd-shards" style="{{core.style}}">{{#each shards}}<i style="--a: {{a}}deg; --d: {{d}}s"></i>{{/each}}</div>{{/if}}
