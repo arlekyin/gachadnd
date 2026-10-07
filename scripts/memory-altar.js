@@ -2,7 +2,8 @@
  * Gacha Roguelike dnd5e — Алтарь Памяти (полноэкранная мастерская на Привале)
  *
  * Ритуалы за Кости Хитов:
- *   Слияние     — повторный кристалл повышает ранг навыка (ранг II — 1 КХ, ранг III — 2 КХ);
+ *   Слияние     — повторный кристалл растворяется в навыке Памяти и повышает его ранг
+ *                 (ранг II — 1 КХ, ранг III — 2 КХ); сам навык Память не покидает;
  *   Переплавка  — 3 кристалла одной редкости → случайный кристалл следующей редкости;
  *   Резонанс    — кристалл → случайный кристалл той же редкости с выбранным тегом (1 КХ);
  *   Расщепление — кристалл → Кости Хитов обратно (зелёный, синий — 1, фиолетовый — 2).
@@ -70,7 +71,7 @@ async function chat(actor, content) {
 
 // Ритуалы: порядок в списке, подписи и цвет пламени котла
 const RITUALS = {
-    merge: { name: 'Слияние', icon: 'fa-hammer', flame: '#ffb347', text: 'Повторный кристалл повышает ранг навыка.' },
+    merge: { name: 'Слияние', icon: 'fa-hammer', flame: '#ffb347', text: 'Повторный кристалл растворяется в навыке Памяти и повышает его ранг.' },
     smelt: { name: 'Переплавка', icon: 'fa-fire', flame: '#ff6a2b', text: '3 кристалла одной редкости → случайный кристалл следующей редкости.' },
     resonate: { name: 'Резонанс', icon: 'fa-gem', flame: '#b066ff', text: 'Кристалл → случайный кристалл той же редкости с выбранным тегом.' },
     split: { name: 'Расщепление', icon: 'fa-burst', flame: '#5fe0b8', text: 'Кристалл → Кости Хитов обратно.' }
@@ -142,7 +143,7 @@ export class MemoryAltar extends ApplicationV2 {
         const hd = availableHitDice(this.actor);
         if (this.ritual === 'merge') {
             const item = this.actor.items.get(this.mergeId);
-            if (!item) return { ready: false, note: 'Выберите навык, для которого есть повторный кристалл.' };
+            if (!item) return { ready: false, note: 'Выберите навык Памяти, для которого в инвентаре есть повторный кристалл.' };
             const next = (item.flags[MODULE_ID].rank ?? 1) + 1;
             const cost = FORGE_COST[next] ?? 2;
             return { ready: hd >= cost, cost, note: `${item.name} → ранг ${romanRank(next)}`, short: hd < cost ? 'Не хватает Костей Хитов' : null };
@@ -151,6 +152,7 @@ export class MemoryAltar extends ApplicationV2 {
             const rarity = slotted[0]?.rarity;
             const weight = slotted.reduce((sum, i) => sum + i.weight, 0);
             if (!rarity) return { ready: false, note: 'Положите в котёл 3 кристалла одной редкости.' };
+            if (slotted.some(i => i.rarity !== rarity)) return { ready: false, note: 'Все кристаллы в котле должны быть одной редкости.' };
             const smelt = SMELT[rarity];
             if (weight < 3) return { ready: false, cost: smelt.cost, note: `Ещё ${3 - weight} — нужно 3 кристалла редкости «${RARITY[rarity].label}».` };
             return { ready: hd >= smelt.cost, cost: smelt.cost, note: `Случайный кристалл редкости «${RARITY[smelt.to].label}»`, short: hd < smelt.cost ? 'Не хватает Костей Хитов' : null };
@@ -178,15 +180,12 @@ export class MemoryAltar extends ApplicationV2 {
         const hd = availableHitDice(this.actor);
         const hdMax = this.actor.system.attributes?.hd?.max ?? hd;
 
-        // Медальоны ритуалов по бокам от котла: два слева, два справа
-        const medal = ([key, r]) => `
+        // Медальоны ритуалов — дуга слева от котла
+        const medals = Object.entries(RITUALS).map(([key, r]) => `
             <button type="button" class="gd-medal ${key === this.ritual ? 'active' : ''}" data-action="ritual" data-ritual="${key}" style="--flame: ${r.flame}" title="${r.text}">
-                <span class="gd-medal-disc"><i class="fas ${r.icon}"></i></span>
                 <span class="gd-medal-name">${r.name}</span>
-            </button>`;
-        const entries = Object.entries(RITUALS);
-        const leftMedals = entries.slice(0, 2).map(medal).join('');
-        const rightMedals = entries.slice(2).map(medal).join('');
+                <span class="gd-medal-disc"><i class="fas ${r.icon}"></i></span>
+            </button>`).join('');
 
         // Над котлом — ячейки ингредиентов
         const crystalCard = (ing, action, extra = '') => `
@@ -199,11 +198,13 @@ export class MemoryAltar extends ApplicationV2 {
         let slotsHtml = '';
         if (this.ritual === 'merge') {
             const item = this.actor.items.get(this.mergeId);
+            // Навык не покидает Память: в котёл опускается только повторный кристалл
+            const color = RARITY[item?.flags[MODULE_ID].rarity]?.color ?? '#ccc';
             slotsHtml = item
-                ? `<div class="gd-slot filled"><div class="gd-crystal" style="--rarity: ${RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#ccc'}"><i class="fas fa-brain"></i><span>${esc(item.name)}</span></div></div>
-                   <div class="gd-slot-plus">+</div>
-                   <div class="gd-slot filled"><div class="gd-crystal" style="--rarity: ${RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#ccc'}"><i class="fas fa-gem"></i><span>повтор</span></div></div>`
-                : '<div class="gd-slot"></div><div class="gd-slot-plus">+</div><div class="gd-slot"></div>';
+                ? `<div class="gd-mind" style="--rarity: ${color}"><i class="fas fa-brain"></i><span>${esc(item.name)}</span><small>в Памяти · ранг ${romanRank(item.flags[MODULE_ID].rank ?? 1)}</small></div>
+                   <div class="gd-slot-plus"><i class="fas fa-arrow-left"></i></div>
+                   <div class="gd-slot filled"><div class="gd-crystal" style="--rarity: ${color}"><i class="fas fa-gem"></i><span>${esc(item.name)}</span></div></div>`
+                : '<div class="gd-mind empty"><i class="fas fa-brain"></i><span>Навык в Памяти</span></div><div class="gd-slot-plus"><i class="fas fa-arrow-left"></i></div><div class="gd-slot"></div>';
         } else {
             for (let i = 0; i < this.#slotLimit(); i++) {
                 const ing = slotted[i];
@@ -220,7 +221,10 @@ export class MemoryAltar extends ApplicationV2 {
                     <i class="fas fa-brain"></i><span>${esc(item.name)}</span><b class="gd-crystal-x2">${romanRank(item.flags[MODULE_ID].rank ?? 1)}</b>
                 </div>`).join('') || '<div class="gd-tray-empty">Нет навыков с повторным кристаллом в инвентаре.</div>';
         } else {
-            tray = pool.filter(i => !this.slots.includes(i.key)).map(i => crystalCard(i, 'pick')).join('')
+            // В Переплавке кристаллы другой редкости приглушены: их выбор начнёт котёл заново
+            const smeltRarity = this.ritual === 'smelt' ? slotted[0]?.rarity : null;
+            tray = pool.filter(i => !this.slots.includes(i.key))
+                .map(i => crystalCard(i, 'pick', smeltRarity && i.rarity !== smeltRarity ? 'data-dim="1"' : '')).join('')
                 || '<div class="gd-tray-empty">Нет подходящих кристаллов.</div>';
         }
 
@@ -239,14 +243,14 @@ export class MemoryAltar extends ApplicationV2 {
                     <div class="gd-subtitle">${ritual.text}</div>
                     <div class="gd-slots">${slotsHtml}</div>
                     <div class="gd-altar-row">
-                        <div class="gd-medals">${leftMedals}</div>
+                        <div class="gd-medals">${medals}</div>
                         <div class="gd-cauldron">
                             <div class="gd-glow"></div>
                             <div class="gd-pot"><div class="gd-brew"><i></i><i></i><i></i><i></i><i></i></div></div>
                             <div class="gd-embers"><i></i><i></i><i></i><i></i><i></i><i></i></div>
                             ${resultHtml}
                         </div>
-                        <div class="gd-medals">${rightMedals}</div>
+                        <div class="gd-medals-balance"></div>
                     </div>
                     ${tagsHtml}
                     <div class="gd-recipe">${esc(recipe.note)}${recipe.short ? ` · <em>${recipe.short}</em>` : ''}</div>
@@ -269,6 +273,13 @@ export class MemoryAltar extends ApplicationV2 {
     }
 
     static #onPick(event, target) {
+        // Переплавка: кристалл другой редкости начинает котёл заново
+        if (this.ritual === 'smelt') {
+            const { all } = this.#state();
+            const rarity = all.find(i => i.key === target.dataset.key)?.rarity;
+            const current = all.find(i => i.key === this.slots[0])?.rarity;
+            if (current && rarity !== current) this.slots = [];
+        }
         if (this.slots.length >= this.#slotLimit()) this.slots.shift();
         this.slots.push(target.dataset.key);
         this.result = null;

@@ -931,23 +931,48 @@
 .gachadnd-memory-altar .gd-stage h1 { margin: 0; border: none; font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; color: #f6e4c2; text-shadow: 0 0 18px var(--flame), 0 2px 4px #000; }
 .gachadnd-memory-altar .gd-subtitle { margin-top: -6px; color: #e9c98a; font-size: 14px; text-shadow: 0 1px 3px #000; }
 .gachadnd-memory-altar .gd-altar-row { display: flex; align-items: center; gap: 24px; }
-.gachadnd-memory-altar .gd-medals { display: flex; flex-direction: column; gap: 34px; }
 
-/* Медальоны ритуалов */
-.gachadnd-memory-altar .gd-medal { width: 110px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0; border: none; background: none; color: #e8d6b8; cursor: pointer; }
+/* Медальоны ритуалов: дуга слева от котла, подпись снаружи дуги */
+.gachadnd-memory-altar .gd-medals { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; width: 210px; }
+.gachadnd-memory-altar .gd-medals-balance { width: 210px; flex-shrink: 0; }
+.gachadnd-memory-altar .gd-medal:nth-child(1),
+.gachadnd-memory-altar .gd-medal:nth-child(4) { transform: translateX(40px); }
+.gachadnd-memory-altar button.gd-medal,
+.gachadnd-memory-altar button.gd-medal:hover,
+.gachadnd-memory-altar button.gd-medal:focus,
+.gachadnd-memory-altar button.gd-medal:focus-visible,
+.gachadnd-memory-altar button.gd-medal:active {
+  width: auto; min-width: 0; height: auto; display: flex; flex-direction: row; align-items: center; gap: 12px;
+  margin: 0; padding: 0; border: none; border-radius: 0; outline: none; background: none; box-shadow: none;
+  color: #e8d6b8; cursor: pointer;
+}
 .gachadnd-memory-altar .gd-medal-disc {
-  width: 78px; height: 78px; border-radius: 50%;
+  width: 66px; height: 66px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border: 2px solid #8a6430;
   background: radial-gradient(circle at 35% 30%, #3a2a1a 0%, #140d08 70%);
   box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.55), inset 0 0 14px rgba(0, 0, 0, 0.8);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
-.gachadnd-memory-altar .gd-medal-disc i { font-size: 30px; color: var(--flame); text-shadow: 0 0 12px var(--flame); }
-.gachadnd-memory-altar .gd-medal-name { font-size: 14px; font-weight: bold; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; }
+.gachadnd-memory-altar .gd-medal-disc i { font-size: 26px; color: var(--flame); text-shadow: 0 0 12px var(--flame); }
+.gachadnd-memory-altar .gd-medal-name { font-size: 14px; font-weight: bold; letter-spacing: 0.04em; text-align: right; text-shadow: 0 1px 3px #000; }
 .gachadnd-memory-altar .gd-medal:hover .gd-medal-disc { transform: scale(1.06); border-color: #e9c98a; }
-.gachadnd-memory-altar .gd-medal.active .gd-medal-disc { border-color: var(--flame); box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.55), 0 0 26px var(--flame), inset 0 0 14px rgba(0, 0, 0, 0.6); transform: scale(1.1); }
+.gachadnd-memory-altar .gd-medal:focus-visible .gd-medal-disc { border-color: #e9c98a; }
+.gachadnd-memory-altar .gd-medal.active .gd-medal-disc { border-color: var(--flame); box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.55), 0 0 26px var(--flame), inset 0 0 14px rgba(0, 0, 0, 0.6); transform: scale(1.12); }
 .gachadnd-memory-altar .gd-medal.active .gd-medal-name { color: #fff; }
+
+/* Слияние: навык в Памяти — не ячейка котла, а сознание персонажа */
+.gachadnd-memory-altar .gd-mind {
+  width: 150px; height: 88px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 50%; border: 1px solid var(--rarity, #8a6430);
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--rarity, #8a6430) 22%, transparent), rgba(0, 0, 0, 0.5) 70%);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--rarity, #8a6430) 35%, transparent);
+  font-size: 13px; text-align: center; text-shadow: 0 1px 3px #000;
+}
+.gachadnd-memory-altar .gd-mind i { font-size: 20px; color: var(--rarity, #e9c98a); }
+.gachadnd-memory-altar .gd-mind small { font-size: 11px; color: #e9c98a; }
+.gachadnd-memory-altar .gd-mind.empty { opacity: 0.6; border-style: dashed; }
+.gachadnd-memory-altar .gd-crystal[data-dim] { opacity: 0.4; }
 
 /* Кости Хитов под кнопкой */
 .gachadnd-memory-altar .gd-hd { text-align: center; color: #e9c98a; font-size: 13px; letter-spacing: 0.06em; text-shadow: 0 1px 3px #000; }
