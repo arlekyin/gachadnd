@@ -178,13 +178,15 @@ export class MemoryAltar extends ApplicationV2 {
         const hd = availableHitDice(this.actor);
         const hdMax = this.actor.system.attributes?.hd?.max ?? hd;
 
-        // Слева — книга ритуалов, как список заклинаний у котла
-        const book = Object.entries(RITUALS).map(([key, r]) => `
-            <button type="button" class="gd-rite ${key === this.ritual ? 'active' : ''}" data-action="ritual" data-ritual="${key}" style="--flame: ${r.flame}">
-                <i class="fas ${r.icon}"></i>
-                <span class="gd-rite-name">${r.name}</span>
-                <span class="gd-rite-text">${r.text}</span>
-            </button>`).join('');
+        // Медальоны ритуалов по бокам от котла: два слева, два справа
+        const medal = ([key, r]) => `
+            <button type="button" class="gd-medal ${key === this.ritual ? 'active' : ''}" data-action="ritual" data-ritual="${key}" style="--flame: ${r.flame}" title="${r.text}">
+                <span class="gd-medal-disc"><i class="fas ${r.icon}"></i></span>
+                <span class="gd-medal-name">${r.name}</span>
+            </button>`;
+        const entries = Object.entries(RITUALS);
+        const leftMedals = entries.slice(0, 2).map(medal).join('');
+        const rightMedals = entries.slice(2).map(medal).join('');
 
         // Над котлом — ячейки ингредиентов
         const crystalCard = (ing, action, extra = '') => `
@@ -232,25 +234,26 @@ export class MemoryAltar extends ApplicationV2 {
 
         return `
             <div class="gd-cauldron-scene" style="--flame: ${ritual.flame}">
-                <aside class="gd-book">
-                    <h2>Ритуалы</h2>
-                    ${book}
-                    <div class="gd-hd"><span>Кости Хитов</span><div class="gd-pips">${pips}</div></div>
-                </aside>
-                <main class="gd-stage">
+                <div class="gd-stage">
                     <h1>${ritual.name}</h1>
+                    <div class="gd-subtitle">${ritual.text}</div>
                     <div class="gd-slots">${slotsHtml}</div>
-                    <div class="gd-cauldron">
-                        <div class="gd-glow"></div>
-                        <div class="gd-pot"><div class="gd-brew"><i></i><i></i><i></i><i></i><i></i></div></div>
-                        <div class="gd-embers"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-                        ${resultHtml}
+                    <div class="gd-altar-row">
+                        <div class="gd-medals">${leftMedals}</div>
+                        <div class="gd-cauldron">
+                            <div class="gd-glow"></div>
+                            <div class="gd-pot"><div class="gd-brew"><i></i><i></i><i></i><i></i><i></i></div></div>
+                            <div class="gd-embers"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                            ${resultHtml}
+                        </div>
+                        <div class="gd-medals">${rightMedals}</div>
                     </div>
                     ${tagsHtml}
                     <div class="gd-recipe">${esc(recipe.note)}${recipe.short ? ` · <em>${recipe.short}</em>` : ''}</div>
                     <button type="button" class="gd-conjure" data-action="conjure" ${recipe.ready ? '' : 'disabled'}>Сотворить ${cost ? `<b>${cost}</b>` : ''}</button>
-                </main>
-                <footer class="gd-tray">${tray}</footer>
+                    <div class="gd-hd"><span>Кости Хитов ${hd} / ${Math.max(hdMax, hd)}</span><div class="gd-pips">${pips}</div></div>
+                </div>
+                <div class="gd-tray">${tray}</div>
             </div>`;
     }
 
