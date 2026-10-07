@@ -320,8 +320,12 @@ export class MemoryAltar extends ApplicationV2 {
             // Неподходящие ритуалу воспоминания тоже плавают в тумане — их можно бросать
             drifting.push(...all.filter(i => !pool.includes(i)).map(i => ({ ing: i, tap: '', cls: 'dim' })));
         }
-        const motes = drifting.map(({ ing, tap, cls, mergeSkill }, n) =>
-            mote(ing, this.#drift.get(ing.key) ?? fogPosition(n, drifting.length), { tap, cls, mergeSkill, delay: -(n * 0.7) % 6 })).join('');
+        // Место в тумане закрепляется за огоньком при первом появлении: иначе выбор одного
+        // сдвигал бы раскладку остальных
+        const motes = drifting.map(({ ing, tap, cls, mergeSkill }, n) => {
+            if (!this.#drift.has(ing.key)) this.#drift.set(ing.key, fogPosition(n, drifting.length));
+            return mote(ing, this.#drift.get(ing.key), { tap, cls, mergeSkill, delay: -(n * 0.7) % 6 });
+        }).join('');
         const emptyNote = drifting.length ? '' : '<div class="gd-fog-empty">Туман пуст.</div>';
 
         // Легенда нитей — какие теги уже сплетены и насколько
