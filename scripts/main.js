@@ -2,34 +2,32 @@
  * Gacha Roguelike dnd5e — Главный клиентский скрипт модуля
  */
 
-// Первым: остальные скрипты читают MODULE_ID через main.js
+// MODULE_ID — из constants.js; реэкспорт оставлен для макросов и старого кода
 export { MODULE_ID } from "./constants.js";
 import { MODULE_ID } from "./constants.js";
 import { MemoryTerminal } from "./ui.js";
 import { GachaLootTerminal } from "./loot.js";
-import { GachaMapTerminal } from "./map.js";
 import "./compendium.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
 import { registerSoundSettings } from "./sounds.js";
 import { giveCrystal } from "./inventory.js";
-import "./horsemen.js";
-import { DoomAltar } from "./altar.js";
-import { ShopWindow } from "./shop.js";
 import { registerSocket } from "./socket.js";
-import { RiskWindow, registerRiskSettings } from "./risk.js";
-import { MemoryAltar } from "./memory-altar.js";
-import { registerEconomySettings } from "./economy.js";
-
+import { MemoryAltar, announceRest } from "./memory-altar.js";
+import { registerMemorySettings } from "./memory-api.js";
+import { addTokenTools } from "./controls.js";
+// Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
+// Память от него не зависит: без этой строки она работает как самостоятельная система
+import "./labyrinth.js";
 
 Hooks.once('init', () => {
     console.log(`%c🎲 GachaDND | Инициализация...`, 'color: #ffaa00; font-weight: bold;');
 
     registerGachaPeriods();
     registerSoundSettings();
-    registerEconomySettings();
-    registerRiskSettings();
+    registerMemorySettings();
 
-    game.gachadnd = {
+    // Лабиринт дописывает в этот же объект свои функции
+    game.gachadnd = Object.assign(game.gachadnd ?? {}, {
         openTerminal: (actor) => {
             const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
             if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
@@ -42,14 +40,13 @@ Hooks.once('init', () => {
             const existing = Object.values(ui.windows).find(w => w instanceof GachaLootTerminal);
             if (existing) existing.bringToTop(); else new GachaLootTerminal().render(true);
         },
-        openMapTerminal: () => {
-            const existing = Object.values(ui.windows).find(w => w instanceof GachaMapTerminal);
-            if (existing) existing.bringToTop(); else new GachaMapTerminal().render(true);
-        },
-        openDoomAltar: () => DoomAltar.open(),
-        openShop: () => ShopWindow.open(),
-        openRisk: () => RiskWindow.open(),
         openMemoryAltar: (actor) => MemoryAltar.open(actor),
+        // Привал без карты: Мастер открывает и закрывает его вручную; при открытии у игроков открывается Алтарь
+        setRest: async (open = true) => {
+            if (!game.user?.isGM) return ui.notifications.warn("⚠️ Открывать Привал может только Мастер.");
+            await game.settings.set(MODULE_ID, 'restOpen', !!open);
+            if (open) announceRest();
+        },
         // Кристалл навыка вручную: game.gachadnd.giveCrystal(actor, 'Фус-Ро-Да')
         giveCrystal: (actor, skillName) => giveCrystal(actor, { skillName }),
         // Восстановление зарядов по периоду: 'gachaRun', 'gachaScene' или стандартный период dnd5e
@@ -60,75 +57,32 @@ Hooks.once('init', () => {
             ui.notifications.info(`🔄 Период «${label}»: восстановлены заряды у ${count} навыков.`);
             return count;
         }
-    };
+    });
 });
 
+// Кнопки Памяти на панели токенов (кнопку карты добавляет Лабиринт)
 Hooks.on('getSceneControlButtons', (controls) => {
-    let tokenGroup = null;
-    
-    // 1. Ищем вкладку токенов (Поддерживаем и классические массивы, и словари v12+)
-    if (Array.isArray(controls)) {
-        tokenGroup = controls.find(c => c.name === 'token');
-    } else if (controls && typeof controls === 'object') {
-        tokenGroup = controls.token || controls.tokens || Object.values(controls).find(c => c?.name === 'token' || c?.name === 'tokens');
-    }
-
-    if (!tokenGroup) return;
-
-    // 2. УНИВЕРСАЛЬНЫЙ ДОБАВЛЯТОР КНОПОК
-    // Обходит Type Error, адаптируясь под любую структуру данных (Array, Map, Object)
-    const safeAddTool = (tool) => {
-        if (!tokenGroup.tools) tokenGroup.tools = [];
-        
-        // Если это стандартный Массив (Foundry v11)
-        if (Array.isArray(tokenGroup.tools)) {
-            if (!tokenGroup.tools.some(t => t.name === tool.name)) tokenGroup.tools.push(tool);
-        } 
-        // Если это Коллекция или Map (Foundry v12+ / Monk's Modules)
-        else if (tokenGroup.tools instanceof Map || (typeof Collection !== 'undefined' && tokenGroup.tools instanceof Collection)) {
-            if (!tokenGroup.tools.has(tool.name)) tokenGroup.tools.set(tool.name, tool);
-        } 
-        // Если это просто Объект-словарь
-        else if (typeof tokenGroup.tools === 'object') {
-            const exists = Object.values(tokenGroup.tools).some(t => t?.name === tool.name);
-            if (!exists) tokenGroup.tools[tool.name] = tool;
-        }
-    };
-
-    const isGM = game.user ? game.user.isGM : false;
-
-    // 3. Безопасно внедряем наши инструменты
-    safeAddTool({
-        name: 'gachadnd-map',
-        title: 'Карта Этажа (Туман)',
-        icon: 'fas fa-map-marked-alt',
-        visible: true,
-        button: true,
-        onClick: () => game.gachadnd.openMapTerminal()
-    });
-
-    safeAddTool({
-        name: 'gachadnd-terminal',
-        title: 'Терминал Тумана',
-        icon: 'fas fa-brain',
-        visible: true,
-        button: true,
-        onClick: () => game.gachadnd.openTerminal()
-    });
-
-    if (isGM) {
-        safeAddTool({
+    addTokenTools(controls, [
+        {
+            name: 'gachadnd-terminal',
+            title: 'Терминал Тумана',
+            icon: 'fas fa-brain',
+            visible: true,
+            button: true,
+            onClick: () => game.gachadnd.openTerminal()
+        },
+        ...(game.user?.isGM ? [{
             name: 'gachadnd-loot',
             title: 'Генератор Лута (Мастер)',
             icon: 'fas fa-gem',
             visible: true,
             button: true,
             onClick: () => game.gachadnd.openLootTerminal()
-        });
-    }
+        }] : [])
+    ]);
 });
 
-// 4. Принудительная отрисовка UI после загрузки, чтобы новые кнопки 100% появились на экране
+// Принудительная отрисовка UI после загрузки, чтобы новые кнопки появились на экране
 Hooks.once('ready', () => {
     registerSocket();
     if (ui.controls) {

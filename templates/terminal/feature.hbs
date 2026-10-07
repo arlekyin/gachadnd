@@ -11,7 +11,7 @@
             {{#each chips}}<span class="gd-chip {{cls}}" {{#if color}}style="--chip: {{color}}"{{/if}}>{{text}}</span>{{/each}}
         </div>
         {{#if drawback}}<div class="gd-feature-drawback"><strong>Штраф:</strong> {{drawback}}</div>{{/if}}
-        {{#if horseman}}<div class="gd-horseman {{#if horseman.cleansed}}cleansed{{/if}}">🐎 {{horseman.text}}</div>{{/if}}
+        {{#each notes}}<div class="{{cls}}">{{text}}</div>{{/each}}
         <div class="gd-feature-text">{{{body}}}</div>
         {{#if hiddenRanks}}
         <div class="gd-gm-ranks"><div class="gd-gm-ranks-title"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер</div>
@@ -24,8 +24,7 @@
                 {{#if equipped}}<i class="fas fa-power-off"></i> Снять{{else}}<i class="fas fa-bolt"></i> Экипировать{{/if}}
             </button>
             {{#if canUse}}<button type="button" class="gd-btn" data-action="use" data-item-id="{{id}}"><i class="fas fa-dice-d20"></i> Использовать</button>{{/if}}
-            {{#if gm.progress}}<button type="button" class="gd-btn" data-action="horsemanProgress" data-item-id="{{id}}" title="Видит только Мастер"><i class="fas fa-plus"></i> Прогресс</button>{{/if}}
-            {{#if gm.cleanse}}<button type="button" class="gd-btn" data-action="horsemanCleanse" data-item-id="{{id}}" title="Видит только Мастер"><i class="fas fa-horse-head"></i> Срастить</button>{{/if}}
+            {{#each extensions}}<button type="button" class="gd-btn" data-action="extension" data-index="{{index}}" title="{{title}}"><i class="{{icon}}"></i> {{label}}</button>{{/each}}
             {{#if gm.personal}}<button type="button" class="gd-btn" data-action="editPersonal" data-item-id="{{id}}" title="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>{{/if}}
         </div>
     </div>

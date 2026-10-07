@@ -14,6 +14,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
+import { HOOKS } from "./memory-api.js";
 import { randomCrystal, crystalForSkill } from "./crystals.js";
 import { getFloor, rollGold, addGold } from "./economy.js";
 import { partyActors } from "./horsemen.js";
@@ -87,6 +88,18 @@ function currentRiskNode(scene = canvas?.scene) {
 export function isRiskActive(scene) {
     return !!currentRiskNode(scene)?.node.risk?.active;
 }
+
+// Подключение к Памяти: пока идёт испытание, игроки не поглощают кристаллы и не меняют навыки
+Hooks.on(HOOKS.preAbsorbCrystal, () => {
+    if (!isRiskActive() || game.user.isGM) return;
+    ui.notifications.warn('Во время испытания Риска кристаллы не поглощаются.');
+    return false;
+});
+Hooks.on(HOOKS.preChangeSkill, () => {
+    if (!isRiskActive() || game.user.isGM) return;
+    ui.notifications.warn('Во время испытания Риска навыки менять нельзя.');
+    return false;
+});
 
 async function saveRisk(map, nodeId, risk) {
     const copy = foundry.utils.deepClone(map);

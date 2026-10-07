@@ -2,7 +2,7 @@
  * Gacha Roguelike dnd5e — Интеграция фильтров в окно компендиума
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 
 Hooks.on('renderCompendium', async (app, html, data) => {
     const compendium = app.collection;

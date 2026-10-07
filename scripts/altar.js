@@ -9,7 +9,7 @@
  * Состояние алтаря хранится в узле карты этажа (флаг сцены floorMap): { blood, order, taken }.
  */
 
-import { MODULE_ID } from "./main.js";
+import { MODULE_ID } from "./constants.js";
 import { randomCrystal, buildCrystalData } from "./crystals.js";
 import { HORSEMEN, partyActors, getHorseman, hasTakenHorseman } from "./horsemen.js";
 

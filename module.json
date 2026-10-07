@@ -14,13 +14,7 @@
     }
   ],
   "esmodules": [
-    "scripts/main.js",
-    "scripts/inventory.js",
-    "scripts/ui.js",
-    "scripts/synergy.js",
-    "scripts/loot.js",
-    "scripts/compendium.js",
-    "scripts/map.js"
+    "scripts/main.js"
   ],
   "styles": [
     "styles/gachadnd.css"
