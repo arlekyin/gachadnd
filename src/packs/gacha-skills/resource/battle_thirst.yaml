@@ -5,6 +5,9 @@ tags:
   - кровь
 description: В начале боя активируйте навык и получите количество временных ПЗ, равное {damage}.
 activation: encounter
+trigger:
+  on: combat_start
+  use: true
 uses: 1
 recovery: combat
 damage:

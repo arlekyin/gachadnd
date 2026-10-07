@@ -6,6 +6,10 @@ tags:
   - сталь
 description: Один раз в ход, когда вы попадаете атакой по цели, у которой меньше половины ПЗ, она получает дополнительно {damage}. Активируйте навык, чтобы бросить урон.
 activation: special
+trigger:
+  on: damage_roll
+  when: [attack_only, target_bloodied]
+  bonus: { from: damage }
 uses: 1
 recovery: turn
 damage:

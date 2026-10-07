@@ -5,6 +5,9 @@ tags:
   - щит
 description: Когда по вам попадает атака, реакцией уменьшите её урон на {roll}. Бросьте величину кнопкой навыка.
 activation: reaction
+trigger:
+  on: damaged
+  reduce: { from: roll }
 roll:
   formula: 1d6 + @prof
   name: Снижение урона

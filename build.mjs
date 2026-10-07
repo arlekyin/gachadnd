@@ -54,28 +54,59 @@ const SYNERGY_ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const SYNERGY_ACTIVATIONS = ['action', 'bonus', 'reaction', 'special'];
 const SYNERGY_TARGETS = ['radius', 'sphere', 'cone', 'line', 'cube', 'cylinder'];
 const SYNERGY_MODES = ['custom', 'multiply', 'add', 'downgrade', 'upgrade', 'override'];
-// Автоматизация (scripts/triggers.js): когда срабатывает и при каких условиях
-const TRIGGER_ON = ['damage_roll', 'damaged'];
-const TRIGGER_WHEN = ['self_wounded', 'self_bloodied', 'target_bloodied', 'hostile_target'];
+// Автоматизация (scripts/triggers.js): когда срабатывает, при каких условиях и что делает.
+// Общая схема для синергий (порог) и навыков; у навыка формулы можно брать из его активности (from)
+const TRIGGER_ON = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
+const TRIGGER_WHEN = ['self_wounded', 'self_bloodied', 'target_bloodied', 'hostile_target', 'target_anomaly', 'attack_only'];
+const TRIGGER_ONCE = ['turn', 'none', 'primed'];
 const TRIGGER_DAMAGE_TYPES = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
 
-function validateTrigger(trigger, f, err, feature) {
-    const { on, when, bonus, heal_self, reduce, ...extra } = trigger ?? {};
-    Object.keys(extra).forEach(k => err(`${f}.trigger.${k}`, 'неизвестное поле (допустимы: on, when, bonus, heal_self, reduce)'));
+/**
+ * @param {object} trigger
+ * @param {string} f        Путь поля для сообщений
+ * @param {Function} err
+ * @param {{ feature?: object, skill?: object }} owner  Порог синергии (feature) или навык (skill)
+ */
+function validateTrigger(trigger, f, err, { feature, skill } = {}) {
+    const { on, when, once, bonus, heal_self, reduce, use, pay, advantage, ...extra } = trigger ?? {};
+    Object.keys(extra).forEach(k => err(`${f}.trigger.${k}`, 'неизвестное поле (допустимы: on, when, once, bonus, heal_self, reduce, use, pay, advantage)'));
     if (!TRIGGER_ON.includes(on)) return err(`${f}.trigger.on`, `допустимо: ${TRIGGER_ON.join(', ')}`);
     (when ?? []).forEach(w => { if (!TRIGGER_WHEN.includes(w)) err(`${f}.trigger.when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`); });
+    if (once !== undefined && !TRIGGER_ONCE.includes(once)) err(`${f}.trigger.once`, `допустимо: ${TRIGGER_ONCE.join(', ')}`);
+    if (once === 'primed' && !skill) err(`${f}.trigger.once`, 'primed — только у навыка: срабатывание взводится его использованием');
+    const fromOk = (from, need) => {
+        if (!skill) return err(`${f}.trigger`, 'from — только у навыка');
+        if (need === 'damage' && !skill.damage?.length) err(`${f}.trigger`, 'from: damage — у навыка нет damage');
+        if (need === 'roll' && !skill.roll) err(`${f}.trigger`, 'from: roll — у навыка нет roll');
+    };
+    const only = (field, ons) => { if (trigger[field] !== undefined && !ons.includes(on)) err(`${f}.trigger.${field}`, `только для on: ${ons.join(', ')}`); };
+    only('bonus', ['damage_roll']); only('heal_self', ['damage_roll']); only('once', ['damage_roll']);
+    only('reduce', ['damaged']); only('pay', ['turn_start', 'combat_start']); only('advantage', ['turn_start', 'combat_start']);
     if (on === 'damage_roll') {
         if (!bonus && !heal_self) err(`${f}.trigger`, 'для damage_roll нужен bonus или heal_self');
-        if (bonus && (!bonus.formula || !TRIGGER_DAMAGE_TYPES.includes(bonus.type))) err(`${f}.trigger.bonus`, '{ formula, type } — тип урона dnd5e');
+        if (bonus?.from) {
+            if (!['damage', 'roll'].includes(bonus.from)) err(`${f}.trigger.bonus.from`, 'damage или roll');
+            else fromOk(bonus.from, bonus.from);
+            if (bonus.from === 'roll' && !TRIGGER_DAMAGE_TYPES.includes(bonus.type)) err(`${f}.trigger.bonus.type`, 'тип урона dnd5e');
+        } else if (bonus && (!bonus.formula || !TRIGGER_DAMAGE_TYPES.includes(bonus.type))) err(`${f}.trigger.bonus`, '{ formula, type } или { from }');
         if (bonus?.double_when && !TRIGGER_WHEN.includes(bonus.double_when)) err(`${f}.trigger.bonus.double_when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`);
         if (heal_self && !heal_self.formula) err(`${f}.trigger.heal_self.formula`, 'обязательное поле');
-        if (reduce) err(`${f}.trigger.reduce`, 'только для on: damaged');
     }
     if (on === 'damaged') {
-        if (!reduce?.formula) err(`${f}.trigger.reduce.formula`, 'обязательное поле');
-        if (!feature?.uses) err(`${f}.trigger`, 'реакции на урон нужна feature с зарядами — они и тратятся');
-        if (bonus || heal_self) err(`${f}.trigger`, 'bonus и heal_self — только для on: damage_roll');
+        const modes = [reduce, use].filter(Boolean).length;
+        if (modes !== 1) err(`${f}.trigger`, 'для damaged нужен ровно один из reduce, use');
+        if (reduce && !reduce.formula && reduce.from !== 'roll' && reduce.half !== true) err(`${f}.trigger.reduce`, '{ formula }, { from: roll } или { half: true }');
+        if (reduce?.from === 'roll') fromOk('roll', 'roll');
+        if (reduce && feature && !feature.uses) err(`${f}.trigger`, 'реакции синергии нужна feature с зарядами — они и тратятся');
     }
+    if (on === 'turn_start' || on === 'combat_start') {
+        if (!use && !pay) err(`${f}.trigger`, `для ${on} нужен use или pay`);
+        if (use && !skill) err(`${f}.trigger.use`, 'use — только у навыка с активацией');
+        if (pay && !pay.formula) err(`${f}.trigger.pay.formula`, 'обязательное поле');
+        if (pay && !TRIGGER_DAMAGE_TYPES.includes(pay.type)) err(`${f}.trigger.pay.type`, 'тип урона dnd5e');
+        if (advantage !== undefined && advantage !== 'attacks') err(`${f}.trigger.advantage`, 'допустимо: attacks');
+    }
+    if (use && skill && (skill.activation ?? 'none') === 'none') err(`${f}.trigger.use`, 'у навыка нет активации — использовать нечего');
 }
 
 function validateSynergy(syn) {
@@ -91,7 +122,7 @@ function validateSynergy(syn) {
         const f = `tiers[${i}]`;
         const { count, name, description, changes, feature, trigger, ...more } = t ?? {};
         Object.keys(more).forEach(k => err(`${f}.${k}`, 'неизвестное поле (допустимы: count, name, description, changes, feature, trigger)'));
-        if (trigger) validateTrigger(trigger, f, err, feature);
+        if (trigger) validateTrigger(trigger, f, err, { feature });
         if (!Number.isInteger(count) || count < 1) err(`${f}.count`, 'число навыков с тегом — целое больше 0');
         if (typeof name !== 'string' || !name.trim()) err(`${f}.name`, 'обязательное поле');
         if (typeof description !== 'string' || !description.trim()) err(`${f}.description`, 'обязательное поле');
@@ -170,7 +201,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -375,6 +406,8 @@ function validateSkill(skill, folder) {
     if (skill.changes !== undefined) checkChanges(skill.changes, 'changes');
     // Эффекты, действующие только в начатом бою (например, штраф Берсерка); от ранга не зависят
     if (skill.combat_changes !== undefined) checkChanges(skill.combat_changes, 'combat_changes');
+    // Автоматизация: от ранга не зависит; формулы с from берутся из активности текущего ранга
+    if (skill.trigger !== undefined) validateTrigger(skill.trigger, 'навык', err, { skill });
 
     // Эффекты, сила которых зависит от состава Памяти или экипировки: объект или список объектов
     if (skill.memory_scaling !== undefined) {
@@ -666,6 +699,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.combat_changes ? {
                     combat_changes: skill.combat_changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
                 } : {}),
+                ...(skill.trigger ? { trigger: skill.trigger } : {}),
                 ...(skill.memory_bonus ? { memory_bonus: skill.memory_bonus } : {}),
                 ...(skill.undeletable ? { undeletable: true } : {}),
                 ...(skill.combat_swap ? { combat_swap: true } : {}),

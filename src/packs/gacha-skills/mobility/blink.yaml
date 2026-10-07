@@ -5,6 +5,9 @@ tags:
   - движение
 description: Когда вы получаете урон, реакцией телепортируйтесь на расстояние до 10 футов в свободное пространство, которое видите.
 activation: reaction
+trigger:
+  on: damaged
+  use: true
 range: 10
 uses: 3
 recovery: long
