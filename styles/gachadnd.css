@@ -564,13 +564,13 @@
    Динамические эффекты Терминала
    ========================================== */
 
-/* Неон экипированных карт: карта залита цветом, по контуру бежит яркий участок */
-@property --gd-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
+/* Неон экипированных карт: карта залита цветом, по контуру бежит яркий участок.
+   Градиент рисуется один раз и вращается через transform — анимация идёт на видеокарте
+   и не пересчитывает стили страницы каждый кадр. */
+@keyframes gd-neon-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
-@keyframes gd-neon-run { to { --gd-angle: 360deg; } }
 
 .gachadnd-terminal .gd-tcard.equipped,
 .gachadnd-terminal .gd-bigcard.equipped {
@@ -590,26 +590,43 @@
   box-shadow: 0 0 0 2px #0b1214, 0 0 30px rgba(95, 224, 184, 0.6), inset 0 0 24px rgba(160, 255, 225, 0.35);
 }
 
-/* Бегущий контур: конический градиент, вырезанный маской в рамку */
-.gachadnd-terminal .gd-tcard.equipped::before,
+/* Бегущий контур: рамка-маска, внутри неё вращается квадрат с коническим градиентом */
+.gachadnd-terminal .gd-tcard.equipped > .gd-neon,
 .gachadnd-terminal .gd-bigcard.equipped > .gd-neon {
-  content: "";
   position: absolute;
   inset: -3px;
   padding: 3px;
   border-radius: 8px;
-  background: conic-gradient(from var(--gd-angle),
-    var(--neon-dim) 0deg, var(--neon) 30deg, var(--neon-hot) 55deg, var(--neon) 80deg, var(--neon-dim) 120deg,
-    var(--neon-dim) 180deg, var(--neon) 215deg, var(--neon-hot) 235deg, var(--neon) 255deg, var(--neon-dim) 300deg, var(--neon-dim) 360deg);
+  overflow: hidden;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  filter: drop-shadow(0 0 4px var(--neon));
-  /* Фаза задаётся из часов при каждой отрисовке — перерисовка не запускает анимацию заново */
-  animation: gd-neon-run 4.5s linear var(--gd-phase-small, 0ms) infinite;
   pointer-events: none;
+  z-index: 1;
 }
-.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -6px; padding: 5px; border-radius: 13px; animation-duration: 6s; animation-delay: var(--gd-phase-big, 0ms); }
+.gachadnd-terminal .gd-neon::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260%;
+  aspect-ratio: 1;
+  background: conic-gradient(
+    var(--neon-dim) 0deg, var(--neon) 30deg, var(--neon-hot) 55deg, var(--neon) 80deg, var(--neon-dim) 120deg,
+    var(--neon-dim) 180deg, var(--neon) 215deg, var(--neon-hot) 235deg, var(--neon) 255deg, var(--neon-dim) 300deg, var(--neon-dim) 360deg);
+  transform: translate(-50%, -50%);
+  will-change: transform;
+  /* Фаза задаётся из часов при каждой отрисовке — перерисовка не запускает анимацию заново */
+  animation: gd-neon-spin 4.5s linear var(--gd-phase-small, 0ms) infinite;
+}
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon { inset: -6px; padding: 5px; border-radius: 13px; }
+.gachadnd-terminal .gd-bigcard.equipped > .gd-neon::before { animation-duration: 6s; animation-delay: var(--gd-phase-big, 0ms); }
+
+/* Терминал не в фокусе — все анимации на паузе */
+.gachadnd-terminal.gd-idle *,
+.gachadnd-terminal.gd-idle *::before,
+.gachadnd-terminal.gd-idle *::after { animation-play-state: paused !important; }
+
 .gachadnd-terminal .gd-tcard.equipped.selected { border-color: transparent; }
 
 /* Экипировка: вспышка и «вспыхивание» карты */
@@ -639,7 +656,7 @@
 
 /* Без анимаций по системной настройке */
 @media (prefers-reduced-motion: reduce) {
-  .gachadnd-terminal .gd-tcard.equipped::before,
+  .gachadnd-terminal .gd-neon::before,
   .gachadnd-terminal .gd-bigcard.equipped > .gd-neon,
   .gachadnd-terminal .fx-equip,
   .gachadnd-terminal .fx-unequip,

@@ -105,9 +105,15 @@ export class NeuralBackground {
         this.frame = requestAnimationFrame(loop);
     }
 
-    stop() {
+    // Пауза: цикл отрисовки останавливается, кадр остаётся на холсте; start() продолжает
+    pause() {
         this.running = false;
         if (this.frame) cancelAnimationFrame(this.frame);
+        this.frame = null;
+    }
+
+    stop() {
+        this.pause();
         this.resizeObserver.disconnect();
     }
 
