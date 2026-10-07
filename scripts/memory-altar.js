@@ -115,6 +115,8 @@ const RITUALS = {
 // Геометрия сознания в процентах поля: ядро, орбита Памяти, точки фокуса
 const CORE = { x: 50, y: 46 };
 const ORBIT = { rx: 17, ry: 24 };
+// Колесо тегов Резонанса — эллипс вокруг ядра, внутри пояса тумана
+const WHEEL = { rx: 18, ry: 24 };
 const FOCUS = {
     1: [CORE],
     3: [-90, 30, 150].map(deg => ({ x: CORE.x + 8 * Math.cos(deg * Math.PI / 180), y: CORE.y + 11 * Math.sin(deg * Math.PI / 180) }))
@@ -252,6 +254,29 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         return { ready: true, gain: SPLIT[ing.rarity], note: `Кости Хитов: +${SPLIT[ing.rarity]}` };
     }
 
+    // Прогноз под ядром: что получится из того, что сейчас в фокусе
+    #forecast(slotted, hd, hdMax, memory) {
+        const style = at({ x: CORE.x, y: CORE.y + 14 });
+        if (this.ritual === 'merge') {
+            const item = memory.find(i => i.id === this.mergeId);
+            if (!item) return null;
+            const rank = item.flags[MODULE_ID].rank ?? 1;
+            return { style, color: RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#e8c26a', text: `${item.name}: ранг ${romanRank(rank)} → ${romanRank(rank + 1)}` };
+        }
+        if (this.ritual === 'smelt') {
+            const rarity = slotted[0]?.rarity;
+            if (!rarity) return null;
+            const weight = Math.min(3, slotted.reduce((sum, i) => sum + i.weight, 0));
+            if (slotted.some(i => i.rarity !== rarity)) return { style, color: '#ff8a7a', text: 'Редкости не совпадают' };
+            const to = SMELT[rarity]?.to;
+            return { style, color: RARITY[to]?.color, text: `→ ${RARITY[to]?.label.toLowerCase()} кристалл`, sub: 'навык выпадет случайно', pips: [0, 1, 2].map(n => n < weight) };
+        }
+        const ing = slotted[0];
+        if (!ing) return null;
+        if (this.ritual === 'resonate') return { style, color: RARITY[ing.rarity].color, text: `→ ${RARITY[ing.rarity].label.toLowerCase()} кристалл`, sub: `тег «${this.tag}»` };
+        return { style, color: '#5fe0b8', text: `Кости Хитов ${hd} → ${Math.min(hdMax, hd + SPLIT[ing.rarity])}`, sub: 'кристалл рассеется в туман' };
+    }
+
     #slotLimit() {
         return { smelt: 3, resonate: 1, split: 1 }[this.ritual] ?? 0;
     }
@@ -336,6 +361,11 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             const points = FOCUS[this.#slotLimit()] ?? FOCUS[1];
             points.forEach((pos, n) => {
                 const ing = slotted[n];
+                // Переплавка: гнёзда соединены треугольником, грань горит, когда заняты оба конца
+                if (points.length > 1) {
+                    const next = points[(n + 1) % points.length];
+                    flows.push({ x1: pos.x, y1: pos.y, x2: next.x, y2: next.y, cls: ing && slotted[(n + 1) % points.length] ? 'edge lit' : 'edge' });
+                }
                 if (!ing) return focusEmpty.push({ style: at(pos) });
                 views.set(ing.key, { cls: ['focused'], tap: 'unslot', pos });
                 if (points.length > 1) flows.push({ x1: pos.x, y1: pos.y, x2: CORE.x, y2: CORE.y });
@@ -373,11 +403,22 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             };
         });
 
+        // Резонанс: теги колесом вокруг ядра, от ядра к выбранному тянется нить
+        const wheel = this.ritual !== 'resonate' ? [] : tags.map((name, n) => {
+            const angle = -Math.PI / 2 + (2 * Math.PI * n) / tags.length;
+            const pos = { x: CORE.x + WHEEL.rx * Math.cos(angle), y: CORE.y + WHEEL.ry * Math.sin(angle) };
+            if (name === this.tag) flows.push({ x1: CORE.x, y1: CORE.y, x2: pos.x, y2: pos.y, cls: 'thread' });
+            return { name, active: name === this.tag, style: at(pos) };
+        });
+        // Переплавка накаляет ядро по мере заполнения гнёзд
+        const heat = this.ritual === 'smelt' ? Math.min(1, slotted.reduce((sum, i) => sum + i.weight, 0) / 3) : 0;
+
         return {
-            ritual, recipe, motes, nodes, flows, focusEmpty,
+            ritual, recipe, motes, nodes, flows, focusEmpty, wheel,
+            forecast: this.#forecast(slotted, hdValue, hdMax, memory),
+            shards: this.ritual === 'split' && slotted.length ? Array.from({ length: 10 }, (_, n) => ({ a: n * 36 + 8, d: (n % 5) * 0.32 })) : null,
             glyphs: Object.entries(RITUALS).map(([key, r]) => ({ key, ...r, active: key === this.ritual })),
-            tags: this.ritual === 'resonate' ? tags.map(name => ({ name, active: name === this.tag })) : null,
-            core: { style: at(CORE) },
+            core: { style: `${at(CORE)}; --heat: ${heat.toFixed(2)}` },
             ring: merge ? { filled: equipped.length, cap } : null,
             sockets: merge ? Array.from({ length: sockets - equipped.length }, (_, n) => ({ style: at(orbitAt(equipped.length + n)) })) : [],
             cost: recipe.gain ? `+${recipe.gain} КХ` : recipe.cost ? `−${recipe.cost} КХ` : '',
@@ -564,7 +605,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
 
     static #onTag(event, target) {
         this.tag = target.dataset.tag;
-        this.#update(['side', 'controls']);
+        this.#update(['stage', 'controls']);
     }
 
     static #onMergePick(event, target) {
