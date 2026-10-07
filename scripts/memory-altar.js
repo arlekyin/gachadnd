@@ -131,13 +131,14 @@ function bobPhase(key) {
     return -((Date.now() / 1000 + (Math.abs(hash) % 600) / 100) % BOB_PERIOD);
 }
 
-// Огоньки тумана — по эллиптическому поясу, низ оставлен под кнопку
+// Огоньки тумана — плотным эллиптическим поясом вокруг механизма ядра, низ оставлен под кнопку.
+// Внутренний ряд — сразу за колесом тегов и кольцом Слияния, внешний — чуть дальше
 function fogPosition(n, total) {
     const from = 125, span = 290;
     const deg = from + (span * (n + 0.5)) / Math.max(total, 1);
     const outer = n % 2 === 1;
     const rad = deg * Math.PI / 180;
-    return { x: CORE.x + (outer ? 43 : 32) * Math.cos(rad), y: CORE.y + (outer ? 41 : 33) * Math.sin(rad) };
+    return { x: CORE.x + (outer ? 36 : 28) * Math.cos(rad), y: CORE.y + (outer ? 38 : 31) * Math.sin(rad) };
 }
 
 const TEMPLATES = 'modules/gachadnd/templates/memory-altar';
