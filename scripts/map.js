@@ -301,7 +301,7 @@ function placeDoodles(rand, nodeCoords, edgePoints) {
         placed.push({
             ...p, d: DOODLES[pool.pop()],
             size: Math.round(38 + rand() * 22), turn: Math.round(rand() * 40 - 20),
-            delay: (-rand() * 1.2).toFixed(2)
+            delay: (-rand() * 3.6).toFixed(2)
         });
     }
     return placed;
@@ -391,7 +391,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             return { strokes, cls: traversed ? 'traversed' : open ? 'open' : 'faint' };
         }));
         context.doodles = placeDoodles(seededRandom(`${seed}|doodles`), Object.values(coords), edgePoints);
-        // Три кадра «живых чернил»: каждый слой путей со своим дрожанием, слои сменяют друг друга
+        // Три кадра «живых чернил»: каждый слой со своим искажением, слои плавно перетекают друг в друга
         context.boil = [0, 1, 2];
 
         context.current = current ? look(current) : null;
