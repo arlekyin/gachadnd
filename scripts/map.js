@@ -187,6 +187,126 @@ const NODE_HINTS = {
 // Порядок типов в легенде
 const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'boss'];
 
+/* ---------- Набросок от руки ----------
+ * Всё «нарисованное» строится из случайных чисел с зерном от самой карты: у всех клиентов и при каждой
+ * перерисовке линии дрожат одинаково, а новая карта рисуется иначе. Дрожание «живых чернил» делает CSS. */
+
+// Поле в процентах; примерный размер в пикселях нужен, чтобы отступы и рисунки не зависели от пропорций окна
+const BOARD_PX = { x: 5.4, y: 6.2 };
+
+function seededRandom(text) {
+    let h = 1779033703 ^ text.length;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 3432918353), h = (h << 13) | (h >>> 19);
+    let a = h >>> 0;
+    return () => {
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+const fmt = n => n.toFixed(2);
+
+// Кривая между узлами: выходит из узла вверх и входит сверху, как раньше
+function edgePoint(a, b, t) {
+    const mid = (a.y + b.y) / 2, u = 1 - t;
+    return {
+        x: u ** 3 * a.x + 3 * u * u * t * a.x + 3 * u * t * t * b.x + t ** 3 * b.x,
+        y: u ** 3 * a.y + 3 * u * u * t * mid + 3 * u * t * t * mid + t ** 3 * b.y
+    };
+}
+
+/** Дрожащая линия от руки: точки кривой со смещением поперёк, сглаженные через середины. Концы не доходят до узлов */
+function sketchLine(a, b, rand, { trim = 30, wobble = 3 } = {}) {
+    // Длина в пикселях — чтобы найти, где начать и закончить линию
+    const samples = Array.from({ length: 41 }, (_, i) => edgePoint(a, b, i / 40));
+    const lengths = [0];
+    for (let i = 1; i < samples.length; i++) {
+        lengths.push(lengths[i - 1] + Math.hypot((samples[i].x - samples[i - 1].x) * BOARD_PX.x, (samples[i].y - samples[i - 1].y) * BOARD_PX.y));
+    }
+    const total = lengths.at(-1);
+    const tAt = len => { const i = lengths.findIndex(l => l >= len); return (i < 0 ? 40 : i) / 40; };
+    const t0 = tAt(Math.min(trim, total * 0.4)), t1 = tAt(Math.max(total - trim, total * 0.6));
+
+    const count = Math.max(4, Math.round((total - 2 * trim) / 22));
+    const points = [];
+    for (let i = 0; i <= count; i++) {
+        const t = t0 + (t1 - t0) * i / count;
+        const p = edgePoint(a, b, t), q = edgePoint(a, b, Math.min(1, t + 0.01));
+        const dx = (q.x - p.x) * BOARD_PX.x, dy = (q.y - p.y) * BOARD_PX.y, len = Math.hypot(dx, dy) || 1;
+        const shift = (i === 0 || i === count ? 0.3 : 1) * (rand() - 0.5) * 2 * wobble;
+        points.push({ x: p.x + (-dy / len) * shift / BOARD_PX.x, y: p.y + (dx / len) * shift / BOARD_PX.y });
+    }
+    let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
+    for (let i = 1; i < points.length - 1; i++) {
+        const m = { x: (points[i].x + points[i + 1].x) / 2, y: (points[i].y + points[i + 1].y) / 2 };
+        d += ` Q ${fmt(points[i].x)} ${fmt(points[i].y)} ${fmt(m.x)} ${fmt(m.y)}`;
+    }
+    const last = points.at(-1);
+    return { d: `${d} L ${fmt(last.x)} ${fmt(last.y)}`, points };
+}
+
+/** Мазок кистью вокруг узла: незамкнутое кольцо, толстое в середине и сходящее на нет к концам (viewBox 0 0 100 100) */
+function brushRing(rand, { radius = 36, width = 6, turns = 1.12 } = {}) {
+    const start = rand() * Math.PI * 2, wobbleA = rand() * 6, wobbleB = rand() * 6;
+    const outer = [], inner = [], steps = 56;
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps, angle = start + t * turns * Math.PI * 2;
+        const r = radius + 2.2 * Math.sin(angle * 2 + wobbleA) + 1.2 * Math.sin(angle * 3 + wobbleB) + t * 3;
+        // Нажим: резкое начало, долгий хвост
+        const w = width * Math.min(1, t * 6) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.1)));
+        outer.push(`${fmt(50 + Math.cos(angle) * (r + w / 2))} ${fmt(50 + Math.sin(angle) * (r + w / 2))}`);
+        inner.push(`${fmt(50 + Math.cos(angle) * (r - w / 2))} ${fmt(50 + Math.sin(angle) * (r - w / 2))}`);
+    }
+    return `M ${outer.join(' L ')} L ${inner.reverse().join(' L ')} Z`;
+}
+
+// Рисунки на полях (viewBox 0 0 40 40): то, что кто-то набросал о Разломе
+const DOODLES = [
+    // роза ветров
+    'M20 3 L23 17 L37 20 L23 23 L20 37 L17 23 L3 20 L17 17 Z M20 9 L20 31 M9 20 L31 20 M11 11 l3 3 M29 11 l-3 3 M11 29 l3 -3 M29 29 l-3 -3',
+    // спираль
+    'M20 20 c2 -1 3 2 1 4 c-3 3 -8 0 -7 -4 c1 -6 9 -8 13 -3 c5 6 0 14 -7 14 c-9 0 -14 -9 -10 -16 c4 -8 16 -9 21 -2',
+    // глаз
+    'M3 20 Q20 5 37 20 Q20 35 3 20 Z M20 14 a6 6 0 1 0 0.1 0 M20 18 a2 2 0 1 0 0.1 0 M8 12 l-3 -4 M14 9 l-1 -5 M26 9 l1 -5 M32 12 l3 -4',
+    // череп
+    'M10 19 a10 10 0 1 1 20 0 v6 h-3 v5 h-14 v-5 h-3 Z M14 18 a3 3 0 1 0 0.1 0 M26 18 a3 3 0 1 0 0.1 0 M18 30 v-4 M22 30 v-4 M20 22 l-1 3 h2 z',
+    // щупальце
+    'M6 37 C9 25 19 27 17 17 C15 8 23 3 29 7 C34 11 31 17 27 16 C24 15 25 11 28 12 M12 29 a1 1 0 1 0 .1 0 M16 22 a1 1 0 1 0 .1 0 M19 14 a1 1 0 1 0 .1 0',
+    // трещины
+    'M3 5 L12 14 L9 21 L18 26 L15 36 M12 14 L21 11 L27 16 L35 13 M18 26 L27 29 L31 37 M21 11 L22 4',
+    // стрелка и вопрос
+    'M5 35 C13 27 17 19 29 9 M29 9 l-8 1 M29 9 l-2 8 M27 25 c0 -5 8 -5 8 0 c0 3 -4 3 -4 7 M31 37 l0 0.5',
+    // мотылёк
+    'M20 11 v19 M20 14 C10 3 1 14 10 20 C3 27 12 33 20 25 M20 14 C30 3 39 14 30 20 C37 27 28 33 20 25 M19 11 l-4 -6 M21 11 l4 -6',
+    // арка двери
+    'M9 37 V18 a11 11 0 0 1 22 0 V37 M20 7 V37 M24 24 a1 1 0 1 0 .1 0 M5 37 h30 M12 15 l3 2 M28 15 l-3 2',
+    // туман
+    'M2 13 q5 -5 10 0 t10 0 t10 0 t7 0 M6 22 q5 -5 10 0 t10 0 t10 0 M2 31 q5 -5 10 0 t10 0 t8 0',
+    // руна в круге
+    'M20 3 a17 17 0 1 1 -0.1 0 M20 8 L20 32 M20 14 L28 9 M20 20 L12 15 M20 26 L28 21',
+    // искры
+    'M7 7 l5 5 M12 7 l-5 5 M27 13 l4 4 M31 13 l-4 4 M15 29 l6 6 M21 29 l-6 6 M33 31 l2 2 M35 31 l-2 2'
+];
+
+/** Рисунки в пустых местах поля: подальше от узлов, путей и друг от друга */
+function placeDoodles(rand, nodeCoords, edgePoints) {
+    const far = (p, list, px) => list.every(q => Math.hypot((p.x - q.x) * BOARD_PX.x, (p.y - q.y) * BOARD_PX.y) > px);
+    const pool = [...DOODLES.keys()].sort(() => rand() - 0.5);
+    const placed = [];
+    for (let attempt = 0; attempt < 400 && placed.length < 7 && pool.length; attempt++) {
+        const p = { x: 4 + rand() * 92, y: 4 + rand() * 92 };
+        if (!far(p, nodeCoords, 58) || !far(p, edgePoints, 30) || !far(p, placed, 80)) continue;
+        placed.push({
+            ...p, d: DOODLES[pool.pop()],
+            size: Math.round(38 + rand() * 22), turn: Math.round(rand() * 40 - 20),
+            delay: (-rand() * 1.2).toFixed(2)
+        });
+    }
+    return placed;
+}
+
 /**
  * Карта этажа: части header (этаж, создание этажа у Мастера), board (узлы и пути), footer (где отряд,
  * куда дальше, состав этажа). Перемещение отряда перерисовывает только board и footer — у всех
@@ -242,29 +362,37 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             row.forEach((node, c) => { coords[node.id] = { x: 12 + ((c + 0.5) / row.length) * 76, y }; });
         });
 
+        // Зерно — сама карта: перерисовка и другие клиенты видят тот же набросок
+        const seed = `${floor}|${nodes.map(n => `${n.id}${n.type}${n.next.join(',')}`).join(';')}`;
         const look = node => ({ color: MAP_DATA.COLORS[node.type] ?? node.color, icon: MAP_DATA.ICONS[node.type] ?? node.icon, label: MAP_DATA.LABELS[node.type] ?? node.label });
+
+        // Отряд обведён толстым мазком, пройденные узлы — тонким, доступные — небрежной незамкнутой петлёй
+        const RINGS = {
+            current: { radius: 34, width: 7, turns: 1.18 },
+            visited: { radius: 33, width: 2.6, turns: 1.05 },
+            reachable: { radius: 34, width: 2, turns: 0.82 }
+        };
         context.nodes = nodes.map(node => {
             const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
-            return { id: node.id, ...coords[node.id], ...look(node), cls: `${state} type-${node.type}`, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
+            const ring = RINGS[state] ? brushRing(seededRandom(`${seed}|ring|${node.id}|${state}`), RINGS[state]) : null;
+            return { id: node.id, ...coords[node.id], ...look(node), cls: `${state} type-${node.type}`, ring, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
         });
 
-        // Пути: пройденный — светится, доступный — пунктир, остальные — едва видны.
-        // Кривая Безье со стороны рядов, чтобы пересечения читались
+        // Пути: пройденный — двойная линия, будто обведён дважды; доступный — крупный пунктир; остальные — бледные точки
+        const edgePoints = [];
         context.edges = nodes.flatMap(node => node.next.map(nextId => {
-            const a = coords[node.id], b = coords[nextId];
-            const mid = (a.y + b.y) / 2;
+            const rand = seededRandom(`${seed}|edge|${node.id}|${nextId}`);
             const traversed = visited.has(node.id) && visited.has(nextId);
             const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
-            return {
-                d: `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} C ${a.x.toFixed(2)} ${mid.toFixed(2)}, ${b.x.toFixed(2)} ${mid.toFixed(2)}, ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
-                cls: traversed ? 'traversed' : open ? 'open' : 'faint',
-                from: node.id, to: nextId, a, b, traversed
-            };
+            const line = sketchLine(coords[node.id], coords[nextId], rand);
+            edgePoints.push(...line.points);
+            const strokes = [line.d];
+            if (traversed) strokes.push(sketchLine(coords[node.id], coords[nextId], rand, { wobble: 2.5 }).d);
+            return { strokes, cls: traversed ? 'traversed' : open ? 'open' : 'faint' };
         }));
-        // Порядок пройденных путей — для следов: последний шаг отряда проявляется заново
-        const order = visitedNodes;
-        context.steps = context.edges.filter(e => e.traversed && order.indexOf(e.to) === order.indexOf(e.from) + 1)
-            .map(e => ({ a: e.a, b: e.b, fresh: e.to === currentNodeId }));
+        context.doodles = placeDoodles(seededRandom(`${seed}|doodles`), Object.values(coords), edgePoints);
+        // Три кадра «живых чернил»: каждый слой путей со своим дрожанием, слои сменяют друг друга
+        context.boil = [0, 1, 2];
 
         context.current = current ? look(current) : null;
         context.next = current ? current.next.map(id => look(nodes.find(n => n.id === id))) : [];
@@ -272,42 +400,6 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         for (const node of nodes) if (!['start'].includes(node.type)) counts[node.type] = (counts[node.type] ?? 0) + 1;
         context.legend = LEGEND_ORDER.filter(t => counts[t]).map(t => ({ ...look({ type: t }), count: counts[t] }));
         return context;
-    }
-
-    // Следы отряда, как на карте Мародёров: отпечатки вдоль пройденных путей.
-    // Ставятся после отрисовки — нужен настоящий размер поля, чтобы шаги шли вдоль кривой
-    _onRender(context, options) {
-        super._onRender(context, options);
-        const board = this.element.querySelector('.gd-map-board');
-        const layer = board?.querySelector('.gd-map-steps');
-        if (!layer || !context.steps?.length) return;
-        const width = board.clientWidth, height = board.clientHeight;
-        const html = [];
-        for (const step of context.steps) {
-            const p0 = { x: step.a.x * width / 100, y: step.a.y * height / 100 };
-            const p3 = { x: step.b.x * width / 100, y: step.b.y * height / 100 };
-            const p1 = { x: p0.x, y: (p0.y + p3.y) / 2 }, p2 = { x: p3.x, y: (p0.y + p3.y) / 2 };
-            const at = t => {
-                const u = 1 - t;
-                return {
-                    x: u ** 3 * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t ** 3 * p3.x,
-                    y: u ** 3 * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t ** 3 * p3.y
-                };
-            };
-            // Шаг каждые ~18 пикселей, кроме кругов узлов на концах
-            const length = Math.hypot(p3.x - p0.x, p3.y - p0.y) * 1.15;
-            const count = Math.max(2, Math.floor((length - 56) / 18));
-            for (let i = 0; i < count; i++) {
-                const t = (30 / length) + (i / Math.max(1, count - 1)) * (1 - 60 / length);
-                const p = at(t), q = at(Math.min(1, t + 0.01));
-                const angle = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI + 90;
-                const side = i % 2 ? 1 : -1;
-                const nx = Math.cos((angle) * Math.PI / 180) * 4 * side, ny = Math.sin((angle) * Math.PI / 180) * 4 * side;
-                const delay = step.fresh ? `animation-delay: ${(i * 0.12).toFixed(2)}s;` : '';
-                html.push(`<i class="gd-step ${step.fresh ? 'fresh' : ''}" style="left: ${(p.x + nx).toFixed(1)}px; top: ${(p.y + ny).toFixed(1)}px; transform: translate(-50%, -50%) rotate(${angle.toFixed(0)}deg); ${delay}"></i>`);
-            }
-        }
-        layer.innerHTML = html.join('');
     }
 
     static async #onGenerate() {

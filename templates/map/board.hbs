@@ -1,12 +1,25 @@
 <section class="gd-map-board {{#unless hasMap}}empty{{/unless}}">
-    {{#if hasMap}}
-    <svg class="gd-map-edges" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {{#each edges}}<path class="{{cls}}" d="{{d}}" vector-effect="non-scaling-stroke"/>{{/each}}
+    {{!-- Кадры «живых чернил»: один шум, три зерна. Смещение в пикселях, поэтому одинаковое для путей и рисунков --}}
+    <svg class="gd-map-defs" width="0" height="0" aria-hidden="true">
+        <filter id="gd-ink-0" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
+        <filter id="gd-ink-1" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
+        <filter id="gd-ink-2" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="27"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
     </svg>
-    <div class="gd-map-steps"></div>
+    {{#if hasMap}}
+    {{#each boil}}
+    <svg class="gd-map-edges gd-ink-frame frame-{{this}}" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {{#each @root.edges}}{{#each strokes}}<path class="{{../cls}}" d="{{this}}" vector-effect="non-scaling-stroke"/>{{/each}}{{/each}}
+    </svg>
+    {{/each}}
+    {{#each doodles}}
+    <svg class="gd-map-doodle gd-ink-live" viewBox="0 0 40 40" style="left: {{x}}%; top: {{y}}%; width: {{size}}px; height: {{size}}px; --turn: {{turn}}deg; animation-delay: {{delay}}s"><path d="{{d}}"/></svg>
+    {{/each}}
     {{#each nodes}}
     <button type="button" class="gd-map-node {{cls}}" data-action="node" data-node-id="{{id}}" style="left: {{x}}%; top: {{y}}%; --node: {{color}}" title="{{label}}{{#if hint}} — {{hint}}{{/if}}">
-        <span class="gd-map-disc"><i class="fas {{icon}}"></i></span>
+        <span class="gd-map-mark gd-ink-live">
+            {{#if ring}}<svg class="gd-map-ring" viewBox="0 0 100 100"><path d="{{ring}}"/></svg>{{/if}}
+            <i class="fas {{icon}}"></i>
+        </span>
         <span class="gd-map-label">{{label}}</span>
     </button>
     {{/each}}
