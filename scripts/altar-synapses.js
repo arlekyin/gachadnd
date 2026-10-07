@@ -7,12 +7,12 @@
  * и сходятся в линию, мягко выгнутую наружу. Ни одна линия не обрывается в пустоту.
  *
  * Неподвижная геометрия рисуется на отдельный холст, только когда сдвинулись узлы (появление кольца,
- * размер окна). В каждом кадре (до 60 в секунду) — лишь импульсы, бегущие к ядру и между соседями.
+ * размер окна). В каждом кадре экрана — лишь импульсы, бегущие к ядру и между соседями.
  * Положения берутся из разметки узлов и ядра, поэтому холст всегда совпадает с ней.
  */
 
-// Импульсы идут с частотой экрана до 60 кадров: неподвижное закэшировано, кадр дешёвый
-const FRAME_MS = 16;
+// Импульсы рисуются в каждом кадре экрана, по его метке времени: неподвижное закэшировано, кадр дешёвый.
+// Часы в момент вызова и пропуск кадров давали неровный шаг — импульсы дёргались
 const SOMA_R = 18;
 
 const cubic = (p0, p1, p2, p3) => u => {
@@ -43,6 +43,38 @@ function random(seedText) {
     };
 }
 
+// Точка на ломаной по доле её длины: импульс скользит, а не прыгает по опорным точкам
+function alongPolyline(points, lengths, u) {
+    const target = u * lengths.at(-1);
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < target) i++;
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const k = Math.max(0, Math.min(1, (target - lengths[i - 1]) / span));
+    return [points[i - 1][0] + (points[i][0] - points[i - 1][0]) * k, points[i - 1][1] + (points[i][1] - points[i - 1][1]) * k];
+}
+
+// Светящийся импульс; возвращает прямоугольник, который он занял, — его сотрут в следующем кадре
+function drawPulse(ctx, x, y, color, r, alpha) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(255, 255, 255, ${0.8 * alpha})`);
+    g.addColorStop(0.35, `rgba(${color.join(', ')}, ${0.6 * alpha})`);
+    g.addColorStop(1, `rgba(${color.join(', ')}, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    return [x - r - 2, y - r - 2, r * 2 + 4, r * 2 + 4];
+}
+
+// Неподвижные нити — на своём холсте под холстом импульсов: в кадре перерисовываются только импульсы
+function underlay(canvas) {
+    const layer = document.createElement('canvas');
+    layer.className = canvas.className;
+    layer.setAttribute('aria-hidden', 'true');
+    canvas.before(layer);
+    return layer;
+}
+
 export class AltarSynapses {
     /**
      * @param {HTMLCanvasElement} canvas  холст в слое ядра
@@ -52,12 +84,17 @@ export class AltarSynapses {
         this.canvas = canvas;
         this.stage = stage;
         this.ctx = canvas.getContext('2d');
-        this.layer = document.createElement('canvas');
+        this.layer = underlay(canvas);
         this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         this.flares = new Map();
-        this.signature = '';
+        this.dirty = [];
+        this.stale = true;
         this.running = false;
         this.last = 0;
+        // Замер — при появлении и изменении размера, а не каждый кадр: чтение стилей в кадре
+        // заставляло браузер пересчитывать всё окно с его анимациями, и импульсы дёргались
+        this.resizeObserver = new ResizeObserver(() => { this.stale = true; });
+        this.resizeObserver.observe(stage);
     }
 
     start() {
@@ -66,10 +103,7 @@ export class AltarSynapses {
         const loop = time => {
             if (!this.running) return;
             if (!this.canvas.isConnected) return this.stop();
-            if (time - this.last >= FRAME_MS) {
-                this.last = time;
-                this.#frame();
-            }
+            this.#frame(time);
             this.frame = requestAnimationFrame(loop);
         };
         this.frame = requestAnimationFrame(loop);
@@ -79,6 +113,7 @@ export class AltarSynapses {
         this.running = false;
         if (this.frame) cancelAnimationFrame(this.frame);
         this.frame = null;
+        this.resizeObserver.disconnect();
     }
 
     /** Слияние: по прядям навыка к ядру уходят яркие импульсы */
@@ -101,18 +136,18 @@ export class AltarSynapses {
         return { width, height, core: { ...place(core), r: core.offsetWidth / 2 }, nodes, closed };
     }
 
-    #frame() {
-        const scene = this.#measure();
-        if (!scene) return;
-        const signature = [scene.width, scene.height, scene.core.x, scene.core.y, scene.closed, ...scene.nodes.flatMap(n => [n.id, n.x, n.y])]
-            .map(v => typeof v === 'number' ? v.toFixed(1) : v).join('|');
-        if (signature !== this.signature) {
-            this.signature = signature;
+    #frame(time) {
+        if (this.stale) {
+            const scene = this.#measure();
+            if (!scene) return;
+            this.stale = false;
             this.#resize(scene);
             this.#build(scene);
             this.#paint();
+            this.ctx.clearRect(0, 0, this.width, this.height);
+            this.dirty = [];
         }
-        this.#drawPulses();
+        this.#drawPulses(time);
     }
 
     #resize({ width, height }) {
@@ -213,39 +248,30 @@ export class AltarSynapses {
         }
     }
 
-    #pulse(at, u, color, r, alpha) {
+    #drawPulses(time) {
         const ctx = this.ctx;
-        const [x, y] = at(u);
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, `rgba(255, 255, 255, ${0.8 * alpha})`);
-        g.addColorStop(0.35, `rgba(${color.join(', ')}, ${0.6 * alpha})`);
-        g.addColorStop(1, `rgba(${color.join(', ')}, 0)`);
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    #drawPulses() {
-        const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.width, this.height);
-        ctx.drawImage(this.layer, 0, 0, this.width, this.height);
+        for (const [x, y, w, h] of this.dirty) ctx.clearRect(x, y, w, h);
+        this.dirty = [];
         if (this.reducedMotion) return;
-        const now = Date.now(), clock = performance.now();
+        const now = time, clock = time;
+        const pulse = (at, u, color, r, alpha) => {
+            const [x, y] = at(u);
+            this.dirty.push(drawPulse(ctx, x, y, color, r, alpha));
+        };
         ctx.globalCompositeOperation = 'lighter';
         this.pulsePaths.forEach((p, i) => {
             const fade = u => Math.min(1, u / 0.1, (1 - u) / 0.1);
             if (p.ring) {
                 const u = ((now / 1000) * 0.08 + p.phase) % 1;
-                return this.#pulse(p.strands[0], u, p.color, 3.5, fade(u) * 0.55);
+                return pulse(p.strands[0], u, p.color, 3.5, fade(u) * 0.55);
             }
             for (let k = 0; k < 2; k++) {
                 const u = ((now / 1000) * 0.16 + p.phase + k * 0.5) % 1;
-                this.#pulse(p.strands[(k * 2 + i) % p.strands.length], u, p.color, 4.5, fade(u) * 0.75);
+                pulse(p.strands[(k * 2 + i) % p.strands.length], u, p.color, 4.5, fade(u) * 0.75);
             }
             // Слияние: яркая волна по всем прядям к ядру, около 1,6 секунды
             const since = this.flares.has(p.id) ? (clock - this.flares.get(p.id)) / 1600 : 1;
-            if (since < 1) p.strands.forEach(at => this.#pulse(at, since, [255, 255, 255], 8, 1 - since * 0.6));
+            if (since < 1) p.strands.forEach(at => pulse(at, since, [255, 255, 255], 8, 1 - since * 0.6));
             else this.flares.delete(p.id);
         });
         ctx.globalCompositeOperation = 'source-over';
@@ -263,19 +289,26 @@ export class ResonanceWeave {
     constructor() {
         this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         this.grow = 0;          // доля прорастания: 0 — в ядре, 1 — тег обвит
+        this.painted = -1;      // доля, с которой нити нарисованы на нижнем холсте
         this.target = null;     // тег, к которому растут пряди
         this.wanted = null;     // выбранный тег
+        this.dirty = [];
         this.running = false;
         this.last = 0;
+        this.resizeObserver = new ResizeObserver(() => { this.stale = true; });
     }
 
     /** Новый холст слоя ядра и выбранный тег */
     attach(canvas, stage, tag) {
         this.canvas = canvas;
+        this.layer = underlay(canvas);
         this.stage = stage;
         this.ctx = canvas.getContext('2d');
         this.wanted = tag;
-        this.signature = '';
+        this.stale = true;
+        this.dirty = [];
+        this.resizeObserver.disconnect();
+        this.resizeObserver.observe(stage);
         if (this.target === null) this.target = tag;
         if (this.reducedMotion) { this.target = tag; this.grow = 1; }
         this.start();
@@ -286,12 +319,11 @@ export class ResonanceWeave {
         this.running = true;
         const loop = time => {
             if (!this.running) return;
-            if (!this.canvas?.isConnected) { this.frame = requestAnimationFrame(loop); return; }
-            const dt = Math.min(0.1, (time - (this.last || time)) / 1000);
-            if (time - this.last >= FRAME_MS) {
+            if (this.canvas?.isConnected) {
+                const dt = Math.min(0.1, (time - (this.last || time)) / 1000);
                 this.last = time;
                 this.#step(dt);
-                this.#draw();
+                this.#draw(time);
             }
             this.frame = requestAnimationFrame(loop);
         };
@@ -302,13 +334,14 @@ export class ResonanceWeave {
         this.running = false;
         if (this.frame) cancelAnimationFrame(this.frame);
         this.frame = null;
+        this.resizeObserver.disconnect();
     }
 
     // Втягивание к ядру быстрее, прорастание — мягче
     #step(dt) {
         if (this.target !== this.wanted) {
             this.grow = Math.max(0, this.grow - dt / 0.35);
-            if (this.grow === 0) { this.target = this.wanted; this.signature = ''; }
+            if (this.grow === 0) { this.target = this.wanted; this.stale = true; }
         } else {
             this.grow = Math.min(1, this.grow + dt / 0.7);
         }
@@ -332,6 +365,7 @@ export class ResonanceWeave {
         const dist = Math.hypot(tag.x - core.x, tag.y - core.y);
         const nx = -Math.sin(dir), ny = Math.cos(dir);
         const rx = tag.w / 2 + 7, ry = tag.h / 2 + 6;
+        this.color = scene.color;
         this.strands = [];
         for (let k = 0; k < 5; k++) {
             const f = k / 4 - 0.5;
@@ -359,22 +393,11 @@ export class ResonanceWeave {
         }
     }
 
-    #draw() {
-        const scene = this.#measure();
-        if (!scene) return;
-        const signature = [scene.width, scene.height, scene.core.x, scene.core.y, scene.tag.x, scene.tag.y, scene.tag.w, this.target].join('|');
-        if (signature !== this.signature) {
-            this.signature = signature;
-            const ratio = Math.min(window.devicePixelRatio || 1, 2);
-            this.canvas.width = Math.round(scene.width * ratio);
-            this.canvas.height = Math.round(scene.height * ratio);
-            this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-            this.#build(scene);
-        }
-        const ctx = this.ctx, color = scene.color;
-        ctx.clearRect(0, 0, scene.width, scene.height);
+    // Нити на нижнем холсте — только когда меняется доля прорастания или геометрия
+    #paintStrands() {
+        const ctx = this.layer.getContext('2d');
+        ctx.clearRect(0, 0, this.width, this.height);
         ctx.lineCap = 'round';
-        // Прорастание с плавным разгоном; дуги обвивки догоняют пучок
         const ease = this.grow * this.grow * (3 - 2 * this.grow);
         for (const s of this.strands) {
             const limit = s.total * ease;
@@ -389,31 +412,48 @@ export class ResonanceWeave {
                 // Толще у ядра и на обвивке, тоньше посередине; цвет ритуала светлеет к тегу
                 const mid = i <= s.split ? Math.abs(i / s.split - 0.45) * 2 : 1;
                 ctx.lineWidth = 1.1 + 0.9 * mid;
-                ctx.strokeStyle = toward(color, Math.min(1, u * 0.9), 0.5 + u * 0.35);
+                ctx.strokeStyle = toward(this.color, Math.min(1, u * 0.9), 0.5 + u * 0.35);
                 ctx.beginPath();
                 ctx.moveTo(x0, y0);
                 ctx.lineTo(x1, y1);
                 ctx.stroke();
             }
         }
-        // Импульсы бегут от ядра к тегу, когда пряди обвили его
+        this.painted = this.grow;
+    }
+
+    #draw(time) {
+        if (this.stale) {
+            const scene = this.#measure();
+            if (!scene) return;
+            this.stale = false;
+            const ratio = Math.min(window.devicePixelRatio || 1, 2);
+            for (const c of [this.canvas, this.layer]) {
+                c.width = Math.round(scene.width * ratio);
+                c.height = Math.round(scene.height * ratio);
+                c.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
+            }
+            this.width = scene.width;
+            this.height = scene.height;
+            this.#build(scene);
+            this.painted = -1;
+            this.dirty = [];
+        }
+        if (this.painted !== this.grow) this.#paintStrands();
+
+        // Импульсы: стирается только то, что они заняли в прошлом кадре
+        const ctx = this.ctx;
+        for (const [x, y, w, h] of this.dirty) ctx.clearRect(x, y, w, h);
+        this.dirty = [];
         if (this.reducedMotion || this.grow < 1) return;
-        const now = Date.now() / 1000;
+        const now = time / 1000;
         ctx.globalCompositeOperation = 'lighter';
         this.strands.forEach((s, k) => {
             if (k % 2) return;
             const u = (now * 0.35 + s.phase) % 1;
-            const at = s.lengths.findIndex(l => l >= u * s.lengths[s.split]);
-            const [x, y] = s.points[Math.max(0, at)];
-            const g = ctx.createRadialGradient(x, y, 0, x, y, 5);
-            const fade = Math.min(1, u / 0.1, (1 - u) / 0.1);
-            g.addColorStop(0, `rgba(255, 255, 255, ${0.8 * fade})`);
-            g.addColorStop(0.4, `rgba(${color.join(', ')}, ${0.55 * fade})`);
-            g.addColorStop(1, `rgba(${color.join(', ')}, 0)`);
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fill();
+            const reach = s.points.slice(0, s.split + 1), lengths = s.lengths.slice(0, s.split + 1);
+            const [x, y] = alongPolyline(reach, lengths, u);
+            this.dirty.push(drawPulse(ctx, x, y, this.color, 5, Math.min(1, u / 0.1, (1 - u) / 0.1)));
         });
         ctx.globalCompositeOperation = 'source-over';
     }
