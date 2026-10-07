@@ -189,10 +189,19 @@ const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', '
 
 /* ---------- Набросок от руки ----------
  * Всё «нарисованное» строится из случайных чисел с зерном от самой карты: у всех клиентов и при каждой
- * перерисовке линии дрожат одинаково, а новая карта рисуется иначе. Дрожание «живых чернил» делает CSS. */
+ * перерисовке линии дрожат одинаково, а новая карта рисуется иначе.
+ * «Живые чернила»: у каждой линии, кольца и рисунка три формы с одним набором команд пути, и SVG плавно
+ * перетекает между ними (animate по атрибуту d) — штрих медленно изгибается, как чернила на мокрой бумаге. */
 
 // Поле в процентах; примерный размер в пикселях нужен, чтобы отступы и рисунки не зависели от пропорций окна
-const BOARD_PX = { x: 5.4, y: 6.2 };
+const BOARD_PX = { x: 6.8, y: 7.4 };
+const INK_FORMS = 3;
+
+// Длительность цикла и сдвиг фазы у каждого рисунка свои — карта колышется не в такт
+const inkMotion = rand => ({ dur: (4.5 + rand() * 3).toFixed(2), begin: (-rand() * 8).toFixed(2) });
+
+/** Формы для animate: первая повторяется в конце, чтобы цикл замкнулся */
+const inkValues = forms => [...forms, forms[0]].join(';');
 
 function seededRandom(text) {
     let h = 1779033703 ^ text.length;
@@ -217,8 +226,9 @@ function edgePoint(a, b, t) {
     };
 }
 
-/** Дрожащая линия от руки: точки кривой со смещением поперёк, сглаженные через середины. Концы не доходят до узлов */
-function sketchLine(a, b, rand, { trim = 30, wobble = 3 } = {}) {
+/** Дрожащая линия от руки: точки кривой со смещением поперёк, сглаженные через середины. Концы не доходят до узлов.
+ *  Возвращает несколько форм одной линии: основа общая, у каждой формы своё отклонение — между ними линия «течёт» */
+function sketchLine(a, b, rand, { trim = 38, wobble = 3.5, flow = 3.5 } = {}) {
     // Длина в пикселях — чтобы найти, где начать и закончить линию
     const samples = Array.from({ length: 41 }, (_, i) => edgePoint(a, b, i / 40));
     const lengths = [0];
@@ -229,37 +239,60 @@ function sketchLine(a, b, rand, { trim = 30, wobble = 3 } = {}) {
     const tAt = len => { const i = lengths.findIndex(l => l >= len); return (i < 0 ? 40 : i) / 40; };
     const t0 = tAt(Math.min(trim, total * 0.4)), t1 = tAt(Math.max(total - trim, total * 0.6));
 
-    const count = Math.max(4, Math.round((total - 2 * trim) / 22));
-    const points = [];
+    const count = Math.max(4, Math.round((total - 2 * trim) / 26));
+    const base = [];
     for (let i = 0; i <= count; i++) {
         const t = t0 + (t1 - t0) * i / count;
         const p = edgePoint(a, b, t), q = edgePoint(a, b, Math.min(1, t + 0.01));
         const dx = (q.x - p.x) * BOARD_PX.x, dy = (q.y - p.y) * BOARD_PX.y, len = Math.hypot(dx, dy) || 1;
-        const shift = (i === 0 || i === count ? 0.3 : 1) * (rand() - 0.5) * 2 * wobble;
-        points.push({ x: p.x + (-dy / len) * shift / BOARD_PX.x, y: p.y + (dx / len) * shift / BOARD_PX.y });
+        const end = i === 0 || i === count ? 0.3 : 1;
+        base.push({ p, nx: -dy / len, ny: dx / len, end, shift: end * (rand() - 0.5) * 2 * wobble });
     }
-    let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
-    for (let i = 1; i < points.length - 1; i++) {
-        const m = { x: (points[i].x + points[i + 1].x) / 2, y: (points[i].y + points[i + 1].y) / 2 };
-        d += ` Q ${fmt(points[i].x)} ${fmt(points[i].y)} ${fmt(m.x)} ${fmt(m.y)}`;
-    }
-    const last = points.at(-1);
-    return { d: `${d} L ${fmt(last.x)} ${fmt(last.y)}`, points };
+    const shape = extra => {
+        const points = base.map((pt, i) => {
+            const shift = pt.shift + pt.end * extra[i];
+            return { x: pt.p.x + pt.nx * shift / BOARD_PX.x, y: pt.p.y + pt.ny * shift / BOARD_PX.y };
+        });
+        let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
+        for (let i = 1; i < points.length - 1; i++) {
+            const m = { x: (points[i].x + points[i + 1].x) / 2, y: (points[i].y + points[i + 1].y) / 2 };
+            d += ` Q ${fmt(points[i].x)} ${fmt(points[i].y)} ${fmt(m.x)} ${fmt(m.y)}`;
+        }
+        const last = points.at(-1);
+        return { d: `${d} L ${fmt(last.x)} ${fmt(last.y)}`, points };
+    };
+    const forms = Array.from({ length: INK_FORMS }, () => shape(base.map(() => (rand() - 0.5) * 2 * flow)));
+    return { forms: forms.map(f => f.d), points: forms[0].points };
 }
 
-/** Мазок кистью вокруг узла: незамкнутое кольцо, толстое в середине и сходящее на нет к концам (viewBox 0 0 100 100) */
+/** Мазок кистью вокруг узла: незамкнутое кольцо, толстое в середине и сходящее на нет к концам (viewBox 0 0 100 100).
+ *  Формы отличаются фазой неровностей и нажимом — кольцо медленно «дышит» */
 function brushRing(rand, { radius = 36, width = 6, turns = 1.12 } = {}) {
     const start = rand() * Math.PI * 2, wobbleA = rand() * 6, wobbleB = rand() * 6;
-    const outer = [], inner = [], steps = 56;
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps, angle = start + t * turns * Math.PI * 2;
-        const r = radius + 2.2 * Math.sin(angle * 2 + wobbleA) + 1.2 * Math.sin(angle * 3 + wobbleB) + t * 3;
-        // Нажим: резкое начало, долгий хвост
-        const w = width * Math.min(1, t * 6) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.1)));
-        outer.push(`${fmt(50 + Math.cos(angle) * (r + w / 2))} ${fmt(50 + Math.sin(angle) * (r + w / 2))}`);
-        inner.push(`${fmt(50 + Math.cos(angle) * (r - w / 2))} ${fmt(50 + Math.sin(angle) * (r - w / 2))}`);
-    }
-    return `M ${outer.join(' L ')} L ${inner.reverse().join(' L ')} Z`;
+    const form = shift => {
+        const outer = [], inner = [], steps = 56;
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps, angle = start + shift * 0.12 + t * turns * Math.PI * 2;
+            const r = radius + 2.2 * Math.sin(angle * 2 + wobbleA + shift) + 1.2 * Math.sin(angle * 3 + wobbleB - shift * 1.4) + t * 3;
+            // Нажим: резкое начало, долгий хвост
+            const w = width * (1 + 0.12 * Math.sin(shift * 2 + t * 5)) * Math.min(1, t * 6) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.1)));
+            outer.push(`${fmt(50 + Math.cos(angle) * (r + w / 2))} ${fmt(50 + Math.sin(angle) * (r + w / 2))}`);
+            inner.push(`${fmt(50 + Math.cos(angle) * (r - w / 2))} ${fmt(50 + Math.sin(angle) * (r - w / 2))}`);
+        }
+        return `M ${outer.join(' L ')} L ${inner.reverse().join(' L ')} Z`;
+    };
+    return Array.from({ length: INK_FORMS }, (_, i) => form(i * 1.1));
+}
+
+/** Те же рисунки, но каждое число чуть сдвинуто: флаги дуг (4-й и 5-й параметры команды A) не трогаются */
+function jitterPath(d, rand, amount) {
+    let command = '', index = 0;
+    return d.replace(/[a-zA-Z]|-?\d*\.?\d+/g, token => {
+        if (/[a-zA-Z]/.test(token)) { command = token; index = 0; return token; }
+        const param = index++;
+        if (/a/i.test(command) && [3, 4].includes(param % 7)) return token;
+        return fmt(parseFloat(token) + (rand() - 0.5) * 2 * amount);
+    });
 }
 
 // Рисунки на полях (viewBox 0 0 40 40): то, что кто-то набросал о Разломе
@@ -296,12 +329,12 @@ function placeDoodles(rand, nodeCoords, edgePoints) {
     const pool = [...DOODLES.keys()].sort(() => rand() - 0.5);
     const placed = [];
     for (let attempt = 0; attempt < 400 && placed.length < 7 && pool.length; attempt++) {
-        const p = { x: 4 + rand() * 92, y: 4 + rand() * 92 };
-        if (!far(p, nodeCoords, 58) || !far(p, edgePoints, 30) || !far(p, placed, 80)) continue;
+        const p = { x: 9 + rand() * 82, y: 6 + rand() * 88 };
+        if (!far(p, nodeCoords, 70) || !far(p, edgePoints, 36) || !far(p, placed, 95)) continue;
+        const d = DOODLES[pool.pop()];
         placed.push({
-            ...p, d: DOODLES[pool.pop()],
-            size: Math.round(38 + rand() * 22), turn: Math.round(rand() * 40 - 20),
-            delay: (-rand() * 3.6).toFixed(2)
+            ...p, d, values: inkValues(Array.from({ length: INK_FORMS }, () => jitterPath(d, rand, 0.9))), ...inkMotion(rand),
+            size: Math.round(48 + rand() * 26), turn: Math.round(rand() * 40 - 20)
         });
     }
     return placed;
@@ -318,7 +351,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         classes: ['gachadnd-map'],
         tag: 'div',
         window: { title: 'Карта Разлома', icon: 'fas fa-scroll', resizable: true },
-        position: { width: 560, height: 760 },
+        position: { width: 700, height: 920 },
         actions: {
             node: GachaMapTerminal.#onNode,
             generate: GachaMapTerminal.#onGenerate
@@ -374,7 +407,9 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         };
         context.nodes = nodes.map(node => {
             const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
-            const ring = RINGS[state] ? brushRing(seededRandom(`${seed}|ring|${node.id}|${state}`), RINGS[state]) : null;
+            const rand = seededRandom(`${seed}|ring|${node.id}|${state}`);
+            const forms = RINGS[state] ? brushRing(rand, RINGS[state]) : null;
+            const ring = forms ? { d: forms[0], values: inkValues(forms), ...inkMotion(rand) } : null;
             return { id: node.id, ...coords[node.id], ...look(node), cls: `${state} type-${node.type}`, ring, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
         });
 
@@ -384,15 +419,13 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             const rand = seededRandom(`${seed}|edge|${node.id}|${nextId}`);
             const traversed = visited.has(node.id) && visited.has(nextId);
             const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
-            const line = sketchLine(coords[node.id], coords[nextId], rand);
-            edgePoints.push(...line.points);
-            const strokes = [line.d];
-            if (traversed) strokes.push(sketchLine(coords[node.id], coords[nextId], rand, { wobble: 2.5 }).d);
+            const lines = [sketchLine(coords[node.id], coords[nextId], rand)];
+            if (traversed) lines.push(sketchLine(coords[node.id], coords[nextId], rand, { wobble: 3 }));
+            edgePoints.push(...lines[0].points);
+            const strokes = lines.map(line => ({ d: line.forms[0], values: inkValues(line.forms), ...inkMotion(rand) }));
             return { strokes, cls: traversed ? 'traversed' : open ? 'open' : 'faint' };
         }));
         context.doodles = placeDoodles(seededRandom(`${seed}|doodles`), Object.values(coords), edgePoints);
-        // Три кадра «живых чернил»: каждый слой со своим искажением, слои плавно перетекают друг в друга
-        context.boil = [0, 1, 2];
 
         context.current = current ? look(current) : null;
         context.next = current ? current.next.map(id => look(nodes.find(n => n.id === id))) : [];
@@ -400,6 +433,18 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         for (const node of nodes) if (!['start'].includes(node.type)) counts[node.type] = (counts[node.type] ?? 0) + 1;
         context.legend = LEGEND_ORDER.filter(t => counts[t]).map(t => ({ ...look({ type: t }), count: counts[t] }));
         return context;
+    }
+
+    // Перерисовка поля не должна перезапускать течение чернил: часы каждого SVG ставятся на общее время страницы,
+    // и линии продолжают движение с того же места
+    _onRender(context, options) {
+        super._onRender(context, options);
+        const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        const now = performance.now() / 1000;
+        for (const svg of this.element.querySelectorAll('.gd-map-board svg.gd-ink')) {
+            if (still) { svg.setCurrentTime?.(0); svg.pauseAnimations?.(); }
+            else svg.setCurrentTime?.(now);
+        }
     }
 
     static async #onGenerate() {
