@@ -29,6 +29,19 @@
         {{/each}}
     </div>
     {{/if}}
+    {{#if automation.length}}
+    <div class="gd-auto">
+        <div class="gd-build-title">Автоматизация</div>
+        <div class="gd-auto-head"><span></span><span>Вкл.</span><span>Спрашивать</span></div>
+        {{#each automation}}
+        <div class="gd-auto-row {{#unless enabled}}off{{/unless}}">
+            <div class="gd-auto-name"><span>{{name}}</span><small>{{kind}}</small></div>
+            <input type="checkbox" data-pref="{{prefKey}}" data-field="enabled" {{#if enabled}}checked{{/if}} {{#unless ../canEditAutomation}}disabled{{/unless}} title="Срабатывает автоматически">
+            <input type="checkbox" data-pref="{{prefKey}}" data-field="ask" {{#if ask}}checked{{/if}} {{#unless enabled}}disabled{{/unless}} {{#unless ../canEditAutomation}}disabled{{/unless}} title="Спрашивать перед срабатыванием">
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
     <div class="gd-glossary">
         {{#each glossary}}
         <div class="gd-term {{#if accent}}accent{{/if}}">

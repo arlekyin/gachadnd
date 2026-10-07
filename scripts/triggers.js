@@ -20,7 +20,10 @@
  *   - «1 раз в ход» считается по раунду и ходу текущего боя, вне боя — без ограничения;
  *   - кость добавляется к первому подходящему броску в ход; переброс урона тратит срабатывание;
  *   - источник полученного урона не известен: реакция предлагается на любой урон.
- * Отключается настройкой «Автоматизация синергий и навыков».
+ * Общий выключатель — настройка мира «Автоматизация синергий и навыков» (Мастер). Кроме того,
+ * у каждого персонажа для каждого срабатывания две галочки, как у реакций в Baldur's Gate 3
+ * (Терминал → «Автоматизация»): «Включено» и «Спрашивать». Со «Спрашивать» доп. урон не
+ * добавляется к броску сам, а предлагается кнопкой в чате; остальное — окном.
  */
 
 import { MODULE_ID } from "./constants.js";
@@ -68,15 +71,59 @@ export function activeTriggers(actor, on) {
         const count = counts[config.key] ?? 0;
         for (const tier of config.thresholds) {
             if (tier.trigger?.on !== on || count < tier.count) continue;
-            result.push({ id: `${config.key}:${tier.count}`, name: tier.name, trigger: tier.trigger, item: featureItem(actor, tier.name), skill: false });
+            const id = `${config.key}:${tier.count}`;
+            result.push({ id, prefKey: `syn-${config.key}-${tier.count}`, name: tier.name, trigger: tier.trigger, item: featureItem(actor, tier.name), skill: false });
         }
     }
     for (const item of actor?.items ?? []) {
         const flags = item.flags?.[MODULE_ID] ?? {};
         if (flags.trigger?.on !== on || !flags.is_active || flags.is_crystal_item) continue;
-        result.push({ id: `skill:${item.id}`, name: item.name, trigger: flags.trigger, item, skill: true });
+        result.push({ id: `skill:${item.id}`, prefKey: `skill-${flags.skill_id ?? item.id}`, name: item.name, trigger: flags.trigger, item, skill: true });
     }
-    return result;
+    return result.filter(source => getPref(actor, source).enabled);
+}
+
+// ==========================================
+// ГАЛОЧКИ ПЕРСОНАЖА: «ВКЛЮЧЕНО» И «СПРАШИВАТЬ»
+// ==========================================
+
+const TRIGGER_EVENTS = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
+// По умолчанию доп. урон добавляется сам, остальное спрашивается
+const DEFAULT_ASK = { damage_roll: false, damaged: true, turn_start: true, combat_start: true };
+const KIND_LABELS = {
+    damage_roll: source => source.trigger.heal_self ? 'лечение после урона' : 'доп. урон',
+    damaged: () => 'реакция на урон',
+    turn_start: () => 'начало хода',
+    combat_start: () => 'начало боя'
+};
+
+export function getPref(actor, source) {
+    const saved = actor?.getFlag?.(MODULE_ID, 'automation')?.[source.prefKey] ?? {};
+    return { enabled: saved.enabled ?? true, ask: saved.ask ?? DEFAULT_ASK[source.trigger.on] };
+}
+
+export async function setPref(actor, prefKey, field, value) {
+    await actor.setFlag(MODULE_ID, `automation.${prefKey}`, { [field]: !!value });
+}
+
+/** Все срабатывания персонажа с галочками — для Терминала (включая выключенные) */
+export function automationList(actor) {
+    const counts = actor?.getFlag?.(MODULE_ID, 'counts') ?? {};
+    const list = [];
+    for (const config of Object.values(getSynergyDictionary())) {
+        for (const tier of config.thresholds) {
+            if (!tier.trigger || (counts[config.key] ?? 0) < tier.count) continue;
+            list.push({ prefKey: `syn-${config.key}-${tier.count}`, name: tier.name, trigger: tier.trigger });
+        }
+    }
+    for (const item of actor?.items ?? []) {
+        const flags = item.flags?.[MODULE_ID] ?? {};
+        if (!flags.trigger || !flags.is_active || flags.is_crystal_item) continue;
+        list.push({ prefKey: `skill-${flags.skill_id ?? item.id}`, name: item.name, trigger: flags.trigger });
+    }
+    return list
+        .filter(source => TRIGGER_EVENTS.includes(source.trigger.on))
+        .map(source => ({ ...source, kind: KIND_LABELS[source.trigger.on](source), ...getPref(actor, source) }));
 }
 
 const activityOf = item => item?.system?.activities?.contents?.[0] ?? [...(item?.system?.activities?.values?.() ?? [])][0] ?? null;
@@ -208,14 +255,19 @@ Hooks.on('dnd5e.preRollDamageV2', (config) => {
             continue;
         }
         if (!conditionsMet(trigger.when, ctx)) continue;
+        const ask = getPref(actor, source).ask;
         if (trigger.bonus) {
             const bonus = bonusRoll(source, ctx);
             if (!bonus) continue;
+            if (ask) {
+                fired.push({ ...source, offer: bonus });
+                continue;
+            }
             config.rolls ??= [];
             config.rolls.push({ parts: [bonus.formula], data: actor.getRollData(), options: { type: bonus.type, types: [bonus.type] } });
             ui.notifications.info(`${source.name}: +${bonus.formula} (${CONFIG.DND5E?.damageTypes?.[bonus.type]?.label ?? bonus.type})`);
         }
-        fired.push(source);
+        fired.push({ ...source, ask });
     }
     if (fired.length) pending.set(activity.uuid ?? activity.id, { actor, key, fired });
 });
@@ -226,10 +278,14 @@ Hooks.on('dnd5e.rollDamageV2', async (rolls, { subject } = {}) => {
     pending.delete(subject.uuid ?? subject.id);
     const { actor, key, fired } = entry;
     for (const source of fired) {
-        if (key !== null) usedThisTurn.set(`${actor.id}:${source.id}`, key);
-        if (source.trigger.once === 'primed') primed.delete(`${actor.id}:${source.id}`);
-        if (source.skill) await spendUse(source.item);
+        // «Спрашивать»: доп. урон ждёт кнопки в чате и тратится только по нажатию
+        if (source.offer) {
+            await offerBonusCard(actor, source, key);
+            continue;
+        }
         const heal = source.trigger.heal_self;
+        if (heal && source.ask && !await confirm(source.name, `<p>${actor.name}: восстановить ${shownFormula(heal.formula, actor)} ПЗ?</p>`)) continue;
+        await commitUse(actor, source, key);
         if (!heal) continue;
         try {
             const roll = await new Roll(heal.formula, actor.getRollData()).evaluate();
@@ -241,6 +297,53 @@ Hooks.on('dnd5e.rollDamageV2', async (rolls, { subject } = {}) => {
         }
     }
 });
+
+// Срабатывание состоялось: «1 раз в ход», взвод и заряд навыка
+async function commitUse(actor, source, key) {
+    if (key !== null) usedThisTurn.set(`${actor.id}:${source.id}`, key);
+    if (source.trigger.once === 'primed') primed.delete(`${actor.id}:${source.id}`);
+    if (source.skill) await spendUse(source.item);
+}
+
+// Карточка в чате с кнопкой доп. урона — видит только владелец
+const offers = new Map();
+async function offerBonusCard(actor, source, key) {
+    const id = foundry.utils.randomID();
+    offers.set(id, { actor, source, key, bonus: source.offer });
+    const label = CONFIG.DND5E?.damageTypes?.[source.offer.type]?.label ?? source.offer.type;
+    await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor }),
+        whisper: [game.user.id],
+        content: `<div class="gachadnd-trigger-offer"><p><strong>${source.name}</strong>: добавить ${shownFormula(source.offer.formula, actor)} (${label})?</p>
+            <button type="button" data-gd-offer="${id}"><i class="fas fa-dice-d20"></i> Бросить урон</button></div>`
+    });
+}
+
+async function acceptOffer(id, button) {
+    const offer = offers.get(id);
+    if (!offer) return ui.notifications.warn('Предложение устарело — оно действует до перезагрузки и только в своём ходу.');
+    const { actor, source, key, bonus } = offer;
+    if (source.trigger.once !== 'none' && key !== null && key !== turnKey(actor)) return ui.notifications.warn(`${source.name}: ход уже закончился.`);
+    if (usedNow(actor, source, key) && (source.trigger.once ?? 'turn') === 'turn') return ui.notifications.warn(`${source.name}: уже использовано в этом ходу.`);
+    offers.delete(id);
+    if (button) button.disabled = true;
+    await commitUse(actor, source, key);
+    await CONFIG.Dice.DamageRoll.build(
+        { rolls: [{ parts: [bonus.formula], data: actor.getRollData(), options: { type: bonus.type, types: [bonus.type] } }] },
+        { configure: false },
+        { data: { speaker: ChatMessage.getSpeaker({ actor }), flavor: source.name, flags: { dnd5e: { messageType: 'roll', roll: { type: 'damage' } } } } }
+    );
+}
+
+function bindOffers(message, html) {
+    const root = html instanceof HTMLElement ? html : html?.[0];
+    root?.querySelectorAll?.('[data-gd-offer]:not([data-bound])').forEach(button => {
+        button.dataset.bound = '1';
+        button.addEventListener('click', () => acceptOffer(button.dataset.gdOffer, button));
+    });
+}
+Hooks.on('renderChatMessageHTML', bindOffers);
+Hooks.on('renderChatMessage', bindOffers);
 
 // ==========================================
 // ОКНА ВЛАДЕЛЬЦУ
@@ -303,16 +406,17 @@ async function offerReaction(message, local = null) {
     const left = usesLeft(source.item);
     const charges = left === null ? '' : ` Осталось зарядов: ${left}.`;
 
+    const ask = getPref(actor, source).ask;
     // Навык, который просто используется реакцией (Блинк)
     if (use) {
-        if (!await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Использовать «${source.name}» реакцией?${charges}</p>`)) return;
+        if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Использовать «${source.name}» реакцией?${charges}</p>`)) return;
         await source.item.use();
         return;
     }
 
     const formula = reduce.from === 'roll' ? activityOf(source.item)?.roll?.formula : reduce.formula;
     const what = reduce.half ? `половину урона (${Math.floor(amount / 2)})` : shownFormula(formula, actor);
-    if (!await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Реакцией уменьшить его на ${what}?${charges}</p>`)) return;
+    if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Реакцией уменьшить его на ${what}?${charges}</p>`)) return;
 
     let restored;
     if (reduce.half) {
@@ -350,18 +454,19 @@ Hooks.on('updateCombat', (combat, changes) => {
 async function offerTurnTriggers(actor, on) {
     for (const source of activeTriggers(actor, on)) {
         const { use, pay, advantage } = source.trigger;
+        const ask = getPref(actor, source).ask;
         if (use) {
             if (!hasUse(source.item)) continue;
             const drawback = source.item.flags?.[MODULE_ID]?.drawback;
             const when = on === 'combat_start' ? 'Начало боя' : 'Начало хода';
-            const ok = await confirm(source.name, `<p>${when}: использовать «${source.name}»?</p>${drawback ? `<p><strong>Штраф:</strong> ${drawback}</p>` : ''}`);
+            const ok = !ask || await confirm(source.name, `<p>${when}: использовать «${source.name}»?</p>${drawback ? `<p><strong>Штраф:</strong> ${drawback}</p>` : ''}`);
             if (ok) await source.item.use();
             continue;
         }
         if (pay) {
             const shown = shownFormula(pay.formula, actor);
             const gain = advantage === 'attacks' ? ' Тогда до конца хода ваши броски атаки совершаются с преимуществом.' : '';
-            if (!await confirm(source.name, `<p>${actor.name}: получить ${shown} урона (его нельзя уменьшить или предотвратить)?${gain}</p>`)) continue;
+            if (ask && !await confirm(source.name, `<p>${actor.name}: получить ${shown} урона (его нельзя уменьшить или предотвратить)?${gain}</p>`)) continue;
             const roll = await new Roll(pay.formula, actor.getRollData()).evaluate();
             await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${source.name}: плата` });
             // Число без типа: dnd5e применяет его без сопротивлений и иммунитетов
