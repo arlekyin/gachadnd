@@ -344,12 +344,15 @@
   background-size: cover;
   background-position: center;
 }
+/* Ранг — внутри угла карты: колода прокручивается и обрезает всё, что выходит за её край;
+   поверх бегущего неонового контура */
 .gachadnd-terminal .gd-tcard-badge {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 24px;
-  height: 24px;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: flex;
   align-items: center;
