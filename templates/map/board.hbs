@@ -1,0 +1,15 @@
+<section class="gd-map-board {{#unless hasMap}}empty{{/unless}}">
+    {{#if hasMap}}
+    <svg class="gd-map-edges" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {{#each edges}}<path class="{{cls}}" d="{{d}}" vector-effect="non-scaling-stroke"/>{{/each}}
+    </svg>
+    {{#each nodes}}
+    <button type="button" class="gd-map-node {{cls}}" data-action="node" data-node-id="{{id}}" style="left: {{x}}%; top: {{y}}%; --node: {{color}}" title="{{label}}{{#if hint}} — {{hint}}{{/if}}">
+        <span class="gd-map-disc"><i class="fas {{icon}}"></i></span>
+        <span class="gd-map-label">{{label}}</span>
+    </button>
+    {{/each}}
+    {{else}}
+    <div class="gd-map-fog">Карта скрыта в тумане…</div>
+    {{/if}}
+</section>

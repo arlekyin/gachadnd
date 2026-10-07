@@ -1161,3 +1161,85 @@
 .gachadnd-event-rewards-window label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .gachadnd-event-rewards-window label input[type="text"], .gachadnd-event-rewards-window select { flex: 1; }
 .gachadnd-event-rewards-window .gd-check { justify-content: flex-start; }
+
+/* ==========================================
+   Карта этажа (ApplicationV2, части header · board · footer)
+   Анимации только transform и opacity
+   ========================================== */
+.gachadnd-map .window-content {
+  display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  color: #d0c9c0; font-family: 'Modesto Condensed', serif;
+  background: radial-gradient(ellipse at 50% 40%, #12201e 0%, #080b0c 75%);
+}
+.gachadnd-map button { height: auto; line-height: 1.2; }
+
+.gachadnd-map .gd-map-header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid rgba(95, 224, 184, 0.18); background: rgba(5, 10, 10, 0.75); }
+.gachadnd-map .gd-map-floor { display: flex; align-items: baseline; gap: 6px; text-transform: uppercase; letter-spacing: 0.12em; color: #9fd9c8; }
+.gachadnd-map .gd-map-floor strong { font-size: 1.8em; color: #e6c87a; text-shadow: 0 0 10px rgba(230, 200, 122, 0.5); }
+.gachadnd-map .gd-map-gm { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: var(--font-primary, sans-serif); font-size: 12px; color: #9fb3ae; }
+.gachadnd-map .gd-map-gm input { width: 44px; height: 24px; text-align: center; background: #050808; color: #e6c87a; border: 1px solid #2f4440; }
+.gachadnd-map .gd-map-gm button { width: auto; padding: 4px 10px; border: 1px solid #c9a75d; background: linear-gradient(180deg, #2a1f0c, #140e05); color: #e6c87a; }
+
+.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.gachadnd-map .gd-map-board.empty { display: flex; align-items: center; justify-content: center; }
+.gachadnd-map .gd-map-fog { font-style: italic; color: #5d6b67; font-size: 1.2em; }
+.gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gachadnd-map .gd-map-edges path { fill: none; stroke-linecap: round; }
+.gachadnd-map .gd-map-edges path.faint { stroke: rgba(160, 190, 185, 0.16); stroke-width: 2; stroke-dasharray: 4 6; }
+.gachadnd-map .gd-map-edges path.open { stroke: rgba(230, 200, 122, 0.75); stroke-width: 2.5; stroke-dasharray: 7 6; }
+.gachadnd-map .gd-map-edges path.traversed { stroke: #5fe0b8; stroke-width: 3.5; filter: drop-shadow(0 0 4px rgba(95, 224, 184, 0.8)); }
+
+/* Узел: медальон цвета типа; текущий — пульсирующее кольцо, доступный — подсвечен */
+.gachadnd-map .gd-map-node {
+  /* Точка узла — центр медальона, подпись ниже: пути сходятся в центр круга */
+  position: absolute; transform: translate(-50%, -23px); z-index: 2;
+  width: auto; margin: 0; padding: 0; border: none; background: none; box-shadow: none;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
+}
+.gachadnd-map .gd-map-node:hover, .gachadnd-map .gd-map-node:focus { box-shadow: none; outline: none; }
+.gachadnd-map .gd-map-disc {
+  position: relative; width: 46px; height: 46px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--node); background: radial-gradient(circle at 40% 35%, #1d2626, #070a0a 75%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--node) 30%, transparent), inset 0 0 10px rgba(0, 0, 0, 0.8);
+  transition: transform 0.2s;
+}
+.gachadnd-map .gd-map-disc i { font-size: 19px; color: var(--node); text-shadow: 0 0 6px var(--node); }
+.gachadnd-map .gd-map-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9fb3ae; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+.gachadnd-map .gd-map-node:hover .gd-map-disc { transform: scale(1.1); }
+/* Приглушение — цветом, а не прозрачностью: медальон остаётся непрозрачным и закрывает пути */
+.gachadnd-map .gd-map-node.locked .gd-map-disc { border-color: color-mix(in srgb, var(--node) 35%, #1a2222); box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8); }
+.gachadnd-map .gd-map-node.locked .gd-map-disc i { opacity: 0.4; text-shadow: none; }
+.gachadnd-map .gd-map-node.locked .gd-map-label { opacity: 0.45; }
+.gachadnd-map .gd-map-node.visited .gd-map-disc { border-color: #2c7a64; }
+.gachadnd-map .gd-map-node.visited .gd-map-disc i { color: #5fe0b8; text-shadow: none; opacity: 0.8; }
+.gachadnd-map .gd-map-node.visited .gd-map-label { opacity: 0.7; }
+.gachadnd-map .gd-map-node.reachable .gd-map-disc { box-shadow: 0 0 16px color-mix(in srgb, var(--node) 60%, transparent), inset 0 0 10px rgba(0, 0, 0, 0.8); }
+.gachadnd-map .gd-map-node.reachable .gd-map-label { color: #f0e6d0; }
+.gachadnd-map .gd-map-node.current { z-index: 3; }
+.gachadnd-map .gd-map-node.current .gd-map-disc { transform: scale(1.15); border-color: #e4fff5; background: radial-gradient(circle at 40% 35%, #1f4a40, #071412 75%); }
+.gachadnd-map .gd-map-node.current .gd-map-label { color: #e4fff5; font-weight: bold; }
+.gachadnd-map .gd-map-node.current .gd-map-disc::after {
+  content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #5fe0b8;
+  animation: gd-map-pulse 2.2s ease-out infinite;
+}
+@keyframes gd-map-pulse { from { transform: scale(0.85); opacity: 0.9; } to { transform: scale(1.45); opacity: 0; } }
+.gachadnd-map .gd-map-node.type-boss { transform: translate(-50%, -29px); }
+.gachadnd-map .gd-map-node.type-boss .gd-map-disc { width: 58px; height: 58px; }
+.gachadnd-map .gd-map-node.type-boss .gd-map-disc i { font-size: 24px; }
+
+.gachadnd-map .gd-map-footer { display: flex; flex-direction: column; gap: 6px; padding: 8px 14px; border-top: 1px solid rgba(95, 224, 184, 0.18); background: rgba(5, 10, 10, 0.75); font-family: var(--font-primary, sans-serif); font-size: 12px; }
+.gachadnd-map .gd-map-footer:empty { display: none; }
+.gachadnd-map .gd-map-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #9fb3ae; }
+.gachadnd-map .gd-map-here { color: var(--node); font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; }
+.gachadnd-map .gd-map-next b { margin-left: 6px; color: var(--node); font-weight: normal; }
+.gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 10px; }
+.gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 4px; color: #d0c9c0; }
+.gachadnd-map .gd-map-legend i { color: var(--node); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gachadnd-map .gd-map-node.current .gd-map-disc::after { animation: none; }
+}
+
+.gachadnd-map-chat { padding: 8px 10px; border: 1px solid var(--node, #5fe0b8); border-radius: 4px; background: #0b0d0d; color: #ede6dc; text-align: center; }
+.gachadnd-map-chat i { color: var(--node, #5fe0b8); }
