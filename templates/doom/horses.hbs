@@ -1,18 +1,15 @@
 <section class="gd-horses">
     {{#if active}}
     {{#each horses}}
-    {{!-- Голова коня в профиль: череп, грива и нижняя челюсть на шарнире. Глаза горят по мере того, как кровь подходит к порогу --}}
+    {{!-- Силуэт коня, как на карте. Глаз загорается цветом всадника, когда кровь доходит до его порога --}}
     <div class="gd-horse {{status}} rider-{{key}} facing-{{facing}}" data-key="{{key}}" style="left: {{x}}%; top: {{y}}%; --heat: {{heat}}">
-        <svg class="gd-horse-head" viewBox="0 0 130 150" aria-hidden="true">
-            <ellipse class="gd-horse-aura" cx="70" cy="80" rx="62" ry="64"/>
-            <path class="gd-horse-mane" d="M36 44 C26 64 22 90 20 116 M43 38 C33 62 29 90 28 124 M30 56 C22 78 18 102 17 130 M40 66 C34 84 33 104 35 124"/>
-            <path class="gd-horse-skull" d="M16 142 C12 106 18 68 32 44 L34 22 L42 4 L50 25 C60 27 70 34 78 44 C90 60 104 80 114 94 C120 102 118 110 110 110 L80 108 C70 108 64 112 60 118 C56 124 54 132 54 142 Z"/>
-            <path class="gd-horse-line" d="M64 58 C50 62 46 86 58 98 C64 103 72 105 79 107 M105 96 q-4 3 -8 1 M56 30 C66 36 74 44 80 52"/>
-            <g class="gd-horse-jaw"><path d="M80 108 L111 110 C116 112 115 120 108 122 L85 123 C78 121 76 114 80 108 Z"/><path class="gd-horse-teeth" d="M88 109 v4 M94 109 v4 M100 110 v4 M106 110 v4"/></g>
-            <polygon class="gd-horse-crystal" points="96,113 104,100 112,113 104,127"/>
-            <circle class="gd-horse-eye-glow" cx="66" cy="52" r="11"/>
-            <circle class="gd-horse-eye" cx="66" cy="52" r="3.6"/>
-        </svg>
+        <div class="gd-horse-figure">
+            <i class="gd-horse-aura"></i>
+            <i class="fas fa-horse-head gd-horse-silhouette"></i>
+            <i class="gd-horse-socket"></i>
+            <i class="gd-horse-eye"></i>
+            <i class="gd-horse-crystal"></i>
+        </div>
         <span class="gd-horse-name">{{name}}</span>
         <span class="gd-horse-status">{{label}}</span>
         {{#if canTake}}

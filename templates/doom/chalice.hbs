@@ -1,33 +1,31 @@
 <section class="gd-chalice-wrap">
     {{#if active}}
-    <div class="gd-chalice {{#if chalice.done}}done{{/if}}">
-        {{!-- Чаша: кровь поднимается от дна, риски — пороги коней (I–IV) --}}
-        <svg class="gd-chalice-svg" viewBox="0 0 180 200" aria-hidden="true">
-            <defs><clipPath id="gd-bowl-clip"><path d="M14 20 C14 80 40 118 80 120 C120 118 146 80 146 20 Z"/></clipPath></defs>
-            <path class="gd-bowl-back" d="M14 20 C14 80 40 118 80 120 C120 118 146 80 146 20 Z"/>
-            <g clip-path="url(#gd-bowl-clip)">
-                <g class="gd-blood" style="--fill: {{chalice.fill}}">
-                    <rect x="0" y="20" width="160" height="104"/>
-                    <ellipse class="gd-blood-surface" cx="80" cy="20" rx="72" ry="5"/>
-                </g>
-            </g>
+    <div class="gd-chalice {{#if chalice.done}}done{{/if}}" style="--fill: {{chalice.fill}}">
+        {{!-- Постамент: чаша наверху светится сильнее по мере наполнения, желоб в камне показывает уровень, риски I–IV — пороги коней --}}
+        <svg class="gd-chalice-svg" viewBox="0 0 220 280" aria-hidden="true">
+            <defs><clipPath id="gd-groove-clip"><rect x="96" y="96" width="28" height="124" rx="12"/></clipPath></defs>
+            <ellipse class="gd-basin-glow" cx="110" cy="52" rx="92" ry="30"/>
+            <path class="gd-pillar" d="M78 72 L142 72 L136 230 L84 230 Z"/>
+            <path class="gd-pillar-shade" d="M126 72 L142 72 L136 230 L124 230 Z"/>
+            <rect class="gd-groove" x="96" y="96" width="28" height="124" rx="12"/>
+            <g clip-path="url(#gd-groove-clip)"><rect class="gd-blood" x="96" y="96" width="28" height="124"/></g>
             {{#each chalice.marks}}
             <g class="gd-mark {{#if reached}}reached{{/if}}" style="--at: {{at}}">
-                <line x1="148" x2="160" y1="0" y2="0"/>
-                <text x="164" y="4">{{roman}}</text>
+                <line x1="128" x2="140" y1="0" y2="0"/>
+                <text x="146" y="5">{{roman}}</text>
             </g>
             {{/each}}
-            <path class="gd-bowl-rim" d="M14 20 C14 80 40 118 80 120 C120 118 146 80 146 20"/>
-            <ellipse class="gd-bowl-lip" cx="80" cy="20" rx="66" ry="6"/>
-            <path class="gd-chalice-stem" d="M70 119 L74 158 L56 176 L104 176 L86 158 L90 119 Z"/>
-            <ellipse class="gd-chalice-base" cx="80" cy="178" rx="34" ry="7"/>
+            <path class="gd-basin" d="M30 46 C34 74 70 86 110 86 C150 86 186 74 190 46 Z"/>
+            <ellipse class="gd-basin-lip" cx="110" cy="46" rx="80" ry="16"/>
+            <ellipse class="gd-basin-blood" cx="110" cy="47" rx="72" ry="12"/>
+            <path class="gd-steps" d="M64 230 L156 230 L164 244 L56 244 Z M44 244 L176 244 L186 262 L34 262 Z"/>
         </svg>
         <i class="gd-drip d1"></i><i class="gd-drip d2"></i><i class="gd-drip d3"></i>
         {{#if last.img}}<img class="gd-rising" src="{{last.img}}" alt="">{{/if}}
     </div>
     <div class="gd-blood-count">
         <b>{{chalice.blood}}</b> крови
-        {{#if chalice.done}}· пасти коней сомкнуты{{else}}{{#if chalice.next}}· следующий конь при {{chalice.next}}{{else}}· все пасти открыты{{/if}}{{/if}}
+        {{#if chalice.done}}· пасти коней сомкнуты{{else}}{{#if chalice.next}}· следующий конь при {{chalice.next}}{{else}}· все кони пробудились{{/if}}{{/if}}
     </div>
     {{/if}}
 </section>
