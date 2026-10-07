@@ -10,7 +10,6 @@ import path from 'path';
 import crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/recovery.js';
-import { UNIVERSAL_DC_FORMULA, makeSynergyDictionary } from './scripts/synergy-data.js';
 import { validateRisk } from './scripts/risk-schema.js';
 import { buildRules } from './tools/rules.mjs';
 
@@ -140,6 +139,9 @@ if (synergyErrors.length) {
 }
 fs.writeFileSync(SYNERGY_OUT, `// Создано build.mjs из src/synergies/*.yaml — не редактировать вручную\nexport const SYNERGIES = ${JSON.stringify(synergies, null, 2)};\n`, 'utf8');
 
+// synergy-data.js читает только что записанный synergy-tiers.js — импорт после записи,
+// иначе на чистой копии (файл не хранится в git) сборка не запустится
+const { UNIVERSAL_DC_FORMULA, makeSynergyDictionary } = await import('./scripts/synergy-data.js');
 const SYNERGY_DICTIONARY = makeSynergyDictionary(synergies);
 const TAGS = synergies.map(s => s.tag);
 const TAG_KEYS = Object.fromEntries(synergies.map(s => [s.tag, s.key]));
