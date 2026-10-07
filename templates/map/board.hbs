@@ -3,6 +3,7 @@
     <svg class="gd-map-edges" viewBox="0 0 100 100" preserveAspectRatio="none">
         {{#each edges}}<path class="{{cls}}" d="{{d}}" vector-effect="non-scaling-stroke"/>{{/each}}
     </svg>
+    <div class="gd-map-steps"></div>
     {{#each nodes}}
     <button type="button" class="gd-map-node {{cls}}" data-action="node" data-node-id="{{id}}" style="left: {{x}}%; top: {{y}}%; --node: {{color}}" title="{{label}}{{#if hint}} — {{hint}}{{/if}}">
         <span class="gd-map-disc"><i class="fas {{icon}}"></i></span>
@@ -10,6 +11,6 @@
     </button>
     {{/each}}
     {{else}}
-    <div class="gd-map-fog">Карта скрыта в тумане…</div>
+    <div class="gd-map-fog">Здесь пока ничего не начерчено…</div>
     {{/if}}
 </section>
