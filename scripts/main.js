@@ -15,6 +15,7 @@ import { registerSocket } from "./socket.js";
 import { MemoryAltar, announceRest } from "./memory-altar.js";
 import { registerMemorySettings } from "./memory-api.js";
 import { registerTriggerSettings } from "./triggers.js";
+import { registerAutomationMenu } from "./automation-settings.js";
 import { addTokenTools } from "./controls.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
@@ -27,6 +28,7 @@ Hooks.once('init', () => {
     registerSoundSettings();
     registerMemorySettings();
     registerTriggerSettings();
+    registerAutomationMenu();
 
     // Лабиринт дописывает в этот же объект свои функции
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
