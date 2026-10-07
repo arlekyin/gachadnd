@@ -6,5 +6,8 @@ tags:
   - щит
 description: Когда по вам попадает атака, реакцией перенаправьте половину её урона атакующему. Вторую половину получаете вы.
 activation: reaction
+trigger:
+  on: damaged
+  reduce: { half: true }
 uses: 1
 recovery: long

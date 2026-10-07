@@ -6,6 +6,11 @@ tags:
   - проклятье
 description: Бонусным действием заплатите кровью. Ваша следующая атака в этом ходу при попадании наносит дополнительный некротический урон {roll}. Бросьте его кнопкой навыка и примените к цели.
 activation: bonus
+trigger:
+  on: damage_roll
+  once: primed
+  when: [attack_only]
+  bonus: { from: roll, type: necrotic }
 cost:
   hp: '@details.level'
 roll:

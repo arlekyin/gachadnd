@@ -273,7 +273,8 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                 { text: flags.category ?? '' },
                 ...tags.map(t => ({ text: t, cls: 'tag' })),
                 ...(ranked ? [{ text: `Ранг ${romanRank(rank)}${canRankUp(selected) ? ' · можно улучшить' : ''}` }] : []),
-                ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : [])
+                ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : []),
+                ...(flags.trigger ? [{ text: 'Срабатывает сам', cls: 'tag' }] : [])
             ],
             drawback: flags.drawback && !flags.cleansed ? flags.drawback : null,
             notes: view.notes,
