@@ -28,6 +28,7 @@ import {
 import { isAtRest } from "./memory-api.js";
 import { onSocket, emit } from "./socket.js";
 import { MindPhysics } from "./mind-physics.js";
+import { AltarSynapses } from "./altar-synapses.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -135,6 +136,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #dived = false;
     #ringShown = false;
     #physics = null;
+    #synapses = null;
+    #flareId = null;
     #drift = new Map();
     #momentum = null;
 
@@ -328,7 +331,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             return {
                 key: ing.key, itemId: ing.item.id, kind: ing.kind, name: ing.name, view, pos,
                 cls: view.cls.join(' '), tap: view.tap ?? '', mergeSkill: view.mergeSkill ?? '',
-                icon: ing.kind === 'skill' ? 'fa-brain' : 'fa-gem', double: ing.weight > 1,
+                double: ing.weight > 1,
                 style: `${at(pos)}; --rarity: ${RARITY[ing.rarity]?.color ?? '#c9a75d'}; --delay: ${bobPhase(ing.key)}s`,
                 title: `${ing.name}${ing.kind === 'skill' ? ' — навык из Памяти: бросьте в него повтор' : ''}${ing.weight > 1 ? ' — повтор без слияния, весит вдвое' : ''}`
             };
@@ -365,7 +368,16 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         super._onRender(context, options);
         this.element.style.setProperty('--glow', context.ritual.glow);
         this.#dived = true;
-        if (options.parts?.includes('stage')) this.#ringShown = !!context.ring;
+        if (options.parts?.includes('stage')) {
+            this.#ringShown = !!context.ring;
+            // Связи кольца живут вместе со слоем ядра; после слияния по прядям навыка уходит вспышка
+            this.#synapses?.stop();
+            const canvas = this.#part('stage')?.querySelector('canvas.gd-synapses');
+            this.#synapses = canvas ? new AltarSynapses(canvas, this.#part('stage')) : null;
+            this.#synapses?.start();
+            if (this.#flareId) this.#synapses?.flare(this.#flareId);
+            this.#flareId = null;
+        }
         if (!options.parts?.includes('fog')) return this.#physics?.refresh();
         this.#physics?.destroy();
         this.#physics = new MindPhysics(this.#part('fog'), {
@@ -386,6 +398,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         super._onClose(options);
         this.#physics?.destroy();
         this.#physics = null;
+        this.#synapses?.stop();
+        this.#synapses = null;
     }
 
     // Новые роли огоньков применяются к уже нарисованному туману: класс, действие,
@@ -502,6 +516,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
         await forgeSkill(this.actor, item);
         this.mergeId = null;
+        this.#flareId = item.id;
         return { text: `${item.name} — ранг ${romanRank(rank)}`, color: '#e8c26a', icon: 'fa-link' };
     }
 

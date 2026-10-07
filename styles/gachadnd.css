@@ -1601,6 +1601,8 @@
 /* Поле сознания: всё позиционируется в процентах, центр элемента — в точке */
 .gachadnd-memory-altar .gd-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gachadnd-memory-altar .gd-links { z-index: 1; }
+/* Холст связей кольца — под ядром и узлами */
+.gachadnd-memory-altar .gd-synapses { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 .gachadnd-memory-altar .gd-flows line { stroke: var(--glow); stroke-width: 2; stroke-dasharray: 6 6; opacity: 0.85; }
 
 /* Пустые гнёзда Предела разума */
@@ -1610,6 +1612,7 @@
 
 /* Кольцо Памяти проявляется при выборе Слияния */
 .gachadnd-memory-altar .ring-in .gd-orbit,
+.gachadnd-memory-altar .ring-in .gd-synapses,
 .gachadnd-memory-altar .ring-in .gd-socket,
 .gachadnd-memory-altar .ring-in .gd-node { animation: gd-fade 0.5s ease-out both; }
 .gachadnd-memory-altar .ring-in .gd-node-disc { animation: gd-ring-in 0.5s ease-out both; }
@@ -1630,17 +1633,22 @@
 @keyframes gd-core-breath { 0%, 100% { opacity: 0.6; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
 @keyframes gd-core-pulse { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1.03); } }
 
-/* Узлы орбиты — навыки, уже ставшие частью персонажа */
-.gachadnd-memory-altar .gd-node { position: absolute; z-index: 3; width: 120px; transform: translate(-50%, -27px); display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; }
+/* Узлы орбиты — навыки, уже ставшие частью персонажа: тела нейронов. Ядро цвета редкости с ободком,
+   вокруг мягко пульсирует ореол. Пряди к ядру Алтаря и воронки к соседям рисует холст связей */
+.gachadnd-memory-altar .gd-node { position: absolute; z-index: 3; width: 120px; transform: translate(-50%, -18px); display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
 .gachadnd-memory-altar .gd-node-disc {
-  position: relative; width: 54px; height: 54px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--rarity) 70%, transparent);
-  background: radial-gradient(circle, color-mix(in srgb, var(--rarity) 22%, #0b0d12), #07080b 80%);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--rarity) 35%, transparent);
+  position: relative; width: 36px; height: 36px; border-radius: 50%;
+  border: 1.6px solid color-mix(in srgb, var(--rarity) 60%, transparent);
+  background: radial-gradient(circle, #ffffff 0%, color-mix(in srgb, var(--rarity) 85%, #fff) 22%, color-mix(in srgb, var(--rarity) 45%, #0b0d12) 62%, color-mix(in srgb, var(--rarity) 18%, #07080b) 100%);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--rarity) 55%, transparent);
   transition: transform 0.2s, box-shadow 0.2s;
 }
-.gachadnd-memory-altar .gd-node-disc i { font-size: 20px; color: var(--rarity); }
+.gachadnd-memory-altar .gd-node-disc::before {
+  content: ''; position: absolute; inset: -18px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--rarity) 30%, transparent), transparent);
+  animation: gd-soma-pulse 7.5s ease-in-out infinite;
+}
+@keyframes gd-soma-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
 .gachadnd-memory-altar .gd-node-disc b { position: absolute; bottom: -4px; right: -4px; min-width: 20px; padding: 0 4px; border-radius: 8px; background: #0b0d12; border: 1px solid var(--rarity); font-size: 10px; color: #eef3f1; }
 .gachadnd-memory-altar .gd-node-name { font-size: 12px; color: #cfd8d6; text-shadow: 0 1px 3px #000; }
 .gachadnd-memory-altar .gd-node.can-merge { cursor: pointer; }
@@ -1649,18 +1657,52 @@
 .gachadnd-memory-altar .gd-node.chosen .gd-node-disc { animation: none; transform: scale(1.15); box-shadow: 0 0 0 2px var(--glow), 0 0 28px var(--glow); }
 @keyframes gd-call { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
-/* Огоньки — кристаллы и неэкипированные навыки в тумане */
+/* Огоньки — кристаллы и неэкипированные навыки в тумане. Кристалл — неусвоенное воспоминание: клочья
+   тумана цвета редкости медленно клубятся вокруг тлеющей искры, каждый по своей петле. Навык — тело нейрона */
 .gachadnd-memory-altar .gd-mote { position: absolute; z-index: 3; width: 110px; transform: translate(-50%, -20px); cursor: pointer; }
 .gachadnd-memory-altar .gd-mote-body { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; animation: gd-bob 6s ease-in-out var(--delay, 0s) infinite; }
 .gachadnd-memory-altar .gd-mote-orb {
   position: relative; width: 40px; height: 40px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(circle at 40% 35%, color-mix(in srgb, var(--rarity) 55%, #fff) 0%, color-mix(in srgb, var(--rarity) 45%, transparent) 35%, transparent 72%);
   transition: transform 0.2s;
 }
-.gachadnd-memory-altar .gd-mote-orb i { font-size: 15px; color: #fff; opacity: 0.85; text-shadow: 0 0 8px var(--rarity); }
+.gachadnd-memory-altar .gd-wisp { position: absolute; inset: 0; transition: transform 0.3s; }
+.gachadnd-memory-altar .gd-wisp i {
+  position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--rarity) 42%, transparent), color-mix(in srgb, var(--rarity) 14%, transparent) 55%, transparent);
+  will-change: transform;
+  animation: gd-wisp-a 7s ease-in-out infinite alternate;
+}
+.gachadnd-memory-altar .gd-wisp i:nth-child(2) { width: 50px; height: 50px; margin: -25px 0 0 -25px; animation: gd-wisp-b 9s -3s ease-in-out infinite alternate; }
+.gachadnd-memory-altar .gd-wisp i:nth-child(3) { width: 34px; height: 34px; margin: -17px 0 0 -17px; animation: gd-wisp-c 6s -1s ease-in-out infinite alternate; }
+.gachadnd-memory-altar .gd-wisp i:nth-child(4) { width: 46px; height: 46px; margin: -23px 0 0 -23px; animation: gd-wisp-a 11s -6s ease-in-out infinite alternate-reverse; }
+.gachadnd-memory-altar .gd-wisp i:nth-child(5) { width: 38px; height: 38px; margin: -19px 0 0 -19px; animation: gd-wisp-b 8s -5s ease-in-out infinite alternate-reverse; }
+.gachadnd-memory-altar .gd-wisp i:nth-child(6) { width: 56px; height: 56px; margin: -28px 0 0 -28px; opacity: 0.7; animation: gd-wisp-c 12s -8s ease-in-out infinite alternate; }
+@keyframes gd-wisp-a { from { transform: translate(-9px, -5px) scale(0.9); } to { transform: translate(8px, 6px) scale(1.15); } }
+@keyframes gd-wisp-b { from { transform: translate(7px, -8px) scale(1.05); } to { transform: translate(-7px, 7px) scale(0.9); } }
+@keyframes gd-wisp-c { from { transform: translate(-2px, 9px) scale(1.12); } to { transform: translate(3px, -9px) scale(0.88); } }
+/* Искра ядра тлеет */
+.gachadnd-memory-altar .gd-spark {
+  position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+  background: radial-gradient(closest-side, #ffffff 0%, color-mix(in srgb, var(--rarity) 80%, #fff) 30%, color-mix(in srgb, var(--rarity) 40%, transparent) 65%, transparent);
+  animation: gd-spark 3.2s ease-in-out infinite alternate;
+}
+@keyframes gd-spark { from { opacity: 0.65; transform: scale(0.85); } to { opacity: 1; transform: scale(1.1); } }
+/* Схваченный огонёк: туман стягивается к искре */
+.gachadnd-memory-altar .gd-mote.held .gd-wisp { transform: scale(0.65); }
+/* Навык в тумане — тело нейрона, как в кольце, только меньше */
+.gachadnd-memory-altar .gd-soma {
+  position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  border: 1.4px solid color-mix(in srgb, var(--rarity) 60%, transparent);
+  background: radial-gradient(circle, #ffffff 0%, color-mix(in srgb, var(--rarity) 85%, #fff) 22%, color-mix(in srgb, var(--rarity) 45%, #0b0d12) 62%, color-mix(in srgb, var(--rarity) 18%, #07080b) 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rarity) 55%, transparent);
+}
+.gachadnd-memory-altar .gd-soma::before {
+  content: ''; position: absolute; inset: -14px; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--rarity) 30%, transparent), transparent);
+  animation: gd-soma-pulse 7.5s ease-in-out infinite;
+}
 .gachadnd-memory-altar .gd-mote-orb b { position: absolute; top: -4px; right: -10px; font-size: 10px; color: #ffcf8a; }
-.gachadnd-memory-altar .gd-mote.skill .gd-mote-orb { border: 1px dashed color-mix(in srgb, var(--rarity) 70%, transparent); }
 .gachadnd-memory-altar .gd-mote-name { font-size: 12px; line-height: 1.2; color: #b8c6c2; text-shadow: 0 1px 3px #000; }
 .gachadnd-memory-altar .gd-mote:hover .gd-mote-orb { transform: scale(1.2); }
 .gachadnd-memory-altar .gd-mote:hover .gd-mote-name { color: #fff; }
@@ -1714,7 +1756,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .gachadnd-memory-altar .gd-fog i, .gachadnd-memory-altar .gd-core::before, .gachadnd-memory-altar .gd-core span,
-  .gachadnd-memory-altar .gd-mote-body, .gachadnd-memory-altar .gd-node-disc, .gachadnd-memory-altar .window-content *, .gachadnd-memory-altar .gd-result { animation: none !important; }
+  .gachadnd-memory-altar .gd-mote-body, .gachadnd-memory-altar .gd-node-disc, .gachadnd-memory-altar .gd-wisp i, .gachadnd-memory-altar .window-content *, .gachadnd-memory-altar .gd-result { animation: none !important; }
 }
 .gachadnd-memory-altar-chat { padding: 8px; border: 1px solid #5fe0b8; background: #0b0d12; color: #dce6e2; }
 

@@ -5,12 +5,15 @@
             {{#each flows}}<line x1="{{x1}}" y1="{{y1}}" x2="{{x2}}" y2="{{y2}}" vector-effect="non-scaling-stroke"/>{{/each}}
         </g>
     </svg>
-    {{#if ring}}<div class="gd-orbit"></div>{{/if}}
+    {{#if ring}}<div class="gd-orbit"></div>
+    {{!-- Связи кольца: пучки прядей к ядру и воронки между соседями (altar-synapses.js) --}}
+    <canvas class="gd-synapses"></canvas>{{/if}}
     <div class="gd-core" style="{{core.style}}"><span></span>{{#if ring}}<em>{{ring.filled}} / {{ring.cap}}</em>{{/if}}</div>
     {{#each sockets}}<div class="gd-socket" style="{{style}}"></div>{{/each}}
     {{#each nodes}}
     <div class="gd-node {{cls}}" style="{{style}}" data-item-id="{{id}}" {{#if canMerge}}data-action="mergePick"{{/if}} title="{{title}}">
-        <span class="gd-node-disc"><i class="fas fa-brain"></i><b>{{rank}}</b></span>
+        {{!-- Навык в кольце — тело нейрона: ядро цвета редкости с ободком, к которому крепятся пряди --}}
+        <span class="gd-node-disc"><b>{{rank}}</b></span>
         <span class="gd-node-name">{{name}}</span>
     </div>
     {{/each}}
