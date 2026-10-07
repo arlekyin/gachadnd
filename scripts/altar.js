@@ -1,9 +1,9 @@
 /**
  * Gacha Roguelike dnd5e — Алтарь Погибели (узел карты «Погибель»)
  *
- * Жертвенный постамент: персонаж отдаёт ПЗ, равные своему уровню, и получает случайный кристалл
- * с тегом «проклятье». Кровь всего отряда копится в общий счёт; при 3, 6, 9 и 12 × средний уровень
- * отряда пасть открывает очередной конь с кристаллом всадника в зубах. Когда персонаж забирает
+ * Жертвенный постамент: персонаж отдаёт ПЗ, равные своему уровню. Кровь всего отряда копится в общий счёт.
+ * Каждые doomCurseBlood × средний уровень крови постамент отдаёт кристалл с тегом «проклятье» тому, чья жертва
+ * добрала до отметки. Конь № N открывает пасть при N × doomHorseBlood × средний уровень (по умолчанию 12 и 3). Когда персонаж забирает
  * всадника, пасти остальных коней закрываются. Управляет алтарём Мастер.
  *
  * Состояние алтаря хранится в узле карты этажа (флаг сцены floorMap): { blood, order, taken, last }.
@@ -17,7 +17,9 @@ import { emit, onSocket } from "./socket.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-const THRESHOLD_STEP = 3;
+// Доли настраиваются в параметрах модуля (Экономика)
+const horseBlood = () => Math.max(1, Number(game.settings.get(MODULE_ID, 'doomHorseBlood')) || 12);
+const curseBlood = () => Math.max(1, Number(game.settings.get(MODULE_ID, 'doomCurseBlood')) || 3);
 const RARITY_WEIGHTS = { gray: 600, green: 250, blue: 100, purple: 40, red: 9 };
 
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -135,7 +137,7 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!state) return context;
         const { doom } = state;
         const level = averageLevel();
-        const step = THRESHOLD_STEP * level;
+        const step = horseBlood() * level;
         const max = step * doom.order.length;
         // Всадник, который уже есть у кого-то из отряда, на алтаре не появляется
         const held = new Set(party.map(a => getHorseman(a)?.flags[MODULE_ID].horseman ?? a.getFlag(MODULE_ID, 'horseman')).filter(Boolean));
@@ -167,6 +169,9 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             marks: doom.order.map((key, i) => ({ at: ((i + 1) / doom.order.length * 100).toFixed(1), roman: ['I', 'II', 'III', 'IV'][i], reached: doom.blood >= step * (i + 1) })),
             done: !!doom.taken
         };
+        // До следующего проклятого кристалла
+        const per = curseBlood() * level;
+        context.chalice.curseIn = per - (doom.blood % per);
         context.last = doom.last ?? null;
 
         context.party = party.map(a => {
@@ -236,13 +241,21 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (hp <= level) return ui.notifications.warn(`${actor.name}: не хватает ПЗ для жертвы.`);
 
         await actor.update({ 'system.attributes.hp.value': hp - level });
-        const crystal = await randomCrystal(rollRarity(), 'проклят');
-        if (crystal) await actor.createEmbeddedDocuments('Item', [crystal]);
+        // Кристаллы — за каждую отметку крови, которую перешла эта жертва
+        const per = curseBlood() * averageLevel();
+        const before = state.doom.blood;
         state.doom.blood += level;
+        const crystals = [];
+        for (let i = Math.floor(before / per); i < Math.floor(state.doom.blood / per); i++) {
+            const crystal = await randomCrystal(rollRarity(), 'проклят');
+            if (crystal) crystals.push(crystal);
+        }
+        if (crystals.length) await actor.createEmbeddedDocuments('Item', crystals);
         // Последняя жертва — чтобы у всех проиграть капли и всплывающий кристалл
-        state.doom.last = { actorId: actor.id, at: Date.now(), img: crystal?.img ?? null };
+        state.doom.last = { actorId: actor.id, at: Date.now(), img: crystals.at(-1)?.img ?? null };
         await saveDoom(state.map, state.node.id, state.doom);
-        await chat(`<strong>${esc(actor.name)}</strong> отдаёт постаменту ${level} ПЗ${crystal ? ` и получает <strong>${esc(crystal.name)}</strong>` : ''}. Кровь: ${state.doom.blood}.`);
+        const gained = crystals.length ? ` Постамент отдаёт: ${crystals.map(c => `<strong>${esc(c.name)}</strong>`).join(', ')}.` : '';
+        await chat(`<strong>${esc(actor.name)}</strong> отдаёт постаменту ${level} ПЗ. Кровь: ${state.doom.blood}.${gained}`);
     }
 
     static async #onTake(event, target) {

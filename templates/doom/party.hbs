@@ -9,7 +9,7 @@
         <span class="gd-offerer-name">{{name}}</span>
         <span class="gd-offerer-hp" title="{{hp}} из {{hpMax}} ПЗ"><i style="width: {{hpPct}}%"></i><em>{{hp}} / {{hpMax}}</em></span>
         {{#if @root.isGM}}
-        <button type="button" data-action="sacrifice" data-actor-id="{{id}}" {{#unless canSacrifice}}disabled{{/unless}} title="Отдать {{cost}} ПЗ и получить кристалл с тегом «проклятье»">Жертва · −{{cost}} ПЗ</button>
+        <button type="button" data-action="sacrifice" data-actor-id="{{id}}" {{#unless canSacrifice}}disabled{{/unless}} title="Отдать {{cost}} ПЗ постаменту">Жертва · −{{cost}} ПЗ</button>
         {{else}}
         <span class="gd-offerer-cost">жертва — {{cost}} ПЗ</span>
         {{/if}}
