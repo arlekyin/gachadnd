@@ -1181,13 +1181,20 @@
   --ink-soft: #4a4541;
   --ink-faint: #8f8a84;
   --blood: #6e1d14;
-  --paper: #d8d3c7;
-  --paper-texture: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='300'%20height='300'%3E%3Cfilter%20id='p'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='3'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.2%20%200%200%200%200%200.18%20%200%200%200%200%200.15%20%200%200%200%200.16%200'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23p)'/%3E%3C/svg%3E");
+  --paper: #e6d1a3;
+  --paper-texture: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='300'%20height='300'%3E%3Cfilter%20id='p'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='3'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20values='0%200%200%200%200.35%20%200%200%200%200%200.22%20%200%200%200%200%200.1%20%200%200%200%200.2%200'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23p)'/%3E%3C/svg%3E");
 }
 .gachadnd-map .window-content {
   position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden;
   color: var(--ink); font-family: 'GD Caveat', 'Modesto Condensed', cursive;
-  background: radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(60, 55, 48, 0.25) 100%), var(--paper-texture), var(--paper) !important;
+  /* Пергамент: пятна, потемневшие обожжённые края, волокна */
+  background:
+    radial-gradient(ellipse at 18% 22%, rgba(150, 100, 50, 0.16), transparent 34%),
+    radial-gradient(ellipse at 82% 68%, rgba(140, 90, 40, 0.14), transparent 40%),
+    radial-gradient(ellipse at 60% 12%, rgba(120, 80, 35, 0.1), transparent 30%),
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(110, 70, 30, 0.42) 100%),
+    var(--paper-texture),
+    linear-gradient(160deg, #eedcb2 0%, #e3cc9c 55%, #d6bb86 100%) !important;
 }
 .gachadnd-map button { height: auto; line-height: 1.2; }
 
@@ -1208,31 +1215,33 @@
 
 /* Поле: стол, на нём наклонённый лист карты */
 .gachadnd-map .gd-map-defs { position: absolute; width: 0; height: 0; }
-.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; perspective: 1300px; perspective-origin: 50% 0%; background: radial-gradient(ellipse at 50% 40%, rgba(40, 36, 32, 0.05), rgba(40, 36, 32, 0.3)); }
+.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .gachadnd-map .gd-map-board.empty { display: flex; align-items: center; justify-content: center; }
 .gachadnd-map .gd-map-fog { font-size: 28px; color: var(--ink-soft); transform: rotate(-3deg); }
-.gachadnd-map .gd-map-plane {
-  position: absolute; inset: 8px 22px 10px; transform-origin: 50% 100%; transform: rotateX(16deg);
-  background: radial-gradient(ellipse at 25% 20%, rgba(120, 110, 95, 0.14), transparent 40%), radial-gradient(ellipse at 75% 75%, rgba(110, 100, 85, 0.12), transparent 42%), var(--paper-texture), var(--paper);
-  box-shadow: 0 14px 22px rgba(20, 18, 16, 0.35), 0 2px 4px rgba(20, 18, 16, 0.3);
-}
+/* Карта лежит перед зрителем трапецией: ближний ряд у Входа крупный, дальние ряды к Боссу уже и мельче.
+   Положение рядов считает map.js, здесь — масштаб по глубине (--k) для значков, подписей и штрихов */
+.gachadnd-map .gd-map-plane { position: absolute; inset: 0; }
 
 /* Живые чернила: у каждой линии, кольца и рисунка три формы, SVG плавно перетекает между ними.
    Фильтр делает штрих расплывшимся, как от пера */
 .gachadnd-map .gd-ink { filter: url(#gd-ink-bleed); }
+/* Кольца без порога: на тонком мазке он то стирает, то возвращает края, и кольцо мигает */
+.gachadnd-map .gd-map-ring.gd-ink { filter: none; }
 .gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .gachadnd-map .gd-map-edges path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: 3; stroke-dasharray: 1 11 4 10; }
-.gachadnd-map .gd-map-edges path.open { stroke: var(--ink); stroke-width: 5; stroke-dasharray: 16 10 8 11; }
-.gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-warm); stroke-width: 3.4; }
+.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: calc(3px * var(--k, 1)); stroke-dasharray: 1 11 4 10; }
+.gachadnd-map .gd-map-edges path.open { stroke: var(--ink); stroke-width: calc(5px * var(--k, 1)); stroke-dasharray: 16 10 8 11; }
+.gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-warm); stroke-width: calc(3.4px * var(--k, 1)); }
 
 /* Рисунки на полях */
 .gachadnd-map .gd-map-doodle { position: absolute; transform: translate(-50%, -50%) rotate(var(--turn)); pointer-events: none; overflow: visible; }
 .gachadnd-map .gd-map-doodle path { fill: none; stroke: var(--ink-warm); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Узлы: значок чернилами без кружка, вокруг — мазок кистью. Значок чуть покачивается */
+/* Узлы: значок чернилами без кружка, вокруг — мазок кистью. Значок чуть покачивается (map.js) */
 .gachadnd-map .gd-map-node {
-  position: absolute; transform: translate(-50%, -27px); z-index: 2;
+  position: absolute; z-index: 2;
+  /* центр значка — в точке узла, уменьшение вокруг него */
+  transform-origin: 50% 27px; transform: translate(-50%, -27px) scale(var(--k, 1));
   width: auto; margin: 0; padding: 0; border: none; background: none; box-shadow: none;
   display: flex; flex-direction: column; align-items: center; gap: 0; cursor: pointer; color: var(--ink);
   /* кнопки не наследуют шрифт — подписи пишутся тем же почерком, что и вся карта */
@@ -1246,11 +1255,7 @@
 }
 .gachadnd-map .gd-map-mark i {
   font-size: 28px; color: color-mix(in srgb, var(--tint) 35%, var(--paper)); -webkit-text-stroke: 2.4px var(--ink); paint-order: stroke fill;
-  animation: gd-ink-sway 5.5s ease-in-out infinite alternate;
 }
-.gachadnd-map .gd-map-node:nth-child(3n + 1) .gd-map-mark i { animation-duration: 6.5s; animation-delay: -2s; }
-.gachadnd-map .gd-map-node:nth-child(3n + 2) .gd-map-mark i { animation-duration: 4.8s; animation-delay: -3.5s; }
-@keyframes gd-ink-sway { from { transform: rotate(-3deg) translateY(1px); } to { transform: rotate(3deg) translateY(-1px); } }
 .gachadnd-map .gd-map-ring { position: absolute; left: 50%; top: 50%; width: 80px; height: 80px; transform: translate(-50%, -50%); overflow: visible; pointer-events: none; }
 .gachadnd-map .gd-map-ring path { fill: var(--ink); }
 .gachadnd-map .gd-map-label { font-size: 23px; line-height: 1; padding: 0 4px; white-space: nowrap; text-shadow: 0 0 3px var(--paper), 0 0 3px var(--paper), 0 0 6px var(--paper); }
@@ -1268,7 +1273,7 @@
 .gachadnd-map .gd-map-node.current .gd-map-ring path { fill: var(--blood); }
 .gachadnd-map .gd-map-node.current .gd-map-mark i { color: color-mix(in srgb, var(--blood) 35%, var(--paper)); -webkit-text-stroke-color: var(--blood); }
 .gachadnd-map .gd-map-node.current .gd-map-label { font-weight: 700; color: var(--blood); }
-.gachadnd-map .gd-map-node.type-boss { transform: translate(-50%, -34px); }
+.gachadnd-map .gd-map-node.type-boss { transform-origin: 50% 34px; transform: translate(-50%, -34px) scale(var(--k, 1)); }
 .gachadnd-map .gd-map-node.type-boss .gd-map-mark { width: 68px; height: 68px; }
 .gachadnd-map .gd-map-node.type-boss .gd-map-mark i { font-size: 40px; -webkit-text-stroke-width: 3px; }
 .gachadnd-map .gd-map-node.type-boss .gd-map-ring { width: 100px; height: 100px; }
@@ -1283,9 +1288,6 @@
 .gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 5px; }
 .gachadnd-map .gd-map-legend i { font-size: 17px; color: color-mix(in srgb, var(--node) 30%, var(--paper)); -webkit-text-stroke: 1.4px #141210; paint-order: stroke fill; }
 
-@media (prefers-reduced-motion: reduce) {
-  .gachadnd-map .gd-map-mark i { animation: none; }
-}
 
-.gachadnd-map-chat { padding: 6px 10px; border: 2px solid #141210; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: #d8d3c7; color: #141210; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 20px; }
+.gachadnd-map-chat { padding: 6px 10px; border: 2px solid #141210; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: linear-gradient(160deg, #eedcb2, #dcc290); color: #141210; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 20px; }
 .gachadnd-map-chat i { color: color-mix(in srgb, var(--node, #141210) 35%, #141210); }

@@ -197,11 +197,23 @@ const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', '
 const BOARD_PX = { x: 6.8, y: 7.4 };
 const INK_FORMS = 3;
 
-// Длительность цикла и сдвиг фазы у каждого рисунка свои — карта колышется не в такт
-const inkMotion = rand => ({ dur: (4.5 + rand() * 3).toFixed(2), begin: (-rand() * 8).toFixed(2) });
+// Длительность цикла и сдвиг фазы у каждого рисунка свои — карта колышется не в такт.
+// Часы SVG стартуют при вставке в страницу, поэтому начало сдвинуто назад на время страницы: перерисованная
+// линия продолжает движение с того же места. (setCurrentTime сразу после вставки в Chrome замораживает анимацию.)
+let inkClock = 0;
+const inkMotion = rand => ({ dur: (4.5 + rand() * 3).toFixed(2), begin: (-rand() * 8 - inkClock).toFixed(2) });
 
 /** Формы для animate: первая повторяется в конце, чтобы цикл замкнулся */
 const inkValues = forms => [...forms, forms[0]].join(';');
+
+/* Карта лежит перед зрителем трапецией: ближний край (Вход) широкий и крупный, дальний (Босс) узкий и мелкий.
+ * depth — 0 у нижнего края, 1 у верхнего; scale — во сколько раз уменьшены значки, подписи и штрихи */
+const FAR_SCALE = 0.62;
+const depthScale = y => 1 - (1 - FAR_SCALE) * Math.min(1, Math.max(0, (94 - y) / 86));
+function toTrapezoid(x, depth) {
+    const y = 94 - 86 * depth * (1.35 - 0.35 * depth); // ряды сближаются к дальнему краю
+    return { x: 50 + (x - 50) * depthScale(y), y, k: depthScale(y) };
+}
 
 function seededRandom(text) {
     let h = 1779033703 ^ text.length;
@@ -274,8 +286,8 @@ function brushRing(rand, { radius = 36, width = 6, turns = 1.12 } = {}) {
         for (let i = 0; i <= steps; i++) {
             const t = i / steps, angle = start + shift * 0.12 + t * turns * Math.PI * 2;
             const r = radius + 2.2 * Math.sin(angle * 2 + wobbleA + shift) + 1.2 * Math.sin(angle * 3 + wobbleB - shift * 1.4) + t * 3;
-            // Нажим: резкое начало, долгий хвост
-            const w = width * (1 + 0.12 * Math.sin(shift * 2 + t * 5)) * Math.min(1, t * 6) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.1)));
+            // Нажим: резкое начало, долгий хвост. Концы не сходят в ноль — иначе тонкий хвост то появляется, то пропадает
+            const w = width * (1 + 0.08 * Math.sin(shift * 2 + t * 5)) * (0.35 + 0.65 * Math.min(1, t * 6)) * (0.45 + 0.55 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.1)));
             outer.push(`${fmt(50 + Math.cos(angle) * (r + w / 2))} ${fmt(50 + Math.sin(angle) * (r + w / 2))}`);
             inner.push(`${fmt(50 + Math.cos(angle) * (r - w / 2))} ${fmt(50 + Math.sin(angle) * (r - w / 2))}`);
         }
@@ -284,13 +296,13 @@ function brushRing(rand, { radius = 36, width = 6, turns = 1.12 } = {}) {
     return Array.from({ length: INK_FORMS }, (_, i) => form(i * 1.1));
 }
 
-/** Те же рисунки, но каждое число чуть сдвинуто: флаги дуг (4-й и 5-й параметры команды A) не трогаются */
+/** Те же рисунки, но каждое число чуть сдвинуто. Дуги не трогаются: почти замкнутая дуга от малейшего сдвига
+ *  конца перескакивает на другую сторону, и круг рвётся */
 function jitterPath(d, rand, amount) {
-    let command = '', index = 0;
+    let command = '';
     return d.replace(/[a-zA-Z]|-?\d*\.?\d+/g, token => {
-        if (/[a-zA-Z]/.test(token)) { command = token; index = 0; return token; }
-        const param = index++;
-        if (/a/i.test(command) && [3, 4].includes(param % 7)) return token;
+        if (/[a-zA-Z]/.test(token)) { command = token; return token; }
+        if (/a/i.test(command)) return token;
         return fmt(parseFloat(token) + (rand() - 0.5) * 2 * amount);
     });
 }
@@ -334,7 +346,7 @@ function placeDoodles(rand, nodeCoords, edgePoints) {
         const d = DOODLES[pool.pop()];
         placed.push({
             ...p, d, values: inkValues(Array.from({ length: INK_FORMS }, () => jitterPath(d, rand, 0.9))), ...inkMotion(rand),
-            size: Math.round(48 + rand() * 26), turn: Math.round(rand() * 40 - 20)
+            size: Math.round((48 + rand() * 26) * depthScale(p.y)), turn: Math.round(rand() * 40 - 20)
         });
     }
     return placed;
@@ -391,10 +403,11 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         // Координаты в процентах поля: Вход внизу, Босс вверху
         const coords = {};
         rows.forEach((row, r) => {
-            const y = 92 - (r / Math.max(1, rows.length - 1)) * 82;
-            row.forEach((node, c) => { coords[node.id] = { x: 12 + ((c + 0.5) / row.length) * 76, y }; });
+            const depth = r / Math.max(1, rows.length - 1);
+            row.forEach((node, c) => { coords[node.id] = toTrapezoid(6 + ((c + 0.5) / row.length) * 88, depth); });
         });
 
+        inkClock = performance.now() / 1000;
         // Зерно — сама карта: перерисовка и другие клиенты видят тот же набросок
         const seed = `${floor}|${nodes.map(n => `${n.id}${n.type}${n.next.join(',')}`).join(';')}`;
         const look = node => ({ color: MAP_DATA.COLORS[node.type] ?? node.color, icon: MAP_DATA.ICONS[node.type] ?? node.icon, label: MAP_DATA.LABELS[node.type] ?? node.label });
@@ -410,7 +423,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             const rand = seededRandom(`${seed}|ring|${node.id}|${state}`);
             const forms = RINGS[state] ? brushRing(rand, RINGS[state]) : null;
             const ring = forms ? { d: forms[0], values: inkValues(forms), ...inkMotion(rand) } : null;
-            return { id: node.id, ...coords[node.id], ...look(node), cls: `${state} type-${node.type}`, ring, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
+            return { id: node.id, ...coords[node.id], k: coords[node.id].k.toFixed(3), ...look(node), cls: `${state} type-${node.type}`, ring, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
         });
 
         // Пути: пройденный — двойная линия, будто обведён дважды; доступный — крупный пунктир; остальные — бледные точки
@@ -419,11 +432,12 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             const rand = seededRandom(`${seed}|edge|${node.id}|${nextId}`);
             const traversed = visited.has(node.id) && visited.has(nextId);
             const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
-            const lines = [sketchLine(coords[node.id], coords[nextId], rand)];
-            if (traversed) lines.push(sketchLine(coords[node.id], coords[nextId], rand, { wobble: 3 }));
+            const k = (coords[node.id].k + coords[nextId].k) / 2;
+            const lines = [sketchLine(coords[node.id], coords[nextId], rand, { trim: 38 * k, wobble: 3.5 * k, flow: 3.5 * k })];
+            if (traversed) lines.push(sketchLine(coords[node.id], coords[nextId], rand, { trim: 38 * k, wobble: 3 * k, flow: 3.5 * k }));
             edgePoints.push(...lines[0].points);
             const strokes = lines.map(line => ({ d: line.forms[0], values: inkValues(line.forms), ...inkMotion(rand) }));
-            return { strokes, cls: traversed ? 'traversed' : open ? 'open' : 'faint' };
+            return { strokes, k: k.toFixed(3), cls: traversed ? 'traversed' : open ? 'open' : 'faint' };
         }));
         context.doodles = placeDoodles(seededRandom(`${seed}|doodles`), Object.values(coords), edgePoints);
 
@@ -435,16 +449,23 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         return context;
     }
 
-    // Перерисовка поля не должна перезапускать течение чернил: часы каждого SVG ставятся на общее время страницы,
-    // и линии продолжают движение с того же места
+    // Перерисовка поля не должна перезапускать движение: покачивание значков ставится на время страницы,
+    // как и начало течения чернил (inkClock)
     _onRender(context, options) {
         super._onRender(context, options);
         const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        const now = performance.now() / 1000;
-        for (const svg of this.element.querySelectorAll('.gd-map-board svg.gd-ink')) {
-            if (still) { svg.setCurrentTime?.(0); svg.pauseAnimations?.(); }
-            else svg.setCurrentTime?.(now);
+        const now = performance.now();
+        if (still) {
+            this.element.querySelectorAll('.gd-map-board svg.gd-ink').forEach(svg => svg.pauseAnimations?.());
+            return;
         }
+        this.element.querySelectorAll('.gd-map-mark i').forEach((icon, index) => {
+            const sway = icon.animate(
+                [{ transform: 'rotate(-3deg) translateY(1px)' }, { transform: 'rotate(3deg) translateY(-1px)' }],
+                { duration: 4800 + (index % 3) * 850, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' }
+            );
+            sway.currentTime = now + index * 1700;
+        });
     }
 
     static async #onGenerate() {
