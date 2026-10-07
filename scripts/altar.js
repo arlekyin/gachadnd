@@ -71,7 +71,7 @@ const LIVE_PARTS = ['horses', 'chalice', 'party'];
 // Кони стоят по диагоналям вокруг постамента и смотрят на него: левые — вправо, правые — влево
 const HORSE_SEATS = [
     { x: 17, y: 24, facing: 'right' }, { x: 83, y: 24, facing: 'left' },
-    { x: 17, y: 68, facing: 'right' }, { x: 83, y: 68, facing: 'left' }
+    { x: 17, y: 64, facing: 'right' }, { x: 83, y: 64, facing: 'left' }
 ];
 const STATUS_LABELS = {
     absent: () => 'Пасть пуста — этот всадник уже в отряде',
