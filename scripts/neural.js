@@ -209,8 +209,8 @@ export class NeuralBackground {
             const at = this.#curve(link.a, link.b, link.bend);
             const color = rgba(link.color, 0.07 + link.tier * 0.04);
             const width = 1.4 + link.tier * 0.7;
-            this.#taper(ctx, at, 0.06, 0.5, width, 0.6, color);
-            this.#taper(ctx, at, 0.94, 0.5, width, 0.6, color);
+            this.#taper(ctx, at, 0, 0.5, width, 0.6, color);
+            this.#taper(ctx, at, 1, 0.5, width, 0.6, color);
         }
 
         for (const n of this.neurons) {
@@ -219,7 +219,7 @@ export class NeuralBackground {
             for (const br of n.branches) {
                 const ex = x + Math.cos(br.ang) * br.len, ey = y + Math.sin(br.ang) * br.len;
                 const at = quad(x, y, x + Math.cos(br.ang + br.bend) * br.len * 0.55, y + Math.sin(br.ang + br.bend) * br.len * 0.55, ex, ey);
-                this.#taper(ctx, at, 0.15, 1, n.active ? 1.8 : 1, 0.2, color);
+                this.#taper(ctx, at, 0, 1, n.active ? 2 : 1.1, 0.2, color);
                 if (br.fork !== null) {
                     const [fx, fy] = at(0.6);
                     const angle = br.ang + br.fork, length = br.len * 0.45;
@@ -272,8 +272,8 @@ export class NeuralBackground {
                 const at = this.#curve(link.a, link.b, link.bend);
                 const color = rgba('#ff5a46', (0.1 + link.tier * 0.04) * on);
                 const width = 1.4 + link.tier * 0.7;
-                this.#taper(ctx, at, 0.06, 0.5, width, 0.6, color);
-                this.#taper(ctx, at, 0.94, 0.5, width, 0.6, color);
+                this.#taper(ctx, at, 0, 0.5, width, 0.6, color);
+                this.#taper(ctx, at, 1, 0.5, width, 0.6, color);
             }
         }
 
@@ -308,11 +308,24 @@ export class NeuralBackground {
             }
         }
 
-        // Ядра: экипированные медленно дышат цветом редкости, спящие — тусклые
+        // Ядра: экипированные плавно пульсируют цветом редкости — мягкий ореол расходится и сходится,
+        // ядро чуть разгорается; спящие тусклые и дышат едва заметно. Отростки и связи выходят из центра ядра
         for (const n of this.neurons) {
             const x = n.x * w, y = n.y * h;
-            const breath = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 1600 + n.phase);
-            const r = n.active ? 12 + breath * 3 : 7;
+            // Синус в квадрате: долгая пауза в покое и мягкий подъём — пульс, а не мигание
+            const wave = still ? 0.5 : Math.sin(now / 2400 + n.phase) ** 2;
+            if (n.active) {
+                const halo = 16 + wave * 14;
+                const hg = ctx.createRadialGradient(x, y, 0, x, y, halo);
+                hg.addColorStop(0, rgba(n.color, 0.1 + wave * 0.08));
+                hg.addColorStop(1, rgba(n.color, 0));
+                ctx.fillStyle = hg;
+                ctx.beginPath();
+                ctx.arc(x, y, halo, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            const breath = wave;
+            const r = n.active ? 11 + breath * 4 : 6 + breath;
             const g = ctx.createRadialGradient(x, y, 0, x, y, r);
             if (n.active) {
                 g.addColorStop(0, rgba('#ffffff', 0.32 + breath * 0.08));
