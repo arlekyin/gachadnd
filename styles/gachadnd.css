@@ -326,6 +326,8 @@
      и не перерисовывает неон и перелив внутри — иначе они дёргались и тормозили */
   transform: translateY(0);
   will-change: transform;
+  /* двойное нажатие экипирует — без выделения подписи */
+  user-select: none;
 }
 .gachadnd-terminal .gd-tcard:hover { filter: saturate(0.8) brightness(0.9); transform: translateY(-2px); }
 .gachadnd-terminal .gd-tcard.equipped:hover { filter: none; }

@@ -161,6 +161,13 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _onFirstRender(context, options) {
         super._onFirstRender?.(context, options);
+        // Двойное нажатие на карту колоды — экипировать или снять (большая карта по нажатию открывает лист)
+        this.element.addEventListener('dblclick', event => {
+            const card = event.target.closest('.gd-tcard[data-item-id]');
+            if (!card || card.classList.contains('empty')) return;
+            event.preventDefault();
+            MemoryTerminal.#onToggleEquip.call(this, event, card);
+        });
         document.addEventListener('pointerdown', this.#onPointerDown, true);
         document.addEventListener('visibilitychange', this.#onVisibility);
     }
@@ -184,8 +191,8 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         const actor = this.actor;
         const naturalCap = naturalSlotCap(actor);
 
-        const memory = actor.items.filter(isMemorySkill)
-            .sort((a, b) => (b.flags[MODULE_ID].is_active ? 1 : 0) - (a.flags[MODULE_ID].is_active ? 1 : 0) || a.name.localeCompare(b.name));
+        // Колода — по алфавиту: карта не прыгает по колоде при экипировке и снятии
+        const memory = actor.items.filter(isMemorySkill).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
         const equipped = memory.filter(i => i.flags[MODULE_ID].is_active);
         const absoluteCap = naturalCap + getSlotBonus(equipped);
 
