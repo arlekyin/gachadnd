@@ -13,7 +13,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getSynergyDictionary } from '../scripts/synergy-data.js';
 
 const JOURNALS = [
     { dir: 'player', pack: 'gacha-rules', name: 'Правила Лабиринта' },
@@ -100,13 +99,13 @@ export function markdown(source, generators = {}) {
 // ВСТАВКИ ИЗ ДАННЫХ МОДУЛЯ
 // ==========================================
 
-function makeGenerators({ items, risks }) {
+function makeGenerators({ items, risks, synergyDictionary }) {
     const skills = items.map(i => i.item);
     const link = item => `@UUID[Compendium.gachadnd.gacha-skills.Item.${item._id}]{${esc(item.name)}}`;
 
     return {
         tags() {
-            const dictionary = getSynergyDictionary('СЛ');
+            const dictionary = synergyDictionary;
             return Object.entries(dictionary).map(([tag, config]) => `<h3>${esc(tag)}</h3>` + table([
                 ['Навыков', 'Синергия', 'Эффект'],
                 ...config.thresholds.map(t => [String(t.count), esc(t.name), esc(t.desc ?? '')])
@@ -161,8 +160,8 @@ function makeGenerators({ items, risks }) {
 // СБОРКА
 // ==========================================
 
-export function buildRules({ srcDir, distDir, items, risks, stableId }) {
-    const generators = makeGenerators({ items, risks });
+export function buildRules({ srcDir, distDir, items, risks, stableId, synergyDictionary }) {
+    const generators = makeGenerators({ items, risks, synergyDictionary });
     const built = [];
     for (const journal of JOURNALS) {
         const dir = path.join(srcDir, journal.dir);

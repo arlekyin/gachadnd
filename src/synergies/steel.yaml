@@ -1,0 +1,26 @@
+tag: сталь
+key: steel
+icon: icons/svg/shield.svg
+tiers:
+  - count: 2
+    name: Закалка
+    description: Вы получаете +1 к КД и +1 к броскам атаки и урона оружием. Действует автоматически.
+    changes:
+      - { key: system.attributes.ac.bonus, mode: add, value: '+1' }
+      - { key: system.bonuses.mwak.attack, mode: add, value: '+1' }
+      - { key: system.bonuses.mwak.damage, mode: add, value: '+1' }
+      - { key: system.bonuses.rwak.attack, mode: add, value: '+1' }
+      - { key: system.bonuses.rwak.damage, mode: add, value: '+1' }
+  - count: 4
+    name: Мастерское парирование
+    description: Реакцией, когда по вам попадает атака ближнего боя, добавьте бонус мастерства к КД против этой атаки. Если атака из-за этого промахивается, вы совершаете по атакующему одну атаку оружием.
+  - count: 6
+    name: Стальной вихрь
+    description: 1 раз до долгого отдыха действием совершите атаку оружием по каждому врагу в пределах 10 футов. Каждый враг, по которому вы попали, получает дополнительно 4d8 урона и совершает спасбросок Силы против универсальной Сложности. При провале его отталкивает на 10 футов, сбивает с ног, и он роняет оружие.
+    feature:
+      activation: action
+      uses: 1
+      recovery: long
+      target: { type: radius, value: 10 }
+      save: { ability: str, on_save: full }
+      damage: [{ formula: 4d8, type: slashing }]
