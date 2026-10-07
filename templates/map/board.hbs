@@ -1,9 +1,10 @@
 <section class="gd-map-board {{#unless hasMap}}empty{{/unless}}">
-    {{!-- Кадры «живых чернил»: один шум, три зерна. Смещение в пикселях, поэтому одинаковое для путей и рисунков --}}
+    {{!-- Кадры «живых чернил»: один шум, три зерна. Смещение в пикселях, поэтому одинаковое для путей и рисунков.
+         Размытие и порог по прозрачности дают края расплывшихся чернил: штрих набухает, концы скругляются каплей --}}
     <svg class="gd-map-defs" width="0" height="0" aria-hidden="true">
-        <filter id="gd-ink-0" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
-        <filter id="gd-ink-1" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
-        <filter id="gd-ink-2" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="27"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
+        <filter id="gd-ink-0" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="0.7"/><feComponentTransfer><feFuncA type="table" tableValues="0 0 1 1"/></feComponentTransfer></filter>
+        <filter id="gd-ink-1" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="0.7"/><feComponentTransfer><feFuncA type="table" tableValues="0 0 1 1"/></feComponentTransfer></filter>
+        <filter id="gd-ink-2" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="27"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="0.7"/><feComponentTransfer><feFuncA type="table" tableValues="0 0 1 1"/></feComponentTransfer></filter>
     </svg>
     {{#if hasMap}}
     {{#each boil}}

@@ -368,9 +368,9 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
 
         // Отряд обведён толстым мазком, пройденные узлы — тонким, доступные — небрежной незамкнутой петлёй
         const RINGS = {
-            current: { radius: 34, width: 7, turns: 1.18 },
-            visited: { radius: 33, width: 2.6, turns: 1.05 },
-            reachable: { radius: 34, width: 2, turns: 0.82 }
+            current: { radius: 34, width: 9, turns: 1.18 },
+            visited: { radius: 33, width: 4.5, turns: 1.05 },
+            reachable: { radius: 34, width: 3.6, turns: 0.82 }
         };
         context.nodes = nodes.map(node => {
             const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
