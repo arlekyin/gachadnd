@@ -641,12 +641,13 @@
 .gachadnd-terminal .fx-equip { animation: gd-fx-equip 0.7s ease-out 1 !important; }
 
 /* Снятие: карта гаснет и осыпается */
+/* Снятие: карта плавно гаснет до обычного вида неэкипированной, без провала в серое */
 @keyframes gd-fx-unequip {
-  0% { filter: brightness(1.4); transform: translateY(0); }
-  50% { filter: grayscale(1) brightness(0.5); transform: translateY(3px); }
+  0% { filter: brightness(1.25); transform: translateY(0); }
+  35% { transform: translateY(3px); }
   100% { filter: saturate(0.35) brightness(0.65); transform: translateY(0); }
 }
-.gachadnd-terminal .fx-unequip { animation: gd-fx-unequip 0.6s ease-in 1 !important; }
+.gachadnd-terminal .fx-unequip { animation: gd-fx-unequip 0.7s ease-out 1 !important; }
 
 /* Слияние: золотой взрыв */
 @keyframes gd-fx-merge {
@@ -961,9 +962,11 @@
 @keyframes gd-mist { from { transform: translate(0, 0) scale(1); } to { transform: translate(12%, 6%) scale(1.15); } }
 
 /* Левая колонка: название, описание, дуга ритуалов, теги Резонанса */
-.gachadnd-memory-altar .gd-part-side { display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px 0 24px 28px; }
+/* Дуга ритуалов стоит на одном месте при любом ритуале: колонка выравнивается от верха,
+   у описания постоянная высота, теги Резонанса добавляются ниже дуги и её не сдвигают */
+.gachadnd-memory-altar .gd-part-side { display: flex; flex-direction: column; justify-content: flex-start; gap: 14px; padding: clamp(24px, 24vh, 260px) 0 24px 28px; }
 .gachadnd-memory-altar .gd-part-side h1 { margin: 0; border: none; font-size: 28px; letter-spacing: 0.18em; text-transform: uppercase; color: #eef3f1; text-shadow: 0 0 18px var(--glow), 0 2px 4px #000; }
-.gachadnd-memory-altar .gd-subtitle { color: #a9bbb6; font-size: 13px; line-height: 1.4; max-width: 250px; }
+.gachadnd-memory-altar .gd-subtitle { color: #a9bbb6; font-size: 13px; line-height: 1.4; max-width: 250px; min-height: 5.6em; }
 .gachadnd-memory-altar .gd-glyphs { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 10px 0; }
 .gachadnd-memory-altar .gd-glyph:nth-child(2),
 .gachadnd-memory-altar .gd-glyph:nth-child(3) { transform: translateX(-14px); }
