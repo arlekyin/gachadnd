@@ -644,21 +644,19 @@
   transform: translate(-50%, -50%);
   animation:
     gd-arcana-drift-back 17s ease-in-out var(--gd-phase-drift, 0ms) infinite,
-    gd-arcana-flash 26s ease-in-out var(--gd-phase-flash, 0ms) infinite;
+    gd-arcana-flash 11s ease-in-out var(--gd-phase-flash, 0ms) infinite;
 }
 /* Карты не в такт: постоянный сдвиг к общей фазе */
 .gachadnd-terminal .gd-tcard:nth-child(3n + 1) > .gd-neon::before { animation-delay: calc(var(--gd-phase-drift, 0ms) - 4.1s), calc(var(--gd-phase-flicker, 0ms) - 1.7s); }
 .gachadnd-terminal .gd-tcard:nth-child(3n + 2) > .gd-neon::before { animation-delay: calc(var(--gd-phase-drift, 0ms) - 8.7s), calc(var(--gd-phase-flicker, 0ms) - 3.4s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 1) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 6s), calc(var(--gd-phase-flash, 0ms) - 8s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 2) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 11s), calc(var(--gd-phase-flash, 0ms) - 14s); }
-.gachadnd-terminal .gd-tcard:nth-child(4n + 3) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 2.5s), calc(var(--gd-phase-flash, 0ms) - 20s); }
-/* Перелив самой карты: картинка экипированной карты подсвечена цветом кромки. Подсветка неровно дышит
-   вместе с неоном, а изредка по картинке наискось проходит отсвет. Только прозрачность и сдвиг слоёв */
-.gachadnd-terminal .gd-bigcard-art { position: relative; }
-.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art,
-.gachadnd-terminal .gd-bigcard.equipped .gd-bigcard-art { overflow: hidden; }
-.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::before,
-.gachadnd-terminal .gd-bigcard.equipped .gd-bigcard-art::before {
+.gachadnd-terminal .gd-tcard:nth-child(4n + 1) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 6s), calc(var(--gd-phase-flash, 0ms) - 3.1s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 2) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 11s), calc(var(--gd-phase-flash, 0ms) - 6.3s); }
+.gachadnd-terminal .gd-tcard:nth-child(4n + 3) > .gd-neon::after { animation-delay: calc(var(--gd-phase-drift, 0ms) - 2.5s), calc(var(--gd-phase-flash, 0ms) - 8.6s); }
+/* Перелив карт колоды: картинка экипированной карты изредка медленно наливается цветом кромки и гаснет,
+   а иногда по ней по диагонали проходит отсвет. Выбранная карта в центре не переливается — её смотрят.
+   Только прозрачность и сдвиг слоёв */
+.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art { overflow: hidden; }
+.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -668,13 +666,12 @@
     radial-gradient(ellipse at 50% 110%, rgba(95, 224, 184, 0.35), transparent 60%),
     linear-gradient(180deg, rgba(95, 224, 184, 0.16), rgba(95, 224, 184, 0.06) 45%, rgba(95, 224, 184, 0.2));
   will-change: opacity;
-  animation: gd-arcana-wash 5.3s ease-in-out var(--gd-phase-flicker, 0ms) infinite;
+  animation: gd-arcana-wash 23s ease-in-out var(--gd-phase-wash, 0ms) infinite;
 }
 /* Отсвет: мягкая полоса в тоне кромки проходит по диагонали картинки — от левого верхнего угла
    к правому нижнему. Слой втрое больше картинки и тех же пропорций, полоса лежит поперёк его диагонали,
    поэтому сдвиг на треть по обеим осям ведёт её ровно по диагонали карты */
-.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::after,
-.gachadnd-terminal .gd-bigcard.equipped .gd-bigcard-art::after {
+.gachadnd-terminal .gd-tcard.equipped .gd-tcard-art::after {
   content: "";
   position: absolute;
   inset: -100%;
@@ -686,18 +683,21 @@
   will-change: transform, opacity;
   animation: gd-arcana-sheen 26s ease-in-out var(--gd-phase-sheen, 0ms) infinite;
 }
-.gachadnd-terminal .gd-tcard:nth-child(3n + 1) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-flicker, 0ms) - 1.7s); }
-.gachadnd-terminal .gd-tcard:nth-child(3n + 2) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-flicker, 0ms) - 3.4s); }
+.gachadnd-terminal .gd-tcard:nth-child(3n + 1) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-wash, 0ms) - 8s); }
+.gachadnd-terminal .gd-tcard:nth-child(3n + 2) .gd-tcard-art::before { animation-delay: calc(var(--gd-phase-wash, 0ms) - 15s); }
 .gachadnd-terminal .gd-tcard:nth-child(4n + 1) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 7s); }
 .gachadnd-terminal .gd-tcard:nth-child(4n + 2) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 15s); }
 .gachadnd-terminal .gd-tcard:nth-child(4n + 3) .gd-tcard-art::after { animation-delay: calc(var(--gd-phase-sheen, 0ms) - 21s); }
-/* Подсветка картинки — тот же неровный ритм, что у неона, но мягче */
+/* Подсветка картинки: почти всё время едва заметна; раз в 23 секунды около 8 секунд медленно
+   наливается цветом кромки, чуть проседает, снова поднимается и плавно гаснет */
 @keyframes gd-arcana-wash {
-  0% { opacity: 0.75; } 6% { opacity: 0.5; } 9% { opacity: 0.85; } 15% { opacity: 0.6; } 22% { opacity: 0.95; }
-  29% { opacity: 0.55; } 32% { opacity: 0.8; } 40% { opacity: 0.45; } 51% { opacity: 0.9; } 57% { opacity: 0.6; }
-  60% { opacity: 0.75; } 69% { opacity: 0.42; } 75% { opacity: 0.85; } 83% { opacity: 0.55; } 89% { opacity: 0.95; }
-  95% { opacity: 0.65; } 100% { opacity: 0.75; }
+  0%, 62% { opacity: 0.25; }
+  72% { opacity: 0.9; }
+  79% { opacity: 0.6; }
+  86% { opacity: 0.8; }
+  97%, 100% { opacity: 0.25; }
 }
+
 /* Отсвет проходит редко — раз в 26 секунд, около 3 секунд; остальное время его нет */
 @keyframes gd-arcana-sheen {
   0%, 86% { opacity: 0; transform: translate(-33.4%, -33.4%); }
@@ -733,15 +733,9 @@
   60% { opacity: 0.8; } 69% { opacity: 0.48; } 75% { opacity: 0.88; } 83% { opacity: 0.62; } 89% { opacity: 0.95; }
   95% { opacity: 0.7; } 100% { opacity: 0.8; }
 }
-/* Перелив цветом редкости: редкое событие — раз в 26 секунд, около 6 секунд. Внутри него свет
-   медленно нарастает, проседает и снова поднимается — два-три плавных колебания, не мигание */
 @keyframes gd-arcana-flash {
-  0%, 74% { opacity: 0; }
-  79% { opacity: 0.7; }
-  83% { opacity: 0.38; }
-  88% { opacity: 0.62; }
-  92% { opacity: 0.3; }
-  97%, 100% { opacity: 0; }
+  0%, 55% { opacity: 0; } 61% { opacity: 0.75; } 64% { opacity: 0.4; } 68% { opacity: 0.85; }
+  74% { opacity: 0.3; } 79% { opacity: 0.5; } 86%, 100% { opacity: 0; }
 }
 
 /* Терминал не в фокусе — все анимации на паузе */
@@ -783,8 +777,6 @@
   .gachadnd-terminal .gd-neon::after,
   .gachadnd-terminal .gd-tcard-art::before,
   .gachadnd-terminal .gd-tcard-art::after,
-  .gachadnd-terminal .gd-bigcard-art::before,
-  .gachadnd-terminal .gd-bigcard-art::after,
   .gachadnd-terminal .fx-equip,
   .gachadnd-terminal .fx-unequip,
   .gachadnd-terminal .fx-merge { animation: none !important; }
