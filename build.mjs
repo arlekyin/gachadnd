@@ -12,6 +12,7 @@ import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/recovery.js';
 import { validateRisk } from './scripts/risk-schema.js';
 import { buildRules } from './tools/rules.mjs';
+import { buildBestiary } from './tools/bestiary.mjs';
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
 const DIST_DIR = './dist/packs/gacha-skills';
@@ -868,7 +869,7 @@ fs.writeFileSync(RISK_OUT, JSON.stringify(risks, null, 2) + '\n', 'utf8');
 
 // Базы компендиумов (LevelDB) полностью собираются из dist: старая база удаляется перед упаковкой,
 // иначе неполная или повреждённая база (например, после git pull) не откроется. Мир должен быть закрыт.
-for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm']) {
+for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm', 'gacha-bestiary']) {
     try {
         fs.rmSync(path.join('./packs', pack), { recursive: true, force: true });
     } catch (e) {
@@ -876,6 +877,9 @@ for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm']) {
         process.exit(1);
     }
 }
+
+// Бестиарий: существа Лабиринта
+const creatures = buildBestiary({ distDir: './dist/packs', stableId });
 
 // Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
 let journals = [];
@@ -886,4 +890,4 @@ try {
     process.exit(1);
 }
 
-console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);
+console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, существ — ${creatures.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);

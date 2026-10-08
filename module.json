@@ -51,6 +51,18 @@
         "TRUSTED": "NONE",
         "ASSISTANT": "OWNER"
       }
+    },
+    {
+      "name": "gacha-bestiary",
+      "label": "Gacha: Бестиарий Лабиринта",
+      "path": "packs/gacha-bestiary",
+      "type": "Actor",
+      "system": "dnd5e",
+      "ownership": {
+        "PLAYER": "NONE",
+        "TRUSTED": "NONE",
+        "ASSISTANT": "OWNER"
+      }
     }
   ],
   "relationships": {
