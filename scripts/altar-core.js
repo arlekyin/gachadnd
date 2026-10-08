@@ -8,11 +8,14 @@
  * естественного лимита) сжимает облако, гасит свои волокна и делает вращение беспокойным.
  *
  * Ритуалы не перекрашивают ядро, а меняют его поведение:
- *   Слияние     — пряди кольца тянутся до ядра (AltarSynapses); нить навыка, принявшего повтор, утолщается;
+ *   Слияние     — навыки стоят на кольце, их пряди тянутся до ядра (AltarSynapses), в облаке их нитей нет;
+ *                 при уходе со Слияния навыки перетекают в кольца вокруг ядра, при возврате — обратно;
+ *                 нить навыка, принявшего повтор, утолщается;
  *   Переплавка  — ядро и облако раскаляются с каждым воспоминанием в гнезде;
  *   Резонанс    — облако не меняется, к тегу тянутся только пряди от ядра (ResonanceWeave);
- *   Расщепление — белая нить медленно окрашивается цветом кристалла (без кристалла — цветом ритуала),
- *                 отрывается, распускается и уходит в туман; на её месте из темноты проявляется новая.
+ *   Расщепление — в простое отрывается любая нить, своя или навыка, в своём цвете; кристалл в фокусе
+ *                 сперва окрашивает собственную нить в свой цвет. Нить распускается и уходит в туман,
+ *                 на её месте из темноты проявляется новая.
  *
  * Экземпляр живёт дольше холста: слой ядра перерисовывается при каждом изменении, а облако
  * продолжает движение на новом холсте (attach). Холст — квадрат вокруг ядра, а не всё окно:
@@ -99,7 +102,10 @@ export class MindCore {
      * @param {object} data  Состояние сознания из модели Алтаря (core в контексте).
      */
     attach(canvas, stage, data) {
-        if (data.ritual !== this.data?.ritual) this.since = performance.now();
+        // Слияние: навыки стоят на кольце, в облаке их нитей нет. Остальные ритуалы: навыки перетекают
+        // в кольца вокруг ядра. При первом показе — сразу в нужном состоянии, без перетекания
+        this.wovenTarget = data.ritual === 'merge' ? 0 : 1;
+        if (!this.data || this.reducedMotion) this.woven = this.wovenTarget;
         if (data.ritual !== this.data?.ritual || data.split?.key !== this.data?.split?.key) this.cycleStart = performance.now();
         this.canvas = canvas;
         this.stage = stage;
@@ -133,7 +139,7 @@ export class MindCore {
     }
 
     #resize() {
-        const size = this.canvas.offsetWidth || 780;
+        const size = this.canvas.offsetWidth || 900;
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         this.size = size;
         if (this.canvas.width !== Math.round(size * ratio)) {
@@ -146,6 +152,7 @@ export class MindCore {
         this.threads = this.data.threads.map(th => ({
             ...th,
             color: rgb(th.color),
+            px: (th.x - cx) / 100 * width, py: (th.y - cy) / 100 * height,
             ang: Math.atan2((th.y - cy) / 100 * height, (th.x - cx) / 100 * width)
         }));
         for (const th of this.threads) {
@@ -198,75 +205,112 @@ export class MindCore {
         ctx.fillRect(0, 0, S, S);
 
 
-        // Расщепление: нить облака окрашивается цветом кристалла, распускается, на её месте — новая
-        let splitSlot = -1, regrowSlot = -1, sp = 0;
-        const crystal = d.ritual === 'split' ? rgb(d.split?.color ?? d.glow) : null;
-        if (crystal) {
+        // Перетекание навыков между кольцом Слияния и облаком: около секунды
+        const dt = Math.min(0.1, (now - (this.last ?? now)) / 1000);
+        this.last = now;
+        const dir = Math.sign(this.wovenTarget - this.woven);
+        this.woven = dir > 0 ? Math.min(1, this.woven + dt / 1.1) : Math.max(0, this.woven - dt / 1.1);
+        const w = this.woven;
+
+        // Расщепление: в простое отрывается любая нить — своя или нить навыка — в своём цвете;
+        // кристалл в фокусе сперва окрашивает собственную нить в свой цвет. На месте ушедшей — новая
+        let split = null, regrow = null, sp = 0;
+        const crystal = d.split ? rgb(d.split.color) : null;
+        if (d.ritual === 'split') {
             const elapsed = (now - this.cycleStart) / 1000;
             const cycle = Math.floor(elapsed / SPLIT_PERIOD);
             sp = (elapsed % SPLIT_PERIOD) / SPLIT_PERIOD;
-            splitSlot = (cycle * 7) % OWN_COUNT;
-            if (cycle > 0) regrowSlot = ((cycle - 1) * 7) % OWN_COUNT;
-            if (this.cycle !== cycle && regrowSlot >= 0) this.own[regrowSlot] = makeFiber(random(500 + cycle));
+            const pick = c => {
+                const total = OWN_COUNT + (crystal || w < 1 ? 0 : this.threads.length * 3);
+                const i = Math.floor(random(9000 + c)() * total);
+                return i < OWN_COUNT ? { own: i } : { id: this.threads[Math.floor((i - OWN_COUNT) / 3)].id, j: (i - OWN_COUNT) % 3 };
+            };
+            split = pick(cycle);
+            if (cycle > 0) regrow = pick(cycle - 1);
+            if (this.cycle !== cycle && regrow) {
+                if (regrow.own !== undefined) this.own[regrow.own] = makeFiber(random(500 + cycle));
+                else if (this.rings.has(regrow.id)) this.rings.get(regrow.id)[regrow.j] = makeFiber(random(700 + cycle), [3, 4.6]);
+            }
             this.cycle = cycle;
         }
+        const unravel = sp ? smooth((sp - 0.42) / 0.38) : 0;
+        const leaving = 1 - smooth((sp - 0.6) / 0.32);
+        const arriving = smooth(sp / 0.4);
+        // Отрыв: нить целиком уходит наружу, дальний конец — быстрее, и распрямляется
+        const drift = (pt, f, u) => {
+            const a = f.start + tt * 0.15 + f.ax;
+            pt[0] += Math.cos(a) * unravel * (70 + 230 * u);
+            pt[1] += Math.sin(a) * unravel * (70 + 230 * u);
+        };
 
         const ownColor = mix(OWN, HOT, heat * 0.8);
         const steps = CHUNKS * SUB;
+        const base = (0.4 + 0.14 * beat) * ownDim * (0.6 + 0.4 * hd);
         this.own.forEach((f, idx) => {
-            const isSplit = idx === splitSlot;
-            const unravel = isSplit ? smooth((sp - 0.42) / 0.38) : 0;
+            const isSplit = split?.own === idx;
             const pts = [];
             for (let k = 0; k <= steps; k++) {
                 const u = k / steps;
-                const a = f.start + f.len * u * (1 - unravel * 0.7) + tt * 0.15;
+                const a = f.start + f.len * u * (1 - (isSplit ? unravel : 0) * 0.7) + tt * 0.15;
                 const p = fiberPoint(f, a, tt, scale * (1 + 0.02 * beat), 0);
-                let x = cx + p[0], y = cy + p[1];
-                if (unravel) {
-                    // Отрыв: нить целиком уходит наружу, дальний конец — быстрее, и распрямляется
-                    const dir = f.start + tt * 0.15 + f.ax;
-                    x += Math.cos(dir) * unravel * (70 + 230 * u);
-                    y += Math.sin(dir) * unravel * (70 + 230 * u);
-                }
-                pts.push([x, y, p[2]]);
+                const pt = [cx + p[0], cy + p[1], p[2]];
+                if (isSplit) drift(pt, f, u);
+                pts.push(pt);
             }
-            const base = (0.4 + 0.14 * beat) * ownDim * (0.6 + 0.4 * hd);
-            if (!isSplit) {
-                const fade = idx === regrowSlot ? smooth(sp / 0.4) : 1;
-                return this.#stroke(pts, ownColor, 1.3, base * fade);
-            }
-            // Окрашивание вдоль нити, нить ярче и толще; затем отрыв и угасание
+            if (!isSplit) return this.#stroke(pts, ownColor, 1.3, base * (regrow?.own === idx ? arriving : 1));
+            // Кристалл окрашивает нить вдоль; без кристалла нить лишь светлеет перед отрывом
             const dye = smooth((sp - 0.06) / 0.34);
-            const fade = 1 - smooth((sp - 0.6) / 0.32);
-            const color = u => mix(ownColor, crystal, smooth(dye * 1.5 - u * 0.5));
-            this.#stroke(pts, color, 1.3 + dye * 1.8, (base + dye * (1 - base)) * fade);
-            this.#stroke(pts, u => mix(crystal, WHITE, 0.6), 0.6 + dye * 0.6, dye * 0.5 * fade);
+            const color = crystal ? u => mix(ownColor, crystal, smooth(dye * 1.5 - u * 0.5)) : ownColor;
+            this.#stroke(pts, color, 1.3 + dye * (crystal ? 1.8 : 0.9), (base + dye * (1 - base) * (crystal ? 1 : 0.6)) * leaving);
+            if (crystal) this.#stroke(pts, mix(crystal, WHITE, 0.6), 0.6 + dye * 0.6, dye * 0.5 * leaving);
         });
 
         // Нити навыков: кольца вокруг ядра, кружат вместе с облаком; конец крепится к кромке ядра
-        // с той стороны, где навык стоит на кольце
+        // с той стороны, где навык стоит на кольце. При перетекании нить тянется из места навыка
+        // на кольце Слияния: первым приходит конец у ядра, хвост покидает место навыка последним
         const attach = [];
         for (const th of this.threads) {
+            if (w <= 0) break;
             const since = this.boosts.has(th.id) ? (now - this.boosts.get(th.id)) / 600 : 0;
             const boost = Math.min(1, since);
             const width = 0.9 + th.rank * 0.5 + boost * 1.2;
-            attach.push({ ang: th.ang, color: th.color, k: 0.55 + 0.15 * th.rank + boost * 0.3 });
+            attach.push({ ang: th.ang, color: th.color, k: (0.55 + 0.15 * th.rank + boost * 0.3) * smooth(w * 1.4 - 0.4) });
+            const nx = cx + th.px, ny = cy + th.py;
             this.rings.get(th.id)?.forEach((f, j) => {
+                const isSplit = split?.id === th.id && split.j === j;
                 const anchor = th.ang + (j - 1) * 0.16;
                 const ax = cx + Math.cos(anchor) * (NUCLEUS_R - 2), ay = cy + Math.sin(anchor) * (NUCLEUS_R - 2);
                 const pts = [];
                 for (let k = 0; k <= steps; k++) {
                     const u = k / steps;
-                    const a = f.start + f.len * u + tt * 0.15;
+                    const a = f.start + f.len * u * (1 - (isSplit ? unravel : 0) * 0.7) + tt * 0.15;
                     const p = fiberPoint(f, a, tt, scale * (1 - boost * 0.08), 0);
                     let x = cx + p[0], y = cy + p[1];
                     // Последняя пятая часть нити сходит с кольца к месту крепления на ядре
-                    const e = smooth((u - 0.78) / 0.22);
+                    const e = isSplit ? smooth((u - 0.78) / 0.22) * (1 - unravel) : smooth((u - 0.78) / 0.22);
                     x += (ax - x) * e; y += (ay - y) * e;
-                    pts.push([x, y, p[2] * (1 - e)]);
+                    const pt = [x, y, p[2] * (1 - e)];
+                    if (isSplit) drift(pt, f, u);
+                    if (w < 1) {
+                        const flow = smooth(w * 1.6 - (1 - u) * 0.6);
+                        pt[0] = nx + (pt[0] - nx) * flow;
+                        pt[1] = ny + (pt[1] - ny) * flow;
+                    }
+                    pts.push(pt);
                 }
-                this.#stroke(pts, u => mix(th.color, WHITE, Math.max(0, u - 0.6) * 0.8), width, 0.62 + 0.15 * beat);
+                const fade = isSplit ? leaving : regrow?.id === th.id && regrow.j === j ? arriving : 1;
+                this.#stroke(pts, u => mix(th.color, WHITE, Math.max(0, u - 0.6) * 0.8), width, (0.62 + 0.15 * beat) * fade);
             });
+            // Уходя со Слияния, навык исчезает с кольца сразу — на его месте гаснет сгусток, из которого
+            // вытекают нити
+            if (this.wovenTarget === 1 && w < 1) {
+                const r = 18 * (1 - w) + 4;
+                const blob = ctx.createRadialGradient(nx, ny, 0, nx, ny, r);
+                blob.addColorStop(0, rgba(mix(th.color, WHITE, 0.5), 0.9 * (1 - w)));
+                blob.addColorStop(1, rgba(th.color, 0));
+                ctx.fillStyle = blob;
+                ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2); ctx.fill();
+            }
         }
 
         this.#nucleus(cx, cy, t, beat, hd, heat, attach);
