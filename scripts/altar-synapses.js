@@ -11,6 +11,8 @@
  * Положения берутся из разметки узлов и ядра, поэтому холст всегда совпадает с ней.
  */
 
+import { NUCLEUS_R } from "./altar-core.js";
+
 // Импульсы рисуются в каждом кадре экрана, по его метке времени: неподвижное закэшировано, кадр дешёвый.
 // Часы в момент вызова и пропуск кадров давали неровный шаг — импульсы дёргались
 const SOMA_R = 18;
@@ -370,7 +372,8 @@ export class ResonanceWeave {
         for (let k = 0; k < 5; k++) {
             const f = k / 4 - 0.5;
             const startA = dir + f * 0.9;
-            const start = [core.x + Math.cos(startA) * core.r, core.y + Math.sin(startA) * core.r];
+            // Пряди выходят из кромки белого ядра, а не из края облака
+            const start = [core.x + Math.cos(startA) * NUCLEUS_R, core.y + Math.sin(startA) * NUCLEUS_R];
             // Вход на овал вокруг тега — со стороны ядра, пряди расходятся веером
             const entryA = dir + Math.PI + f * 1.4;
             const entry = [tag.x + Math.cos(entryA) * rx, tag.y + Math.sin(entryA) * ry];

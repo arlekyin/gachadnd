@@ -8,7 +8,9 @@
     {{#if ring}}<div class="gd-orbit"></div>
     {{!-- Связи кольца: пучки прядей к ядру и воронки между соседями (altar-synapses.js) --}}
     <canvas class="gd-synapses"></canvas>{{/if}}
-    <div class="gd-core" style="{{core.style}}"><i class="gd-core-heat"></i><span></span>{{#if ring}}<em>{{ring.filled}} / {{ring.cap}}</em>{{/if}}</div>
+    {{!-- Ядро сознания: белый центр, облако своих волокон, нити навыков (altar-core.js) --}}
+    <canvas class="gd-mind-core" style="{{core.style}}"></canvas>
+    <div class="gd-core" style="{{core.style}}">{{#if ring}}<em>{{ring.filled}} / {{ring.cap}}</em>{{/if}}</div>
     {{#each sockets}}<div class="gd-socket" style="{{style}}"></div>{{/each}}
     {{#each nodes}}
     <div class="gd-node {{cls}}" style="{{style}}" data-item-id="{{id}}" {{#if canMerge}}data-action="mergePick"{{/if}}>

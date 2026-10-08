@@ -29,6 +29,7 @@ import { isAtRest } from "./memory-api.js";
 import { onSocket, emit } from "./socket.js";
 import { MindPhysics } from "./mind-physics.js";
 import { AltarSynapses, ResonanceWeave } from "./altar-synapses.js";
+import { MindCore } from "./altar-core.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -38,6 +39,8 @@ const RARITY = {
     blue: { label: 'Синий', color: '#0070dd' },
     purple: { label: 'Фиолетовый', color: '#a335ee' }
 };
+// Нити навыков в ядре — и красные, и оранжевые: в ритуалах они не участвуют, но в сознании есть
+const THREAD_COLORS = { ...Object.fromEntries(Object.entries(RARITY).map(([k, r]) => [k, r.color])), red: '#ff003c', orange: '#ff8000' };
 const RITUAL_RARITIES = Object.keys(RARITY);
 const SMELT = { gray: { to: 'green', cost: 1 }, green: { to: 'blue', cost: 1 }, blue: { to: 'purple', cost: 2 } };
 const SPLIT = { green: 1, blue: 1, purple: 2 };
@@ -180,6 +183,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #physics = null;
     #synapses = null;
     #weave = new ResonanceWeave();
+    #mind = new MindCore();
     #flareId = null;
     #drift = new Map();
     #cards = new Map();
@@ -332,8 +336,9 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
 
         // Кольцо Памяти — только в Слиянии: гнёзда Предела разума, экипированные навыки по порядку
         const cap = naturalSlotCap(this.actor);
-        const equipped = merge ? memory.filter(i => i.flags[MODULE_ID].is_active) : [];
-        const sockets = Math.max(cap, equipped.length);
+        const active = memory.filter(i => i.flags[MODULE_ID].is_active);
+        const equipped = merge ? active : [];
+        const sockets = Math.max(cap, active.length);
         const orbitAt = n => {
             const angle = -Math.PI / 2 + (2 * Math.PI * n) / sockets;
             return { x: CORE.x + ORBIT.rx * Math.cos(angle), y: CORE.y + ORBIT.ry * Math.sin(angle) };
@@ -419,13 +424,25 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const wheel = this.ritual !== 'resonate' ? [] : tags.map((name, n) => {
             const angle = -Math.PI / 2 + (2 * Math.PI * n) / tags.length;
             const pos = { x: CORE.x + WHEEL.rx * Math.cos(angle), y: CORE.y + WHEEL.ry * Math.sin(angle) };
-            return { name, active: name === this.tag, style: at(pos) };
+            return { name, active: name === this.tag, pos, style: at(pos) };
         });
         // Переплавка накаляет ядро по мере заполнения гнёзд
         const heat = this.ritual === 'smelt' ? Math.min(1, slotted.reduce((sum, i) => sum + i.weight, 0) / 3) : 0;
+        // Ядро сознания: нити экипированных навыков крепятся с той стороны, где навык стоит на кольце
+        const activeTag = wheel.find(w => w.active);
+        const mind = {
+            ritual: this.ritual, at: CORE, heat, hd: hdValue, hdMax,
+            overload: Math.max(0, active.length - cap),
+            threads: active.map((item, n) => ({
+                id: item.id, rank: item.flags[MODULE_ID].rank ?? 1,
+                color: THREAD_COLORS[item.flags[MODULE_ID].rarity] ?? '#c9a75d', ...orbitAt(n)
+            })),
+            tagAt: activeTag ? activeTag.pos : null,
+            split: this.ritual === 'split' && slotted[0] ? { key: slotted[0].key, color: RARITY[slotted[0].rarity]?.color ?? '#c9a75d' } : null
+        };
 
         return {
-            ritual, recipe, motes, nodes, flows, focusEmpty, wheel,
+            ritual, recipe, motes, nodes, flows, focusEmpty, wheel, mind,
             forecast: this.#forecast(slotted, hdValue, hdMax, memory),
             shards: this.ritual === 'split' && slotted.length ? Array.from({ length: 10 }, (_, n) => ({ a: n * 36 + 8, d: (n % 5) * 0.32 })) : null,
             glyphs: Object.entries(RITUALS).map(([key, r]) => ({ key, ...r, active: key === this.ritual })),
@@ -466,6 +483,9 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             this.#synapses = canvas ? new AltarSynapses(canvas, this.#part('stage')) : null;
             this.#synapses?.start();
             if (this.#flareId) this.#synapses?.flare(this.#flareId);
+            if (this.#flareId) this.#mind.boost(this.#flareId);
+            const mindCanvas = this.#part('stage')?.querySelector('canvas.gd-mind-core');
+            if (mindCanvas) this.#mind.attach(mindCanvas, this.#part('stage'), context.mind);
             this.#flareId = null;
             // Пряди Резонанса переживают перерисовку: при смене тега втягиваются и прорастают к новому
             const weave = this.#part('stage')?.querySelector('canvas.gd-weave');
@@ -553,6 +573,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#synapses?.stop();
         this.#synapses = null;
         this.#weave.stop();
+        this.#mind.stop();
     }
 
     // Новые роли огоньков применяются к уже нарисованному туману: класс, действие,
