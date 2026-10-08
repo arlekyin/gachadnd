@@ -29,7 +29,7 @@ export function buildBestiary({ distDir, stableId, skills }) {
     const out = path.join(distDir, 'gacha-bestiary');
     fs.rmSync(out, { recursive: true, force: true });
     fs.mkdirSync(out, { recursive: true });
-    const actors = [devourer(stableId, skills), scrap(stableId)];
+    const actors = [devourer(stableId, skills), scrap(stableId), portal(stableId)];
     for (const actor of actors) {
         fs.writeFileSync(path.join(out, `${actor.name}_${actor._id}.json`), JSON.stringify(actor, null, 2) + '\n', 'utf8');
     }
@@ -339,6 +339,47 @@ function scrap(stableId) {
         },
         items, effects: [], folder: null, sort: 0, ownership: { default: 0 },
         flags: { gachadnd: { creature: 'scrap' } },
+        _key: `!actors!${A}`
+    };
+}
+
+// ==========================================
+// ПОРТАЛ УЗЛА — метка на сцене, источающая свет
+// ==========================================
+
+// Не существо: токен-метка перехода между узлами. Светит сам, поэтому на тёмной сцене виден всем,
+// кто видит его свет; полосы и имя скрыты, в бой его не добавляют
+function portal(stableId) {
+    const A = stableId('bestiary', 'portal');
+    const img = 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp';
+    return {
+        _id: A, name: 'Портал узла', type: 'npc', img,
+        system: {
+            attributes: {
+                ac: { flat: 20, calc: 'flat', formula: '' },
+                hp: { value: 1, max: 1, temp: 0, tempmax: 0, formula: '' },
+                movement: { walk: 0, climb: 0, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false }
+            },
+            details: {
+                biography: { value: html('Разрыв ткани Лабиринта: проход к соседнему узлу. Метка для сцены — светится и медленно закручивается.', 'Цвет и радиус света меняются в настройках токена, вкладка «Свет».'), public: '' },
+                type: { value: 'custom', subtype: '', swarm: '', custom: 'портал' }, cr: 0
+            },
+            traits: { size: 'med', ci: { value: [], custom: '' }, languages: { value: [], custom: '' } },
+            source: { custom: 'Gacha Roguelike', book: '', page: '', license: '', rules: '2024', revision: 1 }
+        },
+        prototypeToken: {
+            name: 'Портал узла', displayName: 0, displayBars: 0, actorLink: false, disposition: 0,
+            width: 1, height: 1, lockRotation: true,
+            texture: { src: img, scaleX: 1.2, scaleY: 1.2 },
+            sight: { enabled: false },
+            light: {
+                bright: 5, dim: 20, angle: 360, color: '#a35cff', alpha: 0.55, coloration: 1, luminosity: 0.5,
+                attenuation: 0.6, saturation: 0.2, contrast: 0, shadows: 0,
+                animation: { type: 'vortex', speed: 2, intensity: 4, reverse: false }
+            }
+        },
+        items: [], effects: [], folder: null, sort: 0, ownership: { default: 0 },
+        flags: { gachadnd: { creature: 'portal' } },
         _key: `!actors!${A}`
     };
 }
