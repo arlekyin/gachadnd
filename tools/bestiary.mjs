@@ -16,15 +16,19 @@ const IMG = 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp';
 const SATIETY = '@flags.gachadnd.satiety';
 const DC = `13 + ${SATIETY}`;
 
+// Память Пожирателя: навыки компендиума по граням к6. В бою доступен только навык выпавшей грани
+const MEMORY = ['Квен', 'Удалой рывок', 'Хайзенберг', 'Игни', 'Нейрализатор', 'Фус-Ро-Да'];
+
 /**
- * @param {{ distDir: string, stableId: (...parts: string[]) => string }} options
+ * @param {{ distDir: string, stableId: (...parts: string[]) => string, skills: object[] }} options
+ *   skills — собранные предметы навыков (ранг I) из компендиума навыков.
  * @returns {string[]}  Имена собранных существ.
  */
-export function buildBestiary({ distDir, stableId }) {
+export function buildBestiary({ distDir, stableId, skills }) {
     const out = path.join(distDir, 'gacha-bestiary');
     fs.rmSync(out, { recursive: true, force: true });
     fs.mkdirSync(out, { recursive: true });
-    const actors = [devourer(stableId)];
+    const actors = [devourer(stableId, skills), scrap(stableId)];
     for (const actor of actors) {
         fs.writeFileSync(path.join(out, `${actor.name}_${actor._id}.json`), JSON.stringify(actor, null, 2) + '\n', 'utf8');
     }
@@ -95,7 +99,7 @@ const natural = (actorId, id, name, img, description, dice, activities) => item(
 // ПОЖИРАТЕЛЬ
 // ==========================================
 
-function devourer(stableId) {
+function devourer(stableId, skills) {
     const A = stableId('bestiary', 'devourer');
     const id = (...parts) => stableId('bestiary', 'devourer', ...parts);
     const attack = (key, name) => activity(id(key, 'attack'), 'attack', name, {
@@ -142,30 +146,35 @@ function devourer(stableId) {
             digest('purple', 'фиолетовый', 15),
             digest('red', 'красный или оранжевый', 25)
         ]),
-        feat(A, id('echo'), 'Эхо чужих навыков', 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp', html(
-            'Бонусным действием в начале каждого своего хода Пожиратель бросает 1к6 — отголосок навыков, которые он когда-то носил. С Насыщения 2 он бросает дважды и выбирает.',
+        feat(A, id('memory'), 'Память Пожирателя', 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp', html(
+            'Он держал в голове слишком много навыков — шесть ещё всплывают. В начале каждого своего хода Пожиратель бросает 1к6: в этот ход он может использовать только навык выпавшей грани, по его обычной активации и без расхода зарядов. Остальные заперты. С Насыщения 2 он бросает дважды и выбирает.',
+            '<ol>' + MEMORY.map(name => `<li>${name}</li>`).join('') + '</ol>',
+            'Сл навыков — 13 + Насыщение. Навыки — отдельные строки на листе с номером грани.'
+        ), [activity(id('memory', 'roll'), 'utility', 'Всплывает', { activation: 'special', roll: { formula: '1d6', name: 'Память Пожирателя', prompt: false, visible: true } })]),
+        ...MEMORY.map((name, n) => memorySkill(A, id('memory', String(n + 1)), n + 1, skills.find(i => i.name === name), name)),
+        feat(A, id('burp'), 'Отрыжка памяти', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
+            'Один раз за встречу, когда ПЗ Пожирателя впервые опускаются до половины или ниже, он выкашливает 2 Огрызков памяти в свободные места в пределах 10 футов. Они действуют сразу после него.'
+        )),
+        feat(A, id('lair'), 'Разрыв ткани (логово)', 'modules/gachadnd/assets/icons/skills/red_fog_active.webp', html(
+            'Узел, куда он прорвался, рвётся. На счёте инициативы 20 (проигрывая ничьи) бросьте 1к4:',
             '<ol>' +
-            '<li><strong>Обратный сдвиг.</strong> До его следующего хода атаки по нему совершаются с помехой.</li>' +
-            '<li><strong>Кража удачи.</strong> Одно существо в пределах 30 футов совершает следующий бросок к20 дважды и берёт худший.</li>' +
-            '<li><strong>Шаг тумана.</strong> Телепортируется на расстояние до 30 футов к носителю самого большого запаса кристаллов.</li>' +
-            '<li><strong>Чужая ярость.</strong> Следующая атака этого хода наносит дополнительно 2к6 урона силовым полем (кнопка ниже).</li>' +
-            '<li><strong>Выплюнутый навык.</strong> Конус 15 футов: спасбросок Ловкости (Сл 13 + Насыщение), 3к6 урона случайного типа — к4: огонь, холод, яд, некротическая энергия; при успехе половина (кнопка ниже).</li>' +
-            '<li><strong>Джекпот.</strong> Бросьте Эхо ещё дважды: действуют оба эффекта.</li>' +
-            '</ol>'
+            '<li><strong>Тяга запаха.</strong> Каждое существо с кристаллами в пределах 60 футов совершает спасбросок Силы (Сл 13 + Насыщение) или притягивается на 10 футов к Пожирателю.</li>' +
+            '<li><strong>Туманная стена.</strong> Стена тумана длиной 30 футов и высотой 10 футов в пределах 60 футов: местность сильно заслонена до следующего счёта 20. Слепое зрение Пожирателя её не замечает.</li>' +
+            '<li><strong>Кристаллы гудят.</strong> Каждое существо, несущее кристаллы общим весом 3 и больше, совершает спасбросок Мудрости (Сл 13 + Насыщение): 2к6 урона психической энергией, при успехе половина.</li>' +
+            '<li><strong>Шов рвётся.</strong> Пожиратель и до двух Огрызков телепортируются в свободные места в пределах 10 футов от носителя самого большого запаса кристаллов.</li>' +
+            '</ol>',
+            '<strong>Приманка.</strong> Любое существо может бонусным действием бросить свой кристалл в точку в пределах 30 футов. На своём следующем ходу Пожиратель и Огрызки в пределах 60 футов обязаны двигаться к ближайшему брошенному кристаллу; дошедший глотает его (в Брюхо). Инстинкту он не сопротивляется.'
         ), [
-            activity(id('echo', 'roll'), 'utility', 'Эхо', { activation: 'bonus', roll: { formula: '1d6', name: 'Эхо чужих навыков', prompt: false, visible: true } }),
-            activity(id('echo', 'fury'), 'damage', 'Чужая ярость', {
-                activation: 'special',
-                damage: { critical: { allow: true, bonus: '' }, parts: [part(2, 6, ['force'])] }
+            activity(id('lair', 'roll'), 'utility', 'Разрыв ткани', { activation: 'lair', roll: { formula: '1d4', name: 'Разрыв ткани', prompt: false, visible: true } }),
+            activity(id('lair', 'pull'), 'save', 'Тяга запаха', {
+                activation: 'lair', range: 60,
+                save: { ability: ['str'], dc: { calculation: '', formula: DC } },
+                damage: { onSave: 'none', parts: [] }
             }),
-            activity(id('echo', 'spit'), 'save', 'Выплюнутый навык', {
-                activation: 'special',
-                target: {
-                    template: { count: '1', contiguous: false, type: 'cone', size: '15', width: '', height: '', units: 'ft' },
-                    affects: { count: '', type: '', choice: false, special: '' }, prompt: true, override: false
-                },
-                save: { ability: ['dex'], dc: { calculation: '', formula: DC } },
-                damage: { onSave: 'half', parts: [part(3, 6, ['fire', 'cold', 'poison', 'necrotic'])] }
+            activity(id('lair', 'hum'), 'save', 'Кристаллы гудят', {
+                activation: 'lair',
+                save: { ability: ['wis'], dc: { calculation: '', formula: DC } },
+                damage: { onSave: 'half', parts: [part(2, 6, ['psychic'])] }
             })
         ]),
         feat(A, id('reroll'), 'Перекрутка', 'modules/gachadnd/assets/icons/skills/blue_fog_active.webp', html(
@@ -193,7 +202,7 @@ function devourer(stableId) {
             ...(n >= 2 ? [{ key: 'system.resources.legres.max', mode: 2, value: '1', priority: 20 }] : [])
         ],
         description: html(`Насыщение ${n}: +${n} к попаданию и Сл, +${15 * (n >= 3 ? n - 1 : 1)} к максимуму ПЗ` +
-            (n >= 2 ? ', легендарное сопротивление 1, Эхо — два броска на выбор' : '') +
+            (n >= 2 ? ', легендарное сопротивление 1, Память — два броска на выбор' : '') +
             (n >= 3 ? ', Укус глотает 2 кристалла' : '') + '. Включайте только один эффект Насыщения.'),
         duration: {}, origin: null, statuses: [], flags: {}, tint: '#ffffff',
         _key: `!actors.effects!${A}.${id('satiety', String(n))}`
@@ -224,7 +233,7 @@ function devourer(stableId) {
                 ci: { value: ['charmed', 'frightened'], custom: '' },
                 languages: { value: [], custom: 'понимает языки, которые знал, но говорит только «ещё»' }
             },
-            resources: { legact: { value: 0, max: 0 }, legres: { value: 0, max: 0 }, lair: { value: false, initiative: null } },
+            resources: { legact: { value: 0, max: 0 }, legres: { value: 0, max: 0 }, lair: { value: true, initiative: 20 } },
             source: { custom: 'Gacha Roguelike', book: '', page: '', license: '', rules: '2024', revision: 1 }
         },
         prototypeToken: {
@@ -237,6 +246,94 @@ function devourer(stableId) {
         effects,
         folder: null, sort: 0, ownership: { default: 0 },
         flags: { gachadnd: { satiety: 0, creature: 'devourer' } },
+        _key: `!actors!${A}`
+    };
+}
+
+// Навык из компендиума в Памяти Пожирателя: без зарядов и флагов модуля (это не Память персонажа:
+// синергии и триггеры его не трогают), Сл — общая формула Пожирателя
+function memorySkill(actorId, id, face, source, name) {
+    if (!source) throw new Error(`Бестиарий: навык «${name}» не найден в компендиуме навыков`);
+    const copy = structuredClone(source);
+    const activities = Object.fromEntries(Object.values(copy.system.activities ?? {}).map(a => {
+        a.consumption = { targets: [], scaling: { allowed: false, max: '' }, spellSlot: true };
+        if (a.save) a.save.dc = { calculation: '', formula: DC };
+        return [a._id, a];
+    }));
+    return {
+        _id: id, name: `${face}. ${copy.name}`, type: copy.type, img: copy.img,
+        system: {
+            ...copy.system,
+            description: { value: `<p><em>Память Пожирателя, грань ${face}: доступен в ход, когда выпала эта грань.</em></p>${copy.system.description?.value ?? ''}`, chat: '' },
+            uses: { max: '', spent: 0, recovery: [] },
+            activities
+        },
+        effects: (copy.effects ?? []).map(e => ({ ...e, _key: `!actors.items.effects!${actorId}.${id}.${e._id}` })),
+        folder: null, sort: face * 10, ownership: { default: 0 },
+        flags: { gachadnd: { devourer_memory: face } },
+        _key: `!actors.items!${actorId}.${id}`
+    };
+}
+
+// ==========================================
+// ОГРЫЗОК ПАМЯТИ — свита Пожирателя
+// ==========================================
+
+function scrap(stableId) {
+    const A = stableId('bestiary', 'scrap');
+    const id = (...parts) => stableId('bestiary', 'scrap', ...parts);
+    const img = 'modules/gachadnd/assets/icons/skills/grey_fog_crystall.webp';
+    const items = [
+        feat(A, id('carry'), 'Носильщик', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
+            'Огрызок держит не больше одного кристалла. С кристаллом он движется к Пожирателю; если заканчивает ход в пределах 5 футов от него, кристалл уходит в Брюхо.',
+            'Убитый Огрызок роняет кристалл на месте. Приманка (брошенный кристалл) тянет его так же, как Пожирателя.'
+        )),
+        feat(A, id('crumble'), 'Рассыпчатый', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
+            'На 0 ПЗ Огрызок рассыпается туманом: клетка, где он стоял, сильно заслонена до конца следующего раунда.'
+        )),
+        natural(A, id('grab'), 'Хват', 'icons/skills/wounds/bone-broken-tooth-fang-red.webp', html(
+            'Рукопашная атака: досягаемость 5 футов. Урон 1к6 + модификатор Ловкости, колющий.',
+            '<strong>Выхватить.</strong> Если у цели есть кристаллы и у Огрызка руки пусты, цель проходит спасбросок Ловкости Сл 12. При провале Огрызок выхватывает случайный кристалл.'
+        ), [1, 6, 'piercing'], [
+            activity(id('grab', 'attack'), 'attack', 'Хват', {
+                range: 5,
+                attack: { ability: 'dex', bonus: '', critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
+                damage: { critical: { bonus: '' }, includeBase: true, parts: [] }
+            }),
+            activity(id('grab', 'save'), 'save', 'Выхватить', {
+                activation: 'special', range: 5,
+                save: { ability: ['dex'], dc: { calculation: '', formula: '12' } },
+                damage: { onSave: 'none', parts: [] }
+            })
+        ])
+    ];
+    return {
+        _id: A, name: 'Огрызок памяти', type: 'npc', img,
+        system: {
+            abilities: Object.fromEntries(Object.entries({ str: 8, dex: 14, con: 12, int: 3, wis: 10, cha: 3 })
+                .map(([key, value]) => [key, { value, proficient: 0, bonuses: { check: '', save: '' } }])),
+            attributes: {
+                ac: { flat: 12, calc: 'natural', formula: '' },
+                hp: { value: 9, max: 9, temp: 0, tempmax: 0, formula: '2d6 + 2' },
+                movement: { walk: 30, climb: 30, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false },
+                senses: { darkvision: 60, blindsight: 0, tremorsense: 0, truesight: 0, units: 'ft', special: '' }
+            },
+            details: {
+                biography: { value: html('<em>Обрывок исследователя, которого Пожиратель когда-то съел вместе с кристаллами. Помнит только, что надо нести.</em>'), public: '' },
+                alignment: 'Без мировоззрения',
+                type: { value: 'aberration', subtype: 'аномалия', swarm: '', custom: '' },
+                cr: 0.25, environment: 'Лабиринт Тумана'
+            },
+            traits: { size: 'sm', ci: { value: ['charmed', 'frightened'], custom: '' }, languages: { value: [], custom: '' } },
+            source: { custom: 'Gacha Roguelike', book: '', page: '', license: '', rules: '2024', revision: 1 }
+        },
+        prototypeToken: {
+            name: 'Огрызок памяти', displayName: 20, actorLink: false, disposition: -1, displayBars: 40,
+            bar1: { attribute: 'attributes.hp' }, width: 1, height: 1,
+            texture: { src: img, scaleX: 0.8, scaleY: 0.8 }, sight: { enabled: false }, appendNumber: true
+        },
+        items, effects: [], folder: null, sort: 0, ownership: { default: 0 },
+        flags: { gachadnd: { creature: 'scrap' } },
         _key: `!actors!${A}`
     };
 }
@@ -254,6 +351,8 @@ function biography() {
         'Прорывается на узлы Монстры, Элита (третьей стороной), Событие, Привал (до отдыха). Не входит на Босса, Магазин, Риск, Погибель. Шёпот всегда за узел до Охоты.',
         '<h2>Насыщение</h2>',
         '+1 за каждое возвращение и каждое кормление. Предел — номер этажа + 1. Ниже предела он возвращается через 2 узла Охоты, на пределе — на каждом подходящем узле. Переход на следующий этаж Насыщение не сбрасывает. На листе включите эффект «Насыщение N».',
+        '<h2>Свита и местность</h2>',
+        'В начале встречи рядом с ним 2 Огрызка памяти и ещё по одному за каждые 2 Насыщения. На половине ПЗ — Отрыжка памяти (+2). Огрызки воруют кристаллы и несут их в Брюхо — их надо перехватывать. Логово: Разрыв ткани на счёте 20. Приманка: брошенный кристалл тянет его и Огрызков.',
         '<h2>Выходы</h2>',
         '<ul><li><strong>Бой</strong> — свести к 0 ПЗ: Брюхо, Сердце аномалии, золото; Насыщение +1.</li>' +
         '<li><strong>Откуп</strong> — действием отдать кристаллы общим весом 2 + 2 × Насыщение: он уходит до конца этажа, Насыщение +1.</li>' +
