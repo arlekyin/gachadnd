@@ -10,6 +10,7 @@ import { GachaLootTerminal } from "./loot.js";
 import "./compendium.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
 import { registerSoundSettings } from "./sounds.js";
+import { registerImpactSettings } from "./impact-frame.js";
 import { giveCrystal } from "./inventory.js";
 import { registerSocket } from "./socket.js";
 import { MemoryAltar, announceRest } from "./memory-altar.js";
@@ -26,6 +27,7 @@ Hooks.once('init', () => {
 
     registerGachaPeriods();
     registerSoundSettings();
+    registerImpactSettings();
     registerMemorySettings();
     registerTriggerSettings();
     registerAutomationMenu();
