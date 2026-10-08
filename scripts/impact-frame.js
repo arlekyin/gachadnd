@@ -12,7 +12,7 @@ import { MODULE_ID } from "./constants.js";
 import { emit, onSocket } from "./socket.js";
 
 const PALETTE = { dark: [8, 6, 10], mid: [214, 18, 46], light: [250, 246, 240] };
-const DURATION = 1500;
+const DURATION = 1650;
 
 export function registerImpactSettings() {
     game.settings.register(MODULE_ID, 'impactFrames', {
@@ -72,7 +72,7 @@ function loadImage(src) {
     });
 }
 
-// Оттенки серого → три тона (тёмный / алый / светлый) с растром, прямой или инвертированный вариант
+// Прямой вариант — градиентная карта чёрный / алый / белый, инвертированный — негатив в цветах сцены
 function process(img, inverted, maxWidth = 900) {
     const w = Math.min(maxWidth, img.width), h = Math.round(w * img.height / img.width);
     const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -92,24 +92,33 @@ function process(img, inverted, maxWidth = 900) {
         return c;
     }
     const d = data.data;
-    // Пороги по гистограмме: 38% и 72% яркости кадра — работает с любым артом
+    // Уровни по гистограмме яркости: 2% и 98% растягиваются на весь диапазон — работает с любой картой
     const hist = new Array(256).fill(0);
     for (let i = 0; i < d.length; i += 4) hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++;
     const total = d.length / 4;
-    let acc = 0, t1 = 85, t2 = 170;
+    let acc = 0, lo = 0, hi = 255;
     for (let v = 0, found = false; v < 256; v++) {
         acc += hist[v];
-        if (!found && acc > total * 0.38) { t1 = v; found = true; }
-        if (acc > total * 0.72) { t2 = v; break; }
+        if (!found && acc > total * 0.02) { lo = v; found = true; }
+        if (acc > total * 0.98) { hi = v; break; }
     }
+    const span = Math.max(24, hi - lo);
+    const curve = n => { n = Math.min(1, Math.max(0, n)); return n * n * (3 - 2 * n); };
+    const mix = (a, b, k) => a + (b - a) * k;
     for (let i = 0; i < d.length; i += 4) {
+        if (inverted) {
+            // Негатив сцены в её собственных цветах: токены, карта и зона узнаваемы, контраст усилен
+            for (let c = 0; c < 3; c++) d[i + c] = 255 * curve((hi - d[i + c]) / span);
+            continue;
+        }
+        // Градиентная карта: тени — чёрный, средние — алый, света — белый; лёгкий растр в полутонах
         const px = (i / 4) % w, py = Math.floor(i / 4 / w);
-        // Растровые точки в средних тонах: на границах тонов — манга-текстура
-        const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] + Math.sin(px * 0.9) * Math.sin(py * 0.9) * 14;
-        let tone = l < t1 ? 'dark' : l < t2 ? 'mid' : 'light';
-        if (inverted) tone = tone === 'dark' ? 'light' : tone === 'light' ? 'dark' : 'mid';
-        const [r, g, b] = PALETTE[tone];
-        d[i] = r; d[i + 1] = g; d[i + 2] = b;
+        // Без S-кривой: светлые токены и зона не выгорают в сплошной белый
+        const n = Math.min(1, Math.max(0, (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] - lo) / span)) * 0.92
+            + Math.sin(px * 0.9) * Math.sin(py * 0.9) * 0.05;
+        const [from, to, k] = n < 0.5 ? [PALETTE.dark, PALETTE.mid, n * 2] : [PALETTE.mid, PALETTE.light, (n - 0.5) * 2];
+        const kk = Math.min(1, Math.max(0, k));
+        d[i] = mix(from[0], to[0], kk); d[i + 1] = mix(from[1], to[1], kk); d[i + 2] = mix(from[2], to[2], kk);
     }
     x.putImageData(data, 0, 0);
     return c;
@@ -228,6 +237,7 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     playing = true;
     let set, focus = { fx: 0.5, fy: 0.48 };
     const shot = captureScene(sceneId);
+    console.info(`${MODULE_ID} | импакт-кадр: ${shot ? `снимок сцены ${shot.width}×${shot.height}` : 'арт навыка'}`);
     if (shot) {
         set = { normal: process(shot, false, 1280), inverted: process(shot, true, 1280) };
         focus = screenFocus(point);
@@ -288,24 +298,24 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     const rgb = tone => `rgb(${PALETTE[tone].join(',')})`;
 
     const t0 = performance.now();
-    const tick = now => {
+    const step = now => {
         const t = now - t0;
         // Последний показанный кадр основной фазы — с выкриком и линиями — застывает и рассыпается
-        if (t >= 1050 && !stillReady) { still.getContext('2d').drawImage(cv, 0, 0); stillReady = true; }
+        if (t >= 1200 && !stillReady) { still.getContext('2d').drawImage(cv, 0, 0); stillReady = true; }
         ctx.globalAlpha = 1;
         ctx.clearRect(0, 0, W, H);
-        const shake = t < 520 ? (1 - t / 520) * 18 * dpr : 0;
+        const shake = t < 600 ? (1 - t / 600) * 18 * dpr : 0;
         const ox = (Math.random() - 0.5) * shake, oy = (Math.random() - 0.5) * shake;
-        if (t < 70 && !calm) {
+        if (t < 60 && !calm) {
             // 1. Белая вспышка
             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-        } else if (t < 230 && !calm) {
-            // 2. Инвертированный кадр: светлый фон, чёрные линии скорости, рывок масштаба
-            cover(set.inverted, 1.18 - (t - 70) / 160 * 0.06, ox, oy);
-            speedLines('rgba(8, 6, 10, 0.92)', 7, 90);
-        } else if (t < 1050) {
+        } else if (t < 380 && !calm) {
+            // 2. Негатив сцены: чёрные линии скорости по краям, рывок масштаба
+            cover(set.inverted, 1.18 - (t - 60) / 320 * 0.06, ox, oy);
+            speedLines('rgba(8, 6, 10, 0.8)', 7, 55);
+        } else if (t < 1200) {
             // 3. Основной кадр: три тона, светлые линии скорости, выкрик и имя
-            const k = Math.min(1, Math.max(0, (t - 230) / 820));
+            const k = Math.min(1, Math.max(0, (t - 380) / 820));
             ctx.fillStyle = rgb('dark'); ctx.fillRect(0, 0, W, H);
             cover(set.normal, 1.1 + k * 0.05, ox, oy);
             // Сдвиг каналов: двойник арта чуть в стороне
@@ -315,12 +325,12 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
             speedLines('rgba(250, 246, 240, 0.55)', 11 + Math.floor(t / 90), 70);
             // Полосы кинорамки
             ctx.fillStyle = rgb('dark'); ctx.fillRect(0, 0, W, H * 0.1); ctx.fillRect(0, H * 0.9, W, H * 0.1);
-            const pop = Math.min(1, Math.max(0, (t - 230) / 120));
+            const pop = Math.min(1, Math.max(0, (t - 380) / 120));
             title(shout, H * 0.16 * (1.25 - pop * 0.25), rgb('light'), rgb('mid'), -0.08, H * 0.3, pop);
-            title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, Math.min(1, (t - 330) / 150));
+            title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, Math.min(1, (t - 480) / 150));
         } else if (t < DURATION) {
             // 4. Распад: кадр рассыпается на растровые точки, они сжимаются волной от точки удара
-            const k = (t - 1050) / (DURATION - 1050);
+            const k = (t - 1200) / (DURATION - 1200);
             const cell = 18 * dpr, R = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
             ctx.beginPath();
             for (let row = 0, y = 0; y < H + cell; row++, y += cell * 0.87) {
@@ -338,11 +348,20 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
             ctx.drawImage(still, 0, 0);
             ctx.globalCompositeOperation = 'source-over';
         } else {
-            cv.remove();
-            playing = false;
-            return;
+            return false;
         }
-        requestAnimationFrame(tick);
+        return true;
+    };
+    // Ошибка в кадре не должна оставить холст поверх экрана
+    const finish = () => { cv.remove(); playing = false; };
+    const tick = now => {
+        try {
+            if (step(now)) requestAnimationFrame(tick);
+            else finish();
+        } catch (error) {
+            finish();
+            console.error(`${MODULE_ID} | импакт-кадр`, error);
+        }
     };
     requestAnimationFrame(tick);
 }
