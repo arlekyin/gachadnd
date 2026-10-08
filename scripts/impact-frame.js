@@ -3,7 +3,8 @@
  *
  * Навык с полем impact (Мегумин) при использовании на секунду с половиной закрывает экран у всех игроков
  * стоп-кадром в манга-стиле: белая вспышка, инвертированный кадр, три тона с растром, линии скорости,
- * выкрик и имя навыка, распад полосами. Кадр собирается из арта навыка прямо в браузере.
+ * выкрик и имя навыка, распад на растровые точки от центра удара. Кадр — снимок сцены с токенами
+ * у каждого игрока, удар — в точку шаблона области. Без сцены кадр собирается из арта навыка.
  * «Без вспышек» убирает белую вспышку и инверсию — каждый игрок у себя.
  */
 
@@ -40,12 +41,17 @@ export function registerImpactSettings() {
     });
 }
 
-// Навык использован: кадр у себя и у остальных. Хук срабатывает только у использовавшего
-Hooks.on('dnd5e.postUseActivity', (activity) => {
+// Навык использован: кадр у себя и у остальных. Хук срабатывает только у использовавшего,
+// шаблон области к этому моменту уже размещён (dnd5e создаёт его до хука)
+Hooks.on('dnd5e.postUseActivity', (activity, usageConfig, results) => {
     const item = activity?.item;
     const impact = item?.flags?.[MODULE_ID]?.impact;
     if (!impact) return;
-    const data = { name: item.name, shout: impact.shout ?? '', art: impact.art || item.img };
+    // drawPreview возвращает массив созданных шаблонов, поэтому results.templates бывает вложенным
+    const template = [results?.templates].flat(2).find(t => Number.isFinite(t?.x));
+    const token = item.actor?.getActiveTokens?.()[0];
+    const point = template ? { x: template.x, y: template.y } : token?.center ? { x: token.center.x, y: token.center.y } : null;
+    const data = { name: item.name, shout: impact.shout ?? '', art: impact.art || item.img, sceneId: canvas?.scene?.id ?? null, point };
     emit('impactFrame', data);
     playImpact(data);
 });
@@ -67,8 +73,8 @@ function loadImage(src) {
 }
 
 // Оттенки серого → три тона (тёмный / алый / светлый) с растром, прямой или инвертированный вариант
-function process(img, inverted) {
-    const w = Math.min(900, img.width), h = Math.round(w * img.height / img.width);
+function process(img, inverted, maxWidth = 900) {
+    const w = Math.min(maxWidth, img.width), h = Math.round(w * img.height / img.width);
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d', { willReadFrequently: true });
     x.drawImage(img, 0, 0, w, h);
@@ -109,11 +115,48 @@ function process(img, inverted) {
     return c;
 }
 
-async function frames(src) {
+async function artFrames(src) {
     if (!cache.has(src)) {
         cache.set(src, loadImage(src).then(img => ({ normal: process(img, false), inverted: process(img, true) })));
     }
     return cache.get(src);
+}
+
+/**
+ * Снимок сцены, как её видит этот игрок. Холст WebGL не хранит кадр после показа,
+ * поэтому сцена перерисовывается и копируется в той же задаче, до вывода на экран.
+ * @returns {HTMLCanvasElement|null}  null — сцены нет, она другая или снимок пуст.
+ */
+function captureScene(sceneId) {
+    const app = canvas?.app;
+    const view = app?.view ?? app?.canvas;
+    if (!canvas?.ready || !view || (sceneId && canvas.scene?.id !== sceneId)) return null;
+    try {
+        app.renderer.render(app.stage);
+        const shot = document.createElement('canvas');
+        shot.width = view.width; shot.height = view.height;
+        const x = shot.getContext('2d', { willReadFrequently: true });
+        x.drawImage(view, 0, 0);
+        // Пустой буфер: проверка по сетке точек
+        const probe = x.getImageData(0, 0, shot.width, shot.height).data;
+        const step = Math.max(4, Math.floor(probe.length / 4 / 400)) * 4;
+        let filled = 0;
+        for (let i = 3; i < probe.length; i += step) if (probe[i] > 0) filled++;
+        return filled > 20 ? shot : null;
+    } catch (error) {
+        console.warn(`${MODULE_ID} | снимок сцены для импакт-кадра`, error);
+        return null;
+    }
+}
+
+// Точка сцены → доля экрана; за краем экрана — прижата к нему, чтобы удар оставался в кадре
+function screenFocus(point) {
+    const view = canvas?.app?.view ?? canvas?.app?.canvas;
+    if (!point || !view) return { fx: 0.5, fy: 0.48 };
+    const p = canvas.stage.worldTransform.apply({ x: point.x, y: point.y });
+    const rect = view.getBoundingClientRect();
+    const clamp = v => Math.min(0.85, Math.max(0.15, v));
+    return { fx: clamp(p.x / rect.width), fy: clamp(p.y / rect.height) };
 }
 
 // ==========================================
@@ -180,13 +223,19 @@ function playSound() {
 
 let playing = false;
 
-export async function playImpact({ name, shout, art }) {
+export async function playImpact({ name, shout, art, sceneId, point }) {
     if (playing || !game.settings.get(MODULE_ID, 'impactFrames')) return;
     playing = true;
-    let set;
-    try { set = await frames(art); } catch (error) {
-        playing = false;
-        return console.warn(`${MODULE_ID} | арт импакт-кадра не загружен: ${art}`, error);
+    let set, focus = { fx: 0.5, fy: 0.48 };
+    const shot = captureScene(sceneId);
+    if (shot) {
+        set = { normal: process(shot, false, 1280), inverted: process(shot, true, 1280) };
+        focus = screenFocus(point);
+    } else {
+        try { set = await artFrames(art); } catch (error) {
+            playing = false;
+            return console.warn(`${MODULE_ID} | арт импакт-кадра не загружен: ${art}`, error);
+        }
     }
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
     const cv = document.createElement('canvas');
@@ -195,14 +244,20 @@ export async function playImpact({ name, shout, art }) {
     cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
     document.body.append(cv);
     const ctx = cv.getContext('2d');
-    const W = cv.width, H = cv.height, cx = W / 2, cy = H * 0.48;
+    const W = cv.width, H = cv.height, cx = W * focus.fx, cy = H * focus.fy;
     playSound();
 
+    // Кадр во весь экран; масштаб — вокруг точки удара, она остаётся на месте
     const cover = (src, zoom, ox, oy) => {
         const s = Math.max(W / src.width, H / src.height) * zoom;
         const w = src.width * s, h = src.height * s;
-        ctx.drawImage(src, (W - w) / 2 + ox, (H - h) / 2 + oy, w, h);
+        const base = Math.max(W / src.width, H / src.height);
+        const bx = (W - src.width * base) / 2, by = (H - src.height * base) / 2;
+        ctx.drawImage(src, cx - (cx - bx) * zoom + ox, cy - (cy - by) * zoom + oy, w, h);
     };
+    const still = document.createElement('canvas');
+    still.width = W; still.height = H;
+    let stillReady = false;
     // Линии скорости: клинья от точки удара к краям экрана
     const speedLines = (color, seed, count) => {
         let s = seed;
@@ -223,7 +278,7 @@ export async function playImpact({ name, shout, art }) {
         if (!text || alpha <= 0) return;
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.translate(cx, y); ctx.rotate(rot);
+        ctx.translate(W / 2, y); ctx.rotate(rot);
         ctx.font = `900 ${size}px Impact, "Arial Black", sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.lineJoin = 'round'; ctx.lineWidth = size * 0.14; ctx.strokeStyle = stroke; ctx.strokeText(text, 0, 0);
@@ -235,6 +290,8 @@ export async function playImpact({ name, shout, art }) {
     const t0 = performance.now();
     const tick = now => {
         const t = now - t0;
+        // Последний показанный кадр основной фазы — с выкриком и линиями — застывает и рассыпается
+        if (t >= 1050 && !stillReady) { still.getContext('2d').drawImage(cv, 0, 0); stillReady = true; }
         ctx.globalAlpha = 1;
         ctx.clearRect(0, 0, W, H);
         const shake = t < 520 ? (1 - t / 520) * 18 * dpr : 0;
@@ -262,15 +319,24 @@ export async function playImpact({ name, shout, art }) {
             title(shout, H * 0.16 * (1.25 - pop * 0.25), rgb('light'), rgb('mid'), -0.08, H * 0.3, pop);
             title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, Math.min(1, (t - 330) / 150));
         } else if (t < DURATION) {
-            // 4. Распад: кадр разъезжается полосами и гаснет
+            // 4. Распад: кадр рассыпается на растровые точки, они сжимаются волной от точки удара
             const k = (t - 1050) / (DURATION - 1050);
-            ctx.globalAlpha = 1 - k;
-            const bands = 12, bh = H / bands;
-            for (let b = 0; b < bands; b++) {
-                ctx.save(); ctx.beginPath(); ctx.rect(0, b * bh, W, bh + 1); ctx.clip();
-                cover(set.normal, 1.15, (b % 2 ? 1 : -1) * k * W * 0.25, 0);
-                ctx.restore();
+            const cell = 18 * dpr, R = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
+            ctx.beginPath();
+            for (let row = 0, y = 0; y < H + cell; row++, y += cell * 0.87) {
+                for (let x = row % 2 ? cell / 2 : 0; x < W + cell; x += cell) {
+                    const local = Math.min(1, Math.max(0, k * 1.6 - Math.hypot(x - cx, y - cy) / R * 0.6));
+                    const r = cell * 0.62 * (1 - local * local);
+                    if (r < 0.4) continue;
+                    ctx.moveTo(x + r, y);
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                }
             }
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            ctx.globalCompositeOperation = 'source-in';
+            ctx.drawImage(still, 0, 0);
+            ctx.globalCompositeOperation = 'source-over';
         } else {
             cv.remove();
             playing = false;
