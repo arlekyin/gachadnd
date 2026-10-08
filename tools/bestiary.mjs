@@ -3,7 +3,7 @@
  * особенностями и эффектами). Существа описаны здесь же кодом: у актёра много вложенных документов,
  * и общий шаблон активностей короче YAML.
  *
- * Пожиратель — аномалия, бывший исследователь Лабиринта. Числа рассчитаны на второй этаж
+ * Пожиратель — аномалия, бывший исследователь Лабиринта, Большой (2×2). Числа рассчитаны на второй этаж
  * (мини-босс, ПО 4); рост от возвращений — эффекты «Насыщение N» на актёре: Мастер включает один.
  * Формулы атак и Сл читают @flags.gachadnd.satiety — его задаёт включённый эффект.
  * Иконки — только из модуля и подтверждённые пути ядра Foundry: неверный путь дал бы пустую картинку.
@@ -223,7 +223,7 @@ function devourer(stableId, skills) {
                 ac: { flat: 14, calc: 'natural', formula: '' },
                 hp: { value: 68, max: 68, temp: 0, tempmax: 0, formula: '8d8 + 32' },
                 movement: { walk: 40, climb: 30, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false },
-                senses: { darkvision: 0, blindsight: 30, tremorsense: 0, truesight: 0, units: 'ft', special: '' }
+                senses: { darkvision: 60, blindsight: 30, tremorsense: 0, truesight: 0, units: 'ft', special: '' }
             },
             details: {
                 biography: { value: biography(), public: '' },
@@ -232,7 +232,7 @@ function devourer(stableId, skills) {
                 cr: 4, environment: 'Лабиринт Тумана'
             },
             traits: {
-                size: 'med',
+                size: 'lg',
                 ci: { value: ['charmed', 'frightened'], custom: '' },
                 languages: { value: [], custom: 'понимает языки, которые знал, но говорит только «ещё»' }
             },
@@ -241,9 +241,10 @@ function devourer(stableId, skills) {
         },
         prototypeToken: {
             name: 'Пожиратель', displayName: 20, actorLink: true, disposition: -1, displayBars: 40,
-            bar1: { attribute: 'attributes.hp' }, width: 1, height: 1,
+            bar1: { attribute: 'attributes.hp' }, width: 2, height: 2,
             texture: { src: TOKEN, scaleX: 1, scaleY: 1 },
-            sight: { enabled: false }
+            // Зрение токена: Мастер, выбрав его на тёмной сцене, видит его глазами, а не пустоту
+            sight: { enabled: true, range: 60, visionMode: 'darkvision' }
         },
         items,
         effects,
@@ -334,7 +335,7 @@ function scrap(stableId) {
         prototypeToken: {
             name: 'Огрызок памяти', displayName: 20, actorLink: false, disposition: -1, displayBars: 40,
             bar1: { attribute: 'attributes.hp' }, width: 1, height: 1,
-            texture: { src: img, scaleX: 0.8, scaleY: 0.8, tint: '#b4b4b4' }, sight: { enabled: false }, appendNumber: true
+            texture: { src: img, scaleX: 0.8, scaleY: 0.8, tint: '#b4b4b4' }, sight: { enabled: true, range: 60, visionMode: 'darkvision' }, appendNumber: true
         },
         items, effects: [], folder: null, sort: 0, ownership: { default: 0 },
         flags: { gachadnd: { creature: 'scrap' } },
