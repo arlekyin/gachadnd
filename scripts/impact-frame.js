@@ -1,7 +1,7 @@
 /**
  * Gacha Roguelike dnd5e — Импакт-кадр навыка
  *
- * Навык с полем impact (Мегумин) при использовании на секунду с половиной закрывает экран у всех игроков
+ * Навык с полем impact (Мегумин) при использовании меньше чем на секунду закрывает экран у всех игроков
  * стоп-кадром в манга-стиле: белая вспышка, инвертированный кадр, три тона с растром, линии скорости,
  * выкрик и имя навыка, распад на растровые точки от центра удара. Кадр — снимок сцены с токенами
  * у каждого игрока, удар — в точку шаблона области. Без сцены кадр собирается из арта навыка.
@@ -12,7 +12,10 @@ import { MODULE_ID } from "./constants.js";
 import { emit, onSocket } from "./socket.js";
 
 const PALETTE = { dark: [8, 6, 10], mid: [214, 18, 46], light: [250, 246, 240] };
-const DURATION = 1650;
+// Хронометраж, мс: вспышка → негатив → основной кадр → распад. Весь кадр — меньше секунды
+const T = { flash: 45, negative: 170, main: 560, end: 780 };
+// Ширина снимка для обработки: больше не нужно — кадр всё равно растягивается и дробится растром
+const SHOT_WIDTH = 960;
 
 export function registerImpactSettings() {
     game.settings.register(MODULE_ID, 'impactFrames', {
@@ -103,22 +106,37 @@ function process(img, inverted, maxWidth = 900) {
         if (acc > total * 0.98) { hi = v; break; }
     }
     const span = Math.max(24, hi - lo);
-    const curve = n => { n = Math.min(1, Math.max(0, n)); return n * n * (3 - 2 * n); };
-    const mix = (a, b, k) => a + (b - a) * k;
-    for (let i = 0; i < d.length; i += 4) {
-        if (inverted) {
-            // Негатив сцены в её собственных цветах: токены, карта и зона узнаваемы, контраст усилен
-            for (let c = 0; c < 3; c++) d[i + c] = 255 * curve((hi - d[i + c]) / span);
-            continue;
+    // Таблицы вместо вычислений на каждый пиксель: обработка снимка укладывается в десятки мс
+    if (inverted) {
+        // Негатив сцены в её собственных цветах: токены, карта и зона узнаваемы, контраст усилен
+        const lut = new Uint8ClampedArray(256);
+        for (let v = 0; v < 256; v++) {
+            const n = Math.min(1, Math.max(0, (hi - v) / span));
+            lut[v] = 255 * n * n * (3 - 2 * n);
         }
-        // Градиентная карта: тени — чёрный, средние — алый, света — белый; лёгкий растр в полутонах
-        const px = (i / 4) % w, py = Math.floor(i / 4 / w);
-        // Без S-кривой: светлые токены и зона не выгорают в сплошной белый
-        const n = Math.min(1, Math.max(0, (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] - lo) / span)) * 0.92
-            + Math.sin(px * 0.9) * Math.sin(py * 0.9) * 0.05;
-        const [from, to, k] = n < 0.5 ? [PALETTE.dark, PALETTE.mid, n * 2] : [PALETTE.mid, PALETTE.light, (n - 0.5) * 2];
-        const kk = Math.min(1, Math.max(0, k));
-        d[i] = mix(from[0], to[0], kk); d[i + 1] = mix(from[1], to[1], kk); d[i + 2] = mix(from[2], to[2], kk);
+        for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
+    } else {
+        // Градиентная карта: тени — чёрный, средние — алый, света — белый; без S-кривой светлые токены
+        // и зона не выгорают в сплошной белый. Яркость с растровой добавкой — индекс 0…1023
+        const SIZE = 1024;
+        const lut = new Uint8ClampedArray(SIZE * 3);
+        for (let j = 0; j < SIZE; j++) {
+            const n = j / (SIZE - 1);
+            const [from, to, k] = n < 0.5 ? [PALETTE.dark, PALETTE.mid, n * 2] : [PALETTE.mid, PALETTE.light, (n - 0.5) * 2];
+            for (let c = 0; c < 3; c++) lut[j * 3 + c] = from[c] + (to[c] - from[c]) * k;
+        }
+        const sx = Float32Array.from({ length: w }, (_, px) => Math.sin(px * 0.9) * 0.05);
+        const sy = Float32Array.from({ length: h }, (_, py) => Math.sin(py * 0.9));
+        const scale = 0.92 / span;
+        for (let py = 0, i = 0; py < h; py++) {
+            const row = sy[py];
+            for (let px = 0; px < w; px++, i += 4) {
+                let n = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] - lo) * scale;
+                n = (n < 0 ? 0 : n > 0.92 ? 0.92 : n) + sx[px] * row;
+                const j = (n < 0 ? 0 : n > 1 ? SIZE - 1 : Math.round(n * (SIZE - 1))) * 3;
+                d[i] = lut[j]; d[i + 1] = lut[j + 1]; d[i + 2] = lut[j + 2];
+            }
+        }
     }
     x.putImageData(data, 0, 0);
     return c;
@@ -142,10 +160,12 @@ function captureScene(sceneId) {
     if (!canvas?.ready || !view || (sceneId && canvas.scene?.id !== sceneId)) return null;
     try {
         app.renderer.render(app.stage);
+        // Снимок сразу уменьшается: дальнейшая обработка идёт по малому холсту
         const shot = document.createElement('canvas');
-        shot.width = view.width; shot.height = view.height;
+        shot.width = Math.min(SHOT_WIDTH, view.width);
+        shot.height = Math.round(shot.width * view.height / view.width);
         const x = shot.getContext('2d', { willReadFrequently: true });
-        x.drawImage(view, 0, 0);
+        x.drawImage(view, 0, 0, shot.width, shot.height);
         // Пустой буфер: проверка по сетке точек
         const probe = x.getImageData(0, 0, shot.width, shot.height).data;
         const step = Math.max(4, Math.floor(probe.length / 4 / 400)) * 4;
@@ -239,7 +259,7 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     const shot = captureScene(sceneId);
     console.info(`${MODULE_ID} | импакт-кадр: ${shot ? `снимок сцены ${shot.width}×${shot.height}` : 'арт навыка'}`);
     if (shot) {
-        set = { normal: process(shot, false, 1280), inverted: process(shot, true, 1280) };
+        set = { normal: process(shot, false, SHOT_WIDTH), inverted: process(shot, true, SHOT_WIDTH) };
         focus = screenFocus(point);
     } else {
         try { set = await artFrames(art); } catch (error) {
@@ -250,7 +270,7 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
     const cv = document.createElement('canvas');
     cv.className = 'gd-impact';
-    const dpr = Math.min(devicePixelRatio, 1.5);
+    const dpr = 1;
     cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
     document.body.append(cv);
     const ctx = cv.getContext('2d');
@@ -301,36 +321,36 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     const step = now => {
         const t = now - t0;
         // Последний показанный кадр основной фазы — с выкриком и линиями — застывает и рассыпается
-        if (t >= 1200 && !stillReady) { still.getContext('2d').drawImage(cv, 0, 0); stillReady = true; }
+        if (t >= T.main && !stillReady) { still.getContext('2d').drawImage(cv, 0, 0); stillReady = true; }
         ctx.globalAlpha = 1;
         ctx.clearRect(0, 0, W, H);
-        const shake = t < 600 ? (1 - t / 600) * 18 * dpr : 0;
+        const shake = t < T.main * 0.7 ? (1 - t / (T.main * 0.7)) * 18 * dpr : 0;
         const ox = (Math.random() - 0.5) * shake, oy = (Math.random() - 0.5) * shake;
-        if (t < 60 && !calm) {
+        if (t < T.flash && !calm) {
             // 1. Белая вспышка
             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-        } else if (t < 380 && !calm) {
+        } else if (t < T.negative && !calm) {
             // 2. Негатив сцены: чёрные линии скорости по краям, рывок масштаба
-            cover(set.inverted, 1.18 - (t - 60) / 320 * 0.06, ox, oy);
+            cover(set.inverted, 1.18 - (t - T.flash) / (T.negative - T.flash) * 0.06, ox, oy);
             speedLines('rgba(8, 6, 10, 0.8)', 7, 55);
-        } else if (t < 1200) {
-            // 3. Основной кадр: три тона, светлые линии скорости, выкрик и имя
-            const k = Math.min(1, Math.max(0, (t - 380) / 820));
+        } else if (t < T.main) {
+            // 3. Основной кадр: градиентная карта, светлые линии скорости, выкрик и имя
+            const k = Math.min(1, Math.max(0, (t - T.negative) / (T.main - T.negative)));
             ctx.fillStyle = rgb('dark'); ctx.fillRect(0, 0, W, H);
             cover(set.normal, 1.1 + k * 0.05, ox, oy);
             // Сдвиг каналов: двойник арта чуть в стороне
             ctx.globalAlpha = 0.28 * (1 - k); ctx.globalCompositeOperation = 'lighter';
             cover(set.normal, 1.1 + k * 0.05, ox + 10 * dpr, oy);
             ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-            speedLines('rgba(250, 246, 240, 0.55)', 11 + Math.floor(t / 90), 70);
+            speedLines('rgba(250, 246, 240, 0.55)', 11 + Math.floor(t / 60), 70);
             // Полосы кинорамки
             ctx.fillStyle = rgb('dark'); ctx.fillRect(0, 0, W, H * 0.1); ctx.fillRect(0, H * 0.9, W, H * 0.1);
-            const pop = Math.min(1, Math.max(0, (t - 380) / 120));
+            const pop = Math.min(1, Math.max(0, (t - T.negative) / 70));
             title(shout, H * 0.16 * (1.25 - pop * 0.25), rgb('light'), rgb('mid'), -0.08, H * 0.3, pop);
-            title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, Math.min(1, (t - 480) / 150));
-        } else if (t < DURATION) {
+            title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, Math.min(1, (t - T.negative - 40) / 80));
+        } else if (t < T.end) {
             // 4. Распад: кадр рассыпается на растровые точки, они сжимаются волной от точки удара
-            const k = (t - 1200) / (DURATION - 1200);
+            const k = (t - T.main) / (T.end - T.main);
             const cell = 18 * dpr, R = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
             ctx.beginPath();
             for (let row = 0, y = 0; y < H + cell; row++, y += cell * 0.87) {
