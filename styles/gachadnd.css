@@ -1611,14 +1611,6 @@
 .gachadnd-memory-altar .gd-flows line.edge { stroke-dasharray: none; stroke-width: 1.5; opacity: 0.22; }
 .gachadnd-memory-altar .gd-flows line.edge.lit { stroke-width: 2.5; opacity: 0.95; filter: drop-shadow(0 0 4px var(--glow)); }
 
-/* Накал ядра в Переплавке: свечение растёт с каждым воспоминанием в гнезде */
-.gachadnd-memory-altar .gd-core-heat {
-  position: absolute; inset: -46px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 70%, #fff), color-mix(in srgb, var(--glow) 40%, transparent) 45%, transparent);
-  opacity: calc(var(--heat, 0) * 0.85); transform: scale(calc(0.8 + var(--heat, 0) * 0.3));
-  transition: opacity 0.6s, transform 0.6s;
-}
-
 /* Резонанс: колесо тегов вокруг ядра */
 .gachadnd-memory-altar .gd-wheel-tag {
   position: absolute; z-index: 3; width: auto; transform: translate(-50%, -50%); padding: 3px 12px; margin: 0;
@@ -1669,20 +1661,10 @@
 .gachadnd-memory-altar .ring-in .gd-node-disc { animation: gd-ring-in 0.5s ease-out both; }
 @keyframes gd-ring-in { from { transform: scale(0.3); } to { transform: scale(1); } }
 
-.gachadnd-memory-altar .gd-core { position: absolute; width: 120px; height: 120px; transform: translate(-50%, -50%); pointer-events: none; }
-.gachadnd-memory-altar .gd-core::before {
-  content: ''; position: absolute; inset: -60px; border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 35%, transparent), transparent);
-  animation: gd-core-breath 5s ease-in-out infinite;
-}
-.gachadnd-memory-altar .gd-core span {
-  position: absolute; inset: 0; border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #ffffff 0%, color-mix(in srgb, var(--glow) 80%, #fff) 18%, color-mix(in srgb, var(--glow) 45%, #0b0d12) 55%, rgba(10, 12, 16, 0.2) 100%);
-  box-shadow: 0 0 40px color-mix(in srgb, var(--glow) 60%, transparent);
-  animation: gd-core-pulse 5s ease-in-out infinite;
-}
-@keyframes gd-core-breath { 0%, 100% { opacity: 0.6; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
-@keyframes gd-core-pulse { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1.03); } }
+/* Ядро сознания рисует холст вокруг центра; .gd-core — граница облака: цель броска огонька,
+   препятствие для огоньков, конец прядей кольца и Резонанса */
+.gachadnd-memory-altar .gd-core { position: absolute; width: 176px; height: 176px; transform: translate(-50%, -50%); pointer-events: none; }
+.gachadnd-memory-altar .gd-mind-core { position: absolute; z-index: 1; width: 560px; height: 560px; transform: translate(-50%, -50%); pointer-events: none; }
 
 /* Узлы орбиты — навыки, уже ставшие частью персонажа: тела нейронов. Ядро цвета редкости с ободком,
    вокруг мягко пульсирует ореол. Пряди к ядру Алтаря и воронки к соседям рисует холст связей */
@@ -1842,7 +1824,7 @@
 .gachadnd-memory-altar .gd-pip.on { background: radial-gradient(circle at 35% 35%, #ff8a6a, #b3221a); box-shadow: 0 0 8px rgba(255, 70, 40, 0.7); }
 
 @media (prefers-reduced-motion: reduce) {
-  .gachadnd-memory-altar .gd-fog i, .gachadnd-memory-altar .gd-core::before, .gachadnd-memory-altar .gd-core span,
+  .gachadnd-memory-altar .gd-fog i,
   .gachadnd-memory-altar .gd-mote-body, .gachadnd-memory-altar .gd-node-disc, .gachadnd-memory-altar .gd-wisp i, .gachadnd-memory-altar .gd-shards i, .gachadnd-memory-altar .window-content * { animation: none !important; }
   .gachadnd-memory-altar .gd-banner { opacity: 1; }
 }
