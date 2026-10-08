@@ -130,7 +130,7 @@ const ORBIT = { rx: 17, ry: 24 };
 const WHEEL = { rx: 18, ry: 24 };
 const FOCUS = {
     1: [CORE],
-    3: [-90, 30, 150].map(deg => ({ x: CORE.x + 8 * Math.cos(deg * Math.PI / 180), y: CORE.y + 11 * Math.sin(deg * Math.PI / 180) }))
+    3: [-90, 30, 150].map(deg => ({ x: CORE.x + 10.5 * Math.cos(deg * Math.PI / 180), y: CORE.y + 15 * Math.sin(deg * Math.PI / 180) }))
 };
 
 // Фаза покачивания огонька привязана к часам и ключу, а не к моменту отрисовки:
@@ -424,20 +424,18 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const wheel = this.ritual !== 'resonate' ? [] : tags.map((name, n) => {
             const angle = -Math.PI / 2 + (2 * Math.PI * n) / tags.length;
             const pos = { x: CORE.x + WHEEL.rx * Math.cos(angle), y: CORE.y + WHEEL.ry * Math.sin(angle) };
-            return { name, active: name === this.tag, pos, style: at(pos) };
+            return { name, active: name === this.tag, style: at(pos) };
         });
         // Переплавка накаляет ядро по мере заполнения гнёзд
         const heat = this.ritual === 'smelt' ? Math.min(1, slotted.reduce((sum, i) => sum + i.weight, 0) / 3) : 0;
         // Ядро сознания: нити экипированных навыков крепятся с той стороны, где навык стоит на кольце
-        const activeTag = wheel.find(w => w.active);
         const mind = {
-            ritual: this.ritual, at: CORE, heat, hd: hdValue, hdMax,
+            ritual: this.ritual, glow: ritual.glow, at: CORE, heat, hd: hdValue, hdMax,
             overload: Math.max(0, active.length - cap),
             threads: active.map((item, n) => ({
                 id: item.id, rank: item.flags[MODULE_ID].rank ?? 1,
                 color: THREAD_COLORS[item.flags[MODULE_ID].rarity] ?? '#c9a75d', ...orbitAt(n)
             })),
-            tagAt: activeTag ? activeTag.pos : null,
             split: this.ritual === 'split' && slotted[0] ? { key: slotted[0].key, color: RARITY[slotted[0].rarity]?.color ?? '#c9a75d' } : null
         };
 

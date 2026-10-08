@@ -3,28 +3,27 @@
  *
  * В центре — белое ядро, «я» персонажа: живая кромка, внутренние блики, сердцебиение.
  * Вокруг — облако бледных волокон, собственная память. Экипированные навыки — чужие воспоминания:
- * их цветные нити спиралью проходят сквозь облако и крепятся к кромке ядра, подкрашивая её в месте
- * крепления. Яркость и ритм сердцебиения — от оставшихся Костей Хитов; перегрузка (навыков сверх
+ * их цветные нити кружат кольцами вокруг ядра вместе с облаком и одним концом крепятся к кромке
+ * ядра с той стороны, где навык стоит на кольце, подкрашивая её в месте крепления. Яркость и ритм сердцебиения — от оставшихся Костей Хитов; перегрузка (навыков сверх
  * естественного лимита) сжимает облако, гасит свои волокна и делает вращение беспокойным.
  *
  * Ритуалы не перекрашивают ядро, а меняют его поведение:
- *   Слияние     — пряди кольца продолжаются нитями до ядра; нить навыка, принявшего повтор, утолщается;
+ *   Слияние     — пряди кольца тянутся до ядра (AltarSynapses); нить навыка, принявшего повтор, утолщается;
  *   Переплавка  — ядро и облако раскаляются с каждым воспоминанием в гнезде;
- *   Резонанс    — облако вытягивается к выбранному тегу (пряди к тегу рисует ResonanceWeave);
- *   Расщепление — белая нить медленно окрашивается цветом кристалла, распускается и уходит в туман,
- *                 на её месте из темноты проявляется новая.
+ *   Резонанс    — облако не меняется, к тегу тянутся только пряди от ядра (ResonanceWeave);
+ *   Расщепление — белая нить медленно окрашивается цветом кристалла (без кристалла — цветом ритуала),
+ *                 отрывается, распускается и уходит в туман; на её месте из темноты проявляется новая.
  *
  * Экземпляр живёт дольше холста: слой ядра перерисовывается при каждом изменении, а облако
  * продолжает движение на новом холсте (attach). Холст — квадрат вокруг ядра, а не всё окно:
  * очистка и вывод кадра дешевле.
  */
 
-// Размеры в CSS-пикселях: ядро, облако, край облака (там же кончаются пряди кольца — .gd-core)
-export const NUCLEUS_R = 26;
-const CLOUD = { rMin: 36, rMax: 78 };
-const EDGE_R = 88;
-const OWN_COUNT = 40;
-const SPLIT_PERIOD = 6;
+// Размеры в CSS-пикселях: ядро (к его кромке тянутся пряди кольца и Резонанса) и облако
+export const NUCLEUS_R = 40;
+const CLOUD = { rMin: 54, rMax: 118 };
+const OWN_COUNT = 44;
+const SPLIT_PERIOD = 4;
 // Отрезков на волокно: каждый — один штрих своей прозрачности и толщины
 const CHUNKS = 7, SUB = 5;
 
@@ -52,15 +51,16 @@ function random(seed) {
 }
 
 // Волокно облака: дуга на наклонённой плоскости, плоскость медленно вращается — облако в проекции
-function makeFiber(rnd) {
+function makeFiber(rnd, len = [2.2, 5]) {
     return {
         ax: rnd() * Math.PI * 2, tilt: 0.35 + rnd() * 1.1,
         spin: (rnd() < 0.5 ? -1 : 1) * (0.05 + rnd() * 0.12),
         r: CLOUD.rMin + rnd() * (CLOUD.rMax - CLOUD.rMin),
-        start: rnd() * Math.PI * 2, len: 2.2 + rnd() * 2.8,
+        start: rnd() * Math.PI * 2, len: len[0] + rnd() * (len[1] - len[0]),
         wf: 2 + Math.floor(rnd() * 3), ph: rnd() * 6
     };
 }
+const hash = text => { let h = 0; for (const ch of String(text)) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0; return h; };
 
 function fiberPoint(f, a, t, scale, wobble) {
     const k = 1 + 0.18 * Math.sin(a * f.wf + f.ph + t * 0.4) + 0.08 * Math.sin(a * (f.wf + 3) - f.ph * 2 + t * 0.7);
@@ -85,6 +85,8 @@ export class MindCore {
         const rnd = random(7);
         this.own = Array.from({ length: OWN_COUNT }, () => makeFiber(rnd));
         this.boosts = new Map();
+        // Кольца нитей навыка: по три на навык, форма постоянна для навыка
+        this.rings = new Map();
         this.cycle = null;
         this.running = false;
         this.data = null;
@@ -98,7 +100,7 @@ export class MindCore {
      */
     attach(canvas, stage, data) {
         if (data.ritual !== this.data?.ritual) this.since = performance.now();
-        if (data.split?.key !== this.data?.split?.key) this.cycleStart = performance.now();
+        if (data.ritual !== this.data?.ritual || data.split?.key !== this.data?.split?.key) this.cycleStart = performance.now();
         this.canvas = canvas;
         this.stage = stage;
         this.data = data;
@@ -131,7 +133,7 @@ export class MindCore {
     }
 
     #resize() {
-        const size = this.canvas.offsetWidth || 560;
+        const size = this.canvas.offsetWidth || 780;
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         this.size = size;
         if (this.canvas.width !== Math.round(size * ratio)) {
@@ -146,9 +148,11 @@ export class MindCore {
             color: rgb(th.color),
             ang: Math.atan2((th.y - cy) / 100 * height, (th.x - cx) / 100 * width)
         }));
-        // Резонанс: направление к выбранному тегу
-        const tag = this.data.tagAt;
-        this.tagAngle = tag ? Math.atan2((tag.y - cy) / 100 * height, (tag.x - cx) / 100 * width) : null;
+        for (const th of this.threads) {
+            if (this.rings.has(th.id)) continue;
+            const rnd = random(hash(th.id));
+            this.rings.set(th.id, Array.from({ length: 3 }, () => makeFiber(rnd, [3, 4.6])));
+        }
     }
 
     // Штрих волокна по отрезкам: прозрачность и толщина — по середине отрезка (сужение к концам, глубина)
@@ -182,31 +186,21 @@ export class MindCore {
         const ownDim = Math.max(0.2, 1 - over * 0.16);
         const tt = t * (1 + over * 0.5);
         const heat = d.heat;
-        const resonate = this.tagAngle !== null;
         ctx.lineCap = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
         // Глубинное свечение вокруг ядра
         const hot = mix([255, 236, 214], [255, 160, 90], heat);
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 120 + heat * 60);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 170 + heat * 80);
         g.addColorStop(0, rgba(hot, (0.22 + 0.14 * beat) * (0.4 + 0.6 * hd) + heat * 0.35));
         g.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, S, S);
 
-        // Резонанс: облако вытягивается к тегу и дрожит
-        const ca = Math.cos(this.tagAngle ?? 0), sa = Math.sin(this.tagAngle ?? 0);
-        const stretch = p => {
-            if (!resonate) return p;
-            const along = p[0] * ca + p[1] * sa, across = -p[0] * sa + p[1] * ca;
-            const k = along > 0 ? 1.3 : 1.05;
-            return [along * k * ca - across * 0.88 * sa, along * k * sa + across * 0.88 * ca, p[2]];
-        };
-        const vib = (a, f) => resonate ? Math.sin(a * 23 + t * 40 + f.ph) * 1.1 : 0;
 
         // Расщепление: нить облака окрашивается цветом кристалла, распускается, на её месте — новая
         let splitSlot = -1, regrowSlot = -1, sp = 0;
-        const crystal = d.split ? rgb(d.split.color) : null;
+        const crystal = d.ritual === 'split' ? rgb(d.split?.color ?? d.glow) : null;
         if (crystal) {
             const elapsed = (now - this.cycleStart) / 1000;
             const cycle = Math.floor(elapsed / SPLIT_PERIOD);
@@ -221,44 +215,58 @@ export class MindCore {
         const steps = CHUNKS * SUB;
         this.own.forEach((f, idx) => {
             const isSplit = idx === splitSlot;
-            const unravel = isSplit ? smooth((sp - 0.5) / 0.32) : 0;
+            const unravel = isSplit ? smooth((sp - 0.42) / 0.38) : 0;
             const pts = [];
             for (let k = 0; k <= steps; k++) {
                 const u = k / steps;
                 const a = f.start + f.len * u * (1 - unravel * 0.7) + tt * 0.15;
-                const p = stretch(fiberPoint(f, a, tt, scale * (1 + 0.02 * beat), vib(a, f)));
+                const p = fiberPoint(f, a, tt, scale * (1 + 0.02 * beat), 0);
                 let x = cx + p[0], y = cy + p[1];
                 if (unravel) {
+                    // Отрыв: нить целиком уходит наружу, дальний конец — быстрее, и распрямляется
                     const dir = f.start + tt * 0.15 + f.ax;
-                    x += Math.cos(dir) * unravel * 190 * u;
-                    y += Math.sin(dir) * unravel * 190 * u;
+                    x += Math.cos(dir) * unravel * (70 + 230 * u);
+                    y += Math.sin(dir) * unravel * (70 + 230 * u);
                 }
                 pts.push([x, y, p[2]]);
             }
-            const color = isSplit && sp > 0.12 ? u => mix(ownColor, crystal, smooth((sp - 0.12) / 0.33 * 1.4 - u * 0.4)) : ownColor;
-            const fade = isSplit ? 1 - smooth((sp - 0.62) / 0.3) : idx === regrowSlot ? smooth(sp / 0.4) : 1;
-            this.#stroke(pts, color, isSplit ? 2.2 : 1.3, (0.4 + 0.14 * beat) * ownDim * (0.6 + 0.4 * hd) * fade);
+            const base = (0.4 + 0.14 * beat) * ownDim * (0.6 + 0.4 * hd);
+            if (!isSplit) {
+                const fade = idx === regrowSlot ? smooth(sp / 0.4) : 1;
+                return this.#stroke(pts, ownColor, 1.3, base * fade);
+            }
+            // Окрашивание вдоль нити, нить ярче и толще; затем отрыв и угасание
+            const dye = smooth((sp - 0.06) / 0.34);
+            const fade = 1 - smooth((sp - 0.6) / 0.32);
+            const color = u => mix(ownColor, crystal, smooth(dye * 1.5 - u * 0.5));
+            this.#stroke(pts, color, 1.3 + dye * 1.8, (base + dye * (1 - base)) * fade);
+            this.#stroke(pts, u => mix(crystal, WHITE, 0.6), 0.6 + dye * 0.6, dye * 0.5 * fade);
         });
 
-        // Нити навыков: от края облака спиралью к кромке ядра
+        // Нити навыков: кольца вокруг ядра, кружат вместе с облаком; конец крепится к кромке ядра
+        // с той стороны, где навык стоит на кольце
         const attach = [];
         for (const th of this.threads) {
             const since = this.boosts.has(th.id) ? (now - this.boosts.get(th.id)) / 600 : 0;
             const boost = Math.min(1, since);
-            const width = 0.8 + th.rank * 0.45 + boost * 1.2;
+            const width = 0.9 + th.rank * 0.5 + boost * 1.2;
             attach.push({ ang: th.ang, color: th.color, k: 0.55 + 0.15 * th.rank + boost * 0.3 });
-            for (let j = 0; j < 3; j++) {
-                const twist = 0.42 + j * 0.1, outR = EDGE_R * scale;
+            this.rings.get(th.id)?.forEach((f, j) => {
+                const anchor = th.ang + (j - 1) * 0.16;
+                const ax = cx + Math.cos(anchor) * (NUCLEUS_R - 2), ay = cy + Math.sin(anchor) * (NUCLEUS_R - 2);
                 const pts = [];
                 for (let k = 0; k <= steps; k++) {
-                    const u = k / steps, e = smooth(u);
-                    const r = outR + (NUCLEUS_R - 1 - outR) * e;
-                    const th2 = th.ang + twist * e + (j - 1) * 0.08 * (1 - u) + 0.04 * Math.sin(t * 0.8 + j + u * 6);
-                    const p = stretch([Math.cos(th2) * r, Math.sin(th2) * r * 0.96, Math.sin(u * Math.PI * 2 + j) * 40]);
-                    pts.push([cx + p[0], cy + p[1], p[2]]);
+                    const u = k / steps;
+                    const a = f.start + f.len * u + tt * 0.15;
+                    const p = fiberPoint(f, a, tt, scale * (1 - boost * 0.08), 0);
+                    let x = cx + p[0], y = cy + p[1];
+                    // Последняя пятая часть нити сходит с кольца к месту крепления на ядре
+                    const e = smooth((u - 0.78) / 0.22);
+                    x += (ax - x) * e; y += (ay - y) * e;
+                    pts.push([x, y, p[2] * (1 - e)]);
                 }
-                this.#stroke(pts, u => mix(th.color, WHITE, u * 0.35), width, 0.5 + 0.15 * beat, false);
-            }
+                this.#stroke(pts, u => mix(th.color, WHITE, Math.max(0, u - 0.6) * 0.8), width, 0.62 + 0.15 * beat);
+            });
         }
 
         this.#nucleus(cx, cy, t, beat, hd, heat, attach);
@@ -277,7 +285,7 @@ export class MindCore {
             if (k) path.lineTo(x, y); else path.moveTo(x, y);
         }
         const hot = mix([255, 250, 242], [255, 176, 100], heat);
-        const g = ctx.createRadialGradient(cx - 5, cy - 7, 0, cx, cy, R * 1.15);
+        const g = ctx.createRadialGradient(cx - R * 0.2, cy - R * 0.27, 0, cx, cy, R * 1.15);
         g.addColorStop(0, rgba(WHITE, 1));
         g.addColorStop(0.55, rgba(hot, 0.92));
         g.addColorStop(1, rgba(mix(hot, [150, 140, 130], 0.45), 0.85 * (0.6 + 0.4 * hd)));
@@ -296,8 +304,8 @@ export class MindCore {
         // Внутренние блики: ядро — не плоский диск
         for (let k = 0; k < 2; k++) {
             const a = t * (0.7 + k * 0.4) + k * 2;
-            const x = cx + Math.cos(a) * 8, y = cy + Math.sin(a * 1.3) * 8;
-            const wg = ctx.createRadialGradient(x, y, 0, x, y, 14);
+            const x = cx + Math.cos(a) * R * 0.3, y = cy + Math.sin(a * 1.3) * R * 0.3;
+            const wg = ctx.createRadialGradient(x, y, 0, x, y, R * 0.55);
             wg.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
             wg.addColorStop(1, 'rgba(255, 255, 255, 0)');
             ctx.fillStyle = wg;
