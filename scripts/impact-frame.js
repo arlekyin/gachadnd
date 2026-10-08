@@ -1,9 +1,9 @@
 /**
  * Gacha Roguelike dnd5e — Импакт-кадр навыка
  *
- * Навык с полем impact (Мегумин) при использовании меньше чем на секунду закрывает экран у всех игроков
- * стоп-кадром в манга-стиле: белая вспышка, инвертированный кадр, три тона с растром, линии скорости,
- * выкрик и имя навыка, распад на растровые точки от центра удара. Кадр — снимок сцены с токенами
+ * Навык с полем impact (Мегумин) при использовании на треть секунды закрывает экран у всех игроков
+ * стоп-кадром в манга-стиле: белая вспышка, негатив, градиентная карта с растром, линии скорости,
+ * выкрик и имя навыка, затем резкий возврат к сцене. Кадр — снимок сцены с токенами
  * у каждого игрока, удар — в точку шаблона области. Без сцены кадр собирается из арта навыка.
  * «Без вспышек» убирает белую вспышку и инверсию — каждый игрок у себя.
  */
@@ -12,9 +12,11 @@ import { MODULE_ID } from "./constants.js";
 import { emit, onSocket } from "./socket.js";
 
 const PALETTE = { dark: [8, 6, 10], mid: [214, 18, 46], light: [250, 246, 240] };
-// Хронометраж, мс: вспышка → негатив → основной кадр → распад. Весь кадр — меньше секунды
-const T = { flash: 45, negative: 170, main: 560, end: 780 };
-// Ширина снимка для обработки: больше не нужно — кадр всё равно растягивается и дробится растром
+// Хронометраж, мс. Импакт-кадр в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс на рисунок):
+// вспышка — 1 кадр, негатив — 2, основной кадр — 5, затем резкий возврат к сцене.
+// Смены вспышка → негатив → кадр укладываются в три за секунду; calm — только основной кадр
+const T = { flash: 42, negative: 125, end: 340, calm: 300, jolt: 170 };
+// Ширина снимка для обработки: больше не нужно — кадр держится доли секунды
 const SHOT_WIDTH = 960;
 
 export function registerImpactSettings() {
@@ -270,8 +272,7 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
     const cv = document.createElement('canvas');
     cv.className = 'gd-impact';
-    const dpr = 1;
-    cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+    cv.width = innerWidth; cv.height = innerHeight;
     document.body.append(cv);
     const ctx = cv.getContext('2d');
     const W = cv.width, H = cv.height, cx = W * focus.fx, cy = H * focus.fy;
@@ -285,9 +286,6 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
         const bx = (W - src.width * base) / 2, by = (H - src.height * base) / 2;
         ctx.drawImage(src, cx - (cx - bx) * zoom + ox, cy - (cy - by) * zoom + oy, w, h);
     };
-    const still = document.createElement('canvas');
-    still.width = W; still.height = H;
-    let stillReady = false;
     // Линии скорости: клинья от точки удара к краям экрана
     const speedLines = (color, seed, count) => {
         let s = seed;
@@ -320,55 +318,34 @@ export async function playImpact({ name, shout, art, sceneId, point }) {
     const t0 = performance.now();
     const step = now => {
         const t = now - t0;
-        // Последний показанный кадр основной фазы — с выкриком и линиями — застывает и рассыпается
-        if (t >= T.main && !stillReady) { still.getContext('2d').drawImage(cv, 0, 0); stillReady = true; }
+        if (t >= (calm ? T.calm : T.end)) return false;
         ctx.globalAlpha = 1;
         ctx.clearRect(0, 0, W, H);
-        const shake = t < T.main * 0.7 ? (1 - t / (T.main * 0.7)) * 18 * dpr : 0;
+        // Рывок: удар сдвигает кадр, тряска гаснет за пару кадров анимации
+        const shake = t < T.jolt ? (1 - t / T.jolt) * 22 : 0;
         const ox = (Math.random() - 0.5) * shake, oy = (Math.random() - 0.5) * shake;
-        if (t < T.flash && !calm) {
-            // 1. Белая вспышка
+        if (!calm && t < T.flash) {
+            // 1. Белая вспышка — один кадр
             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-        } else if (t < T.negative && !calm) {
-            // 2. Негатив сцены: чёрные линии скорости по краям, рывок масштаба
-            cover(set.inverted, 1.18 - (t - T.flash) / (T.negative - T.flash) * 0.06, ox, oy);
+        } else if (!calm && t < T.negative) {
+            // 2. Негатив сцены с чёрными линиями скорости; масштаб дёргается и сразу встаёт
+            cover(set.inverted, t < T.flash + 42 ? 1.12 : 1.06, ox, oy);
             speedLines('rgba(8, 6, 10, 0.8)', 7, 55);
-        } else if (t < T.main) {
-            // 3. Основной кадр: градиентная карта, светлые линии скорости, выкрик и имя
-            const k = Math.min(1, Math.max(0, (t - T.negative) / (T.main - T.negative)));
+        } else {
+            // 3. Основной кадр: градиентная карта, светлые линии скорости, выкрик и имя — сразу целиком
             ctx.fillStyle = rgb('dark'); ctx.fillRect(0, 0, W, H);
-            cover(set.normal, 1.1 + k * 0.05, ox, oy);
-            // Сдвиг каналов: двойник арта чуть в стороне
-            ctx.globalAlpha = 0.28 * (1 - k); ctx.globalCompositeOperation = 'lighter';
-            cover(set.normal, 1.1 + k * 0.05, ox + 10 * dpr, oy);
-            ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-            speedLines('rgba(250, 246, 240, 0.55)', 11 + Math.floor(t / 60), 70);
+            cover(set.normal, 1.06, ox, oy);
+            // Сдвиг каналов в первый кадр фазы
+            if (t < (calm ? 42 : T.negative + 42)) {
+                ctx.globalAlpha = 0.3; ctx.globalCompositeOperation = 'lighter';
+                cover(set.normal, 1.06, ox + 12, oy);
+                ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+            }
+            speedLines('rgba(250, 246, 240, 0.55)', 11, 70);
             // Полосы кинорамки
             ctx.fillStyle = rgb('dark'); ctx.fillRect(0, 0, W, H * 0.1); ctx.fillRect(0, H * 0.9, W, H * 0.1);
-            const pop = Math.min(1, Math.max(0, (t - T.negative) / 70));
-            title(shout, H * 0.16 * (1.25 - pop * 0.25), rgb('light'), rgb('mid'), -0.08, H * 0.3, pop);
-            title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, Math.min(1, (t - T.negative - 40) / 80));
-        } else if (t < T.end) {
-            // 4. Распад: кадр рассыпается на растровые точки, они сжимаются волной от точки удара
-            const k = (t - T.main) / (T.end - T.main);
-            const cell = 18 * dpr, R = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
-            ctx.beginPath();
-            for (let row = 0, y = 0; y < H + cell; row++, y += cell * 0.87) {
-                for (let x = row % 2 ? cell / 2 : 0; x < W + cell; x += cell) {
-                    const local = Math.min(1, Math.max(0, k * 1.6 - Math.hypot(x - cx, y - cy) / R * 0.6));
-                    const r = cell * 0.62 * (1 - local * local);
-                    if (r < 0.4) continue;
-                    ctx.moveTo(x + r, y);
-                    ctx.arc(x, y, r, 0, Math.PI * 2);
-                }
-            }
-            ctx.fillStyle = '#000';
-            ctx.fill();
-            ctx.globalCompositeOperation = 'source-in';
-            ctx.drawImage(still, 0, 0);
-            ctx.globalCompositeOperation = 'source-over';
-        } else {
-            return false;
+            title(shout, H * 0.16, rgb('light'), rgb('mid'), -0.08, H * 0.3, 1);
+            title(name, H * 0.06, rgb('mid'), rgb('dark'), -0.03, H * 0.8, 1);
         }
         return true;
     };
