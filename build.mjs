@@ -304,11 +304,13 @@ function validateSkill(skill, folder) {
     }
     if (skill.forced_loot !== undefined && !isPositiveInt(skill.forced_loot)) err('forced_loot', 'должно быть целым числом больше 0');
     if (skill.drawback !== undefined && !isNonEmptyString(skill.drawback)) err('drawback', 'должно быть непустой строкой');
+    // impact: true — кадр из снимка сцены; { art } — арт для показа вне сцены вместо иконки навыка
+    if (skill.impact !== undefined && skill.impact !== true) {
+        const { art, ...extra } = typeof skill.impact === 'object' && skill.impact ? skill.impact : { art: null };
+        Object.keys(extra).forEach(k => err(`impact.${k}`, 'неизвестное поле (допустимо: art)'));
+        if (!isNonEmptyString(art)) err('impact.art', 'путь к арту кадра; без арта — impact: true');
+    }
     if (skill.impact !== undefined) {
-        const { shout, art, ...extra } = skill.impact ?? {};
-        Object.keys(extra).forEach(k => err(`impact.${k}`, 'неизвестное поле (допустимы: shout, art)'));
-        if (!isNonEmptyString(shout)) err('impact.shout', 'обязательное поле: выкрик на кадре');
-        if (art !== undefined && !isNonEmptyString(art)) err('impact.art', 'путь к арту кадра');
         if (!isActive) err('impact', 'кадр показывается при использовании — нужна activation');
     }
 
@@ -693,7 +695,7 @@ function buildItem(skill, folder, rank = 1) {
                 // Тексты рангов II–III: для сообщения о слиянии и для Мастера в Терминале
                 ...(rankTexts.length ? { rank_texts: rankTexts } : {}),
                 ...(skill.drawback ? { drawback: skill.drawback } : {}),
-                ...(skill.impact ? { impact: { shout: skill.impact.shout, ...(skill.impact.art ? { art: skill.impact.art } : {}) } } : {}),
+                ...(skill.impact ? { impact: skill.impact.art ? { art: skill.impact.art } : true } : {}),
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
