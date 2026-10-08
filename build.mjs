@@ -879,7 +879,7 @@ for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm', 'gacha-bestiary']
 }
 
 // Бестиарий: существа Лабиринта
-const creatures = buildBestiary({ distDir: './dist/packs', stableId });
+const creatures = buildBestiary({ distDir: './dist/packs', stableId, skills: items.map(({ item }) => item) });
 
 // Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
 let journals = [];
