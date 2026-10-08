@@ -1664,7 +1664,7 @@
 /* Ядро сознания рисует холст вокруг центра; .gd-core — граница облака: цель броска огонька
    и препятствие для огоньков */
 .gachadnd-memory-altar .gd-core { position: absolute; width: 250px; height: 250px; transform: translate(-50%, -50%); pointer-events: none; }
-.gachadnd-memory-altar .gd-mind-core { position: absolute; z-index: 1; width: 780px; height: 780px; transform: translate(-50%, -50%); pointer-events: none; }
+.gachadnd-memory-altar .gd-mind-core { position: absolute; z-index: 1; width: 900px; height: 900px; transform: translate(-50%, -50%); pointer-events: none; }
 
 /* Узлы орбиты — навыки, уже ставшие частью персонажа: тела нейронов. Ядро цвета редкости с ободком,
    вокруг мягко пульсирует ореол. Пряди к ядру Алтаря и воронки к соседям рисует холст связей */
