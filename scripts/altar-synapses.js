@@ -2,7 +2,7 @@
  * Gacha Roguelike dnd5e — связи кольца Слияния на Алтаре Памяти
  *
  * Навыки в кольце — нейроны. Каждый связан с ядром Алтаря пучком из 3–6 прядей: у тела пряди стянуты,
- * посередине слегка переплетаются, у ядра расходятся и цепляются за его край в разных точках; цвет —
+ * посередине слегка переплетаются, сквозь облако доходят до белого ядра и цепляются за его кромку; цвет —
  * от цвета навыка к белому у ядра. Соседи по кольцу связаны воронками: пряди выходят из тела раструбом
  * и сходятся в линию, мягко выгнутую наружу. Ни одна линия не обрывается в пустоту.
  *
@@ -178,8 +178,9 @@ export class AltarSynapses {
             for (let k = 0; k < count; k++) {
                 const f = k / (count - 1) - 0.5;
                 const start = [n.x + Math.cos(dir + f * 1.1) * SOMA_R, n.y + Math.sin(dir + f * 1.1) * SOMA_R];
-                const angle = dir + Math.PI + f * 0.85 + (rand() - 0.5) * 0.12;
-                const end = [core.x + Math.cos(angle) * core.r, core.y + Math.sin(angle) * core.r];
+                // Пряди тянутся сквозь облако до самого ядра и сходятся у кромки
+                const angle = dir + Math.PI + f * 0.5 + (rand() - 0.5) * 0.1;
+                const end = [core.x + Math.cos(angle) * NUCLEUS_R, core.y + Math.sin(angle) * NUCLEUS_R];
                 const twist = (rand() - 0.5) * 14;
                 const c1 = [n.x + Math.cos(dir) * dist * 0.3 + nx * f * 4, n.y + Math.sin(dir) * dist * 0.3 + ny * f * 4];
                 const c2 = [n.x + Math.cos(dir) * dist * 0.62 + nx * (twist - f * 10), n.y + Math.sin(dir) * dist * 0.62 + ny * (twist - f * 10)];
