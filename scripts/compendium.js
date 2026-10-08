@@ -118,3 +118,26 @@ Hooks.on('renderCompendium', async (app, html, data) => {
         searchInput.addEventListener('search', () => setTimeout(applyFilters, 50));
     }
 });
+// Компендиум навыков и правила открыты всем игрокам. Права из module.json — лишь значение по умолчанию:
+// Foundry хранит права компендиумов в настройках мира, и сохранённое там значение их перекрывает.
+// При запуске Мастер поднимает права до Наблюдателя, если у Игрока или Доверенного они ниже
+const OPEN_PACKS = ['gacha-skills', 'gacha-rules'];
+Hooks.once('ready', async () => {
+    if (!game.user.isGM || !(game.user.isActiveGM ?? true)) return;
+    const levels = CONST.DOCUMENT_OWNERSHIP_LEVELS;
+    for (const name of OPEN_PACKS) {
+        const pack = game.packs.get(`${MODULE_ID}.${name}`);
+        if (!pack?.configure) continue;
+        const ownership = { ...(pack.ownership ?? pack.config?.ownership ?? {}) };
+        let changed = false;
+        for (const role of ['PLAYER', 'TRUSTED']) {
+            if ((levels[ownership[role]] ?? -1) < levels.OBSERVER) {
+                ownership[role] = 'OBSERVER';
+                changed = true;
+            }
+        }
+        if (!changed) continue;
+        await pack.configure({ ownership });
+        console.log(`${MODULE_ID} | ${pack.metadata.label}: игрокам открыт просмотр`);
+    }
+});
