@@ -2019,3 +2019,15 @@
 
 .gachadnd-map-chat { padding: 6px 10px; border: 2px solid #141210; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: linear-gradient(160deg, #eedcb2, #dcc290); color: #141210; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 20px; }
 .gachadnd-map-chat i { color: color-mix(in srgb, var(--node, #141210) 35%, #141210); }
+
+/* ==========================================
+   ИМПАКТ-КАДР НАВЫКА
+   ========================================== */
+.gd-impact {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 10000;
+    pointer-events: none;
+}

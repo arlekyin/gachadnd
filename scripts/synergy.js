@@ -468,9 +468,9 @@ Hooks.once('ready', async () => {
     }
 });
 
-// Навыки, полученные до появления новых полей (combat_changes — Берсерк, trigger — автоматизация),
+// Навыки, полученные до появления новых полей (combat_changes — Берсерк, trigger — автоматизация, impact — кадр Мегумин),
 // берут эти данные из компендиума
-const MIGRATED_FLAGS = ['combat_changes', 'trigger'];
+const MIGRATED_FLAGS = ['combat_changes', 'trigger', 'impact'];
 async function migrateSkillFlags(actor) {
     const pack = getSkillPack();
     if (!pack) return;

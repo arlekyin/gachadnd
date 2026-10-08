@@ -201,7 +201,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -304,6 +304,13 @@ function validateSkill(skill, folder) {
     }
     if (skill.forced_loot !== undefined && !isPositiveInt(skill.forced_loot)) err('forced_loot', 'должно быть целым числом больше 0');
     if (skill.drawback !== undefined && !isNonEmptyString(skill.drawback)) err('drawback', 'должно быть непустой строкой');
+    if (skill.impact !== undefined) {
+        const { shout, art, ...extra } = skill.impact ?? {};
+        Object.keys(extra).forEach(k => err(`impact.${k}`, 'неизвестное поле (допустимы: shout, art)'));
+        if (!isNonEmptyString(shout)) err('impact.shout', 'обязательное поле: выкрик на кадре');
+        if (art !== undefined && !isNonEmptyString(art)) err('impact.art', 'путь к арту кадра');
+        if (!isActive) err('impact', 'кадр показывается при использовании — нужна activation');
+    }
 
     if (skill.ranks !== undefined && UNIQUE_RARITIES.includes(skill.rarity)) {
         err('ranks', `навыки редкости ${UNIQUE_RARITIES.join(', ')} уникальны и не имеют рангов`);
@@ -686,6 +693,7 @@ function buildItem(skill, folder, rank = 1) {
                 // Тексты рангов II–III: для сообщения о слиянии и для Мастера в Терминале
                 ...(rankTexts.length ? { rank_texts: rankTexts } : {}),
                 ...(skill.drawback ? { drawback: skill.drawback } : {}),
+                ...(skill.impact ? { impact: { shout: skill.impact.shout, ...(skill.impact.art ? { art: skill.impact.art } : {}) } } : {}),
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
