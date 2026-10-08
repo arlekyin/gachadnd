@@ -19,5 +19,4 @@ save:
 damage:
   - formula: 8d6
     type: fire
-impact:
-  shout: ВЗРЫВ!
+impact: true
