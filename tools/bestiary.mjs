@@ -351,7 +351,8 @@ function scrap(stableId) {
 // кто видит его свет; полосы и имя скрыты, в бой его не добавляют
 function portal(stableId) {
     const A = stableId('bestiary', 'portal');
-    const img = 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp';
+    // Цвет серого навыка (#9d9d9d) — как туман серой редкости
+    const img = 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp';
     return {
         _id: A, name: 'Портал узла', type: 'npc', img,
         system: {
@@ -369,11 +370,11 @@ function portal(stableId) {
         },
         prototypeToken: {
             name: 'Портал узла', displayName: 0, displayBars: 0, actorLink: false, disposition: 0,
-            width: 1, height: 1, lockRotation: true,
+            width: 2, height: 2, lockRotation: true,
             texture: { src: img, scaleX: 1.2, scaleY: 1.2 },
             sight: { enabled: false },
             light: {
-                bright: 5, dim: 20, angle: 360, color: '#a35cff', alpha: 0.55, coloration: 1, luminosity: 0.5,
+                bright: 10, dim: 30, angle: 360, color: '#9d9d9d', alpha: 0.55, coloration: 1, luminosity: 0.5,
                 attenuation: 0.6, saturation: 0.2, contrast: 0, shadows: 0,
                 animation: { type: 'vortex', speed: 2, intensity: 4, reverse: false }
             }
