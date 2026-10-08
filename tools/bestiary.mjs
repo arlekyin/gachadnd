@@ -130,7 +130,7 @@ function devourer(stableId, skills) {
         natural(A, id('claw'), 'Коготь', 'icons/skills/melee/strike-slashes-red.webp', html(
             'Рукопашная атака: досягаемость 5 футов. Урон 2к6 + модификатор Силы, рубящий. К попаданию прибавляется Насыщение.'
         ), [2, 6, 'slashing'], [attack('claw', 'Коготь')]),
-        natural(A, id('bite'), 'Укус-пожирание', 'icons/skills/wounds/bone-broken-tooth-fang-red.webp', html(
+        natural(A, id('bite'), 'Укус-пожирание', 'icons/creatures/abilities/mouth-teeth-long-red.webp', html(
             'Рукопашная атака: досягаемость 5 футов. Урон 2к8 + модификатор Силы, колющий. К попаданию прибавляется Насыщение.',
             '<strong>Пожирание кристалла.</strong> Если у цели есть кристаллы, она проходит спасбросок Ловкости (Сл 13 + Насыщение). При провале случайный кристалл из её инвентаря уходит в Брюхо.',
             '<strong>Переварить.</strong> Пожиратель восстанавливает 5 ПЗ за каждую единицу веса проглоченного кристалла: кнопки по редкости.'
@@ -282,7 +282,8 @@ function memorySkill(actorId, id, face, source, name) {
 function scrap(stableId) {
     const A = stableId('bestiary', 'scrap');
     const id = (...parts) => stableId('bestiary', 'scrap', ...parts);
-    const img = 'modules/gachadnd/assets/icons/skills/grey_fog_crystall.webp';
+    // Иконка ядра Foundry, которую использует сам dnd5e: путь гарантированно существует
+    const img = 'icons/creatures/unholy/demon-winged-cyclops-drooling.webp';
     const items = [
         feat(A, id('carry'), 'Носильщик', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
             'Огрызок держит не больше одного кристалла. С кристаллом он движется к Пожирателю; если заканчивает ход в пределах 5 футов от него, кристалл уходит в Брюхо.',
@@ -291,7 +292,7 @@ function scrap(stableId) {
         feat(A, id('crumble'), 'Рассыпчатый', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
             'На 0 ПЗ Огрызок рассыпается туманом: клетка, где он стоял, сильно заслонена до конца следующего раунда.'
         )),
-        natural(A, id('grab'), 'Хват', 'icons/skills/wounds/bone-broken-tooth-fang-red.webp', html(
+        natural(A, id('grab'), 'Хват', 'icons/creatures/claws/claw-scaled-red.webp', html(
             'Рукопашная атака: досягаемость 5 футов. Урон 1к6 + модификатор Ловкости, колющий.',
             '<strong>Выхватить.</strong> Если у цели есть кристаллы и у Огрызка руки пусты, цель проходит спасбросок Ловкости Сл 12. При провале Огрызок выхватывает случайный кристалл.'
         ), [1, 6, 'piercing'], [
@@ -330,7 +331,7 @@ function scrap(stableId) {
         prototypeToken: {
             name: 'Огрызок памяти', displayName: 20, actorLink: false, disposition: -1, displayBars: 40,
             bar1: { attribute: 'attributes.hp' }, width: 1, height: 1,
-            texture: { src: img, scaleX: 0.8, scaleY: 0.8 }, sight: { enabled: false }, appendNumber: true
+            texture: { src: img, scaleX: 0.8, scaleY: 0.8, tint: '#b4b4b4' }, sight: { enabled: false }, appendNumber: true
         },
         items, effects: [], folder: null, sort: 0, ownership: { default: 0 },
         flags: { gachadnd: { creature: 'scrap' } },
