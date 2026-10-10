@@ -23,17 +23,17 @@ const HIT = `${SATIETY} + ${DEPTH}`;
 
 // Память Пожирателя: навыки компендиума по граням. В бою доступен только навык выпавшей грани.
 // Грани 7–8 открываются с Глубины 4 (к8), 9–10 — с Глубины 7 (к10)
-const MEMORY = ['Квен', 'Удалой рывок', 'Хайзенберг', 'Игни', 'Нейрализатор', 'Фус-Ро-Да', 'Мегумин', 'Кукловод', 'ЗА ВАРУДО', 'Ещё один потомок Вергилия'];
-const MEMORY_DEPTH = face => face >= 9 ? 7 : face >= 7 ? 4 : 1;
+export const MEMORY = ['Квен', 'Удалой рывок', 'Хайзенберг', 'Игни', 'Нейрализатор', 'Фус-Ро-Да', 'Мегумин', 'Кукловод', 'ЗА ВАРУДО', 'Ещё один потомок Вергилия'];
+export const MEMORY_DEPTH = face => face >= 9 ? 7 : face >= 7 ? 4 : 1;
 // Ранги навыков Памяти: ранг II с Глубины 3, ранг III с Глубины 6
-const RANK_DEPTH = { 2: 3, 3: 6 };
+export const RANK_DEPTH = { 2: 3, 3: 6 };
 
 /**
  * Глубина N — эффект номера этажа. Профиль листа — второй этаж (Глубина 2, без изменений).
  * hit — к попаданию и Сл, damage — к урону каждого удара, hp — к максимуму ПЗ, ac — к КД,
  * legact / legres — к числу легендарных действий и сопротивлений.
  */
-const DEPTHS = {
+export const DEPTHS = {
     1: { hit: -1, damage: 0, hp: -40, ac: -1, legact: 0, legres: 0 },
     2: { hit: 0, damage: 0, hp: 0, ac: 0, legact: 0, legres: 0 },
     3: { hit: 1, damage: 2, hp: 40, ac: 0, legact: 0, legres: 0 },
@@ -45,6 +45,15 @@ const DEPTHS = {
     9: { hit: 4, damage: 14, hp: 280, ac: 3, legact: 1, legres: 2 },
     10: { hit: 4, damage: 16, hp: 320, ac: 4, legact: 1, legres: 2 }
 };
+// Базовый профиль (второй этаж): лист актёра и симулятор боёв (tools/sim) берут числа отсюда
+export const DEVOURER = {
+    ac: 15, hp: 152, hpFormula: '16d10 + 64', prof: 3, cr: 6,
+    abilities: { str: 18, dex: 16, con: 18, int: 6, wis: 14, cha: 8 }, saves: ['dex', 'wis'],
+    legact: 2, legres: 1, dc: 14,
+    claw: [2, 8, 'slashing'], bite: [3, 8, 'piercing'],
+    satietyHp: n => 20 * (n >= 3 ? n - 1 : 1)
+};
+
 // Что открывает глубина: строки эффекта и особенностей «Глубина N+»
 const DEPTH_UNLOCKS = {
     3: 'серые, зелёные и синие навыки Памяти — ранг II',
@@ -305,10 +314,10 @@ function devourer(stableId, skills) {
         disabled: true, transfer: false,
         changes: [
             { key: 'flags.gachadnd.satiety', mode: 5, value: String(n), priority: 20 },
-            { key: 'system.attributes.hp.max', mode: 2, value: String(20 * (n >= 3 ? n - 1 : 1)), priority: 20 },
+            { key: 'system.attributes.hp.max', mode: 2, value: String(DEVOURER.satietyHp(n)), priority: 20 },
             ...(n >= 2 ? [{ key: 'system.resources.legres.max', mode: 2, value: '1', priority: 20 }] : [])
         ],
-        description: html(`Насыщение ${n}: +${n} к попаданию и Сл, +${20 * (n >= 3 ? n - 1 : 1)} к максимуму ПЗ` +
+        description: html(`Насыщение ${n}: +${n} к попаданию и Сл, +${DEVOURER.satietyHp(n)} к максимуму ПЗ` +
             (n >= 2 ? ', легендарное сопротивление +1, Память — два броска на выбор' : '') +
             (n >= 3 ? ', Укус глотает 2 кристалла' : '') + '. Включайте только один эффект Насыщения.'),
         duration: {}, origin: null, statuses: [], flags: {}, tint: '#ffffff',
@@ -347,11 +356,11 @@ function devourer(stableId, skills) {
         type: 'npc',
         img: IMG,
         system: {
-            abilities: Object.fromEntries(Object.entries({ str: 18, dex: 16, con: 18, int: 6, wis: 14, cha: 8 })
-                .map(([key, value]) => [key, { value, proficient: ['dex', 'wis'].includes(key) ? 1 : 0, bonuses: { check: '', save: '' } }])),
+            abilities: Object.fromEntries(Object.entries(DEVOURER.abilities)
+                .map(([key, value]) => [key, { value, proficient: DEVOURER.saves.includes(key) ? 1 : 0, bonuses: { check: '', save: '' } }])),
             attributes: {
-                ac: { flat: 15, calc: 'natural', formula: '' },
-                hp: { value: 152, max: 152, temp: 0, tempmax: 0, formula: '16d10 + 64' },
+                ac: { flat: DEVOURER.ac, calc: 'natural', formula: '' },
+                hp: { value: DEVOURER.hp, max: DEVOURER.hp, temp: 0, tempmax: 0, formula: DEVOURER.hpFormula },
                 movement: { walk: 40, climb: 30, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false },
                 senses: { darkvision: 60, blindsight: 30, tremorsense: 0, truesight: 0, units: 'ft', special: '' }
             },
@@ -359,7 +368,7 @@ function devourer(stableId, skills) {
                 biography: { value: biography(), public: '' },
                 alignment: 'Хаотично-нейтральный',
                 type: { value: 'aberration', subtype: 'аномалия', swarm: '', custom: '' },
-                cr: 6, environment: 'Лабиринт Тумана'
+                cr: DEVOURER.cr, environment: 'Лабиринт Тумана'
             },
             traits: {
                 size: 'lg',
