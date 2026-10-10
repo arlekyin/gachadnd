@@ -13,8 +13,7 @@ export function getSkillPack() {
 }
 
 export function crystalImage(rarity) {
-    // У оранжевых всадников пока нет своей иконки
-    const file = { gray: 'grey', orange: 'red' }[rarity] ?? rarity;
+    const file = { gray: 'grey' }[rarity] ?? rarity;
     return `modules/${MODULE_ID}/assets/icons/skills/${file}_fog_crystall.webp`;
 }
 
