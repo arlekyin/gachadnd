@@ -8,6 +8,7 @@ import { DoomAltar } from "./altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
 import { PortalWindow } from "./portal.js";
+import { pulseView, resetPulse } from "./pulse.js";
 import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 
@@ -391,7 +392,8 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             nextFloor: map?.visitedNodes?.length ? floor + 1 : floor,
             isGM: game.user.isGM,
             hasMap: !!map?.nodes?.length,
-            scent: game.user.isGM ? partyScent(undefined, floor) : null
+            scent: game.user.isGM ? partyScent(undefined, floor) : null,
+            pulse: game.user.isGM ? pulseView() : null
         };
         if (!context.hasMap) return context;
 
@@ -506,6 +508,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         // Шаг по карте уводит из Якоря; серия Войны и штраф проклятой Войны; окна узлов
         await leaveAnchor();
         await onNodeEntered(nodeData.type);
+        if (nodeData.type === MAP_DATA.NODE_REST) await resetPulse();
         openNodeWindow(nodeData.type);
 
         const label = MAP_DATA.LABELS[nodeData.type] ?? nodeData.label;

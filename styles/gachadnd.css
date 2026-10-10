@@ -1998,6 +1998,7 @@
 .gachadnd-map .gd-map-here { font-weight: 700; color: var(--blood); }
 .gachadnd-map .gd-map-next { color: var(--ink-soft); }
 .gachadnd-map .gd-map-next b { margin-left: 6px; font-weight: 700; color: color-mix(in srgb, var(--node) 35%, #141210); }
+.gachadnd-map .gd-map-pulse { align-self: flex-start; font-size: 18px; color: color-mix(in srgb, var(--pulse) 45%, #141210); }
 .gachadnd-map .gd-map-scent { align-self: flex-start; font-weight: 700; color: color-mix(in srgb, var(--scent) 45%, #141210); }
 .gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 14px; }
 .gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 5px; }
