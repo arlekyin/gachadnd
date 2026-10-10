@@ -1,0 +1,30 @@
+<div class="gd-draft">
+    {{#if active}}
+    <header class="gd-draft-head">
+        <span class="gd-draft-room">{{room}}</span>
+        <strong class="gd-draft-turn">{{#if mine}}Выбирает {{picker}} — ваш ход{{else}}Выбирает {{picker}}{{/if}}</strong>
+    </header>
+    <ol class="gd-draft-order">
+        {{#each order}}
+        <li class="{{#if current}}current{{/if}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if count}}<b>{{count}}</b>{{/if}}</li>
+        {{/each}}
+    </ol>
+    <div class="gd-draft-pool">
+        {{#each pool}}
+        <button type="button" class="gd-draft-crystal" style="--rarity: {{color}}" data-action="pick" data-key="{{key}}" {{#unless ../mine}}disabled{{/unless}}>
+            <img src="{{img}}" alt="">
+            <span class="gd-draft-name">{{name}}</span>
+            <span class="gd-draft-meta">{{category}}{{#if tags}} · {{tags}}{{/if}}</span>
+        </button>
+        {{/each}}
+    </div>
+    {{#if isGM}}
+    <footer class="gd-draft-gm">
+        <button type="button" data-action="skip"><i class="fas fa-forward"></i> Пропустить ход</button>
+        <button type="button" data-action="stop"><i class="fas fa-stop"></i> Закрыть распределение</button>
+    </footer>
+    {{/if}}
+    {{else}}
+    <p class="gd-draft-empty">Распределение не идёт.</p>
+    {{/if}}
+</div>
