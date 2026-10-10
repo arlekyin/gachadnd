@@ -198,9 +198,9 @@ function sigilSvg(o) {
     const w = 2 * (extentX + 40), h = 2 * (extentY + 40);
     const parts = [];
     for (const r of o.rings ?? []) parts.push(`<ellipse class="gd-sigil-ring ${r.cls ?? ''}" cx="0" cy="0" rx="${f1(r.rx)}" ry="${f1(r.ry)}"/>`);
-    if (o.runes) {
-        parts.push(`<g class="gd-runes">${RUNES.map((d, n) => runeAt(d, n, RUNES.length, o.runes.rx, o.runes.ry, n < o.runes.lit)).join('')}</g>`);
-    }
+    // Кольцо рун вращается отдельным слоем: вращение элемента целиком анимирует видеокарта, а вращение
+    // группы внутри SVG перерисовывало бы весь круг на основном потоке каждый кадр
+    const runes = o.runes ? `<g class="gd-runes">${RUNES.map((d, n) => runeAt(d, n, RUNES.length, o.runes.rx, o.runes.ry, n < o.runes.lit)).join('')}</g>` : '';
     if (o.rays) {
         for (let n = 0; n < o.rays.count; n++) {
             const a = (n * 360 / o.rays.count - 90) * Math.PI / 180;
@@ -255,7 +255,8 @@ function sigilSvg(o) {
     });
     if (o.sockets) points.forEach(([x, y], i) => parts.push(`<circle class="gd-sigil-socket ${filled[i] ? 'lit' : ''}" cx="${f1(x)}" cy="${f1(y)}" r="${o.sockets}"/>`));
     if (o.center) parts.push(`<circle class="gd-sigil-socket center ${o.center.lit ? 'lit' : ''}" cx="0" cy="0" r="${o.center.r}"/>`);
-    return `<svg class="gd-sigil gd-sigil-${o.kind}" viewBox="${f1(-w / 2)} ${f1(-h / 2)} ${f1(w)} ${f1(h)}" width="${f1(w)}" height="${f1(h)}" aria-hidden="true">${parts.join('')}</svg>`;
+    const svg = (cls, body) => `<svg class="gd-sigil gd-sigil-${o.kind} ${cls}" viewBox="${f1(-w / 2)} ${f1(-h / 2)} ${f1(w)} ${f1(h)}" width="${f1(w)}" height="${f1(h)}" aria-hidden="true">${body}</svg>`;
+    return (runes ? svg('gd-sigil-runes', runes) : '') + svg('', parts.join(''));
 }
 
 // Фаза покачивания огонька привязана к часам и ключу, а не к моменту отрисовки:
@@ -767,7 +768,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#physics = null;
         this.#synapses?.stop();
         this.#synapses = null;
-        this.#weave.stop();
+        this.#weave.dispose();
         this.#mind.stop();
     }
 
