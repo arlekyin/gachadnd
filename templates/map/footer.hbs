@@ -8,6 +8,9 @@
         <span class="gd-map-next">Отряд у Входа — путь начинается с него</span>
         {{/if}}
     </div>
+    {{#if scent}}
+    <span class="gd-map-scent" style="--scent: {{scent.color}}" title="Запах отряда · Шёпот от {{scent.thresholds.whisper}}, Охота от {{scent.thresholds.hunt}} · видит только Мастер"><i class="fas {{scent.icon}}"></i> {{scent.label}} · {{scent.value}}</span>
+    {{/if}}
     <div class="gd-map-legend">
         {{#each legend}}<span style="--node: {{color}}" title="{{label}}"><i class="fas {{icon}}"></i>{{count}}</span>{{/each}}
     </div>

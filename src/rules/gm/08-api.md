@@ -12,6 +12,8 @@
 | `game.gachadnd.openDoomAltar()` | Алтарь Погибели на текущем узле |
 | `game.gachadnd.openMemoryAltar(actor)` | Алтарь Памяти персонажа (на Привале) |
 | `game.gachadnd.setRest(true)` / `setRest(false)` | открыть или закрыть Привал без карты; при открытии у игроков открывается Алтарь Памяти |
+| `game.gachadnd.setAnchor(true)` / `setAnchor(false)` | открыть или закрыть Якорь (то же, что кнопка Якорь) |
+| `game.gachadnd.scent()` | Запах отряда: `{ value, state, label, thresholds, members }` |
 | `game.gachadnd.giveCrystal(actor, 'Имя навыка')` | выдать кристалл навыка |
 | `game.gachadnd.recoverUses('gachaRun')` | восстановить заряды «1 раз за забег» |
 | `game.gachadnd.eventRewards({ tier: 'notable', count: 3, title: 'Тайник' })` | награды события каждому персонажу отряда; `tier`: `small`, `notable`, `rare`, `floor` |
