@@ -187,7 +187,7 @@ const TAG_KEYS = Object.fromEntries(synergies.map(s => [s.tag, s.key]));
 const TAG_NAMES = Object.fromEntries(synergies.map(s => [s.key, s.tag]));
 
 // Рисунки импакт-кадра под навык
-const IMPACT_STYLES = ['slash'];
+const IMPACT_STYLES = ['slash', 'fists'];
 
 const ACTIVATION_TYPES = [
     'none', 'action', 'bonus', 'reaction', 'minute', 'hour', 'day', 'longRest', 'shortRest',

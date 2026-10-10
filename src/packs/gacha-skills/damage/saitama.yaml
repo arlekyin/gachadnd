@@ -11,3 +11,5 @@ recovery: long
 damage:
   - formula: 12d8
     type: bludgeoning
+impact:
+  style: fists
