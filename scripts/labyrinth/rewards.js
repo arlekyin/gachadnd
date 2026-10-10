@@ -27,7 +27,7 @@ import { getHorseman, isCleansed, addCleanseProgress, partyActors } from "./hors
 import { onSocket, requestGM, isActiveGM } from "../core/socket.js";
 import { addTokenTools } from "../core/controls.js";
 
-const { ApplicationV2 } = foundry.applications.api;
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 export const TIERS = { small: 'Малая', notable: 'Заметная', rare: 'Редкая' };
 // «По этажу»: шансы уровней растут с этажом
@@ -336,7 +336,7 @@ export async function expireFloorSlots(floor = getFloor()) {
 // ОКНО МАСТЕРА
 // ==========================================
 
-export class EventRewardsWindow extends ApplicationV2 {
+export class EventRewardsWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         id: 'gachadnd-event-rewards',
         classes: ['gachadnd-event-rewards-window'],
@@ -346,27 +346,15 @@ export class EventRewardsWindow extends ApplicationV2 {
         actions: { send: EventRewardsWindow.#onSend }
     };
 
-    async _renderHTML() {
-        const selected = new Set(canvas.tokens?.controlled.map(t => t.actor?.id).filter(Boolean));
-        const party = partyActors();
-        const chosen = id => selected.size ? selected.has(id) : true;
-        return `
-            <label>Название <input type="text" name="title" value="Награда события"></label>
-            <label>Уровень
-                <select name="tier">
-                    <option value="floor">По этажу (${getFloor()})</option>
-                    ${Object.entries(TIERS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
-                </select>
-            </label>
-            <label>Вариантов <input type="number" name="count" value="3" min="1" max="4"></label>
-            <fieldset><legend>Кому — каждому своя карточка</legend>
-                ${party.map(a => `<label class="gd-check"><input type="checkbox" name="actor" value="${a.id}" ${chosen(a.id) ? 'checked' : ''}> ${esc(a.name)}</label>`).join('') || '<p>Нет персонажей игроков.</p>'}
-            </fieldset>
-            <button type="button" data-action="send"><i class="fas fa-gift"></i> Предложить награды</button>`;
-    }
+    static PARTS = { body: { template: 'modules/gachadnd/templates/rewards/window.hbs' } };
 
-    _replaceHTML(result, content) {
-        content.innerHTML = result;
+    async _prepareContext() {
+        const selected = new Set(canvas.tokens?.controlled.map(t => t.actor?.id).filter(Boolean));
+        return {
+            floor: getFloor(),
+            tiers: Object.entries(TIERS).map(([key, label]) => ({ key, label })),
+            party: partyActors().map(a => ({ id: a.id, name: a.name, checked: selected.size ? selected.has(a.id) : true }))
+        };
     }
 
     static async #onSend() {
