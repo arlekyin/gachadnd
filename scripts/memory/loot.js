@@ -108,78 +108,53 @@ function settlePity(pity, rarity) {
     if (rarity === 'red') pity.red = 0;
 }
 
-export class GachaLootTerminal extends Application {
-    constructor(options = {}) {
-        super(options);
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+export const LOOT_ID = 'gachadnd-loot-terminal';
+
+// Пункты окна генератора: комнаты с нормой на игрока и фильтр редкости
+const ROOM_OPTIONS = [
+    { value: 'normal', label: 'Обычная комната (1 на игрока)' },
+    { value: 'elite', label: 'Элитный противник, Застава (1,5 на игрока)' },
+    { value: 'boss', label: 'Босс (2 на игрока)' },
+    { value: 'cursed', label: 'Проклятая комната (2 на игрока)' }
+];
+const RARITY_OPTIONS = [
+    { value: 'any', label: 'Без фильтра (стандартные шансы)' },
+    { value: 'gray', label: 'Только серые' },
+    { value: 'green', label: 'Только зелёные' },
+    { value: 'blue', label: 'Только синие' },
+    { value: 'purple', label: 'Только фиолетовые' },
+    { value: 'red', label: 'Только красные' }
+].map(o => ({ ...o, color: RARITY_COLORS[o.value] ?? null }));
+
+export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
+    static DEFAULT_OPTIONS = {
+        id: LOOT_ID,
+        classes: ['gachadnd-loot'],
+        tag: 'form',
+        window: { title: 'Генератор добычи (Мастер)', icon: 'fas fa-gem' },
+        position: { width: 380, height: 'auto' },
+        form: { handler: GachaLootTerminal.#onSubmit, closeOnSubmit: true }
+    };
+
+    static PARTS = { form: { template: 'modules/gachadnd/templates/loot/form.hbs' } };
+
+    static open() {
+        const existing = foundry.applications.instances?.get(LOOT_ID);
+        if (existing) return existing.render({ force: true }).then(() => existing.bringToFront?.());
+        return new GachaLootTerminal().render({ force: true });
     }
 
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "gachadnd-loot-terminal",
-            template: null,
-            width: 380,
-            height: "auto",
-            resizable: false,
-            classes: ["dnd5e2", "gacha-dark-theme"]
-        });
+    async _prepareContext() {
+        return {
+            rooms: ROOM_OPTIONS, rarities: RARITY_OPTIONS,
+            players: game.users.filter(u => u.active && !u.isGM).length || 4
+        };
     }
 
-    get title() { return `Генератор Лута (Мастер)`; }
-
-    async _renderInner(data) {
-        const activePlayersCount = game.users.filter(u => u.active && !u.isGM).length || 4;
-        const div = document.createElement("div");
-        div.style.cssText = "padding: 18px; display: flex; flex-direction: column; gap: 16px; background: #0b0a0a; color: #d0c9c0; font-family: 'Modesto Condensed', serif; box-sizing: border-box;";
-        div.innerHTML = `
-            <div style="text-align: center; border-bottom: 1px solid #3d3834; padding-bottom: 12px;">
-                <div style="font-size: 1.6em; color: #ede6dc; letter-spacing: 1px;"><i class="fas fa-gem" style="color: #ffaa00;"></i> ПРИЗЫВ ТУМАНА</div>
-            </div>
-            <div>
-                <label style="display: block; font-size: 1.15em; color: #8c8275; margin-bottom: 6px;">Тип завершенной комнаты:</label>
-                <select id="gacha-room-type" style="width: 100%; background: #161414; color: #f5efe6; border: 1px solid #3d3834; height: 30px; border-radius: 4px;">
-                    <option value="normal">Обычная комната (1 на игрока)</option>
-                    <option value="elite">Элитный противник, Застава (1,5 на игрока)</option>
-                    <option value="boss">Босс (2 на игрока)</option>
-                    <option value="cursed">Проклятая комната (2 на игрока)</option>
-                </select>
-            </div>
-            <div>
-                <label style="display: block; font-size: 1.15em; color: #8c8275; margin-bottom: 6px;">Фильтр редкости:</label>
-                <select id="gacha-rarity-filter" style="width: 100%; background: #161414; color: #f5efe6; border: 1px solid #3d3834; height: 30px; border-radius: 4px;">
-                    <option value="any">Без фильтра (Стандартные шансы гачи)</option>
-                    <option style="color: #9d9d9d;" value="gray">Только Серые</option>
-                    <option style="color: #1eff00;" value="green">Только Зелёные</option>
-                    <option style="color: #0070dd;" value="blue">Только Синие</option>
-                    <option style="color: #a335ee;" value="purple">Только Фиолетовые</option>
-                    <option style="color: #ff003c;" value="red">Только Красные</option>
-                </select>
-            </div>
-            <div>
-                <label style="display: block; font-size: 1.15em; color: #8c8275; margin-bottom: 6px;">Игроков:</label>
-                <div style="display: flex; align-items: center; background: #161414; border: 1px solid #3d3834; border-radius: 4px; padding: 4px 6px; height: 30px;">
-                    <input type="number" id="gacha-player-count" value="${activePlayersCount}" min="1" max="10" style="width: 100%; background: transparent; color: #f5efe6; border: none; outline: none;">
-                </div>
-            </div>
-            <button type="button" id="gacha-generate-btn" style="margin-top: 5px; padding: 12px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border: 1px solid #ffaa00; border-radius: 4px; color: #ffaa00; font-size: 1.25em; font-weight: bold; cursor: pointer;">
-                <i class="fas fa-dice-d20"></i> Сгенерировать добычу
-            </button>
-        `;
-        return $(div);
-    }
-
-    activateListeners(html) {
-        super.activateListeners(html);
-        const element = html instanceof jQuery ? html[0] : html;
-
-        element.querySelector('#gacha-generate-btn').addEventListener('click', async (e) => {
-            e.preventDefault();
-            const roomType = element.querySelector('#gacha-room-type').value;
-            const rarityFilter = element.querySelector('#gacha-rarity-filter').value;
-            const players = parseInt(element.querySelector('#gacha-player-count').value) || 1;
-            await this.generateLoot(roomType, players, rarityFilter);
-            this.close();
-        });
-
+    static async #onSubmit(event, form, formData) {
+        const { room, rarity, players } = formData.object;
+        await this.generateLoot(room, Math.max(1, parseInt(players) || 1), rarity);
     }
 
     async generateLoot(roomType, players, rarityFilter) {

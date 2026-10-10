@@ -1,0 +1,21 @@
+<div class="gd-loot">
+    <header class="gd-loot-title"><i class="fas fa-gem"></i> Призыв Тумана</header>
+    <label class="gd-loot-field">
+        <span>Тип завершённой комнаты</span>
+        <select name="room">
+            {{#each rooms}}<option value="{{value}}">{{label}}</option>{{/each}}
+        </select>
+    </label>
+    <label class="gd-loot-field">
+        <span>Фильтр редкости</span>
+        <select name="rarity">
+            {{#each rarities}}<option value="{{value}}" {{#if color}}style="color: {{color}}"{{/if}}>{{label}}</option>{{/each}}
+        </select>
+    </label>
+    <label class="gd-loot-field">
+        <span>Игроков</span>
+        <input type="number" name="players" value="{{players}}" min="1" max="10">
+    </label>
+    <p class="gd-loot-hint">Выделенный токен получит всю добычу; без токена кристаллы делятся по очереди.</p>
+    <button type="submit" class="gd-loot-go"><i class="fas fa-dice-d20"></i> Сгенерировать добычу</button>
+</div>
