@@ -107,7 +107,8 @@ async function saveRisk(map, nodeId, risk) {
     await canvas.scene.setFlag(MODULE_ID, 'floorMap', copy);
 }
 
-const stageDC = (floor, approach) => 12 + Math.floor(floor / 2) + (approach?.dc ?? 0);
+// Этаж — два уровня: Сложность растёт на 1 за этаж (12 на первом, 21 на десятом)
+const stageDC = (floor, approach) => 11 + floor + (approach?.dc ?? 0);
 const actorLevel = actor => actor.system.details?.level ?? 1;
 const isDown = actor => (actor.system.attributes?.hp?.value ?? 0) <= 0;
 

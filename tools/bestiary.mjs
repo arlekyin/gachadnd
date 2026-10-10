@@ -4,7 +4,7 @@
  * и общий шаблон активностей короче YAML.
  *
  * Пожиратель — аномалия, бывший исследователь Лабиринта, Большой (2×2). Числа рассчитаны на второй этаж
- * (мини-босс, ПО 4); рост от возвращений — эффекты «Насыщение N» на актёре: Мастер включает один.
+ * (отряд 3–5 уровня, мини-босс, ПО 6); рост от возвращений — эффекты «Насыщение N» на актёре: Мастер включает один.
  * Формулы атак и Сл читают @flags.gachadnd.satiety — его задаёт включённый эффект.
  * Иконки — только из модуля и подтверждённые пути ядра Foundry: неверный путь дал бы пустую картинку.
  */
@@ -15,7 +15,7 @@ import path from 'path';
 const IMG = 'modules/gachadnd/assets/bestiary/devourer.webp';
 const TOKEN = 'modules/gachadnd/assets/bestiary/devourer-token.webp';
 const SATIETY = '@flags.gachadnd.satiety';
-const DC = `13 + ${SATIETY}`;
+const DC = `14 + ${SATIETY}`;
 
 // Память Пожирателя: навыки компендиума по граням к6. В бою доступен только навык выпавшей грани
 const MEMORY = ['Квен', 'Удалой рывок', 'Хайзенберг', 'Игни', 'Нейрализатор', 'Фус-Ро-Да'];
@@ -144,7 +144,7 @@ function devourer(stableId, skills) {
             '<li><strong>Наполовину в Пределе.</strong> До конца своего первого хода он неуязвим к урону и состояниям: заготовленные ловушки и залпы в точку появления уходят в туман.</li></ul>'
         )),
         feat(A, id('layers'), 'Слои памяти', 'modules/gachadnd/assets/icons/skills/purple_fog_crystall.webp', html(
-            'Тело Пожирателя — три слоя чужих воспоминаний; каждый — треть его максимума ПЗ (при 90 ПЗ — по 30).',
+            'Тело Пожирателя — три слоя чужих воспоминаний; каждый — треть его максимума ПЗ (при 152 ПЗ — около 50).',
             '<ul><li>За один раунд — от начала его хода до начала следующего — разрушить можно <strong>только один слой</strong>. Урон сверх границы слоя в этом раунде пропадает: память осыпается, но держит.</li>' +
             '<li>Разрушенный слой отмечайте зарядом этой особенности. Слой рушится — Пожиратель на миг рассыпается и собирается: Отрыжка памяти срабатывает на первом слое, а не на половине ПЗ.</li>' +
             '<li>Убить его можно не быстрее чем за три раунда — он успеет ходить.</li></ul>'
@@ -166,13 +166,13 @@ function devourer(stableId, skills) {
             'Пожиратель совершает две атаки: две Когтем или одну Когтем и одну Укусом-пожиранием.'
         ), [activity(id('multiattack', 'use'), 'utility', 'Мультиатака', { roll: { formula: '', name: '', prompt: false, visible: false } })]),
         natural(A, id('claw'), 'Коготь', 'icons/skills/melee/strike-slashes-red.webp', html(
-            'Рукопашная атака: досягаемость 5 футов. Урон 2к6 + модификатор Силы, рубящий. К попаданию прибавляется Насыщение.'
-        ), [2, 6, 'slashing'], [attack('claw', 'Коготь')]),
+            'Рукопашная атака: досягаемость 5 футов. Урон 2к8 + модификатор Силы, рубящий. К попаданию прибавляется Насыщение.'
+        ), [2, 8, 'slashing'], [attack('claw', 'Коготь')]),
         natural(A, id('bite'), 'Укус-пожирание', 'icons/creatures/abilities/mouth-teeth-long-red.webp', html(
-            'Рукопашная атака: досягаемость 5 футов. Урон 2к8 + модификатор Силы, колющий. К попаданию прибавляется Насыщение.',
-            '<strong>Пожирание кристалла.</strong> Если у цели есть кристаллы, она проходит спасбросок Ловкости (Сл 13 + Насыщение). При провале случайный кристалл из её инвентаря уходит в Брюхо.',
+            'Рукопашная атака: досягаемость 5 футов. Урон 3к8 + модификатор Силы, колющий. К попаданию прибавляется Насыщение.',
+            '<strong>Пожирание кристалла.</strong> Если у цели есть кристаллы, она проходит спасбросок Ловкости (Сл 14 + Насыщение). При провале случайный кристалл из её инвентаря уходит в Брюхо.',
             '<strong>Переварить.</strong> Пожиратель восстанавливает 5 ПЗ за каждую единицу веса проглоченного кристалла: кнопки по редкости.'
-        ), [2, 8, 'piercing'], [
+        ), [3, 8, 'piercing'], [
             attack('bite', 'Укус'),
             activity(id('bite', 'save'), 'save', 'Пожирание кристалла', {
                 activation: 'special', range: 5,
@@ -187,7 +187,7 @@ function devourer(stableId, skills) {
         feat(A, id('memory'), 'Память Пожирателя', 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp', html(
             'Он держал в голове слишком много навыков — шесть ещё всплывают. В начале каждого своего хода Пожиратель бросает 1к6: в этот ход он может использовать только навык выпавшей грани, по его обычной активации и без расхода зарядов. Остальные заперты. С Насыщения 2 он бросает дважды и выбирает.',
             '<ol>' + MEMORY.map(name => `<li>${name}</li>`).join('') + '</ol>',
-            'Сл навыков — 13 + Насыщение. Навыки — отдельные строки на листе с номером грани.'
+            'Сл навыков — 14 + Насыщение. Навыки — отдельные строки на листе с номером грани.'
         ), [activity(id('memory', 'roll'), 'utility', 'Всплывает', { activation: 'special', roll: { formula: '1d6', name: 'Память Пожирателя', prompt: false, visible: true } })]),
         ...MEMORY.map((name, n) => memorySkill(A, id('memory', String(n + 1)), n + 1, skills.find(i => i.name === name), name)),
         feat(A, id('burp'), 'Отрыжка памяти', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
@@ -196,9 +196,9 @@ function devourer(stableId, skills) {
         feat(A, id('lair'), 'Разрыв ткани (логово)', 'modules/gachadnd/assets/icons/skills/red_fog_active.webp', html(
             'Узел, куда он прорвался, рвётся. На счёте инициативы 20 (проигрывая ничьи) бросьте 1к4:',
             '<ol>' +
-            '<li><strong>Тяга запаха.</strong> Каждое существо с кристаллами в пределах 60 футов совершает спасбросок Силы (Сл 13 + Насыщение) или притягивается на 10 футов к Пожирателю.</li>' +
+            '<li><strong>Тяга запаха.</strong> Каждое существо с кристаллами в пределах 60 футов совершает спасбросок Силы (Сл 14 + Насыщение) или притягивается на 10 футов к Пожирателю.</li>' +
             '<li><strong>Туманная стена.</strong> Стена тумана длиной 30 футов и высотой 10 футов в пределах 60 футов: местность сильно заслонена до следующего счёта 20. Слепое зрение Пожирателя её не замечает.</li>' +
-            '<li><strong>Кристаллы гудят.</strong> Каждое существо, несущее кристаллы общим весом 3 и больше, совершает спасбросок Мудрости (Сл 13 + Насыщение): 2к6 урона психической энергией, при успехе половина.</li>' +
+            '<li><strong>Кристаллы гудят.</strong> Каждое существо, несущее кристаллы общим весом 3 и больше, совершает спасбросок Мудрости (Сл 14 + Насыщение): 3к6 урона психической энергией, при успехе половина.</li>' +
             '<li><strong>Шов рвётся.</strong> Пожиратель и до двух Огрызков телепортируются в свободные места в пределах 10 футов от носителя самого большого запаса кристаллов.</li>' +
             '</ol>',
             '<strong>Приманка.</strong> Любое существо может бонусным действием бросить в точку в пределах 30 футов сколько угодно своих кристаллов — одной кучей.',
@@ -214,7 +214,7 @@ function devourer(stableId, skills) {
             activity(id('lair', 'hum'), 'save', 'Кристаллы гудят', {
                 activation: 'lair',
                 save: { ability: ['wis'], dc: { calculation: '', formula: DC } },
-                damage: { onSave: 'half', parts: [part(2, 6, ['psychic'])] }
+                damage: { onSave: 'half', parts: [part(3, 6, ['psychic'])] }
             })
         ]),
         feat(A, id('reroll'), 'Перекрутка', 'modules/gachadnd/assets/icons/skills/blue_fog_active.webp', html(
@@ -234,12 +234,12 @@ function devourer(stableId, skills) {
             activity(id('legendary', 'claw'), 'attack', 'Коготь (легендарное)', {
                 activation: 'legendary', range: 5, consumption: legendaryCost(1),
                 attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
-                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 6, ['slashing'], '2d6 + @abilities.str.mod')] }
+                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 8, ['slashing'], '2d8 + @abilities.str.mod')] }
             }),
             activity(id('legendary', 'bite'), 'attack', 'Глоток (легендарное, 2)', {
                 activation: 'legendary', range: 5, consumption: legendaryCost(2),
                 attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
-                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 8, ['piercing'], '2d8 + @abilities.str.mod')] }
+                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(3, 8, ['piercing'], '3d8 + @abilities.str.mod')] }
             })
         ]),
         item(A, id('heart'), 'loot', 'Сердце аномалии', 'modules/gachadnd/assets/icons/skills/red_fog_crystall.webp', html(
@@ -256,10 +256,10 @@ function devourer(stableId, skills) {
         disabled: true, transfer: false,
         changes: [
             { key: 'flags.gachadnd.satiety', mode: 5, value: String(n), priority: 20 },
-            { key: 'system.attributes.hp.max', mode: 2, value: String(15 * (n >= 3 ? n - 1 : 1)), priority: 20 },
+            { key: 'system.attributes.hp.max', mode: 2, value: String(20 * (n >= 3 ? n - 1 : 1)), priority: 20 },
             ...(n >= 2 ? [{ key: 'system.resources.legres.max', mode: 2, value: '1', priority: 20 }] : [])
         ],
-        description: html(`Насыщение ${n}: +${n} к попаданию и Сл, +${15 * (n >= 3 ? n - 1 : 1)} к максимуму ПЗ` +
+        description: html(`Насыщение ${n}: +${n} к попаданию и Сл, +${20 * (n >= 3 ? n - 1 : 1)} к максимуму ПЗ` +
             (n >= 2 ? ', легендарное сопротивление +1, Память — два броска на выбор' : '') +
             (n >= 3 ? ', Укус глотает 2 кристалла' : '') + '. Включайте только один эффект Насыщения.'),
         duration: {}, origin: null, statuses: [], flags: {}, tint: '#ffffff',
@@ -272,11 +272,11 @@ function devourer(stableId, skills) {
         type: 'npc',
         img: IMG,
         system: {
-            abilities: Object.fromEntries(Object.entries({ str: 16, dex: 16, con: 18, int: 6, wis: 14, cha: 8 })
+            abilities: Object.fromEntries(Object.entries({ str: 18, dex: 16, con: 18, int: 6, wis: 14, cha: 8 })
                 .map(([key, value]) => [key, { value, proficient: ['dex', 'wis'].includes(key) ? 1 : 0, bonuses: { check: '', save: '' } }])),
             attributes: {
-                ac: { flat: 14, calc: 'natural', formula: '' },
-                hp: { value: 90, max: 90, temp: 0, tempmax: 0, formula: '13d8 + 32' },
+                ac: { flat: 15, calc: 'natural', formula: '' },
+                hp: { value: 152, max: 152, temp: 0, tempmax: 0, formula: '16d10 + 64' },
                 movement: { walk: 40, climb: 30, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false },
                 senses: { darkvision: 60, blindsight: 30, tremorsense: 0, truesight: 0, units: 'ft', special: '' }
             },
@@ -284,7 +284,7 @@ function devourer(stableId, skills) {
                 biography: { value: biography(), public: '' },
                 alignment: 'Хаотично-нейтральный',
                 type: { value: 'aberration', subtype: 'аномалия', swarm: '', custom: '' },
-                cr: 4, environment: 'Лабиринт Тумана'
+                cr: 6, environment: 'Лабиринт Тумана'
             },
             traits: {
                 size: 'lg',
