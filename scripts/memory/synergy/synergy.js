@@ -469,19 +469,21 @@ Hooks.once('ready', async () => {
 });
 
 // Навыки, полученные до появления новых полей (combat_changes — Берсерк, trigger — автоматизация, impact — кадр Мегумин),
-// берут эти данные из компендиума
+// берут эти данные из компендиума. impact сверяется всегда: у него появляются поля (style — рисунок кадра)
 const MIGRATED_FLAGS = ['combat_changes', 'trigger', 'impact'];
+const SYNCED_FLAGS = ['impact'];
 async function migrateSkillFlags(actor) {
     const pack = getSkillPack();
     if (!pack) return;
     for (const item of actor.items.filter(isMemorySkill)) {
         const flags = item.flags[MODULE_ID];
-        if (!flags.skill_id || MIGRATED_FLAGS.every(key => flags[key])) continue;
+        if (!flags.skill_id || (MIGRATED_FLAGS.every(key => flags[key]) && !SYNCED_FLAGS.some(key => flags[key]))) continue;
         const source = await pack.getDocument(flags.skill_id).catch(() => null);
         const updates = {};
         for (const key of MIGRATED_FLAGS) {
             const value = source?.flags?.[MODULE_ID]?.[key];
-            if (value && !flags[key]) updates[`flags.${MODULE_ID}.${key}`] = value;
+            const stale = SYNCED_FLAGS.includes(key) ? JSON.stringify(value) !== JSON.stringify(flags[key]) : !flags[key];
+            if (value && stale) updates[`flags.${MODULE_ID}.${key}`] = value;
         }
         if (Object.keys(updates).length) await item.update(updates);
     }
