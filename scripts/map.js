@@ -7,6 +7,7 @@ import { onNodeEntered } from "./horsemen.js";
 import { DoomAltar } from "./altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
+import { PortalWindow } from "./portal.js";
 import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 
@@ -174,7 +175,8 @@ const MAP_ID = 'gachadnd-map-terminal';
 const NODE_HINTS = {
     shop: 'щёлкните ещё раз, чтобы открыть Магазин',
     risk: 'щёлкните ещё раз, чтобы открыть Риск',
-    doom: 'щёлкните ещё раз, чтобы открыть Алтарь Погибели'
+    doom: 'щёлкните ещё раз, чтобы открыть Алтарь Погибели',
+    rest: 'щёлкните ещё раз, чтобы открыть портал в Якорь'
 };
 // Порядок типов в легенде
 const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'boss'];
@@ -484,7 +486,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             if (nodeData.type !== MAP_DATA.NODE_START) return ui.notifications.warn('Путешествие должно начинаться с начальной точки (Вход).');
         } else {
             // Щелчок по текущему узлу снова открывает его окно
-            if (mapData.currentNodeId === nodeId) return openNodeWindow(nodeData.type);
+            if (mapData.currentNodeId === nodeId) return nodeData.type === MAP_DATA.NODE_REST ? PortalWindow.open() : openNodeWindow(nodeData.type);
             const currentNode = mapData.nodes.find(n => n.id === mapData.currentNodeId);
             if (!currentNode.next.includes(nodeId) && !mapData.visitedNodes.includes(nodeId)) {
                 return ui.notifications.warn('Отряд может двигаться только по связанным линиям вперёд!');
