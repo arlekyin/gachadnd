@@ -27,8 +27,9 @@ const T = { start: 84, first: 168, end: 252, calm: 168 };
 const ARM_MS = 90 * 1000;
 // Наезд камеры к точке удара: в стартовом кадре слабый, в кадрах удара — сильный, фигура крупнее
 const ZOOM = { start: 1.1, first: 1.35, second: 1.3 };
-// Ширина снимка для обработки: больше не нужно — кадр держится доли секунды
-const SHOT_WIDTH = 800;
+// Ширина снимка для обработки: 1280 — резкость на весь экран при задержке ~0,1 с сверх 800;
+// полная ширина экрана удваивает задержку
+const SHOT_WIDTH = 1280;
 // Секторы штрихов по кругу: в каждом секторе не больше одного штриха
 const BINS = 720;
 
@@ -48,6 +49,15 @@ export function registerImpactSettings() {
         config: true,
         type: Boolean,
         default: true
+    });
+    game.settings.register(MODULE_ID, 'impactSlow', {
+        name: 'Импакт-кадры: замедление',
+        hint: 'Во сколько раз медленнее показывать кадры — чтобы рассмотреть их. 1 — обычная скорость.',
+        scope: 'client',
+        config: true,
+        type: Number,
+        range: { min: 1, max: 30, step: 1 },
+        default: 1
     });
     game.settings.register(MODULE_ID, 'impactSound', {
         name: 'Звук импакт-кадра',
@@ -445,11 +455,14 @@ export async function playImpact({ art, sceneId, point, tokens }) {
     // первый кадр удара сдвинут и чуть крупнее, второй встаёт на место
     const ox = (Math.random() - 0.5) * 24, oy = (Math.random() - 0.5) * 24;
     const t0 = performance.now();
+    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
     const finish = () => { cv.remove(); playing = false; };
     const tick = now => {
         try {
-            const t = now - t0;
+            const t = (now - t0) / slow;
             if (t >= (calm ? T.calm : T.end)) return finish();
+            // Чёрно-белые кадры растягиваются без сглаживания: края остаются резкими, а не мутными
+            ctx.imageSmoothingEnabled = !!(shot && t < T.start);
             if (shot && t < T.start) {
                 ctx.filter = 'contrast(1.45) saturate(1.3)';
                 cover(shot, ZOOM.start, -ox / 2, -oy / 2);
