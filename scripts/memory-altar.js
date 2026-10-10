@@ -191,8 +191,9 @@ function runeAt(d, n, total, rx, ry, lit) {
 function sigilSvg(o) {
     const points = o.points ?? [];
     const filled = o.filled ?? points.map(() => false);
-    const extentX = Math.max(60, ...points.map(p => Math.abs(p[0])), ...(o.rings ?? []).map(r => r.rx), o.runes?.rx ?? 0, o.rays?.r1 ?? 0);
-    const extentY = Math.max(60, ...points.map(p => Math.abs(p[1])), ...(o.rings ?? []).map(r => r.ry), o.runes?.ry ?? 0, o.rays?.r1 ?? 0);
+    const extra = (o.crown?.depth ?? 0) + (o.braid?.amp ?? 0);
+    const extentX = Math.max(60, ...points.map(p => Math.abs(p[0])), ...(o.rings ?? []).map(r => r.rx), o.runes?.rx ?? 0, o.rays?.r1 ?? 0, (o.crown?.rx ?? o.braid?.rx ?? 0) + extra);
+    const extentY = Math.max(60, ...points.map(p => Math.abs(p[1])), ...(o.rings ?? []).map(r => r.ry), o.runes?.ry ?? 0, o.rays?.r1 ?? 0, (o.crown?.ry ?? o.braid?.ry ?? 0) + extra);
     const w = 2 * (extentX + 40), h = 2 * (extentY + 40);
     const parts = [];
     for (const r of o.rings ?? []) parts.push(`<ellipse class="gd-sigil-ring ${r.cls ?? ''}" cx="0" cy="0" rx="${f1(r.rx)}" ry="${f1(r.ry)}"/>`);
@@ -203,6 +204,36 @@ function sigilSvg(o) {
         for (let n = 0; n < o.rays.count; n++) {
             const a = (n * 360 / o.rays.count - 90) * Math.PI / 180;
             parts.push(`<line class="gd-sigil-ray ${o.rays.lit ? 'lit' : ''}" x1="${f1(Math.cos(a) * o.rays.r0)}" y1="${f1(Math.sin(a) * o.rays.r0)}" x2="${f1(Math.cos(a) * o.rays.r1)}" y2="${f1(Math.sin(a) * o.rays.r1)}"/>`);
+        }
+    }
+    const ell = (a, rx, ry) => [rx * Math.cos(a), ry * Math.sin(a)];
+    if (o.crown) {
+        // Корона Слияния: зубец за каждым местом кольца — наружу от навыка; горит за занятым местом
+        const { angles, filled: lit, rx, ry, depth } = o.crown;
+        const sorted = angles.map((a, i) => ({ a, i })).sort((x, y) => x.a - y.a);
+        const mid = (x, y) => { let d = y - x; if (d <= 0) d += 2 * Math.PI; return x + d / 2; };
+        sorted.forEach(({ a, i }, n) => {
+            const prev = sorted[(n - 1 + sorted.length) % sorted.length].a, next = sorted[(n + 1) % sorted.length].a;
+            const v1 = ell(mid(prev, a), rx, ry), peak = ell(a, rx + depth, ry + depth), v2 = ell(mid(a, next), rx, ry);
+            parts.push(`<polyline class="gd-sigil-crown ${lit[i] ? 'lit' : ''}" points="${[v1, peak, v2].map(p => p.map(f1).join(',')).join(' ')}"/>`);
+        });
+    }
+    if (o.braid) {
+        // Плетение Резонанса: две нити, перевитые вдоль кольца; у выбранного тега — горят.
+        // На каждом перекрёстке одна нить уходит под другую — разрыв у пересечения
+        const { rx, ry, amp, waves, active } = o.braid;
+        const steps = 240;
+        for (const sign of [1, -1]) {
+            for (let n = 0; n < steps; n++) {
+                const a0 = n / steps * 2 * Math.PI, a1 = (n + 1) / steps * 2 * Math.PI;
+                const r = a => sign * amp * Math.sin(waves * a);
+                const cross = Math.floor(waves * a0 / Math.PI + 0.5);
+                if (Math.abs(Math.sin(waves * a0)) < 0.2 && (cross % 2 === 0) === (sign > 0)) continue;
+                const p0 = ell(a0, rx + r(a0), ry + r(a0)), p1 = ell(a1, rx + r(a1), ry + r(a1));
+                let d = Math.abs(a0 - (active ?? -10)); d = Math.min(d, 2 * Math.PI - d);
+                const lit = active !== null && active !== undefined && d < 0.32;
+                parts.push(`<line class="gd-sigil-braid ${lit ? 'lit' : ''}" x1="${f1(p0[0])}" y1="${f1(p0[1])}" x2="${f1(p1[0])}" y2="${f1(p1[1])}"/>`);
+            }
         }
     }
     const n = points.length;
@@ -658,9 +689,10 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     /**
-     * Круг ритуала за ядром. У каждого ритуала свой: Переплавка — гексаграмма с тремя гнёздами,
-     * Слияние — большая звезда через все места кольца Памяти, Резонанс — звезда-плетение через теги колеса,
-     * Расщепление — паз вокруг ядра и лучи рассеивания. Проценты разметки переводятся в пиксели поля.
+     * Круг ритуала за ядром. Рисунок ритуала живёт в полосе снаружи того, что занято ядром, прядями
+     * и тегами, — иначе линии ритуала путаются с нитями навыков. Переплавка — гексаграмма с тремя гнёздами,
+     * Слияние — корона с зубцом за каждым местом кольца, Резонанс — перевитые нити за колесом тегов,
+     * Расщепление — лучи рассеивания за облаком. Проценты разметки переводятся в пиксели поля.
      */
     #sigil({ slotted, wheel, sockets, orbitAt, filled }) {
         const field = this.#part('stage') ?? this.#part('fog');
@@ -682,37 +714,44 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             });
         }
         if (this.ritual === 'merge') {
-            // Все места кольца Памяти — вершины звезды; грань горит между двумя занятыми местами
-            const points = Array.from({ length: sockets }, (_, n) => px(orbitAt(n)));
-            const rx = ORBIT.rx / 100 * W, ry = ORBIT.ry / 100 * H;
+            // Всё — снаружи кольца Памяти: внутри живут пряди навыков. Корона держит каждое место кольца
+            const ox = ORBIT.rx / 100 * W, oy = ORBIT.ry / 100 * H;
+            const angles = Array.from({ length: sockets }, (_, n) => { const [x, y] = px(orbitAt(n)); return Math.atan2(y / oy, x / ox); });
+            const rx = ox + 44, ry = oy + 44;
             return sigilSvg({
-                kind: 'merge', points, filled: points.map((_, n) => n < filled),
-                rings: [{ rx, ry, cls: 'faint' }, { rx: rx + 34, ry: ry + 34 }, { rx: rx + 70, ry: ry + 70 }],
-                runes: { rx: rx + 52, ry: ry + 52, lit: Math.round(allRunes * Math.min(1, filled / Math.max(1, sockets))) }
+                kind: 'merge',
+                crown: { angles, filled: angles.map((_, n) => n < filled), rx, ry, depth: 22 },
+                rings: [{ rx, ry }, { rx: rx + 48, ry: ry + 48 }],
+                runes: { rx: rx + 36, ry: ry + 36, lit: Math.round(allRunes * Math.min(1, filled / Math.max(1, sockets))) }
             });
         }
         if (this.ritual === 'resonate') {
-            // Плетение: звезда через теги колеса; горят нити выбранного тега
-            const points = wheel.map(w => px(w.pos));
-            const active = wheel.findIndex(w => w.active);
-            const k = starStep(points.length);
-            const rx = WHEEL.rx / 100 * W, ry = WHEEL.ry / 100 * H;
+            // Всё — снаружи колеса тегов: внутри нити оплетают выбранный тег. Кольцо — перевитые нити,
+            // у выбранного тега они горят
+            const active = wheel.find(w => w.active);
+            const wx = WHEEL.rx / 100 * W, wy = WHEEL.ry / 100 * H;
+            let angle = null;
+            if (active) {
+                const [x, y] = px(active.pos);
+                angle = Math.atan2(y / wy, x / wx);
+                if (angle < 0) angle += 2 * Math.PI;
+            }
+            const rx = wx + 46, ry = wy + 46;
             return sigilSvg({
-                kind: 'resonate', points, star: k,
-                edgeLit: points.map((_, i) => i === active || (i + k) % points.length === active),
-                rings: [{ rx, ry, cls: 'faint' }, { rx: 150, ry: 150 }, { rx: 176, ry: 176 }],
-                runes: { rx: 163, ry: 163, lit: slot ? allRunes : 0 },
-                center: { r: 56, lit: slot }
+                kind: 'resonate',
+                braid: { rx, ry, amp: 9, waves: Math.max(6, wheel.length), active: angle },
+                rings: [{ rx: rx + 30, ry: ry + 30 }],
+                runes: { rx: rx + 44, ry: ry + 44, lit: slot ? allRunes : 0 }
             });
         }
         // Расщепление: паз вокруг ядра, лучи расходятся — кристалл рассеивается в туман
-        this.#sigilBelow = 236 / H * 100;
+        this.#sigilBelow = 264 / H * 100;
         return sigilSvg({
             kind: 'split',
-            rings: [{ rx: 150, ry: 150 }, { rx: 196, ry: 196 }],
-            runes: { rx: 173, ry: 173, lit: slot ? allRunes : 0 },
-            rays: { count: 16, r0: 66, r1: 140, lit: slot },
-            center: { r: 56, lit: slot }
+            rings: [{ rx: 150, ry: 150 }, { rx: 200, ry: 200 }, { rx: 228, ry: 228 }],
+            runes: { rx: 214, ry: 214, lit: slot ? allRunes : 0 },
+            // Лучи — только в полосе за облаком: внутри ядро и его нити
+            rays: { count: 24, r0: 156, r1: 194, lit: slot }
         });
     }
 
