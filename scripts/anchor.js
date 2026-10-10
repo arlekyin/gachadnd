@@ -150,7 +150,7 @@ export async function setAnchor(open = true) {
     announceRest();
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ alias: 'Якорь' }),
-        content: '<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд в <strong>Якоре</strong>. Руны над куполом медленно вращаются; Алтарь Памяти открыт. Кости Хитов здесь не восстанавливаются.</div>'
+        content: '<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд в <strong>Якоре</strong>. Руны над куполом медленно вращаются; Алтарь Памяти открыт. Отдыха здесь нет: Кости Хитов возвращает только Расщепление.</div>'
     });
     const scent = partyScent();
     if (scent.state === 'silence') return;
