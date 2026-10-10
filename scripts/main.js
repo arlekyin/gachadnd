@@ -47,8 +47,7 @@ Hooks.once('init', () => {
         },
         openLootTerminal: () => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ У вас нет прав на генерацию лута.");
-            const existing = Object.values(ui.windows).find(w => w instanceof GachaLootTerminal);
-            if (existing) existing.bringToTop(); else new GachaLootTerminal().render(true);
+            return GachaLootTerminal.open();
         },
         openMemoryAltar: (actor) => MemoryAltar.open(actor),
         // Хранилище кристаллов персонажа (там же, где Алтарь)
