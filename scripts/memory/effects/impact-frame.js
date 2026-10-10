@@ -89,8 +89,9 @@ Hooks.on('dnd5e.postUseActivity', (activity, usageConfig, results) => {
     const data = {
         actorId: item.actor.id, art: impact.art || item.img, style: impact.style ?? null,
         tokenId: item.actor.getActiveTokens?.()[0]?.id ?? null,
-        // Шаблон области dnd5e ставит до этого хука: линия разреза — по нему
-        line: templateLine(results?.templates?.[0])
+        // Шаблон области dnd5e ставит до этого хука: линия разреза — по нему. Каждый поставленный
+        // шаблон приходит списком созданных документов, поэтому список плоский
+        line: templateLine([results?.templates ?? []].flat(2)[0])
     };
     emit('impactArm', data);
     arm(data);
@@ -551,7 +552,8 @@ function slashFrames(shot, line, W, H, focus) {
     const D = { x: (E.x - S.x) / len, y: (E.y - S.y) / len }, N = { x: -D.y, y: D.x };
     const at = (t, off = 0) => ({ x: S.x + (E.x - S.x) * t + N.x * off, y: S.y + (E.y - S.y) * t + N.y * off });
     const k = Math.min(W, H) / 1000, far = Math.hypot(W, H) * 2;
-    const SHIFT = 60 * k, APART = 12 * k, CORE = 12 * k;
+    // Сдвиг половин: вдоль линии и поперёк неё; во втором кадре половины разъехались дальше
+    const SHIFT = [70 * k, 150 * k], APART = [16 * k, 40 * k], CORE = 12 * k;
     const [t0, t1] = range;
     const seen = (t1 - t0) * len;
 
@@ -583,7 +585,8 @@ function slashFrames(shot, line, W, H, focus) {
             x.lineTo(b.x + N.x * side * far, b.y + N.y * side * far); x.lineTo(a.x + N.x * side * far, a.y + N.y * side * far);
             x.closePath(); x.clip();
             x.filter = invert ? 'grayscale(1) invert(1) contrast(2.2)' : 'grayscale(1) contrast(2.2) brightness(0.9)';
-            x.drawImage(shot, rect.left + D.x * SHIFT * side + N.x * APART * side, rect.top + D.y * SHIFT * side + N.y * APART * side, rect.width, rect.height);
+            const along = SHIFT[+invert] * side, across = APART[+invert] * side;
+            x.drawImage(shot, rect.left + D.x * along + N.x * across, rect.top + D.y * along + N.y * across, rect.width, rect.height);
             x.restore();
         }
         x.fillStyle = invert ? '#000' : '#fff';
