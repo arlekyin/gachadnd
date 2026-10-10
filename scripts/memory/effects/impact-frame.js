@@ -6,8 +6,11 @@
  * показывается, когда урон применён и он решающий: цель погибла или потеряла не меньше половины
  * максимума ПЗ. Ещё кадр даёт рухнувший слой памяти Пожирателя. Один взвод — один кадр.
  *
- * Кадр на долю секунды подменяет экран у всех игроков двумя кадрами удара из снимка сцены,
- * как её видит каждый игрок:
+ * Кадр на долю секунды подменяет экран у всех игроков, по снимку сцены, как её видит каждый игрок.
+ * Сначала — стартовый кадр: живая сцена, застывшая с рывком к точке удара (как хитстоп). Затем два
+ * кадра удара, в которых выделены фигуры — токены нанёсшего удар и цели, вырезанные по прозрачности
+ * их картинок: в первом кадре фигура — чёрный силуэт с белой каймой, во втором — белый с чёрной.
+ * Фон кадров:
  *  1. светлое — чёрное, пробитое белыми штрихами от точки удара; остальное — белое в чёрных штрихах;
  *  2. инверсия: что было чёрным — сплошь белое, что было белым — чёрное с проблесками белых штрихов.
  * Границы светлого размазаны к точке удара, как в рисованных импакт-кадрах. Без сцены кадры
@@ -19,9 +22,11 @@ import { emit, onSocket } from "../../core/socket.js";
 
 // Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс),
 // хитстоп тяжёлого удара в играх — 50–100 мс: первый кадр — 2 кадра анимации, второй — 2
-const T = { first: 84, end: 168, calm: 125 };
+const T = { start: 84, first: 168, end: 252, calm: 168 };
 // Сколько взвод ждёт урона: навык использован, броски и применение урона — следом
 const ARM_MS = 90 * 1000;
+// Наезд камеры к точке удара: в стартовом кадре слабый, в кадрах удара — сильный, фигура крупнее
+const ZOOM = { start: 1.1, first: 1.35, second: 1.3 };
 // Ширина снимка для обработки: больше не нужно — кадр держится доли секунды
 const SHOT_WIDTH = 800;
 // Секторы штрихов по кругу: в каждом секторе не больше одного штриха
@@ -66,14 +71,14 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
     const item = activity?.item;
     const impact = item?.flags?.[MODULE_ID]?.impact;
     if (!impact || !item.actor) return;
-    const data = { actorId: item.actor.id, art: impact.art || item.img };
+    const data = { actorId: item.actor.id, art: impact.art || item.img, tokenId: item.actor.getActiveTokens?.()[0]?.id ?? null };
     emit('impactArm', data);
     arm(data);
 });
 onSocket('impactArm', message => arm(message));
 
-function arm({ actorId, art }) {
-    armed.set(actorId, { art, until: Date.now() + ARM_MS });
+function arm({ actorId, art, tokenId }) {
+    armed.set(actorId, { art, tokenId, until: Date.now() + ARM_MS });
 }
 
 // Чей это урон: источник dnd5e не сообщает. Берётся взведённый персонаж, чей сейчас ход;
@@ -90,6 +95,7 @@ const tokenPoint = actor => {
     const token = actor?.getActiveTokens?.()[0];
     return token?.center ? { x: token.center.x, y: token.center.y } : null;
 };
+const tokenId = actor => actor?.getActiveTokens?.()[0]?.id ?? null;
 
 // Решающий урон: цель погибла или потеряла не меньше половины максимума ПЗ. Хук — у применившего урон
 Hooks.on('dnd5e.applyDamage', (actor, amount) => {
@@ -99,7 +105,7 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
     const hp = actor.system.attributes?.hp;
     if (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2)) return;
     armed.delete(source[0]);
-    const data = { art: source[1].art, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor), disarm: source[0] };
+    const data = { art: source[1].art, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor), disarm: source[0], tokens: [source[1].tokenId, tokenId(actor)].filter(Boolean) };
     emit('impactFrame', data);
     playImpact(data);
 });
@@ -110,7 +116,7 @@ Hooks.on('updateItem', (item, changes) => {
     if (actor?.flags?.[MODULE_ID]?.creature !== 'devourer' || item.name !== 'Слои памяти') return;
     // Только трата заряда: сброс слоёв перед новой встречей кадра не даёт
     if (!(Number(foundry.utils.getProperty(changes, 'system.uses.spent')) > 0) || !game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
-    const data = { art: actor.img, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor) };
+    const data = { art: actor.img, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor), tokens: [tokenId(actor)].filter(Boolean) };
     emit('impactFrame', data);
     playImpact(data);
 });
@@ -168,8 +174,23 @@ function inStroke(set, b, frac, r) {
  * @param {number} fx, fy  Точка удара — доли ширины и высоты.
  * @returns {{first: HTMLCanvasElement, second: HTMLCanvasElement}}
  */
-function impactPair(img, fx, fy) {
+function impactPair(img, fx, fy, figures = null) {
     const w = Math.min(SHOT_WIDTH, img.width), h = Math.round(w * img.height / img.width);
+    // Фигуры: непрозрачное на холсте силуэтов; кайма — фон в пределах 2 пикселей от фигуры
+    const figure = new Uint8Array(w * h);
+    if (figures) {
+        const fd = figures.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+        for (let p = 0; p < figure.length; p++) figure[p] = fd[p * 4 + 3] > 60 ? 1 : 0;
+    }
+    const RIM = 2;
+    const rim = new Uint8Array(w * h);
+    if (figures) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if (figure[y * w + x]) continue;
+        search: for (let dy = -RIM; dy <= RIM; dy++) for (let dx = -RIM; dx <= RIM; dx++) {
+            const yy = y + dy, xx = x + dx;
+            if (yy >= 0 && yy < h && xx >= 0 && xx < w && figure[yy * w + xx]) { rim[y * w + x] = 1; break search; }
+        }
+    }
     const src = document.createElement('canvas'); src.width = w; src.height = h;
     const sx = src.getContext('2d', { willReadFrequently: true });
     sx.drawImage(img, 0, 0, w, h);
@@ -190,6 +211,17 @@ function impactPair(img, fx, fy) {
     }
     const mask = new Uint8Array(w * h);
     for (let p = 0; p < mask.length; p++) mask[p] = lum[p] > threshold ? 1 : 0;
+
+    // Детали внутри фигуры: самые светлые 25 % её пикселей (блики, лицо, оружие) — светлые,
+    // остальное — сплошной силуэт. Так круглый токен читается как существо, а не как диск
+    const figHist = new Uint32Array(256);
+    let figCount = 0;
+    for (let p = 0; p < figure.length; p++) if (figure[p]) { figHist[lum[p]]++; figCount++; }
+    let figThreshold = 255;
+    for (let v = 255, seen = 0; v >= 0 && figCount; v--) {
+        seen += figHist[v];
+        if (seen >= figCount * 0.25) { figThreshold = v; break; }
+    }
 
     // Рваные границы: случайный сдвиг порога по секторам, к точке удара он сходит на нет
     const rnd = seeded(97);
@@ -218,9 +250,12 @@ function impactPair(img, fx, fy) {
             const light = acc / SAMPLES + jag[b] * Math.min(1, r * 3) * 0.7 > 0.5;
             const grain = Math.random() < 0.02;
             // Кадр 1: светлое — чёрное с белыми штрихами, тёмное — белое с чёрными штрихами
-            const v1 = light ? (inStroke(white1, b, frac, r) || grain ? 255 : 0) : (inStroke(black1, b, frac, r) ? 0 : 255);
+            let v1 = light ? (inStroke(white1, b, frac, r) || grain ? 255 : 0) : (inStroke(black1, b, frac, r) ? 0 : 255);
             // Кадр 2: светлое — белое, тёмное — чёрное с проблесками
-            const v2 = light ? 255 : (inStroke(white2, b, frac, r) || grain ? 255 : 0);
+            let v2 = light ? 255 : (inStroke(white2, b, frac, r) || grain ? 255 : 0);
+            // Фигура поверх фона: в первом кадре чёрная с белой каймой, во втором — наоборот
+            if (figure[p]) { const detail = lum[p] >= figThreshold; v1 = detail ? 255 : 0; v2 = detail ? 0 : 255; }
+            else if (rim[p]) { v1 = 255; v2 = 0; }
             const i = p * 4;
             o1[i] = o1[i + 1] = o1[i + 2] = v1; o1[i + 3] = 255;
             o2[i] = o2[i + 1] = o2[i + 2] = v2; o2[i + 3] = 255;
@@ -266,6 +301,39 @@ function captureScene(sceneId) {
         console.warn(`${MODULE_ID} | снимок сцены для импакт-кадра`, error);
         return null;
     }
+}
+
+/**
+ * Силуэты токенов на холсте размера снимка: картинка токена по его месту на экране, с поворотом.
+ * Прозрачное в картинке — не фигура: силуэт повторяет очертания существа, а не квадрат токена.
+ */
+async function figureLayer(tokenIds, shot) {
+    const view = canvas?.app?.view ?? canvas?.app?.canvas;
+    const tokens = (tokenIds ?? []).map(id => canvas?.tokens?.get(id)).filter(t => t?.document?.texture?.src && t.visible !== false);
+    if (!tokens.length || !view) return null;
+    const layer = document.createElement('canvas');
+    layer.width = shot.width; layer.height = shot.height;
+    const ctx = layer.getContext('2d');
+    const rect = view.getBoundingClientRect();
+    const k = shot.width / rect.width;
+    for (const token of tokens) {
+        try {
+            const img = await loadImage(token.document.texture.src);
+            const doc = token.document;
+            const w = doc.width * canvas.grid.size * Math.abs(doc.texture.scaleX ?? 1);
+            const h = doc.height * canvas.grid.size * Math.abs(doc.texture.scaleY ?? 1);
+            const c = canvas.stage.worldTransform.apply(token.center);
+            const scale = canvas.stage.scale.x * k;
+            ctx.save();
+            ctx.translate(c.x * k, c.y * k);
+            ctx.rotate((doc.rotation ?? 0) * Math.PI / 180);
+            ctx.drawImage(img, -w * scale / 2, -h * scale / 2, w * scale, h * scale);
+            ctx.restore();
+        } catch (error) {
+            console.warn(`${MODULE_ID} | силуэт токена для импакт-кадра`, error);
+        }
+    }
+    return layer;
 }
 
 // Точка сцены → доля экрана; за краем экрана — прижата к нему, чтобы удар оставался в кадре
@@ -342,7 +410,7 @@ function playSound() {
 
 let playing = false;
 
-export async function playImpact({ art, sceneId, point }) {
+export async function playImpact({ art, sceneId, point, tokens }) {
     if (playing || !game.settings.get(MODULE_ID, 'impactFrames')) return;
     playing = true;
     let pair, focus = { fx: 0.5, fy: 0.5 };
@@ -351,7 +419,7 @@ export async function playImpact({ art, sceneId, point }) {
     try {
         if (shot) {
             focus = screenFocus(point);
-            pair = impactPair(shot, focus.fx, focus.fy);
+            pair = impactPair(shot, focus.fx, focus.fy, await figureLayer(tokens, shot));
         } else pair = await artPair(art);
     } catch (error) {
         playing = false;
@@ -373,7 +441,8 @@ export async function playImpact({ art, sceneId, point }) {
         ctx.drawImage(src, cx - (cx - bx) * zoom + ox, cy - (cy - by) * zoom + oy, src.width * base * zoom, src.height * base * zoom);
     };
 
-    // Рывок: первый кадр сдвинут и чуть крупнее, второй встаёт на место
+    // Стартовый кадр — живая сцена, застывшая с рывком к точке удара и поднятым контрастом;
+    // первый кадр удара сдвинут и чуть крупнее, второй встаёт на место
     const ox = (Math.random() - 0.5) * 24, oy = (Math.random() - 0.5) * 24;
     const t0 = performance.now();
     const finish = () => { cv.remove(); playing = false; };
@@ -381,8 +450,16 @@ export async function playImpact({ art, sceneId, point }) {
         try {
             const t = now - t0;
             if (t >= (calm ? T.calm : T.end)) return finish();
-            if (calm || t < T.first) cover(pair.first, 1.05, ox, oy);
-            else cover(pair.second, 1, 0, 0);
+            if (shot && t < T.start) {
+                ctx.filter = 'contrast(1.45) saturate(1.3)';
+                cover(shot, ZOOM.start, -ox / 2, -oy / 2);
+                ctx.filter = 'none';
+            } else if (calm || t < T.first) {
+                // Без вспышек: первый кадр приглушён — белое становится серым
+                if (calm) ctx.filter = 'brightness(0.55)';
+                cover(pair.first, ZOOM.first, ox, oy);
+                ctx.filter = 'none';
+            } else cover(pair.second, ZOOM.second, 0, 0);
             requestAnimationFrame(tick);
         } catch (error) {
             finish();
