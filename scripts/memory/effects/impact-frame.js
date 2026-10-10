@@ -1,8 +1,13 @@
 /**
  * Gacha Roguelike dnd5e — Импакт-кадр навыка
  *
- * Навык с полем impact (Мегумин) при использовании на долю секунды подменяет экран у всех игроков
- * двумя кадрами удара из снимка сцены, как её видит каждый игрок:
+ * Импакт-кадр — акцент результата, а не замаха: как хитстоп в файтингах, он подтверждает удар.
+ * Навык с полем impact (ультимейты: Мегумин, Вергилий) при использовании только «взводится». Кадр
+ * показывается, когда урон применён и он решающий: цель погибла или потеряла не меньше половины
+ * максимума ПЗ. Ещё кадр даёт рухнувший слой памяти Пожирателя. Один взвод — один кадр.
+ *
+ * Кадр на долю секунды подменяет экран у всех игроков двумя кадрами удара из снимка сцены,
+ * как её видит каждый игрок:
  *  1. светлое — чёрное, пробитое белыми штрихами от точки удара; остальное — белое в чёрных штрихах;
  *  2. инверсия: что было чёрным — сплошь белое, что было белым — чёрное с проблесками белых штрихов.
  * Границы светлого размазаны к точке удара, как в рисованных импакт-кадрах. Без сцены кадры
@@ -12,9 +17,11 @@
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 
-// Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс):
-// первый кадр — 2 кадра анимации, второй — 3, затем резкий возврат к сцене
-const T = { first: 84, end: 210, calm: 170 };
+// Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс),
+// хитстоп тяжёлого удара в играх — 50–100 мс: первый кадр — 2 кадра анимации, второй — 2
+const T = { first: 84, end: 168, calm: 125 };
+// Сколько взвод ждёт урона: навык использован, броски и применение урона — следом
+const ARM_MS = 90 * 1000;
 // Ширина снимка для обработки: больше не нужно — кадр держится доли секунды
 const SHOT_WIDTH = 800;
 // Секторы штрихов по кругу: в каждом секторе не больше одного штриха
@@ -23,7 +30,7 @@ const BINS = 720;
 export function registerImpactSettings() {
     game.settings.register(MODULE_ID, 'impactFrames', {
         name: 'Импакт-кадры навыков',
-        hint: 'Стоп-кадр во весь экран при использовании особых навыков.',
+        hint: 'Стоп-кадр во весь экран, когда ультимейт решает исход: цель погибла или потеряла половину ПЗ.',
         scope: 'client',
         config: true,
         type: Boolean,
@@ -31,11 +38,11 @@ export function registerImpactSettings() {
     });
     game.settings.register(MODULE_ID, 'impactCalm', {
         name: 'Импакт-кадры без вспышек',
-        hint: 'Без белой вспышки и инверсии кадра.',
+        hint: 'Без белой вспышки и инверсии кадра. Снимите галочку, чтобы видеть полный эффект.',
         scope: 'client',
         config: true,
         type: Boolean,
-        default: false
+        default: true
     });
     game.settings.register(MODULE_ID, 'impactSound', {
         name: 'Звук импакт-кадра',
@@ -47,21 +54,71 @@ export function registerImpactSettings() {
     });
 }
 
-// Навык использован: кадр у себя и у остальных. Хук срабатывает только у использовавшего,
-// шаблон области к этому моменту уже размещён (dnd5e создаёт его до хука)
-Hooks.on('dnd5e.postUseActivity', (activity, usageConfig, results) => {
+// ==========================================
+// ВЗВОД И РЕЗУЛЬТАТ
+// ==========================================
+
+// Взведённые ультимейты: { actorId, art, until }. Взвод рассылается всем — урон обычно применяет Мастер
+const armed = new Map();
+
+// Навык использован: кадр ещё не показывается — он ждёт решающего урона
+Hooks.on('dnd5e.postUseActivity', (activity) => {
     const item = activity?.item;
     const impact = item?.flags?.[MODULE_ID]?.impact;
-    if (!impact) return;
-    // drawPreview возвращает массив созданных шаблонов, поэтому results.templates бывает вложенным
-    const template = [results?.templates].flat(2).find(t => Number.isFinite(t?.x));
-    const token = item.actor?.getActiveTokens?.()[0];
-    const point = template ? { x: template.x, y: template.y } : token?.center ? { x: token.center.x, y: token.center.y } : null;
-    const data = { art: impact.art || item.img, sceneId: canvas?.scene?.id ?? null, point };
+    if (!impact || !item.actor) return;
+    const data = { actorId: item.actor.id, art: impact.art || item.img };
+    emit('impactArm', data);
+    arm(data);
+});
+onSocket('impactArm', message => arm(message));
+
+function arm({ actorId, art }) {
+    armed.set(actorId, { art, until: Date.now() + ARM_MS });
+}
+
+// Чей это урон: источник dnd5e не сообщает. Берётся взведённый персонаж, чей сейчас ход;
+// вне боя — любой взведённый (взводы живут недолго)
+function armedSource() {
+    const now = Date.now();
+    for (const [id, a] of armed) if (a.until < now) armed.delete(id);
+    const turn = game.combat?.started ? game.combat.combatant?.actor?.id : null;
+    if (turn) return armed.has(turn) ? [turn, armed.get(turn)] : null;
+    return armed.entries().next().value ?? null;
+}
+
+const tokenPoint = actor => {
+    const token = actor?.getActiveTokens?.()[0];
+    return token?.center ? { x: token.center.x, y: token.center.y } : null;
+};
+
+// Решающий урон: цель погибла или потеряла не меньше половины максимума ПЗ. Хук — у применившего урон
+Hooks.on('dnd5e.applyDamage', (actor, amount) => {
+    if (!(amount > 0)) return;
+    const source = armedSource();
+    if (!source) return;
+    const hp = actor.system.attributes?.hp;
+    if (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2)) return;
+    armed.delete(source[0]);
+    const data = { art: source[1].art, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor), disarm: source[0] };
     emit('impactFrame', data);
     playImpact(data);
 });
-onSocket('impactFrame', message => playImpact(message));
+
+// Рухнул слой памяти Пожирателя (Мастер отметил заряд особенности «Слои памяти»)
+Hooks.on('updateItem', (item, changes) => {
+    const actor = item.parent;
+    if (actor?.flags?.[MODULE_ID]?.creature !== 'devourer' || item.name !== 'Слои памяти') return;
+    // Только трата заряда: сброс слоёв перед новой встречей кадра не даёт
+    if (!(Number(foundry.utils.getProperty(changes, 'system.uses.spent')) > 0) || !game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+    const data = { art: actor.img, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor) };
+    emit('impactFrame', data);
+    playImpact(data);
+});
+
+onSocket('impactFrame', message => {
+    if (message.disarm) armed.delete(message.disarm);
+    playImpact(message);
+});
 
 // ==========================================
 // КАДРЫ УДАРА
