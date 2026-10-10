@@ -1762,7 +1762,6 @@
   background: radial-gradient(closest-side, color-mix(in srgb, var(--rarity) 30%, transparent), transparent);
   animation: gd-soma-pulse 7.5s ease-in-out infinite;
 }
-.gachadnd-memory-altar .gd-mote-orb b { position: absolute; top: -4px; right: -10px; font-size: 10px; color: #ffcf8a; }
 .gachadnd-memory-altar .gd-mote-name { font-size: 12px; line-height: 1.2; color: #b8c6c2; text-shadow: 0 1px 3px #000; }
 .gachadnd-memory-altar .gd-mote:hover .gd-mote-orb { transform: scale(1.2); }
 .gachadnd-memory-altar .gd-mote:hover .gd-mote-name { color: #fff; }
@@ -2018,7 +2017,3 @@
     z-index: 10000;
     pointer-events: none;
 }
-
-/* Метка «×2» у повтора без слияния — только в Переплавке, где вес и важен; в других ритуалах она читалась
-   как «два кристалла» */
-.gachadnd-memory-altar:not(.gd-ritual-smelt) .gd-mote-double { display: none; }
