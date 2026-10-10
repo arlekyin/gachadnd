@@ -12,7 +12,7 @@
         <div class="gd-chips">
             {{#each chips}}<span class="gd-chip {{cls}}" {{#if color}}style="--chip: {{color}}"{{/if}}>{{text}}</span>{{/each}}
         </div>
-        {{#if drawback}}<div class="gd-feature-drawback"><strong>Штраф:</strong> {{drawback}}</div>{{/if}}
+        {{#if drawback}}<div class="gd-feature-drawback"><strong>Штраф:</strong> {{{drawback}}}</div>{{/if}}
         {{#each notes}}<div class="{{cls}}">{{text}}</div>{{/each}}
         <div class="gd-feature-text">{{{body}}}</div>
         {{#if hiddenRanks}}

@@ -651,7 +651,7 @@ function buildItem(skill, folder, rank = 1) {
         `<p><strong>Категория:</strong> ${escapeHtml(category)} | <strong>Редкость:</strong> ${rarity.label}</p>`,
         `<p><strong>Теги синергий:</strong> ${escapeHtml(tags.join(', ') || 'нет')}</p>`,
         `<p><strong>Перезарядка:</strong> ${escapeHtml(cooldownText)}</p>`,
-        ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(withFormula(skill.drawback, skill))}</p>`] : []),
+        ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(withFormula(skill.drawback, skill)).replace(/\n/g, '<br>')}</p>`] : []),
         ...(skill.cost?.hp !== undefined ? [`<p><strong>Цена:</strong> ${escapeHtml(formulaToText(String(skill.cost.hp)))} ПЗ за использование</p>`] : []),
         '<hr>',
         textToHtml(withFormula(skill.description, skill)),
