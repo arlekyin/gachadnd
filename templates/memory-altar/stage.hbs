@@ -8,6 +8,8 @@
     {{#if ring}}<div class="gd-orbit"></div>
     {{!-- Связи кольца: пучки прядей к ядру и воронки между соседями (altar-synapses.js) --}}
     <canvas class="gd-synapses"></canvas>{{/if}}
+    {{!-- Переплавка: круг ритуала — руны, гексаграмма, гнёзда --}}
+    {{#if sigil}}<div class="gd-sigil-wrap" style="{{core.style}}">{{{sigil}}}</div>{{/if}}
     {{!-- Ядро сознания: белый центр, облако своих волокон, нити навыков (altar-core.js) --}}
     <canvas class="gd-mind-core" style="{{core.style}}"></canvas>
     <div class="gd-core" style="{{core.style}}">{{#if ring}}<em>{{ring.filled}} / {{ring.cap}}</em>{{/if}}</div>
