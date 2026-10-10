@@ -81,6 +81,25 @@ function armorClass(actor, mods, data) {
     return Math.round(base + shieldBonus + (Number(average(ac.bonus || '0', data)) || 0));
 }
 
+// Шкалы классов (@scale.rogue.sneak-attack): значение на текущем уровне класса
+function scaleData(actor) {
+    const scale = {};
+    const classes = actor.items.filter(i => i.type === 'class');
+    for (const item of actor.items.filter(i => i.type === 'class' || i.type === 'subclass')) {
+        const owner = item.type === 'class' ? item : classes.find(c => classKey(c) === String(item.system.classIdentifier ?? '').toLowerCase());
+        const level = Number(owner?.system.levels) || 0;
+        const key = String(item.system.identifier || classKey(item));
+        for (const adv of Object.values(item.system.advancement ?? {})) {
+            if (adv?.type !== 'ScaleValue' || !adv.configuration?.identifier) continue;
+            const steps = Object.entries(adv.configuration.scale ?? {}).map(([l, v]) => [Number(l), v]).filter(([l]) => l <= level).sort((a, b) => a[0] - b[0]);
+            const value = steps.at(-1)?.[1];
+            if (!value) continue;
+            (scale[key] ??= {})[adv.configuration.identifier] = value.faces ? `${value.number ?? 1}d${value.faces}` : value.value ?? 0;
+        }
+    }
+    return scale;
+}
+
 const isSkill = item => item.type === 'feat' && !!item.flags?.gachadnd?.skill_name && !item.flags.gachadnd.is_crystal_item && !item.flags.gachadnd.is_synergy_item;
 
 // Включённые эффекты: актёра (синергии, перегрузка) и экипированных предметов (навыки Памяти, доспехи)
@@ -156,7 +175,7 @@ export function loadActor(actor, overrides = {}) {
     const scores = Object.fromEntries(ABILITIES.map(a => [a, (Number(actor.system.abilities?.[a]?.value) || 10) + (effects.abilities[a] ?? 0)]));
     const mods = Object.fromEntries(ABILITIES.map(a => [a, mod(scores[a])]));
     const data = {
-        prof, details: { level }, attributes: { prof }, flags: actor.flags ?? {},
+        prof, details: { level }, attributes: { prof }, flags: actor.flags ?? {}, scale: scaleData(actor),
         abilities: Object.fromEntries(ABILITIES.map(a => [a, { mod: mods[a], value: scores[a] }])),
         classes: Object.fromEntries(classes.map(c => [classKey(c), { levels: c.system.levels }]))
     };
@@ -221,8 +240,9 @@ export function loadActor(actor, overrides = {}) {
                 addActivity(item, activity, { kind: 'weapon', toHit, abilityMod, attacks: attacksPerAction, sneak: rogue > 0 && (finesse || ranged), attackKind: ranged ? 'rwak' : 'mwak' });
             }
         } else if (item.type === 'spell') {
+            // Неподготовленные заклинания не в бою: dnd5e 4.x — preparation, 5.x — method и prepared (0 — нет)
             const prep = item.system.preparation ?? {};
-            if (prep.mode === 'prepared' && prep.prepared === false && item.system.level > 0) continue;
+            if (item.system.level > 0 && ((prep.mode === 'prepared' && prep.prepared === false) || (item.system.method === 'spell' && Number(item.system.prepared) === 0))) continue;
             const level = Number(item.system.level) || 0;
             const resource = level ? { slot: level } : null;
             for (const activity of activitiesOf(item)) {
@@ -259,7 +279,9 @@ export function loadActor(actor, overrides = {}) {
         if (count) slots[n] = count;
     }
     const pact = actor.system.spells?.pact;
-    if (Number(pact?.max ?? pact?.value) > 0 && pact?.level) slots[pact.level] = (slots[pact.level] ?? 0) + Number(pact.max ?? pact.value);
+    // Ячейки колдуна: уровень в 5.x не хранится — по уровню класса (до 5-го)
+    const pactLevel = Number(pact?.level) || Math.min(5, Math.ceil(classLevel('warlock') / 2));
+    if (Number(pact?.max ?? pact?.value) > 0 && pactLevel) slots[pactLevel] = (slots[pactLevel] ?? 0) + Number(pact.max ?? pact.value);
 
     const crystals = overrides.crystals ?? actor.items
         .filter(i => i.flags?.gachadnd?.is_crystal_item || /^Кристалл:/.test(i.name))

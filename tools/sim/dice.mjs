@@ -8,12 +8,30 @@ const SAFE = /^[0-9+\-*/(). ,]*$/;
 
 const getPath = (data, path) => path.split('.').reduce((value, key) => value?.[key], data);
 
+/** Формулы, которые не удалось разобрать: считаются за 0, отчёт их перечисляет */
+export const unparsed = new Set();
+
+// Значение ссылки: число или кости шкалы («3d6»). В идентификаторах шкал dnd5e бывает дефис
+// (@scale.fighter.action-surge), но «@prof-1» — это вычитание: берётся самый длинный существующий путь
+function resolve(data, path) {
+    let candidate = path;
+    while (true) {
+        const value = getPath(data, candidate);
+        if (value !== undefined && value !== null && typeof value !== 'object') return { value, rest: path.slice(candidate.length) };
+        if (value && typeof value === 'object' && (value.formula || value.value !== undefined)) return { value: value.formula ?? value.value, rest: path.slice(candidate.length) };
+        const cut = candidate.lastIndexOf('-');
+        if (cut < 0) return { value: 0, rest: '' };
+        candidate = candidate.slice(0, cut);
+    }
+}
+
 function substitute(formula, data) {
     return String(formula ?? '0')
         .replace(/\[[^\]]*\]/g, '')
-        .replace(/@([A-Za-z_][\w.]*)/g, (_, path) => {
-            const value = getPath(data, path);
-            return Number.isFinite(Number(value)) ? ` ${Number(value)} ` : ' 0 ';
+        .replace(/@([A-Za-z_][\w.\-]*)/g, (_, path) => {
+            const { value, rest } = resolve(data, path.replace(/[.\-]+$/, ''));
+            const shown = /^\s*\d*d\d+\s*$/.test(String(value)) ? ` (${value}) ` : Number.isFinite(Number(value)) ? ` ${Number(value)} ` : ' 0 ';
+            return shown + rest;
         });
 }
 
@@ -33,7 +51,16 @@ function evaluate(expression) {
  * @param {boolean} [options.crit]       Крит: кости удваиваются.
  * @param {Function} [options.rng]
  */
-export function rollFormula(formula, data = {}, { mode = 'roll', crit = false, rng = Math.random } = {}) {
+export function rollFormula(formula, data = {}, options = {}) {
+    try {
+        return roll(formula, data, options);
+    } catch (err) {
+        unparsed.add(String(formula));
+        return 0;
+    }
+}
+
+function roll(formula, data, { mode = 'roll', crit = false, rng = Math.random } = {}) {
     let text = substitute(formula, data);
     const dice = (count, faces) => {
         count = Math.max(0, Math.floor(count)) * (crit ? 2 : 1);

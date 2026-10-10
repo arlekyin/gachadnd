@@ -13,7 +13,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { rollFormula, average, rollD20, hitChance, failChance } from './dice.mjs';
+import { rollFormula, average, rollD20, hitChance, failChance, unparsed } from './dice.mjs';
 import { loadParty, typicalParty } from './party.mjs';
 import { DEVOURER, DEPTHS, RANK_DEPTH } from '../bestiary.mjs';
 
@@ -636,6 +636,7 @@ function main() {
             r.swallowed.toFixed(1).padEnd(15), `${r.hpLeft} %`
         ].join(''));
     }
+    if (unparsed.size) out.push('', `Формулы не распознаны и считались за 0: ${[...unparsed].join('; ')}`);
     const text = out.join('\n');
     console.log(text);
     const file = path.join(HERE, 'last-run.txt');
