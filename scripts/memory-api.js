@@ -11,7 +11,8 @@
  *   gachadnd.preChangeSkill   (actor, item, equipping)      — перед экипировкой или снятием навыка в Терминале.
  *
  * Хуки-запросы (Hooks.callAll: слушатель дописывает данные в переданный объект):
- *   gachadnd.queryRest        (state)                       — state.atRest: отряд на Привале.
+ *   gachadnd.queryRest        (state)                       — state.atRest: Алтарь Памяти открыт;
+ *       state.site: где отряд — 'rest' (Привал) или иное место со своей подписью state.label.
  *   gachadnd.terminalSkillView(item, view)                  — плашки и кнопки выбранного навыка в Терминале:
  *       view.notes.push({ text, cls }); view.actions.push({ label, icon, title, run: async () => {} }).
  *   gachadnd.lootGenerated    (loot)                        — добыча сгенерирована, до карточки в чате:
@@ -53,9 +54,25 @@ export function isAtRest() {
     } catch (err) {
         manual = false;
     }
-    const state = { atRest: manual };
+    return restState(manual).atRest;
+}
+
+function restState(manual) {
+    const state = { atRest: manual, site: manual ? 'rest' : null, label: 'Привал' };
     Hooks.callAll(HOOKS.queryRest, state);
-    return state.atRest;
+    return state;
+}
+
+/** Где открыт Алтарь: { site, label } или null, если отряд не на Привале и не в ином месте отдыха */
+export function restSite() {
+    let manual = false;
+    try {
+        manual = !!game.settings.get(MODULE_ID, 'restOpen');
+    } catch (err) {
+        manual = false;
+    }
+    const state = restState(manual);
+    return state.atRest ? { site: state.site ?? 'rest', label: state.label } : null;
 }
 
 /** Можно ли поглотить кристалл: false, если кто-то из Лабиринта запретил */

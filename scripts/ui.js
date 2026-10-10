@@ -7,7 +7,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
-import { HOOKS, isAtRest, allowSkillChange } from "./memory-api.js";
+import { HOOKS, restSite, allowSkillChange } from "./memory-api.js";
 import { MemoryAltar } from "./memory-altar.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { collectGlossary } from "./glossary.js";
@@ -203,7 +203,10 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!memory.some(i => i.id === this.selectedId)) this.selectedId = memory[0]?.id ?? null;
         const selected = memory.find(i => i.id === this.selectedId) ?? null;
 
-        const atRest = isAtRest();
+        const site = restSite();
+        const atRest = !!site;
+        const restLabel = site?.label ?? 'Привал';
+        const restIcon = site?.site === 'anchor' ? 'fa-anchor' : 'fa-campground';
         const hitDice = actor.system.attributes?.hd?.value ?? 0;
 
         const synergyItems = actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item);
@@ -240,7 +243,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         };
         return {
             mind,
-            atRest, hitDice, glossary,
+            atRest, restLabel, restIcon, hitDice, glossary,
             equippedCount: equipped.length,
             capacity: getMemoryCapacity(actor),
             cards: this.#cards(memory, selected, atRest),

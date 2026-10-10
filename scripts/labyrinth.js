@@ -14,10 +14,12 @@ import { RiskWindow, registerRiskSettings } from "./risk.js";
 import { registerEconomySettings } from "./economy.js";
 import { addTokenTools } from "./controls.js";
 import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
+import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
     registerRiskSettings();
+    registerAnchorSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -29,7 +31,11 @@ Hooks.once('init', () => {
         openRisk: () => RiskWindow.open(),
         // Награды события: game.gachadnd.eventRewards({ tier: 'notable', count: 3 }) — каждому персонажу отряда
         eventRewards: (config) => offerEventRewards(config),
-        openEventRewards: () => new EventRewardsWindow().render({ force: true })
+        openEventRewards: () => new EventRewardsWindow().render({ force: true }),
+        // Якорь — хаб в Пределе: game.gachadnd.setAnchor(true) открывает Алтарь всем, false закрывает
+        setAnchor: (open = true) => setAnchor(open),
+        // Запах отряда для Пожирателя: { value, state, label, thresholds, members }
+        scent: () => partyScent()
     });
 });
 
@@ -41,5 +47,12 @@ Hooks.on('getSceneControlButtons', (controls) => {
         visible: true,
         button: true,
         onClick: () => game.gachadnd.openMapTerminal()
-    }]);
+    }, ...(game.user?.isGM ? [{
+        name: 'gachadnd-anchor',
+        title: 'Якорь: открыть или закрыть хаб (Мастер)',
+        icon: 'fas fa-anchor',
+        visible: true,
+        button: true,
+        onClick: () => setAnchor(!isAnchorOpen())
+    }] : [])]);
 });

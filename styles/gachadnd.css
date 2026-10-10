@@ -1998,12 +1998,16 @@
 .gachadnd-map .gd-map-here { font-weight: 700; color: var(--blood); }
 .gachadnd-map .gd-map-next { color: var(--ink-soft); }
 .gachadnd-map .gd-map-next b { margin-left: 6px; font-weight: 700; color: color-mix(in srgb, var(--node) 35%, #141210); }
+.gachadnd-map .gd-map-scent { align-self: flex-start; font-weight: 700; color: color-mix(in srgb, var(--scent) 45%, #141210); }
 .gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 14px; }
 .gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 5px; }
 .gachadnd-map .gd-map-legend i { font-size: 17px; color: color-mix(in srgb, var(--node) 30%, var(--paper)); -webkit-text-stroke: 1.4px #141210; paint-order: stroke fill; }
 
 
 .gachadnd-map-chat { padding: 6px 10px; border: 2px solid #141210; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; background: linear-gradient(160deg, #eedcb2, #dcc290); color: #141210; text-align: center; font-family: 'GD Caveat', 'Modesto Condensed', cursive; font-size: 20px; }
+/* Запах и Якорь в чате */
+.gd-scent-chat { padding: 6px 10px; border-left: 3px solid #6b5b45; background: rgba(20, 18, 16, 0.08); line-height: 1.35; }
+.gd-scent-chat.atmosphere { border-left-color: #8a8f99; font-style: italic; }
 .gachadnd-map-chat i { color: color-mix(in srgb, var(--node, #141210) 35%, #141210); }
 
 /* ==========================================

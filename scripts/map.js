@@ -10,6 +10,7 @@ import { RiskWindow } from "./risk.js";
 import { announceRest } from "./memory-altar.js";
 import { HOOKS, notifyRestChanged } from "./memory-api.js";
 import { getFloor } from "./economy.js";
+import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 
 const MAP_DATA = {
     NODE_START: 'start',
@@ -166,7 +167,7 @@ export function isPartyAtRest(scene = canvas.scene) {
 
 // Подключение к Памяти: отряд на узле Привала — Привал открыт
 Hooks.on(HOOKS.queryRest, state => {
-    if (isPartyAtRest()) state.atRest = true;
+    if (isPartyAtRest()) Object.assign(state, { atRest: true, site: 'rest', label: 'Привал' });
 });
 Hooks.on('updateScene', (scene, changes) => {
     if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) notifyRestChanged();
@@ -391,7 +392,8 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             floorRoman: ROMAN[floor - 1] ?? floor,
             nextFloor: map?.visitedNodes?.length ? floor + 1 : floor,
             isGM: game.user.isGM,
-            hasMap: !!map?.nodes?.length
+            hasMap: !!map?.nodes?.length,
+            scent: game.user.isGM ? partyScent(undefined, floor) : null
         };
         if (!context.hasMap) return context;
 
@@ -503,16 +505,19 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         // Флаг сцены расходится всем клиентам; их карты перерисуются хуком updateScene
         if (canvas.scene) await canvas.scene.setFlag(MODULE_ID, 'floorMap', mapData);
 
-        // Серия Войны и штраф проклятой Войны; окна узлов
+        // Шаг по карте уводит из Якоря; серия Войны и штраф проклятой Войны; окна узлов
+        await leaveAnchor();
         await onNodeEntered(nodeData.type);
         openNodeWindow(nodeData.type);
         if (nodeData.type === MAP_DATA.NODE_REST) announceRest();
 
         const label = MAP_DATA.LABELS[nodeData.type] ?? nodeData.label;
-        ChatMessage.create({
+        await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ alias: 'Путеводитель Тумана' }),
             content: `<div class="gachadnd-map-chat" style="--node: ${MAP_DATA.COLORS[nodeData.type]}"><i class="fas ${MAP_DATA.ICONS[nodeData.type]}"></i> Отряд входит в зону: <strong>${label}</strong></div>`
         });
+        // Нюх Пожирателя: Мастеру — Запах и узел прорыва, игрокам — атмосфера
+        await announceScent(nodeData.type);
     }
 }
 
@@ -521,6 +526,18 @@ function openNodeWindow(type) {
     if (type === MAP_DATA.NODE_SHOP) ShopWindow.open();
     if (type === MAP_DATA.NODE_RISK) RiskWindow.open();
 }
+
+// Запах в подвале карты у Мастера: кристаллы и навыки отряда изменились — подвал перерисовывается
+let scentTimer = null;
+const refreshScent = item => {
+    if (!game.user.isGM || !item?.parent?.hasPlayerOwner) return;
+    clearTimeout(scentTimer);
+    scentTimer = setTimeout(() => {
+        const app = foundry.applications.instances?.get(MAP_ID);
+        if (app?.rendered) app.render({ parts: ['footer'] });
+    }, 150);
+};
+for (const hook of ['createItem', 'updateItem', 'deleteItem']) Hooks.on(hook, refreshScent);
 
 // Карта изменилась (перемещение, новый этаж) — поле и строка состояния перерисовываются у всех
 Hooks.on('updateScene', (scene, changes) => {
