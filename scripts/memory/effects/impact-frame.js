@@ -21,13 +21,17 @@
  * шаблона навыка (половины разъезжаются вдоль неё), токены удара — силуэты с обводкой, камера
  * делает рывок к точке удара; поверх — разрез и полосы от него. Второй кадр — инверсия.
  * fists — пять кулаков Сайтамы (impact-fists.js): кадр идёт после любого применённого урона
- * взведённого навыка, а не только решающего.
+ * взведённого навыка, а не только решающего. Следом — отлёт цели на 30 футов (impact-knock.js).
  * Значки состояний токенов (череп, кровотечение) в снимок сцены не попадают.
  */
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 import { playFists } from "./impact-fists.js";
+import { knockback, playKnock } from "./impact-knock.js";
+
+// Отлёт цели Сайтамы, футы
+const KNOCK_FEET = 30;
 
 // Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс),
 // хитстоп тяжёлого удара в играх — 50–100 мс: первый кадр — 2 кадра анимации, второй — 2
@@ -154,7 +158,8 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
     const point = tokenPoint(actor);
     const data = {
         art, style, sceneId: canvas?.scene?.id ?? null, point, disarm: source[0], tokens: [casterId, tokenId(actor)].filter(Boolean),
-        line: style === 'slash' ? line ?? tokenLine(casterId, point) : null
+        line: style === 'slash' ? line ?? tokenLine(casterId, point) : null,
+        knock: style === 'fists' ? knockback(casterId, tokenId(actor), KNOCK_FEET) : null
     };
     emit('impactFrame', data);
     playImpact(data);
@@ -829,6 +834,24 @@ function synthPunch(volume) {
     noise.start(t);
 }
 
+/**
+ * Цель Сайтамы — на новое место. Переносит активный Мастер, когда у него кончился показ.
+ * У всех токен цели во время отлёта скрыт: он возвращается, когда перенос дошёл, или через 2 с.
+ */
+function moveKnocked(sceneId, knock) {
+    const restore = () => {
+        const token = canvas?.tokens?.get(knock.tokenId);
+        if (token?.mesh && token.mesh.gdAlpha !== undefined) { token.mesh.alpha = token.mesh.gdAlpha; delete token.mesh.gdAlpha; }
+        try { token?.renderFlags?.set({ refreshState: true }); } catch { /* старый движок — достаточно прозрачности */ }
+    };
+    setTimeout(restore, 2000);
+    if (game.users.activeGM?.id !== game.user.id) return;
+    const doc = game.scenes.get(sceneId)?.tokens.get(knock.tokenId);
+    doc?.update({ x: knock.x, y: knock.y }, { animate: false })
+        .then(restore)
+        .catch(error => console.warn(`${MODULE_ID} | отлёт цели`, error));
+}
+
 function playSound() {
     if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
     const volume = game.settings.get(MODULE_ID, 'soundsVolume');
@@ -846,7 +869,9 @@ function playSound() {
 
 let playing = false;
 
-export async function playImpact({ art, style = null, sceneId, point, tokens, line = null }) {
+export async function playImpact({ art, style = null, sceneId, point, tokens, line = null, knock = null }) {
+    // Отлёт — правило навыка, а не украшение: Мастер переносит цель, даже если кадры у него выключены
+    if (style === 'fists' && knock && (playing || !game.settings.get(MODULE_ID, 'impactFrames'))) return moveKnocked(sceneId, knock);
     if (playing || !game.settings.get(MODULE_ID, 'impactFrames')) return;
     playing = true;
     if (style === 'fists') {
@@ -860,10 +885,14 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         };
         try {
             await playFists({ calm, slow, onHit });
+            if (knock && canvas?.ready && canvas.scene?.id === sceneId) {
+                await playKnock({ casterId: tokens?.[0], targetId: knock.tokenId, knock, calm, slow, hideMarks: hideTokenMarks, onBurst: playSound });
+            }
         } catch (error) {
             console.error(`${MODULE_ID} | импакт-кадр`, error);
         }
         playing = false;
+        if (knock) moveKnocked(sceneId, knock);
         return;
     }
     // Разрез — в самой сцене; без сцены кадр собирается по-старому
