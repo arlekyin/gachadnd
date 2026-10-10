@@ -22,3 +22,7 @@ packs/*/
 
 # Создаётся build.mjs из src/synergies/*.yaml — не хранится в git
 scripts/memory/synergy/synergy-tiers.js
+
+# Симулятор: экспорт персонажей игроков и последний отчёт
+tools/sim/party/*.json
+tools/sim/last-run.txt
