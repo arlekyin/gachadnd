@@ -284,6 +284,120 @@ async function artPair(src) {
     return cache.get(src);
 }
 
+// ==========================================
+// КАДРЫ УДАРА ИЗ ПОРТРЕТА
+// ==========================================
+
+/**
+ * Два кадра удара в разрешении экрана: портрет цели крупным планом, переведённый в тушь, и линии
+ * фокуса вокруг — как рисованный импакт-кадр, а не общий план карты. Линии — векторы, поэтому резкие
+ * на любом экране; портрет обрабатывается в том размере, в котором показывается.
+ * Прозрачный портрет вырезается по своим очертаниям, непрозрачный — рваным овалом.
+ * @returns {Promise<{first: HTMLCanvasElement, second: HTMLCanvasElement}>}
+ */
+async function portraitFrames(src, W, H) {
+    const img = await loadImage(src);
+    if (!img.width || !img.height) throw new Error('пустой портрет');
+    // Фигура — 82 % высоты экрана, не шире 60 % ширины
+    let fh = Math.round(H * 0.82), fw = Math.round(fh * img.width / img.height);
+    if (fw > W * 0.6) { fw = Math.round(W * 0.6); fh = Math.round(fw * img.height / img.width); }
+    const pc = document.createElement('canvas'); pc.width = fw; pc.height = fh;
+    const px = pc.getContext('2d', { willReadFrequently: true });
+    px.drawImage(img, 0, 0, fw, fh);
+    const d = px.getImageData(0, 0, fw, fh).data;
+
+    // Маска фигуры: по прозрачности, а у непрозрачной картинки — рваный овал
+    const n = fw * fh, mask = new Uint8Array(n);
+    let clear = 0;
+    for (let p = 0; p < n; p++) if (d[p * 4 + 3] < 128) clear++;
+    const rnd = seeded(331);
+    for (let y = 0, p = 0; y < fh; y++) for (let x = 0; x < fw; x++, p++) {
+        if (clear > n * 0.08) { mask[p] = d[p * 4 + 3] > 60 ? 1 : 0; continue; }
+        const dx = (x - fw / 2) / (fw / 2), dy = (y - fh / 2) / (fh / 2);
+        // Край как мазок кисти: сумма волн разной частоты, без ступенек
+        const a = Math.atan2(dy, dx);
+        const k = 0.93 + 0.035 * Math.sin(5 * a + 1.3) + 0.025 * Math.sin(11 * a + 0.4) + 0.012 * Math.sin(29 * a + 2.1);
+        mask[p] = dx * dx + dy * dy < k * k ? 1 : 0;
+    }
+
+    // Тушь: порог Оцу по яркости внутри фигуры
+    const lum = new Uint8Array(n), hist = new Float64Array(256);
+    let count = 0;
+    for (let p = 0; p < n; p++) {
+        const i = p * 4;
+        lum[p] = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) | 0;
+        if (mask[p]) { hist[lum[p]]++; count++; }
+    }
+    let sum = 0;
+    for (let v = 0; v < 256; v++) sum += v * hist[v];
+    let best = 0, threshold = 128, wB = 0, sumB = 0;
+    for (let v = 0; v < 256; v++) {
+        wB += hist[v]; if (!wB) continue;
+        const wF = count - wB; if (!wF) break;
+        sumB += v * hist[v];
+        const between = wB * wF * (sumB / wB - (sum - sumB) / wF) ** 2;
+        if (between > best) { best = between; threshold = v; }
+    }
+
+    // Кайма вокруг фигуры — 3 пикселя: отделяет силуэт от фона любого цвета
+    const RIM = 3, rim = new Uint8Array(n);
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+        const p = y * fw + x;
+        if (mask[p]) continue;
+        search: for (let dy = -RIM; dy <= RIM; dy++) for (let dx = -RIM; dx <= RIM; dx++) {
+            const yy = y + dy, xx = x + dx;
+            if (yy >= 0 && yy < fh && xx >= 0 && xx < fw && mask[yy * fw + xx]) { rim[p] = 1; break search; }
+        }
+    }
+    const figure = invert => {
+        const out = px.createImageData(fw, fh), o = out.data;
+        for (let p = 0; p < n; p++) {
+            if (!mask[p] && !rim[p]) continue;
+            const ink = rim[p] ? 0 : lum[p] > threshold ? 255 : 0;
+            const v = invert ? 255 - ink : ink;
+            o[p * 4] = o[p * 4 + 1] = o[p * 4 + 2] = v; o[p * 4 + 3] = 255;
+        }
+        const c = document.createElement('canvas'); c.width = fw; c.height = fh;
+        c.getContext('2d').putImageData(out, 0, 0);
+        return c;
+    };
+
+    // Линии фокуса: клинья от края фигуры за пределы экрана, широкие у края экрана
+    const cx = W / 2, cy = H / 2, far = Math.hypot(W, H);
+    const r0 = Math.min(fw, fh) * 0.42;
+    const lines = Array.from({ length: 150 }, () => ({
+        a: rnd() * Math.PI * 2, w: 0.004 + rnd() ** 2 * 0.03, start: r0 * (1 + rnd() * 0.9)
+    }));
+    const frame = invert => {
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const x = c.getContext('2d');
+        x.fillStyle = invert ? '#000' : '#fff';
+        x.fillRect(0, 0, W, H);
+        x.fillStyle = invert ? '#fff' : '#000';
+        for (const l of lines) {
+            x.beginPath();
+            x.moveTo(cx + Math.cos(l.a) * l.start, cy + Math.sin(l.a) * l.start);
+            x.lineTo(cx + Math.cos(l.a - l.w) * far, cy + Math.sin(l.a - l.w) * far);
+            x.lineTo(cx + Math.cos(l.a + l.w) * far, cy + Math.sin(l.a + l.w) * far);
+            x.closePath();
+            x.fill();
+        }
+        x.drawImage(figure(invert), Math.round(cx - fw / 2), Math.round(cy - fh / 2));
+        return c;
+    };
+    return { first: frame(false), second: frame(true), portrait: true };
+}
+
+// Портрет фигуры удара: цель (последний токен), иначе первый; картинка актёра, иначе токена
+function portraitSource(tokenIds) {
+    for (const id of [...(tokenIds ?? [])].reverse()) {
+        const token = canvas?.tokens?.get(id);
+        const src = token?.actor?.img && !/mystery-man/.test(token.actor.img) ? token.actor.img : token?.document?.texture?.src;
+        if (src) return src;
+    }
+    return null;
+}
+
 /**
  * Снимок сцены, как её видит этот игрок. Холст WebGL не хранит кадр после показа,
  * поэтому сцена перерисовывается и копируется в той же задаче, до вывода на экран.
@@ -426,11 +540,13 @@ export async function playImpact({ art, sceneId, point, tokens }) {
     let pair, focus = { fx: 0.5, fy: 0.5 };
     const shot = captureScene(sceneId);
     console.info(`${MODULE_ID} | импакт-кадр: ${shot ? `снимок сцены ${shot.width}×${shot.height}` : 'арт навыка'}`);
+    if (shot) focus = screenFocus(point);
+    const portrait = portraitSource(tokens);
     try {
-        if (shot) {
-            focus = screenFocus(point);
-            pair = impactPair(shot, focus.fx, focus.fy, await figureLayer(tokens, shot));
-        } else pair = await artPair(art);
+        // Кадры удара — крупный план портрета; без него — из снимка сцены, без сцены — из арта навыка
+        if (portrait) pair = await portraitFrames(portrait, innerWidth, innerHeight).catch(() => null);
+        if (!pair && shot) pair = impactPair(shot, focus.fx, focus.fy, await figureLayer(tokens, shot));
+        if (!pair) pair = await artPair(art);
     } catch (error) {
         playing = false;
         return console.warn(`${MODULE_ID} | импакт-кадр не собран`, error);
@@ -444,12 +560,15 @@ export async function playImpact({ art, sceneId, point, tokens }) {
     const W = cv.width, H = cv.height, cx = W * focus.fx, cy = H * focus.fy;
     playSound();
 
-    // Кадр во весь экран; масштаб — вокруг точки удара, она остаётся на месте
-    const cover = (src, zoom, ox, oy) => {
+    // Кадр во весь экран; масштаб — вокруг точки удара, она остаётся на месте.
+    // Кадры из портрета уже в разрешении экрана и построены вокруг его центра
+    const cover = (src, zoom, ox, oy, centred = false) => {
+        const fx = centred ? W / 2 : cx, fy = centred ? H / 2 : cy;
         const base = Math.max(W / src.width, H / src.height);
         const bx = (W - src.width * base) / 2, by = (H - src.height * base) / 2;
-        ctx.drawImage(src, cx - (cx - bx) * zoom + ox, cy - (cy - by) * zoom + oy, src.width * base * zoom, src.height * base * zoom);
+        ctx.drawImage(src, fx - (fx - bx) * zoom + ox, fy - (fy - by) * zoom + oy, src.width * base * zoom, src.height * base * zoom);
     };
+    const zoomOf = z => pair.portrait ? 1 + (z - 1) * 0.3 : z;
 
     // Стартовый кадр — живая сцена, застывшая с рывком к точке удара и поднятым контрастом;
     // первый кадр удара сдвинут и чуть крупнее, второй встаёт на место
@@ -462,7 +581,7 @@ export async function playImpact({ art, sceneId, point, tokens }) {
             const t = (now - t0) / slow;
             if (t >= (calm ? T.calm : T.end)) return finish();
             // Чёрно-белые кадры растягиваются без сглаживания: края остаются резкими, а не мутными
-            ctx.imageSmoothingEnabled = !!(shot && t < T.start);
+            ctx.imageSmoothingEnabled = !!(shot && t < T.start) || !!pair.portrait;
             if (shot && t < T.start) {
                 ctx.filter = 'contrast(1.45) saturate(1.3)';
                 cover(shot, ZOOM.start, -ox / 2, -oy / 2);
@@ -470,9 +589,9 @@ export async function playImpact({ art, sceneId, point, tokens }) {
             } else if (calm || t < T.first) {
                 // Без вспышек: первый кадр приглушён — белое становится серым
                 if (calm) ctx.filter = 'brightness(0.55)';
-                cover(pair.first, ZOOM.first, ox, oy);
+                cover(pair.first, zoomOf(ZOOM.first), ox, oy, pair.portrait);
                 ctx.filter = 'none';
-            } else cover(pair.second, ZOOM.second, 0, 0);
+            } else cover(pair.second, zoomOf(ZOOM.second), 0, 0, pair.portrait);
             requestAnimationFrame(tick);
         } catch (error) {
             finish();
