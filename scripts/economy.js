@@ -20,10 +20,11 @@ export const GOLD_SHARE = {
 // Цены по редкости из DMG 2024, если в предмете цена не указана; расходники — вдвое дешевле
 const DMG_PRICE = { common: 100, uncommon: 400, rare: 4000, veryRare: 40000, legendary: 200000, artifact: 200000 };
 
-// Редкости магических предметов в продаже по этажам
+// Редкости магических предметов в продаже по этажам. Этаж — два уровня: на этаже Э отряд 2Э − 1 … 2Э + 1 уровня
 export function allowedItemRarities(floor) {
-    if (floor >= 7) return ['common', 'uncommon', 'rare'];
-    if (floor >= 4) return ['common', 'uncommon'];
+    if (floor >= 6) return ['common', 'uncommon', 'rare', 'veryRare'];
+    if (floor >= 4) return ['common', 'uncommon', 'rare'];
+    if (floor >= 2) return ['common', 'uncommon'];
     return ['common'];
 }
 
@@ -31,7 +32,7 @@ export function registerEconomySettings() {
     const settings = {
         runFloor: { name: 'Этаж забега', type: Number, default: 1, config: false },
         goldBase: { name: 'Базовое золото 1-го этажа', hint: 'База(Э) = базовое золото × рост^(Э − 1).', type: Number, default: 100 },
-        goldGrowth: { name: 'Рост золота за этаж', type: Number, default: 1.5 },
+        goldGrowth: { name: 'Рост золота за этаж', hint: 'Этаж — два уровня: 2,25 = 1,5 за уровень.', type: Number, default: 2.25 },
         crystalPrices: { name: 'Цены кристаллов (доля базы)', hint: 'Серый / зелёный / синий / фиолетовый. Красные не продаются.', type: String, default: '0.2/0.5/1.2/3' },
         cleansePrice: { name: 'Очистка навыка (доля базы)', hint: 'Цена = база × доля × (1 + очисток за забег).', type: Number, default: 0.5 },
         rerollPrice: { name: 'Обновление ассортимента (доля базы)', hint: 'Цена = база × доля × (1 + обновлений в этом магазине).', type: Number, default: 0.2 },
@@ -55,7 +56,7 @@ export const getFloor = () => Math.max(1, Number(game.settings.get(MODULE_ID, 'r
 
 export function floorBase(floor = getFloor()) {
     const base = Number(game.settings.get(MODULE_ID, 'goldBase')) || 100;
-    const growth = Number(game.settings.get(MODULE_ID, 'goldGrowth')) || 1.5;
+    const growth = Number(game.settings.get(MODULE_ID, 'goldGrowth')) || 2.25;
     return base * growth ** (floor - 1);
 }
 

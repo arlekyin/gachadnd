@@ -32,8 +32,8 @@ const { ApplicationV2 } = foundry.applications.api;
 export const TIERS = { small: 'Малая', notable: 'Заметная', rare: 'Редкая' };
 // «По этажу»: шансы уровней растут с этажом
 const FLOOR_TIER_WEIGHTS = [
-    { upTo: 3, weights: { small: 70, notable: 30, rare: 0 } },
-    { upTo: 6, weights: { small: 30, notable: 55, rare: 15 } },
+    { upTo: 1, weights: { small: 70, notable: 30, rare: 0 } },
+    { upTo: 3, weights: { small: 30, notable: 55, rare: 15 } },
     { upTo: Infinity, weights: { small: 10, notable: 55, rare: 35 } }
 ];
 const RARITY_LABELS = { gray: 'серый', green: 'зелёный', blue: 'синий', purple: 'фиолетовый' };
@@ -44,7 +44,7 @@ const spentHitDice = actor => Math.max(0, (actor.system.attributes?.hd?.max ?? 0
 const drawbackSkills = actor => actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].drawback && !i.flags[MODULE_ID].drawback_lifted && !i.flags[MODULE_ID].horseman);
 const cursedHorseman = actor => { const h = getHorseman(actor); return h && !isCleansed(h) && h.flags[MODULE_ID].cleanse_goal ? h : null; };
 // Кристалл выбранного тега: редкость растёт с этажом
-const tagCrystalRarity = floor => floor >= 8 ? 'purple' : floor >= 4 ? 'blue' : 'green';
+const tagCrystalRarity = floor => floor >= 4 ? 'purple' : floor >= 2 ? 'blue' : 'green';
 
 // ==========================================
 // ПУЛ
