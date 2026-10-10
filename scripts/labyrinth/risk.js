@@ -21,7 +21,7 @@ import { partyActors } from "./horsemen.js";
 import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
 import { validateRisk } from "./risk-schema.js";
 
-const { ApplicationV2 } = foundry.applications.api;
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const RARITY_COLORS = { gray: '#9d9d9d', green: '#1eff00', blue: '#0070dd', purple: '#a335ee', red: '#ff003c' };
 const MAX_FAILURES = 3;
@@ -362,7 +362,7 @@ async function rollSkill(actor, skill, advantage) {
     return roll?.total ?? null;
 }
 
-export class RiskWindow extends ApplicationV2 {
+export class RiskWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         id: 'gachadnd-risk',
         classes: ['gachadnd-risk'],
@@ -397,89 +397,61 @@ export class RiskWindow extends ApplicationV2 {
         return new RiskWindow().render({ force: true });
     }
 
-    async _renderHTML() {
+    static PARTS = { body: { template: 'modules/gachadnd/templates/risk/body.hbs', scrollable: ['.gd-risk-log'] } };
+
+    async _prepareContext() {
         const found = currentRiskNode();
         const risk = found?.node.risk;
-        if (!risk) return '<p class="gd-risk-empty">Отряд не стоит на узле Риска.</p>';
+        if (!risk) return { empty: 'Отряд не стоит на узле Риска.' };
         const challenge = (await loadChallenges()).find(c => c.id === risk.challengeId);
-        if (!challenge) return '<p class="gd-risk-empty">Испытание не найдено.</p>';
+        if (!challenge) return { empty: 'Испытание не найдено.' };
         const party = partyActors();
         const stage = challenge.stages[risk.stage];
-        const pips = Array.from({ length: MAX_FAILURES }, (_, i) => `<span class="gd-pip ${i < risk.failures ? 'on' : ''}"></span>`).join('');
-        const options = list => list.map(a => `<option value="${a.id}" ${a.id === this.performerId ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+        const context = {
+            name: challenge.name, intro: challenge.intro, pot: potText(risk.pot),
+            pips: Array.from({ length: MAX_FAILURES }, (_, i) => i < risk.failures),
+            header: stage && risk.active ? { number: risk.stage + 1, total: challenge.stages.length, name: stage.name, reward: rewardLabel(risk.stage) } : null,
+            log: risk.log
+        };
 
-        let body = '';
         if (!risk.active) {
-            body = `<div class="gd-risk-end">${{ left: 'Отряд ушёл с добычей.', complete: 'Испытание пройдено до конца.', collapse: 'Обвал.' }[risk.ended] ?? 'Испытание окончено.'}</div>`;
+            context.ended = { left: 'Отряд ушёл с добычей.', complete: 'Испытание пройдено до конца.', collapse: 'Обвал.' }[risk.ended] ?? 'Испытание окончено.';
         } else if (risk.pending) {
             const performer = game.actors.get(risk.pending.actorId);
-            const mine = game.user.isGM || performer?.isOwner;
-            body = `
-                <div class="gd-risk-pending">
-                    <div>Провал: ${esc(risk.pending.note)} — ${risk.pending.total} против Сл ${risk.pending.dc}</div>
-                    ${mine ? `<div class="gd-risk-buttons">
-                        <button type="button" data-action="blood"><i class="fas fa-tint"></i> Цена крови — Кость Хитов</button>
-                        <button type="button" data-action="accept">Принять провал</button>
-                    </div>` : '<div>Ждём решения выступавшего.</div>'}
-                </div>`;
+            context.pending = { ...risk.pending, mine: game.user.isGM || !!performer?.isOwner };
         } else if (stage?.group) {
-            const rows = party.filter(a => !isDown(a)).map(a => {
-                const rolled = risk.groupRolls[a.id];
-                const mine = game.user.isGM || a.isOwner;
-                return `<div class="gd-risk-row"><span>${esc(a.name)}</span>${rolled
-                    ? `<span class="${rolled.success ? 'ok' : 'bad'}">${rolled.total} / Сл ${rolled.dc}</span>`
-                    : mine ? stage.approaches.map((ap, i) => `<button type="button" data-action="groupRoll" data-actor-id="${a.id}" data-approach="${i}">${skillLabel(ap.skill)} · Сл ${stageDC(risk.floor, ap)}</button>`).join('') : '<span>бросает…</span>'}</div>`;
-            }).join('');
-            body = `<div class="gd-risk-note">Групповой этап: бросают все, этап пройден, если преуспела хотя бы половина.</div>${rows}`;
+            context.group = party.filter(a => !isDown(a)).map(a => ({
+                id: a.id, name: a.name, rolled: risk.groupRolls[a.id] ?? null, mine: game.user.isGM || a.isOwner,
+                approaches: stage.approaches.map((ap, i) => ({ index: i, skill: skillLabel(ap.skill), dc: stageDC(risk.floor, ap) }))
+            }));
         } else if (stage) {
             const eligible = party.filter(a => !isDown(a) && a.id !== risk.lastPerformer);
             if (!eligible.some(a => a.id === this.performerId)) this.performerId = (eligible.find(a => a.isOwner) ?? eligible[0])?.id;
             const performer = game.actors.get(this.performerId);
-            const canRoll = performer && (game.user.isGM || performer.isOwner);
-            const helpers = party.filter(a => !isDown(a) && a.id !== this.performerId && a.id !== risk.lastPerformer);
-            body = `
-                <div class="gd-risk-pick">
-                    <label>Выступает <select class="gd-risk-performer">${options(eligible)}</select></label>
-                    <label>Помогает <select class="gd-risk-helper"><option value="">никто</option>${helpers.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
-                </div>
-                ${risk.lastPerformer ? `<div class="gd-risk-note">${esc(game.actors.get(risk.lastPerformer)?.name ?? '')} выступал на прошлом этапе и пропускает этот.</div>` : ''}
-                <div class="gd-approaches">${stage.approaches.map((ap, i) => `
-                    <div class="gd-approach">
-                        <div class="gd-approach-label">${esc(ap.label)}</div>
-                        <div class="gd-approach-meta">${skillLabel(ap.skill)} · Сл ${stageDC(risk.floor, ap)}</div>
-                        <div class="gd-approach-fail">Провал: ${esc(ap.fail.text)}${ap.fail.hp ? ` −${ap.fail.hp} × уровень ПЗ.` : ''}</div>
-                        <button type="button" data-action="roll" data-approach="${i}" ${canRoll ? '' : 'disabled'}>Бросок</button>
-                    </div>`).join('')}
-                </div>`;
+            context.solo = {
+                eligible: eligible.map(a => ({ id: a.id, name: a.name, selected: a.id === this.performerId })),
+                helpers: party.filter(a => !isDown(a) && a.id !== this.performerId && a.id !== risk.lastPerformer).map(a => ({ id: a.id, name: a.name })),
+                skipped: risk.lastPerformer ? game.actors.get(risk.lastPerformer)?.name ?? '' : null,
+                canRoll: !!performer && (game.user.isGM || performer.isOwner),
+                approaches: stage.approaches.map((ap, i) => ({
+                    index: i, label: ap.label, skill: skillLabel(ap.skill), dc: stageDC(risk.floor, ap),
+                    fail: `${ap.fail.text}${ap.fail.hp ? ` −${ap.fail.hp} × уровень ПЗ.` : ''}`
+                }))
+            };
         }
 
-        const gm = game.user.isGM && risk.active ? `
-            <div class="gd-risk-gm">
-                <label>Добыча — <select class="gd-risk-recipient">${party.map(a => `<option value="${a.id}" ${a.id === risk.recipientId ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
-                ${stage && !risk.pending ? '<button type="button" data-action="auto" title="Творческое применение навыка, заклинания или предмета удалось">Автоуспех</button>' : ''}
-                ${stage && !risk.pending ? '<button type="button" data-action="autoFail" title="Импровизация не удалась: провал этапа, выступавший теряет ПЗ, равные уровню">Автопровал</button>' : ''}
-                <button type="button" data-action="leave" ${risk.pending ? 'disabled' : ''}>Уйти с добычей</button>
-                ${risk.stage === 0 && !risk.failures && !risk.pending ? '<button type="button" data-action="reroll" title="Заменить испытание на этом узле, пока ни один этап не пройден">Другое испытание</button>' : ''}
-            </div>` : '';
-
-        return `
-            <div class="gd-risk-head">
-                <h2>${esc(challenge.name)}</h2>
-                <div class="gd-risk-fails">Провалы ${pips}</div>
-            </div>
-            <div class="gd-risk-intro">${esc(challenge.intro)}</div>
-            <div class="gd-risk-pot"><strong>Копилка:</strong> ${potText(risk.pot)}</div>
-            ${stage && risk.active ? `<h3>Этап ${risk.stage + 1} из ${challenge.stages.length} — ${esc(stage.name)} <span class="gd-risk-reward">→ ${rewardLabel(risk.stage)}</span></h3>` : ''}
-            ${body}
-            ${gm}
-            ${risk.log.length ? `<div class="gd-risk-log">${risk.log.map(l => `<div>${esc(l)}</div>`).join('')}</div>` : ''}`;
+        if (game.user.isGM && risk.active) {
+            context.gm = {
+                party: party.map(a => ({ id: a.id, name: a.name, selected: a.id === risk.recipientId })),
+                auto: !!stage && !risk.pending, pending: !!risk.pending,
+                reroll: risk.stage === 0 && !risk.failures && !risk.pending
+            };
+        }
+        return context;
     }
 
-    _replaceHTML(result, content) {
-        content.innerHTML = result;
-    }
-
-    _onRender() {
+    _onRender(context, options) {
+        super._onRender(context, options);
         this.element.querySelector('.gd-risk-performer')?.addEventListener('change', event => {
             this.performerId = event.target.value;
             this.render();

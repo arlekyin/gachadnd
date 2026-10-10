@@ -1487,6 +1487,7 @@
    Риск — испытание «испытай удачу»
    ========================================== */
 .gachadnd-risk .window-content { background: radial-gradient(circle at 50% 0%, #1a0d24 0%, #08070b 70%); color: #e4dcef; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.gachadnd-risk .gd-risk { display: flex; flex-direction: column; gap: 10px; }
 .gachadnd-risk .gd-risk-head { display: flex; justify-content: space-between; align-items: center; }
 .gachadnd-risk h2 { margin: 0; border: none; color: #c98cff; text-shadow: 0 0 8px rgba(163, 53, 238, 0.6); }
 .gachadnd-risk h3 { margin: 4px 0 0; border-bottom: 1px solid #3a2a4a; color: #e0c8ff; font-size: 15px; }
@@ -1872,6 +1873,7 @@
 .gachadnd-event-reward .gd-reward.chosen { opacity: 1; border-color: #5fe0b8; background: rgba(95, 224, 184, 0.12); }
 .gachadnd-event-reward .gd-reward-foot { margin-top: 6px; font-size: 11px; opacity: 0.75; }
 .gachadnd-event-rewards-window .window-content { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.gachadnd-event-rewards-window .gd-rewards-form { display: flex; flex-direction: column; gap: 8px; }
 .gachadnd-event-rewards-window label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .gachadnd-event-rewards-window label input[type="text"], .gachadnd-event-rewards-window select { flex: 1; }
 .gachadnd-event-rewards-window .gd-check { justify-content: flex-start; }
