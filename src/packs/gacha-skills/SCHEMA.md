@@ -22,7 +22,7 @@
 | `name` | да | Уникально (без учёта регистра). |
 | `rarity` | да | `gray`, `green`, `blue`, `purple`, `red`, `orange` (только всадники) |
 | `category` | нет | Если указано — должно совпадать с категорией папки. |
-| `tags` | нет | Список тегов из словаря синергий (`scripts/synergy-data.js`). |
+| `tags` | нет | Список тегов из словаря синергий (`scripts/memory/synergy/synergy-data.js`). |
 | `description` | да | Текст. Пустая строка — новый абзац, одиночный перенос — `<br>`. HTML экранируется. |
 | `activation` | нет | `none` (по умолчанию, пассивный навык), `action`, `bonus`, `reaction`, `special`, `minute`, `hour`, `day`, `shortRest`, `longRest`, `encounter`, `turnStart`, `turnEnd`, `legendary`, `mythic`, `lair`, `crew` |
 | `uses` | нет | Целое число > 0. Если указан `recovery`, а `uses` нет — 1 заряд. |

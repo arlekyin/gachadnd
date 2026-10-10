@@ -21,4 +21,4 @@ LOG.old
 packs/*/
 
 # Создаётся build.mjs из src/synergies/*.yaml — не хранится в git
-scripts/synergy-tiers.js
+scripts/memory/synergy/synergy-tiers.js

@@ -8,9 +8,9 @@
  * Состояние — в настройке мира draftState; пишет её Мастер, игроки просят выбор через сокет.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { isActiveGM, onSocket, notifyUser, requestGM } from "./socket.js";
-import { isMemorySkill } from "./synergy.js";
+import { MODULE_ID } from "../core/constants.js";
+import { isActiveGM, onSocket, notifyUser, requestGM } from "../core/socket.js";
+import { isMemorySkill } from "./synergy/synergy.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const DRAFT_ID = 'gachadnd-draft';

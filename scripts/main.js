@@ -3,26 +3,26 @@
  */
 
 // MODULE_ID — из constants.js; реэкспорт оставлен для макросов и старого кода
-export { MODULE_ID } from "./constants.js";
-import { MODULE_ID } from "./constants.js";
-import { MemoryTerminal } from "./ui.js";
-import { GachaLootTerminal, registerLootSettings } from "./loot.js";
-import "./compendium.js";
-import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
-import { registerSoundSettings } from "./sounds.js";
-import { registerImpactSettings } from "./impact-frame.js";
-import { giveCrystal } from "./inventory.js";
-import { registerSocket } from "./socket.js";
-import { MemoryAltar, announceRest } from "./memory-altar.js";
-import { StashWindow } from "./stash.js";
-import { registerDraftSettings, DraftWindow } from "./draft.js";
-import { registerMemorySettings } from "./memory-api.js";
-import { registerTriggerSettings } from "./triggers.js";
-import { registerAutomationMenu } from "./automation-settings.js";
-import { addTokenTools } from "./controls.js";
+export { MODULE_ID } from "./core/constants.js";
+import { MODULE_ID } from "./core/constants.js";
+import { MemoryTerminal } from "./memory/terminal/terminal.js";
+import { GachaLootTerminal, registerLootSettings } from "./memory/loot.js";
+import "./core/compendium.js";
+import { registerGachaPeriods, recoverPeriodUses } from "./core/recovery.js";
+import { registerSoundSettings } from "./core/sounds.js";
+import { registerImpactSettings } from "./memory/effects/impact-frame.js";
+import { giveCrystal } from "./memory/inventory.js";
+import { registerSocket } from "./core/socket.js";
+import { MemoryAltar, announceRest } from "./memory/altar/memory-altar.js";
+import { StashWindow } from "./memory/stash.js";
+import { registerDraftSettings, DraftWindow } from "./memory/draft.js";
+import { registerMemorySettings } from "./memory/memory-api.js";
+import { registerTriggerSettings } from "./memory/synergy/triggers.js";
+import { registerAutomationMenu } from "./core/automation-settings.js";
+import { addTokenTools } from "./core/controls.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
-import "./labyrinth.js";
+import "./labyrinth/labyrinth.js";
 
 Hooks.once('init', () => {
     console.log(`%c🎲 GachaDND | Инициализация...`, 'color: #ffaa00; font-weight: bold;');

@@ -2,10 +2,10 @@
  * Gacha Roguelike dnd5e — Расчёт капов, Синергий и Выдача Навыков
  */
 
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID } from "../../core/constants.js";
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-data.js";
-import { RECOVERY_VALUES } from "./recovery.js";
-import { getSkillPack } from "./crystals.js";
+import { RECOVERY_VALUES } from "../../core/recovery.js";
+import { getSkillPack } from "../crystals.js";
 
 const actorUpdateLocks = new Set();
 const actorUpdatePending = new Set();

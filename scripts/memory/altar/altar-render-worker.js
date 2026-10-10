@@ -7,7 +7,7 @@
 
 import { MindRenderer } from "./altar-core.js";
 import { SynapsesRenderer, WeaveRenderer } from "./altar-synapses.js";
-import { NeuralRenderer } from "./neural.js";
+import { NeuralRenderer } from "../terminal/neural.js";
 
 const KINDS = { mind: MindRenderer, synapses: SynapsesRenderer, weave: WeaveRenderer, neural: NeuralRenderer };
 let renderer = null;

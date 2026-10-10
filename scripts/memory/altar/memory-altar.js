@@ -17,17 +17,17 @@
  * в том числе повтор навыка, который слить уже нельзя.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { isMemorySkill, naturalSlotCap } from "./synergy.js";
-import { getSynergyDictionary } from "./synergy-data.js";
-import { randomCrystal, randomCrystalWithTag, currentSkillName } from "./crystals.js";
+import { MODULE_ID } from "../../core/constants.js";
+import { isMemorySkill, naturalSlotCap } from "../synergy/synergy.js";
+import { getSynergyDictionary } from "../synergy/synergy-data.js";
+import { randomCrystal, randomCrystalWithTag, currentSkillName } from "../crystals.js";
 import {
     canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, romanRank,
     isCrystalItem, isUsableCrystal, availableHitDice, spendHitDice, restoreHitDice, consumeCrystal
-} from "./inventory.js";
-import { isAtRest } from "./memory-api.js";
-import { onSocket, emit } from "./socket.js";
-import { StashWindow } from "./stash.js";
+} from "../inventory.js";
+import { isAtRest } from "../memory-api.js";
+import { onSocket, emit } from "../../core/socket.js";
+import { StashWindow } from "../stash.js";
 import { MindPhysics } from "./mind-physics.js";
 import { AltarSynapses, ResonanceWeave } from "./altar-synapses.js";
 import { MindCore } from "./altar-core.js";

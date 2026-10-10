@@ -8,11 +8,11 @@
 
 import { GachaMapTerminal } from "./map.js";
 import "./horsemen.js";
-import { DoomAltar } from "./altar.js";
+import { DoomAltar } from "./doom-altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow, registerRiskSettings } from "./risk.js";
 import { registerEconomySettings } from "./economy.js";
-import { addTokenTools } from "./controls.js";
+import { addTokenTools } from "../core/controls.js";
 import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
 import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
 import { PortalWindow } from "./portal.js";

@@ -2,9 +2,9 @@
  * Gacha Roguelike dnd5e — Интерактивная Карта Этажа
  */
 
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID } from "../core/constants.js";
 import { onNodeEntered } from "./horsemen.js";
-import { DoomAltar } from "./altar.js";
+import { DoomAltar } from "./doom-altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
 import { PortalWindow } from "./portal.js";

@@ -1,7 +1,7 @@
 /**
  * Gacha Roguelike dnd5e — Синергии тегов
  *
- * Данные синергий — src/synergies/*.yaml; сборка (build.mjs) пишет их в scripts/synergy-tiers.js.
+ * Данные синергий — src/synergies/*.yaml; сборка (build.mjs) пишет их в scripts/memory/synergy/synergy-tiers.js.
  * Здесь — общий вид словаря для модуля, сборки и журналов правил.
  */
 

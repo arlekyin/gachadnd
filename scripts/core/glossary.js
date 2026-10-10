@@ -5,7 +5,7 @@
  * как пояснения к ключевым словам на экране Арканы в Hades II.
  */
 
-import { getSynergyDictionary } from "./synergy-data.js";
+import { getSynergyDictionary } from "../memory/synergy/synergy-data.js";
 
 const TERMS = [
     {

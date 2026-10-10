@@ -12,7 +12,7 @@
  * фаза импульсов — из часов, поэтому перерисовка окна не сбрасывает движение.
  */
 
-import { RendererHost } from "./altar-offscreen.js";
+import { RendererHost } from "../altar/altar-offscreen.js";
 
 const FRAME_MS = 33;
 const TIER_STEP = 2;

@@ -7,7 +7,7 @@
  * персонажа stash и при возврате создаются заново.
  */
 
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID } from "../core/constants.js";
 import { isAtRest } from "./memory-api.js";
 import { isCrystalItem } from "./inventory.js";
 

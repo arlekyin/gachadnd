@@ -10,10 +10,10 @@
  * Окно видят все: игроки смотрят, как копится кровь и раскрываются пасти, действует Мастер.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { randomCrystal, buildCrystalData } from "./crystals.js";
+import { MODULE_ID } from "../core/constants.js";
+import { randomCrystal, buildCrystalData } from "../memory/crystals.js";
 import { HORSEMEN, partyActors, getHorseman, hasTakenHorseman } from "./horsemen.js";
-import { emit, onSocket } from "./socket.js";
+import { emit, onSocket } from "../core/socket.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
