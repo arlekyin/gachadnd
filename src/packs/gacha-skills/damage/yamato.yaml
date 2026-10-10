@@ -18,3 +18,4 @@ target:
 damage:
   - formula: 10d10
     type: force
+impact: true
