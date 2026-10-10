@@ -22,6 +22,8 @@
  * очистка и вывод кадра дешевле.
  */
 
+import { RendererHost } from "./altar-offscreen.js";
+
 // Размеры в CSS-пикселях: ядро (к его кромке тянутся пряди кольца и Резонанса) и облако
 export const NUCLEUS_R = 40;
 const CLOUD = { rMin: 54, rMax: 118 };
@@ -82,9 +84,13 @@ function heartbeat(t, hd) {
     return bump(0.08, 0.035) + 0.6 * bump(0.24, 0.04);
 }
 
-export class MindCore {
-    constructor() {
-        this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/**
+ * Рисовальщик ядра: без DOM, работает и в основном потоке, и в рабочем (OffscreenCanvas).
+ * Размеры холста и поля Алтаря приходят снаружи — метрики меряет основной поток.
+ */
+export class MindRenderer {
+    constructor({ reducedMotion = false } = {}) {
+        this.reducedMotion = reducedMotion;
         const rnd = random(7);
         this.own = Array.from({ length: OWN_COUNT }, () => makeFiber(rnd));
         this.boosts = new Map();
@@ -97,21 +103,20 @@ export class MindCore {
 
     /**
      * Новый холст после перерисовки слоя ядра.
-     * @param {HTMLCanvasElement} canvas
-     * @param {HTMLElement} stage
+     * @param {HTMLCanvasElement|OffscreenCanvas} canvas
+     * @param {{ size: number, ratio: number, stageWidth: number, stageHeight: number }} metrics
      * @param {object} data  Состояние сознания из модели Алтаря (core в контексте).
      */
-    attach(canvas, stage, data) {
+    attach(canvas, metrics, data) {
         // Слияние: навыки стоят на кольце, в облаке их нитей нет. Остальные ритуалы: навыки перетекают
         // в кольца вокруг ядра. При первом показе — сразу в нужном состоянии, без перетекания
         this.wovenTarget = data.ritual === 'merge' ? 0 : 1;
         if (!this.data || this.reducedMotion) this.woven = this.wovenTarget;
         if (data.ritual !== this.data?.ritual || data.split?.key !== this.data?.split?.key) this.cycleStart = performance.now();
         this.canvas = canvas;
-        this.stage = stage;
         this.data = data;
         this.ctx = canvas.getContext('2d');
-        this.#resize();
+        this.#resize(metrics);
         if (this.reducedMotion) return this.#draw(performance.now());
         this.start();
     }
@@ -124,30 +129,28 @@ export class MindCore {
     start() {
         if (this.running) return;
         this.running = true;
+        const next = globalThis.requestAnimationFrame ?? (cb => setTimeout(() => cb(performance.now()), 16));
         const loop = time => {
             if (!this.running) return;
-            if (this.canvas?.isConnected) this.#draw(time);
-            this.frame = requestAnimationFrame(loop);
+            if (this.canvas) this.#draw(time);
+            this.frame = next(loop);
         };
-        this.frame = requestAnimationFrame(loop);
+        this.frame = next(loop);
     }
 
     stop() {
         this.running = false;
-        if (this.frame) cancelAnimationFrame(this.frame);
+        if (this.frame) (globalThis.cancelAnimationFrame ?? clearTimeout)(this.frame);
         this.frame = null;
     }
 
-    #resize() {
-        const size = this.canvas.offsetWidth || 900;
-        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    #resize({ size, ratio, stageWidth: width, stageHeight: height }) {
         this.size = size;
         if (this.canvas.width !== Math.round(size * ratio)) {
             this.canvas.width = this.canvas.height = Math.round(size * ratio);
         }
         this.ratio = ratio;
         // Направления нитей: от центра холста к позициям навыков на кольце — в пикселях окна
-        const width = this.stage.clientWidth, height = this.stage.clientHeight;
         const { x: cx, y: cy } = this.data.at;
         this.threads = this.data.threads.map(th => ({
             ...th,
@@ -357,5 +360,34 @@ export class MindCore {
         }
         ctx.restore();
         ctx.globalCompositeOperation = 'lighter';
+    }
+}
+
+/**
+ * Ядро сознания для Алтаря: рисовальщик живёт в рабочем потоке (RendererHost), основной поток только
+ * меряет холст и поле. Без поддержки OffscreenCanvas — тот же рисовальщик в основном потоке.
+ */
+export class MindCore {
+    #host = null;
+
+    attach(canvas, stage, data) {
+        this.#host ??= new RendererHost('mind', MindRenderer);
+        const metrics = {
+            size: canvas.offsetWidth || 900,
+            ratio: Math.min(globalThis.devicePixelRatio || 1, 2),
+            stageWidth: stage.clientWidth, stageHeight: stage.clientHeight
+        };
+        this.#host.call('attach', canvas, metrics, data);
+    }
+
+    /** Слияние: нить навыка, принявшего повтор, утолщается */
+    boost(itemId) {
+        this.#host?.call('boost', itemId);
+    }
+
+    // Окно закрыто: рабочий поток завершается, при новом холсте поднимется заново
+    stop() {
+        this.#host?.dispose();
+        this.#host = null;
     }
 }

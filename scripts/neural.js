@@ -12,6 +12,8 @@
  * фаза импульсов — из часов, поэтому перерисовка окна не сбрасывает движение.
  */
 
+import { RendererHost } from "./altar-offscreen.js";
+
 const FRAME_MS = 33;
 const TIER_STEP = 2;
 const MAX_TIER = 3;
@@ -51,25 +53,29 @@ const quad = (ax, ay, cx, cy, bx, by) => t => {
     return [u * u * ax + 2 * u * t * cx + t * t * bx, u * u * ay + 2 * u * t * cy + t * t * by];
 };
 
-export class NeuralBackground {
+/**
+ * Рисовальщик фона: без DOM, в рабочем потоке (OffscreenCanvas) или в основном. Размер холста меряет
+ * NeuralBackground в основном потоке.
+ */
+export class NeuralRenderer {
+    constructor({ reducedMotion = false } = {}) {
+        this.reducedMotion = reducedMotion;
+        this.last = 0;
+        this.running = false;
+    }
+
     /**
-     * @param {HTMLCanvasElement} canvas
+     * @param {HTMLCanvasElement|OffscreenCanvas} canvas
      * @param {string} key  Ключ персонажа: от него зависят фоновая сеть и места нейронов.
      * @param {object} mind { neurons: [{ id, color, active, tags }], tiers: { тег: ступень }, overload }
      */
-    constructor(canvas, key, mind) {
+    attach(canvas, key, mind) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.layer = document.createElement('canvas');
+        this.layer = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
         this.key = key;
-        this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         this.#buildDust();
         this.setMind(mind, { redraw: false });
-        this.last = 0;
-        this.running = false;
-        this.resizeObserver = new ResizeObserver(() => this.#resize());
-        this.resizeObserver.observe(canvas);
-        this.#resize();
     }
 
     // Фоновая сеть: тусклые клетки и связи с двумя ближайшими соседями
@@ -147,11 +153,9 @@ export class NeuralBackground {
         return best ? { x: best.x, y: best.y } : { x: 0.04 + rand() * 0.3, y: 0.4 + rand() * 0.55 };
     }
 
-    #resize() {
-        const ratio = Math.min(window.devicePixelRatio || 1, 2);
-        const width = this.canvas.clientWidth;
-        const height = this.canvas.clientHeight;
-        if (!width || !height) return;
+    /** Размер холста в CSS-пикселях и плотность пикселей */
+    resize({ width, height, ratio }) {
+        if (!width || !height || !this.canvas) return;
         for (const c of [this.canvas, this.layer]) {
             c.width = Math.round(width * ratio);
             c.height = Math.round(height * ratio);
@@ -232,28 +236,27 @@ export class NeuralBackground {
     start() {
         if (this.running || this.reducedMotion) return this.#draw(performance.now());
         this.running = true;
+        const next = globalThis.requestAnimationFrame ?? (cb => setTimeout(() => cb(performance.now()), 16));
         const loop = time => {
             if (!this.running) return;
-            if (!this.canvas.isConnected) return this.stop();
             if (time - this.last >= FRAME_MS) {
                 this.last = time;
                 this.#draw(time);
             }
-            this.frame = requestAnimationFrame(loop);
+            this.frame = next(loop);
         };
-        this.frame = requestAnimationFrame(loop);
+        this.frame = next(loop);
     }
 
     // Пауза: цикл отрисовки останавливается, кадр остаётся на холсте; start() продолжает
     pause() {
         this.running = false;
-        if (this.frame) cancelAnimationFrame(this.frame);
+        if (this.frame) (globalThis.cancelAnimationFrame ?? clearTimeout)(this.frame);
         this.frame = null;
     }
 
     stop() {
         this.pause();
-        this.resizeObserver.disconnect();
     }
 
     #draw() {
@@ -340,5 +343,46 @@ export class NeuralBackground {
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fill();
         }
+    }
+}
+
+/**
+ * Фон Терминала: рисовальщик живёт в рабочем потоке (RendererHost), основной поток только меряет холст.
+ */
+export class NeuralBackground {
+    /**
+     * @param {HTMLCanvasElement} canvas
+     * @param {string} key  Ключ персонажа: от него зависят фоновая сеть и места нейронов.
+     * @param {object} mind { neurons: [{ id, color, active, tags }], tiers: { тег: ступень }, overload }
+     */
+    constructor(canvas, key, mind) {
+        this.canvas = canvas;
+        this.host = new RendererHost('neural', NeuralRenderer);
+        this.host.call('attach', canvas, key, mind);
+        this.resizeObserver = new ResizeObserver(() => this.#resize());
+        this.resizeObserver.observe(canvas);
+        this.#resize();
+    }
+
+    #resize() {
+        this.host.call('resize', { width: this.canvas.clientWidth, height: this.canvas.clientHeight, ratio: Math.min(globalThis.devicePixelRatio || 1, 2) });
+    }
+
+    /** Сборка изменилась: те же места у тех же навыков, новые связи */
+    setMind(mind) {
+        this.host.call('setMind', mind);
+    }
+
+    start() {
+        this.host.call('start');
+    }
+
+    pause() {
+        this.host.call('pause');
+    }
+
+    stop() {
+        this.resizeObserver.disconnect();
+        this.host.dispose();
     }
 }

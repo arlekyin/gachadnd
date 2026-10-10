@@ -12,6 +12,7 @@
  */
 
 import { NUCLEUS_R } from "./altar-core.js";
+import { RendererHost } from "./altar-offscreen.js";
 
 // Импульсы рисуются в каждом кадре экрана, по его метке времени: неподвижное закэшировано, кадр дешёвый.
 // Часы в момент вызова и пропуск кадров давали неровный шаг — импульсы дёргались
@@ -77,45 +78,47 @@ function underlay(canvas) {
     return layer;
 }
 
-export class AltarSynapses {
-    /**
-     * @param {HTMLCanvasElement} canvas  холст в слое ядра
-     * @param {HTMLElement} stage         слой с ядром и узлами
-     */
-    constructor(canvas, stage) {
-        this.canvas = canvas;
-        this.stage = stage;
-        this.ctx = canvas.getContext('2d');
-        this.layer = underlay(canvas);
-        this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/**
+ * Рисовальщик связей Слияния: без DOM, в рабочем или основном потоке. Сцену (узлы, ядро, размеры)
+ * меряет AltarSynapses в основном потоке и присылает при появлении и изменении размера.
+ */
+export class SynapsesRenderer {
+    constructor({ reducedMotion = false } = {}) {
+        this.reducedMotion = reducedMotion;
         this.flares = new Map();
         this.dirty = [];
-        this.stale = true;
+        this.scene = null;
         this.running = false;
-        this.last = 0;
-        // Замер — при появлении и изменении размера, а не каждый кадр: чтение стилей в кадре
-        // заставляло браузер пересчитывать всё окно с его анимациями, и импульсы дёргались
-        this.resizeObserver = new ResizeObserver(() => { this.stale = true; });
-        this.resizeObserver.observe(stage);
+    }
+
+    /** Холст импульсов и нижний холст неподвижных нитей */
+    attach(canvas, layer) {
+        this.canvas = canvas;
+        this.layer = layer;
+        this.ctx = canvas.getContext('2d');
+    }
+
+    /** Новая сцена: перерисовать неподвижные нити в следующем кадре */
+    setScene(scene) {
+        this.scene = scene;
     }
 
     start() {
         if (this.running) return;
         this.running = true;
+        const next = globalThis.requestAnimationFrame ?? (cb => setTimeout(() => cb(performance.now()), 16));
         const loop = time => {
             if (!this.running) return;
-            if (!this.canvas.isConnected) return this.stop();
             this.#frame(time);
-            this.frame = requestAnimationFrame(loop);
+            this.frame = next(loop);
         };
-        this.frame = requestAnimationFrame(loop);
+        this.frame = next(loop);
     }
 
     stop() {
         this.running = false;
-        if (this.frame) cancelAnimationFrame(this.frame);
+        if (this.frame) (globalThis.cancelAnimationFrame ?? clearTimeout)(this.frame);
         this.frame = null;
-        this.resizeObserver.disconnect();
     }
 
     /** Слияние: по прядям навыка к ядру уходят яркие импульсы */
@@ -123,37 +126,21 @@ export class AltarSynapses {
         this.flares.set(itemId, performance.now());
     }
 
-    // Узлы и ядро в координатах холста. Берутся из процентов разметки, а не из рамок: ядро и узлы
-    // «дышат» анимацией масштаба, и рамки менялись бы каждый кадр
-    #measure() {
-        const width = this.stage.clientWidth, height = this.stage.clientHeight;
-        const core = this.stage.querySelector('.gd-core');
-        if (!core || !width) return null;
-        const place = el => ({ x: parseFloat(el.style.left) / 100 * width, y: parseFloat(el.style.top) / 100 * height });
-        const nodes = [...this.stage.querySelectorAll('.gd-node')].map(el => ({
-            id: el.dataset.itemId, ...place(el), color: rgb(getComputedStyle(el).getPropertyValue('--rarity'))
-        }));
-        // Кольцо замыкается, только когда навыки заняли все гнёзда: иначе последний и первый разделены пустыми
-        const closed = !this.stage.querySelector('.gd-socket');
-        return { width, height, core: { ...place(core), r: core.offsetWidth / 2 }, nodes, closed };
-    }
-
     #frame(time) {
-        if (this.stale) {
-            const scene = this.#measure();
-            if (!scene) return;
-            this.stale = false;
+        if (!this.canvas) return;
+        if (this.scene) {
+            const scene = this.scene;
+            this.scene = null;
             this.#resize(scene);
             this.#build(scene);
             this.#paint();
             this.ctx.clearRect(0, 0, this.width, this.height);
             this.dirty = [];
         }
-        this.#drawPulses(time);
+        if (this.paths) this.#drawPulses(time);
     }
 
-    #resize({ width, height }) {
-        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    #resize({ width, height, ratio }) {
         for (const c of [this.canvas, this.layer]) {
             if (c.width === Math.round(width * ratio) && c.height === Math.round(height * ratio)) continue;
             c.width = Math.round(width * ratio);
@@ -282,62 +269,119 @@ export class AltarSynapses {
 }
 
 /**
+ * Связи кольца Слияния для Алтаря: меряет узлы и ядро по разметке (при появлении и изменении размера),
+ * рисует — SynapsesRenderer в рабочем потоке.
+ */
+export class AltarSynapses {
+    /**
+     * @param {HTMLCanvasElement} canvas  холст в слое ядра
+     * @param {HTMLElement} stage         слой с ядром и узлами
+     */
+    constructor(canvas, stage) {
+        this.stage = stage;
+        this.host = new RendererHost('synapses', SynapsesRenderer);
+        this.host.call('attach', canvas, underlay(canvas));
+        // Замер — при появлении и изменении размера, а не каждый кадр: чтение стилей в кадре
+        // заставляло браузер пересчитывать всё окно с его анимациями, и импульсы дёргались
+        this.resizeObserver = new ResizeObserver(() => this.#measure());
+        this.resizeObserver.observe(stage);
+    }
+
+    start() {
+        this.#measure();
+        this.host.call('start');
+    }
+
+    stop() {
+        this.resizeObserver.disconnect();
+        this.host.dispose();
+    }
+
+    flare(itemId) {
+        this.host.call('flare', itemId);
+    }
+
+    // Узлы и ядро в координатах холста. Берутся из процентов разметки, а не из рамок: ядро и узлы
+    // «дышат» анимацией масштаба, и рамки менялись бы каждый кадр
+    #measure() {
+        const width = this.stage.clientWidth, height = this.stage.clientHeight;
+        const core = this.stage.querySelector('.gd-core');
+        if (!core || !width) return;
+        const place = el => ({ x: parseFloat(el.style.left) / 100 * width, y: parseFloat(el.style.top) / 100 * height });
+        const nodes = [...this.stage.querySelectorAll('.gd-node')].map(el => ({
+            id: el.dataset.itemId, ...place(el), color: rgb(getComputedStyle(el).getPropertyValue('--rarity'))
+        }));
+        // Кольцо замыкается, только когда навыки заняли все гнёзда: иначе последний и первый разделены пустыми
+        const closed = !this.stage.querySelector('.gd-socket');
+        const ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
+        this.host.call('setScene', { width, height, ratio, core: { ...place(core), r: core.offsetWidth / 2 }, nodes, closed });
+    }
+}
+
+/**
  * Резонанс: пряди от ядра обвивают выбранный тег колеса.
  * Пучок из пяти прядей выходит из края ядра, стягивается на середине пути, у тега расходится
  * и обвивает его, каждая прядь — по своей дуге. При выборе другого тега пряди втягиваются в ядро
  * и прорастают к новому. Экземпляр живёт дольше холста: слой ядра перерисовывается при смене тега,
  * и пряди продолжают движение на новом холсте (attach).
  */
-export class ResonanceWeave {
-    constructor() {
-        this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/**
+ * Рисовальщик прядей Резонанса: без DOM, в рабочем или основном потоке. Положения ядра и всех тегов
+ * колеса меряет ResonanceWeave в основном потоке.
+ */
+export class WeaveRenderer {
+    constructor({ reducedMotion = false } = {}) {
+        this.reducedMotion = reducedMotion;
         this.grow = 0;          // доля прорастания: 0 — в ядре, 1 — тег обвит
         this.painted = -1;      // доля, с которой нити нарисованы на нижнем холсте
         this.target = null;     // тег, к которому растут пряди
         this.wanted = null;     // выбранный тег
         this.dirty = [];
+        this.scene = null;
         this.running = false;
         this.last = 0;
-        this.resizeObserver = new ResizeObserver(() => { this.stale = true; });
     }
 
     /** Новый холст слоя ядра и выбранный тег */
-    attach(canvas, stage, tag) {
+    attach(canvas, layer, tag) {
         this.canvas = canvas;
-        this.layer = underlay(canvas);
-        this.stage = stage;
+        this.layer = layer;
         this.ctx = canvas.getContext('2d');
         this.wanted = tag;
         this.stale = true;
         this.dirty = [];
-        this.resizeObserver.disconnect();
-        this.resizeObserver.observe(stage);
         if (this.target === null) this.target = tag;
         if (this.reducedMotion) { this.target = tag; this.grow = 1; }
         this.start();
     }
 
+    /** Размеры поля и положения ядра и тегов */
+    setScene(scene) {
+        this.scene = scene;
+        this.stale = true;
+    }
+
     start() {
         if (this.running) return;
         this.running = true;
+        const next = globalThis.requestAnimationFrame ?? (cb => setTimeout(() => cb(performance.now()), 16));
         const loop = time => {
             if (!this.running) return;
-            if (this.canvas?.isConnected) {
+            if (this.canvas) {
                 const dt = Math.min(0.1, (time - (this.last || time)) / 1000);
                 this.last = time;
                 this.#step(dt);
                 this.#draw(time);
             }
-            this.frame = requestAnimationFrame(loop);
+            this.frame = next(loop);
         };
-        this.frame = requestAnimationFrame(loop);
+        this.frame = next(loop);
     }
 
     stop() {
         this.running = false;
-        if (this.frame) cancelAnimationFrame(this.frame);
+        if (this.frame) (globalThis.cancelAnimationFrame ?? clearTimeout)(this.frame);
         this.frame = null;
-        this.resizeObserver.disconnect();
     }
 
     // Втягивание к ядру быстрее, прорастание — мягче
@@ -351,13 +395,10 @@ export class ResonanceWeave {
     }
 
     #measure() {
-        const width = this.stage.clientWidth, height = this.stage.clientHeight;
-        const core = this.stage.querySelector('.gd-core');
-        const tag = [...this.stage.querySelectorAll('.gd-wheel-tag')].find(el => el.dataset.tag === this.target);
-        if (!core || !tag || !width) return null;
-        const place = el => ({ x: parseFloat(el.style.left) / 100 * width, y: parseFloat(el.style.top) / 100 * height });
-        const glow = getComputedStyle(this.stage).getPropertyValue('--glow') || '#b066ff';
-        return { width, height, core: { ...place(core), r: core.offsetWidth / 2 }, tag: { ...place(tag), w: tag.offsetWidth, h: tag.offsetHeight }, color: rgb(glow) };
+        const scene = this.scene;
+        const tag = scene?.tags[this.target];
+        if (!scene || !tag) return null;
+        return { width: scene.width, height: scene.height, ratio: scene.ratio, core: scene.core, tag, color: scene.color };
     }
 
     // Пряди как ломаные: пучок от ядра к тегу, затем дуга вокруг тега
@@ -431,7 +472,7 @@ export class ResonanceWeave {
             const scene = this.#measure();
             if (!scene) return;
             this.stale = false;
-            const ratio = Math.min(window.devicePixelRatio || 1, 2);
+            const ratio = scene.ratio;
             for (const c of [this.canvas, this.layer]) {
                 c.width = Math.round(scene.width * ratio);
                 c.height = Math.round(scene.height * ratio);
@@ -460,5 +501,52 @@ export class ResonanceWeave {
             this.dirty.push(drawPulse(ctx, x, y, this.color, 5, Math.min(1, u / 0.1, (1 - u) / 0.1)));
         });
         ctx.globalCompositeOperation = 'source-over';
+    }
+}
+
+/**
+ * Резонанс для Алтаря: экземпляр живёт дольше холста — при смене тега слой ядра перерисовывается,
+ * и пряди продолжают движение на новом холсте. Рисует WeaveRenderer в рабочем потоке.
+ */
+export class ResonanceWeave {
+    constructor() {
+        this.host = null;
+        this.resizeObserver = new ResizeObserver(() => this.#measure());
+    }
+
+    /** Новый холст слоя ядра и выбранный тег */
+    attach(canvas, stage, tag) {
+        this.stage = stage;
+        this.host ??= new RendererHost('weave', WeaveRenderer);
+        this.host.call('attach', canvas, underlay(canvas), tag);
+        this.resizeObserver.disconnect();
+        this.resizeObserver.observe(stage);
+        this.#measure();
+    }
+
+    // Пряди уходят: рисовальщик стоит, но помнит, насколько пряди проросли
+    stop() {
+        this.resizeObserver.disconnect();
+        this.host?.call('stop');
+    }
+
+    /** Окно закрыто */
+    dispose() {
+        this.resizeObserver.disconnect();
+        this.host?.dispose();
+        this.host = null;
+    }
+
+    #measure() {
+        const stage = this.stage;
+        const width = stage?.clientWidth, height = stage?.clientHeight;
+        const core = stage?.querySelector('.gd-core');
+        if (!core || !width) return;
+        const place = el => ({ x: parseFloat(el.style.left) / 100 * width, y: parseFloat(el.style.top) / 100 * height });
+        const tags = Object.fromEntries([...stage.querySelectorAll('.gd-wheel-tag')]
+            .map(el => [el.dataset.tag, { ...place(el), w: el.offsetWidth, h: el.offsetHeight }]));
+        const glow = getComputedStyle(stage).getPropertyValue('--glow') || '#b066ff';
+        const ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
+        this.host.call('setScene', { width, height, ratio, core: { ...place(core), r: core.offsetWidth / 2 }, tags, color: rgb(glow) });
     }
 }
