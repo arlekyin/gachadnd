@@ -154,40 +154,76 @@ const RUNES = (() => {
     });
 })();
 
+const f1 = n => n.toFixed(1);
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+
+// Звезда {n/k}: вершины соединяются через k — «n-грамма». k ≈ 0,38n и взаимно просто с n, чтобы линия
+// обошла все вершины одним ходом; для 3–4 вершин — простой многоугольник
+function starStep(n) {
+    if (n < 5) return 1;
+    let k = Math.max(2, Math.round(n * 0.38));
+    while (k > 1 && gcd(n, k) !== 1) k--;
+    return k;
+}
+
+// Руна на позиции эллипса (rx, ry) под углом deg, повёрнута вдоль него
+function runeAt(d, n, total, rx, ry, lit) {
+    const a = (n * 360 / total - 90) * Math.PI / 180;
+    const x = rx * Math.cos(a), y = ry * Math.sin(a);
+    const turn = Math.atan2(ry * Math.cos(a), -rx * Math.sin(a)) * 180 / Math.PI;
+    return `<path class="gd-rune ${lit ? 'on' : ''}" d="${d}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(turn - 90)})"/>`;
+}
+
 /**
- * Круг Переплавки: два кольца с рунами, гексаграмма — треугольник гнёзд и обратный ему, круг через гнёзда,
- * лучи от занятых гнёзд к ядру. Грань горит, когда заняты оба её конца; руны загораются по мере заполнения.
- * @param {boolean[]} filled  Заняты ли гнёзда, по порядку SIGIL_DEG.
+ * Круг ритуала — фон за ядром. Координаты — в пикселях от центра ядра.
+ * @param {object} o
+ * @param {number[][]} [o.points]   Вершины (гнёзда, места кольца, теги).
+ * @param {boolean[]} [o.filled]    Заняты ли вершины.
+ * @param {number|'hexagram'} [o.star]  Шаг звезды или гексаграмма (треугольник и обратный ему).
+ * @param {boolean[]} [o.edgeLit]   Горит ли грань звезды, начинающаяся в вершине i (по умолчанию — заняты оба конца).
+ * @param {{rx:number, ry:number, cls?:string}[]} [o.rings]  Кольца-эллипсы.
+ * @param {{rx:number, ry:number, lit:number}} [o.runes]      Кольцо рун и сколько из них горит.
+ * @param {{r:number, lit:boolean}} [o.center]  Паз в центре — вокруг ядра.
+ * @param {{count:number, r0:number, r1:number, lit:boolean}} [o.rays]  Лучи от центра наружу.
+ * @param {boolean} [o.spokes]  Лучи от занятых вершин к ядру.
+ * @param {string} o.kind       Ритуал — класс круга.
  */
-function sigilSvg(filled, weight) {
-    const R = SIGIL_R, size = 2 * (R + 44), c = size / 2;
-    const pt = (deg, r) => [c + r * Math.cos(deg * Math.PI / 180), c + r * Math.sin(deg * Math.PI / 180)];
-    const f = n => n.toFixed(1);
-    const sockets = SIGIL_DEG.map(deg => pt(deg, R));
-    const inverse = SIGIL_DEG.map(deg => pt(deg + 180, R));
-    const edges = sockets.map((p, n) => {
-        const q = sockets[(n + 1) % 3];
-        return `<line class="gd-sigil-edge ${filled[n] && filled[(n + 1) % 3] ? 'lit' : ''}" x1="${f(p[0])}" y1="${f(p[1])}" x2="${f(q[0])}" y2="${f(q[1])}"/>`;
-    }).join('');
-    const spokes = sockets.map((p, n) => {
-        const [x, y] = pt(SIGIL_DEG[n], 44);
-        return `<line class="gd-sigil-spoke ${filled[n] ? 'lit' : ''}" x1="${f(p[0])}" y1="${f(p[1])}" x2="${f(x)}" y2="${f(y)}"/>`;
-    }).join('');
-    const lit = Math.round(RUNES.length * Math.min(1, weight / 3));
-    const runes = RUNES.map((d, n) => {
-        const deg = n * 360 / RUNES.length - 90;
-        const [x, y] = pt(deg, R + 24);
-        return `<path class="gd-rune ${n < lit ? 'on' : ''}" d="${d}" transform="translate(${f(x)} ${f(y)}) rotate(${f(deg + 90)})"/>`;
-    }).join('');
-    const rings = sockets.map((p, n) => `<circle class="gd-sigil-socket ${filled[n] ? 'lit' : ''}" cx="${f(p[0])}" cy="${f(p[1])}" r="21"/>`).join('');
-    return `<svg class="gd-sigil" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">
-        <circle class="gd-sigil-ring" cx="${c}" cy="${c}" r="${R + 38}"/>
-        <circle class="gd-sigil-ring" cx="${c}" cy="${c}" r="${R + 10}"/>
-        <circle class="gd-sigil-ring faint" cx="${c}" cy="${c}" r="${R}"/>
-        <g class="gd-runes" style="transform-origin: ${c}px ${c}px">${runes}</g>
-        <polygon class="gd-sigil-inverse" points="${inverse.map(p => p.map(f).join(',')).join(' ')}"/>
-        ${edges}${spokes}${rings}
-    </svg>`;
+function sigilSvg(o) {
+    const points = o.points ?? [];
+    const filled = o.filled ?? points.map(() => false);
+    const extentX = Math.max(60, ...points.map(p => Math.abs(p[0])), ...(o.rings ?? []).map(r => r.rx), o.runes?.rx ?? 0, o.rays?.r1 ?? 0);
+    const extentY = Math.max(60, ...points.map(p => Math.abs(p[1])), ...(o.rings ?? []).map(r => r.ry), o.runes?.ry ?? 0, o.rays?.r1 ?? 0);
+    const w = 2 * (extentX + 40), h = 2 * (extentY + 40);
+    const parts = [];
+    for (const r of o.rings ?? []) parts.push(`<ellipse class="gd-sigil-ring ${r.cls ?? ''}" cx="0" cy="0" rx="${f1(r.rx)}" ry="${f1(r.ry)}"/>`);
+    if (o.runes) {
+        parts.push(`<g class="gd-runes">${RUNES.map((d, n) => runeAt(d, n, RUNES.length, o.runes.rx, o.runes.ry, n < o.runes.lit)).join('')}</g>`);
+    }
+    if (o.rays) {
+        for (let n = 0; n < o.rays.count; n++) {
+            const a = (n * 360 / o.rays.count - 90) * Math.PI / 180;
+            parts.push(`<line class="gd-sigil-ray ${o.rays.lit ? 'lit' : ''}" x1="${f1(Math.cos(a) * o.rays.r0)}" y1="${f1(Math.sin(a) * o.rays.r0)}" x2="${f1(Math.cos(a) * o.rays.r1)}" y2="${f1(Math.sin(a) * o.rays.r1)}"/>`);
+        }
+    }
+    const n = points.length;
+    if (o.star === 'hexagram' && n === 3) {
+        parts.push(`<polygon class="gd-sigil-inverse" points="${points.map(([x, y]) => `${f1(-x)},${f1(-y)}`).join(' ')}"/>`);
+    }
+    if (n >= 3) {
+        const k = o.star === 'hexagram' ? 1 : (o.star ?? starStep(n));
+        for (let i = 0; i < n; i++) {
+            const j = (i + k) % n;
+            const lit = o.edgeLit ? o.edgeLit[i] : filled[i] && filled[j];
+            parts.push(`<line class="gd-sigil-edge ${lit ? 'lit' : ''}" x1="${f1(points[i][0])}" y1="${f1(points[i][1])}" x2="${f1(points[j][0])}" y2="${f1(points[j][1])}"/>`);
+        }
+    }
+    if (o.spokes) points.forEach(([x, y], i) => {
+        const r = Math.hypot(x, y) || 1;
+        parts.push(`<line class="gd-sigil-spoke ${filled[i] ? 'lit' : ''}" x1="${f1(x)}" y1="${f1(y)}" x2="${f1(x / r * 44)}" y2="${f1(y / r * 44)}"/>`);
+    });
+    if (o.sockets) points.forEach(([x, y], i) => parts.push(`<circle class="gd-sigil-socket ${filled[i] ? 'lit' : ''}" cx="${f1(x)}" cy="${f1(y)}" r="${o.sockets}"/>`));
+    if (o.center) parts.push(`<circle class="gd-sigil-socket center ${o.center.lit ? 'lit' : ''}" cx="0" cy="0" r="${o.center.r}"/>`);
+    return `<svg class="gd-sigil gd-sigil-${o.kind}" viewBox="${f1(-w / 2)} ${f1(-h / 2)} ${f1(w)} ${f1(h)}" width="${f1(w)}" height="${f1(h)}" aria-hidden="true">${parts.join('')}</svg>`;
 }
 
 // Фаза покачивания огонька привязана к часам и ключу, а не к моменту отрисовки:
@@ -331,8 +367,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Прогноз под ядром: что получится из того, что сейчас в фокусе
     #forecast(slotted, hd, hdMax, memory) {
-        // В Переплавке — под кругом ритуала, иначе — под ядром
-        const style = at({ x: CORE.x, y: CORE.y + Math.max(14, this.ritual === 'smelt' ? this.#sigilBelow : 0) });
+        // Под кругом ритуала, если он ниже прогноза
+        const style = at({ x: CORE.x, y: CORE.y + Math.max(14, this.#sigilBelow) });
         if (this.ritual === 'merge') {
             const item = memory.find(i => i.id === this.mergeId);
             if (!item) return null;
@@ -417,7 +453,6 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         // Роли огоньков: в фокусе у ядра, доступен ритуалу, приглушён
         const flows = [];
         const focusEmpty = [];
-        let sigil = null;
         const views = new Map();
         const dupKey = merge && this.mergeId ? `${dupOf.get(this.mergeId)}:0` : null;
         if (merge) {
@@ -437,7 +472,6 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             // Размер поля сознания (без левой панели): от него считаются проценты огоньков и ядра.
             // До первой отрисовки — по окну браузера без ширины панели
             const field = this.#part('stage') ?? this.#part('fog');
-            this.#sigilBelow = (SIGIL_R + 50) / (field?.clientHeight || innerHeight) * 100;
             const points = focusPoints(this.#slotLimit(), field?.clientWidth || innerWidth - 290, field?.clientHeight || innerHeight);
             points.forEach((pos, n) => {
                 const ing = slotted[n];
@@ -445,7 +479,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
                 if (!ing) return points.length === 1 && focusEmpty.push({ style: at(pos) });
                 views.set(ing.key, { cls: ['focused'], tap: 'unslot', pos });
             });
-            if (points.length > 1) sigil = sigilSvg(points.map((_, n) => !!slotted[n]), slotted.reduce((sum, i) => sum + (i?.weight ?? 0), 0));
+
             const smeltRarity = this.ritual === 'smelt' ? slotted[0]?.rarity : null;
             for (const i of all) {
                 if (views.has(i.key)) continue;
@@ -484,10 +518,11 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const wheel = this.ritual !== 'resonate' ? [] : tags.map((name, n) => {
             const angle = -Math.PI / 2 + (2 * Math.PI * n) / tags.length;
             const pos = { x: CORE.x + WHEEL.rx * Math.cos(angle), y: CORE.y + WHEEL.ry * Math.sin(angle) };
-            return { name, active: name === this.tag, style: at(pos) };
+            return { name, active: name === this.tag, pos, style: at(pos) };
         });
         // Переплавка накаляет ядро по мере заполнения гнёзд
         const heat = this.ritual === 'smelt' ? Math.min(1, slotted.reduce((sum, i) => sum + i.weight, 0) / 3) : 0;
+        const sigil = this.#sigil({ slotted, wheel, sockets, orbitAt, filled: active.length });
         // Ядро сознания: нити экипированных навыков крепятся с той стороны, где навык стоит на кольце
         const mind = {
             ritual: this.ritual, glow: ritual.glow, at: CORE, heat, hd: hdValue, hdMax,
@@ -620,6 +655,65 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const top = Math.max(12, Math.min(box.height - height - 12, anchor.top - box.top + anchor.height / 2 - height / 2));
         card.style.left = `${Math.max(12, left)}px`;
         card.style.top = `${top}px`;
+    }
+
+    /**
+     * Круг ритуала за ядром. У каждого ритуала свой: Переплавка — гексаграмма с тремя гнёздами,
+     * Слияние — большая звезда через все места кольца Памяти, Резонанс — звезда-плетение через теги колеса,
+     * Расщепление — паз вокруг ядра и лучи рассеивания. Проценты разметки переводятся в пиксели поля.
+     */
+    #sigil({ slotted, wheel, sockets, orbitAt, filled }) {
+        const field = this.#part('stage') ?? this.#part('fog');
+        const W = field?.clientWidth || innerWidth - 290, H = field?.clientHeight || innerHeight;
+        const px = pos => [(pos.x - CORE.x) / 100 * W, (pos.y - CORE.y) / 100 * H];
+        const slot = !!slotted[0];
+        const allRunes = RUNES.length;
+        this.#sigilBelow = 0;
+        if (this.ritual === 'smelt') {
+            const R = SIGIL_R;
+            const weight = slotted.reduce((sum, i) => sum + (i?.weight ?? 0), 0);
+            this.#sigilBelow = (R + 50) / H * 100;
+            return sigilSvg({
+                kind: 'smelt', star: 'hexagram', sockets: 21, spokes: true,
+                points: SIGIL_DEG.map(deg => [R * Math.cos(deg * Math.PI / 180), R * Math.sin(deg * Math.PI / 180)]),
+                filled: SIGIL_DEG.map((_, n) => !!slotted[n]),
+                rings: [{ rx: R + 38, ry: R + 38 }, { rx: R + 10, ry: R + 10 }, { rx: R, ry: R, cls: 'faint' }],
+                runes: { rx: R + 24, ry: R + 24, lit: Math.round(allRunes * Math.min(1, weight / 3)) }
+            });
+        }
+        if (this.ritual === 'merge') {
+            // Все места кольца Памяти — вершины звезды; грань горит между двумя занятыми местами
+            const points = Array.from({ length: sockets }, (_, n) => px(orbitAt(n)));
+            const rx = ORBIT.rx / 100 * W, ry = ORBIT.ry / 100 * H;
+            return sigilSvg({
+                kind: 'merge', points, filled: points.map((_, n) => n < filled),
+                rings: [{ rx, ry, cls: 'faint' }, { rx: rx + 34, ry: ry + 34 }, { rx: rx + 70, ry: ry + 70 }],
+                runes: { rx: rx + 52, ry: ry + 52, lit: Math.round(allRunes * Math.min(1, filled / Math.max(1, sockets))) }
+            });
+        }
+        if (this.ritual === 'resonate') {
+            // Плетение: звезда через теги колеса; горят нити выбранного тега
+            const points = wheel.map(w => px(w.pos));
+            const active = wheel.findIndex(w => w.active);
+            const k = starStep(points.length);
+            const rx = WHEEL.rx / 100 * W, ry = WHEEL.ry / 100 * H;
+            return sigilSvg({
+                kind: 'resonate', points, star: k,
+                edgeLit: points.map((_, i) => i === active || (i + k) % points.length === active),
+                rings: [{ rx, ry, cls: 'faint' }, { rx: 150, ry: 150 }, { rx: 176, ry: 176 }],
+                runes: { rx: 163, ry: 163, lit: slot ? allRunes : 0 },
+                center: { r: 56, lit: slot }
+            });
+        }
+        // Расщепление: паз вокруг ядра, лучи расходятся — кристалл рассеивается в туман
+        this.#sigilBelow = 236 / H * 100;
+        return sigilSvg({
+            kind: 'split',
+            rings: [{ rx: 150, ry: 150 }, { rx: 196, ry: 196 }],
+            runes: { rx: 173, ry: 173, lit: slot ? allRunes : 0 },
+            rays: { count: 16, r0: 66, r1: 140, lit: slot },
+            center: { r: 56, lit: slot }
+        });
     }
 
     #part(id) {
