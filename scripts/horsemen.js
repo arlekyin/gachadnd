@@ -18,7 +18,7 @@ export const HORSEMEN = {
     death: 'Смерть'
 };
 
-const COMBAT_NODES = ['mob', 'elite', 'boss'];
+const COMBAT_NODES = ['mob', 'elite', 'outpost', 'boss'];
 // Риск — небоевое испытание навыков
 const PEACE_NODES = ['event', 'shop', 'rest', 'doom', 'risk'];
 
