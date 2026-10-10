@@ -15,6 +15,9 @@ tiers:
   - count: 6
     name: Резня
     description: 1 раз за бой, когда вы убиваете врага с показателем опасности 1/4 или выше, вы сразу получаете одно дополнительное действие.
+    trigger:
+      on: kill
+      min_cr: 0.25
     feature:
       activation: special
       uses: 1

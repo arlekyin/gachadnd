@@ -12,6 +12,10 @@
  *   turn_start   — в начале своего хода в бою владельцу предлагается использовать навык (use) или
  *                  заплатить уроном (pay) за преимущество на атаки до конца хода (advantage).
  *   combat_start — то же в начале боя.
+ *   zero_hp      — ПЗ владельца упали до 0: вместо этого остаётся 1 ПЗ и лечение (revive); burst — враги
+ *                  рядом совершают спасбросок против универсальной Сложности, урон равен лечению.
+ *   kill         — враг (min_cr и выше) погиб в ход владельца: владельцу объявляется дополнительное действие.
+ *                  Убийцей считается тот, чей сейчас ход: источник урона dnd5e не сообщает.
  * У навыка формула может браться из его активности (from: damage | roll) — с учётом текущего ранга.
  * Заряды навыка (uses) проверяются и тратятся при срабатывании.
  *
@@ -30,7 +34,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { onRenderChatMessage } from "../../core/chat-hooks.js";
-import { getSynergyDictionary } from "./synergy-data.js";
+import { getSynergyDictionary, UNIVERSAL_DC_FORMULA } from "./synergy-data.js";
 import { onSocket, emit } from "../../core/socket.js";
 
 const SETTING = 'automation';
@@ -96,14 +100,16 @@ export function activeTriggers(actor, on, { all = false } = {}) {
 // ЛИЧНЫЕ ГАЛОЧКИ ИГРОКА: «ВКЛ.» И «СПРАШИВАТЬ»
 // ==========================================
 
-export const TRIGGER_EVENTS = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
+export const TRIGGER_EVENTS = ['damage_roll', 'damaged', 'turn_start', 'combat_start', 'zero_hp', 'kill'];
 // По умолчанию доп. урон добавляется сам, остальное спрашивается
-const DEFAULT_ASK = { damage_roll: false, damaged: true, turn_start: true, combat_start: true };
+const DEFAULT_ASK = { damage_roll: false, damaged: true, turn_start: true, combat_start: true, zero_hp: false, kill: false };
 export const KIND_LABELS = {
     damage_roll: trigger => trigger.heal_self ? 'лечение после урона' : 'доп. урон',
     damaged: () => 'реакция на урон',
     turn_start: () => 'начало хода',
-    combat_start: () => 'начало боя'
+    combat_start: () => 'начало боя',
+    zero_hp: () => 'вместо падения до 0 ПЗ',
+    kill: () => 'убийство врага'
 };
 
 export function readPrefs() {
@@ -482,3 +488,60 @@ Hooks.on('dnd5e.preRollAttackV2', (config) => {
     if (flag !== key && !(flag === FREE && key === null)) return;
     config.advantage = true;
 });
+
+// ==========================================
+// ПАДЕНИЕ ДО 0 ПЗ И УБИЙСТВО
+// ==========================================
+
+// Прежние ПЗ уходят в опции изменения: после него у всех клиентов видно, что ПЗ упали до 0, а не стояли там
+Hooks.on('preUpdateActor', (actor, changes, options) => {
+    if (foundry.utils.hasProperty(changes, 'system.attributes.hp.value')) options.gachadndHp = actor.system.attributes?.hp?.value ?? 0;
+});
+
+Hooks.on('updateActor', (actor, changes, options) => {
+    if (!enabled() || !foundry.utils.hasProperty(changes, 'system.attributes.hp.value')) return;
+    if (!(options.gachadndHp > 0) || (actor.system.attributes?.hp?.value ?? 1) > 0) return;
+    if (responder(actor) === game.user.id) enqueue(() => onZeroHp(actor));
+    const combat = game.combats?.find(c => c.started && c.combatants.some(cb => cb.actor === actor || cb.actor?.id === actor.id));
+    const killer = combat?.combatant?.actor;
+    const hostile = combat?.combatants.find(cb => cb.actor === actor || cb.actor?.id === actor.id)?.token?.disposition === CONST.TOKEN_DISPOSITIONS.HOSTILE;
+    if (killer && killer !== actor && hostile && responder(killer) === game.user.id) enqueue(() => onKill(killer, actor));
+});
+
+async function onZeroHp(actor) {
+    for (const source of activeTriggers(actor, 'zero_hp')) {
+        if (!reactionReady(source)) continue;
+        const { revive, burst } = source.trigger;
+        if (getPref(source).ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> падает до 0 ПЗ.</p><p>Использовать «${source.name}»: остаться с 1 ПЗ и восстановить ${shownFormula(revive.formula, actor)}?</p>`)) continue;
+        const roll = await new Roll(revive.formula, actor.getRollData()).evaluate();
+        const hp = actor.system.attributes.hp;
+        await spendUse(source.item);
+        await actor.update({ 'system.attributes.hp.value': Math.min(hp.max, 1 + roll.total) });
+        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${source.name}: вместо падения до 0 ПЗ — 1 ПЗ и лечение` });
+        if (burst) {
+            const dc = (await new Roll(UNIVERSAL_DC_FORMULA, actor.getRollData()).evaluate()).total;
+            const ability = CONFIG.DND5E?.abilities?.[burst.save]?.label ?? burst.save;
+            const type = CONFIG.DND5E?.damageTypes?.[burst.type]?.label ?? burst.type;
+            await ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ actor }),
+                content: `<strong>${source.name}:</strong> враги в пределах ${burst.radius} футов от ${actor.name} совершают спасбросок ${game.i18n.localize(ability)} Сл ${dc}: урон ${game.i18n.localize(type)} ${roll.total}, при успехе ${Math.floor(roll.total / 2)}.`
+            });
+        }
+        return;
+    }
+}
+
+async function onKill(killer, victim) {
+    for (const source of activeTriggers(killer, 'kill')) {
+        if (!reactionReady(source)) continue;
+        const cr = Number(victim.system.details?.cr ?? 0);
+        if (cr < (source.trigger.min_cr ?? 0)) continue;
+        if (getPref(source).ask && !await confirm(source.name, `<p>${killer.name} убивает ${victim.name}.</p><p>Использовать «${source.name}»?</p>`)) continue;
+        await spendUse(source.item);
+        await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor: killer }),
+            content: `<strong>${source.name}:</strong> ${killer.name} убивает ${victim.name} и сразу получает одно дополнительное действие.`
+        });
+    }
+}
+
