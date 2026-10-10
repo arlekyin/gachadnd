@@ -1,0 +1,8 @@
+id: q9lhFpPamNibqvKD
+name: Черепаха
+rarity: green
+tags:
+  - щит
+description: Действием спрячьтесь в панцирь — до начала вашего следующего хода вы получаете +5 к КД.
+drawback: В свой следующий ход ваша скорость равна 0.
+activation: action

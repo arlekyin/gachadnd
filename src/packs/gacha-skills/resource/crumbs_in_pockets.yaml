@@ -1,0 +1,14 @@
+id: oJlFT3Sti6A8yNUj
+name: Крошки в карманах
+rarity: gray
+tags:
+  - аномалия
+description: Активируйте навык, чтобы найти в кармане один паёк. Происхождение неизвестно. Мастер добавляет паёк в инвентарь.
+activation: special
+uses: 1
+recovery: long
+ranks:
+  - text: 2 пайка за долгий отдых.
+    uses: 2
+  - text: 3 пайка за долгий отдых.
+    uses: 3

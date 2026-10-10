@@ -1,0 +1,20 @@
+id: cSR7op4spmkkgxT8
+name: Эстус
+rarity: blue
+tags:
+  - огонь
+description: Бонусным действием сделайте глоток из фляги и восстановите количество ПЗ, равное {damage}. Фляга наполняется при каждом коротком и длинном отдыхе.
+activation: bonus
+uses: 3
+recovery: short
+damage:
+  - formula: 2d4 + @prof
+    type: healing
+ranks:
+  - text: 4 глотка.
+    uses: 4
+  - text: 5 глотков, каждый восстанавливает количество ПЗ, равное {damage}.
+    uses: 5
+    damage:
+      - formula: 3d4 + @prof
+        type: healing

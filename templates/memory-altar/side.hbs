@@ -1,0 +1,13 @@
+<aside class="gd-part-side {{#if diving}}diving{{/if}}" style="--glow: {{ritual.glow}}">
+    <h1>{{ritual.name}}</h1>
+    <div class="gd-subtitle">{{ritual.text}}</div>
+    <div class="gd-glyphs">
+        {{#each glyphs}}
+        <button type="button" class="gd-glyph {{#if active}}active{{/if}}" data-action="ritual" data-ritual="{{key}}" style="--glow: {{glow}}" title="{{text}}">
+            <span class="gd-glyph-name">{{name}}</span>
+            <span class="gd-glyph-disc"><i class="fas {{icon}}"></i></span>
+        </button>
+        {{/each}}
+    </div>
+    <button type="button" class="gd-stash-open" data-action="stash" title="Личный тайник: отложенные кристаллы не пахнут"><i class="fas fa-box-archive"></i> Хранилище</button>
+</aside>

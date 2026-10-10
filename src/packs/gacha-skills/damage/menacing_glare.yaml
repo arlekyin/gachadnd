@@ -1,0 +1,12 @@
+id: nI21L3pkuUeyyj0Q
+name: Грозный взгляд
+rarity: gray
+tags:
+  - разум
+description: В начале каждого вашего хода одно существо по вашему выбору в пределах 10 футов получает {damage}. Каждый повторный кристалл Грозного взгляда, слитый на Привале, прибавляет 1 урон — без ограничения рангов.
+activation: special
+range: 10
+damage:
+  - formula: '1'
+    type: psychic
+stacking: true

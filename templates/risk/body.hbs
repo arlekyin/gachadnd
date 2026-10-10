@@ -1,0 +1,65 @@
+<div class="gd-risk">
+{{#if empty}}
+    <p class="gd-risk-empty">{{empty}}</p>
+{{else}}
+    <div class="gd-risk-head">
+        <h2>{{name}}</h2>
+        <div class="gd-risk-fails">Провалы {{#each pips}}<span class="gd-pip {{#if this}}on{{/if}}"></span>{{/each}}</div>
+    </div>
+    <div class="gd-risk-intro">{{intro}}</div>
+    <div class="gd-risk-pot"><strong>Копилка:</strong> {{{pot}}}</div>
+    {{#if header}}<h3>Этап {{header.number}} из {{header.total}} — {{header.name}} <span class="gd-risk-reward">→ {{header.reward}}</span></h3>{{/if}}
+
+    {{#if ended}}
+    <div class="gd-risk-end">{{ended}}</div>
+    {{else if pending}}
+    <div class="gd-risk-pending">
+        <div>Провал: {{pending.note}} — {{pending.total}} против Сл {{pending.dc}}</div>
+        {{#if pending.mine}}
+        <div class="gd-risk-buttons">
+            <button type="button" data-action="blood"><i class="fas fa-tint"></i> Цена крови — Кость Хитов</button>
+            <button type="button" data-action="accept">Принять провал</button>
+        </div>
+        {{else}}<div>Ждём решения выступавшего.</div>{{/if}}
+    </div>
+    {{else if group}}
+    <div class="gd-risk-note">Групповой этап: бросают все, этап пройден, если преуспела хотя бы половина.</div>
+    {{#each group}}
+    <div class="gd-risk-row"><span>{{name}}</span>
+        {{#if rolled}}<span class="{{#if rolled.success}}ok{{else}}bad{{/if}}">{{rolled.total}} / Сл {{rolled.dc}}</span>
+        {{else if mine}}{{#each approaches}}<button type="button" data-action="groupRoll" data-actor-id="{{../id}}" data-approach="{{index}}">{{skill}} · Сл {{dc}}</button>{{/each}}
+        {{else}}<span>бросает…</span>{{/if}}
+    </div>
+    {{/each}}
+    {{else if solo}}
+    <div class="gd-risk-pick">
+        <label>Выступает <select class="gd-risk-performer">{{#each solo.eligible}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}</select></label>
+        <label>Помогает <select class="gd-risk-helper"><option value="">никто</option>{{#each solo.helpers}}<option value="{{id}}">{{name}}</option>{{/each}}</select></label>
+    </div>
+    {{#if solo.skipped}}<div class="gd-risk-note">{{solo.skipped}} выступал на прошлом этапе и пропускает этот.</div>{{/if}}
+    <div class="gd-approaches">
+        {{#each solo.approaches}}
+        <div class="gd-approach">
+            <div class="gd-approach-label">{{label}}</div>
+            <div class="gd-approach-meta">{{skill}} · Сл {{dc}}</div>
+            <div class="gd-approach-fail">Провал: {{fail}}</div>
+            <button type="button" data-action="roll" data-approach="{{index}}" {{#unless ../solo.canRoll}}disabled{{/unless}}>Бросок</button>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+
+    {{#if gm}}
+    <div class="gd-risk-gm">
+        <label>Добыча — <select class="gd-risk-recipient">{{#each gm.party}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}</select></label>
+        {{#if gm.auto}}
+        <button type="button" data-action="auto" title="Творческое применение навыка, заклинания или предмета удалось">Автоуспех</button>
+        <button type="button" data-action="autoFail" title="Импровизация не удалась: провал этапа, выступавший теряет ПЗ, равные уровню">Автопровал</button>
+        {{/if}}
+        <button type="button" data-action="leave" {{#if gm.pending}}disabled{{/if}}>Уйти с добычей</button>
+        {{#if gm.reroll}}<button type="button" data-action="reroll" title="Заменить испытание на этом узле, пока ни один этап не пройден">Другое испытание</button>{{/if}}
+    </div>
+    {{/if}}
+    {{#if log.length}}<div class="gd-risk-log">{{#each log}}<div>{{this}}</div>{{/each}}</div>{{/if}}
+{{/if}}
+</div>

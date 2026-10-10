@@ -1,0 +1,9 @@
+id: FrXzjQF0dg4VoCJH
+name: Нео
+rarity: blue
+tags:
+  - движение
+description: Бонусным действием войдите в «режим уклонения». До конца боя все дальнобойные атаки оружием по вам совершаются с помехой, с любого расстояния.
+activation: bonus
+uses: 1
+recovery: short

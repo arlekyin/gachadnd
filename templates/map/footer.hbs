@@ -1,0 +1,21 @@
+<footer class="gd-map-footer">
+    {{#if hasMap}}
+    <div class="gd-map-status">
+        {{#if current}}
+        <span class="gd-map-here" style="--node: {{current.color}}"><i class="fas {{current.icon}}"></i> {{current.label}}</span>
+        {{#if next.length}}<span class="gd-map-next">дальше — {{#each next}}<b style="--node: {{color}}">{{label}}</b>{{/each}}</span>{{else}}<span class="gd-map-next">этаж пройден</span>{{/if}}
+        {{else}}
+        <span class="gd-map-next">Отряд у Входа — путь начинается с него</span>
+        {{/if}}
+    </div>
+    {{#if scent}}
+    <span class="gd-map-scent" style="--scent: {{scent.color}}" title="Запах отряда · Шёпот от {{scent.thresholds.whisper}}, Охота от {{scent.thresholds.hunt}} · видит только Мастер"><i class="fas {{scent.icon}}"></i> {{scent.label}} · {{scent.value}}</span>
+    {{/if}}
+    {{#if pulse}}
+    <span class="gd-map-pulse" style="--pulse: {{pulse.color}}" title="{{pulse.detail}} · видит только Мастер"><i class="fas fa-heart-pulse"></i> Пульс: {{pulse.last}} · {{pulse.shift}} — Монстры {{pulse.mob}}, Элита {{pulse.elite}}</span>
+    {{/if}}
+    <div class="gd-map-legend">
+        {{#each legend}}<span style="--node: {{color}}" title="{{label}}"><i class="fas {{icon}}"></i>{{count}}</span>{{/each}}
+    </div>
+    {{/if}}
+</footer>

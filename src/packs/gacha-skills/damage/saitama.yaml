@@ -1,0 +1,13 @@
+id: y1qNeTNUcGFEgAx3
+name: Сайтама
+rarity: red
+tags:
+  - казнь
+description: Действием нанесите один безоружный удар по существу в пределах 5 футов. Он попадает автоматически и наносит {damage}, а цель отлетает на 30 футов. После удара вы обязаны сказать что-то разочарованное.
+activation: action
+range: 5
+uses: 1
+recovery: long
+damage:
+  - formula: 12d8
+    type: bludgeoning

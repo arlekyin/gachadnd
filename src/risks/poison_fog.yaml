@@ -1,0 +1,54 @@
+id: poison_fog
+name: Ядовитый туман
+intro: Туман здесь зеленоватый и сладкий на вкус. Сладость — это плохо.
+collapse:
+  text: Туман смыкается. Все надышались.
+  hp: 2
+  condition: poisoned
+stages:
+  - name: Найти тропу
+    approaches:
+      - label: Следы зверей
+        skill: sur
+        dc: -1
+        fail: { text: "Тропа уводит в самую гущу.", hp: 2 }
+      - label: По растениям, что не вянут
+        skill: nat
+        fail: { text: "Растения оказались ядовитыми.", hp: 1, condition: poisoned }
+  - name: Задержать дыхание — все вместе
+    group: true
+    approaches:
+      - label: Терпеть
+        skill: ath
+        fail: { text: "Судорожный вдох.", hp: 1, condition: poisoned }
+      - label: Дышать через противоядие
+        skill: med
+        fail: { text: "Противоядие не то.", hp: 1 }
+  - name: Миражи
+    approaches:
+      - label: Не поддаться видениям
+        skill: ins
+        fail: { text: "Вы идёте за миражом и падаете в овраг.", hp: 2 }
+      - label: Молитва против наваждения
+        skill: rel
+        dc: 1
+        fail: { text: "Видения становятся кошмаром.", hp: 1, condition: frightened }
+  - name: Рой мошкары
+    approaches:
+      - label: Бежать
+        skill: acr
+        fail: { text: "Рой жалит.", hp: 2 }
+      - label: Затаиться
+        skill: ste
+        dc: 1
+        fail: { text: "Рой находит вас в укрытии.", hp: 1, condition: poisoned }
+  - name: Источник тумана
+    approaches:
+      - label: Найти растение-источник
+        skill: nat
+        dc: 1
+        fail: { text: "Споры в лицо.", hp: 2 }
+      - label: Развеять магией
+        skill: arc
+        dc: 2
+        fail: { text: "Магия раздувает туман.", hp: 1, condition: poisoned }

@@ -1,12 +1,10 @@
-id: "65QK8yPqaIAVFzRx"
-name: "Сигма"
-rarity: "Серый"
-category: "УТИЛИТА"
+id: 65QK8yPqaIAVFzRx
+name: Сигма
+rarity: gray
 tags:
   - разум
-description: "Полный иммунитет к насмешкам, провокациям, эффектам «таунта» и состоянию Очарованный (Charmed). Ты выше этого. Грайндсет."
-activation: "none"
+description: Полный иммунитет к насмешкам, провокациям, эффектам «таунта» и состоянию «Очарованный». Ты выше этого. Грайндсет.
 changes:
-  - key: "system.traits.ci.value"
-    mode: "add"
-    value: "charmed"
+  - key: system.traits.ci.value
+    mode: add
+    value: charmed

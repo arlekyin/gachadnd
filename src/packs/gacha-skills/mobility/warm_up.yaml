@@ -1,0 +1,22 @@
+id: 2DpQjuZeIsVaQdZh
+name: Разминка
+rarity: gray
+tags:
+  - движение
+description: Ваша скорость увеличивается на 5 футов.
+activation: none
+changes:
+  - key: system.attributes.movement.walk
+    mode: add
+    value: '+5'
+ranks:
+  - text: Скорость +10 футов.
+    changes:
+      - key: system.attributes.movement.walk
+        mode: add
+        value: '+10'
+  - text: Скорость +15 футов.
+    changes:
+      - key: system.attributes.movement.walk
+        mode: add
+        value: '+15'

@@ -1,0 +1,20 @@
+<div class="gd-part-controls" style="--glow: {{ritual.glow}}">
+    {{!-- Итог ритуала — яркая надпись вверху экрана на тёмной полосе, подчёркнутая знаком; гаснет сама --}}
+    {{#if result}}
+    <div class="gd-banner" style="--rarity: {{result.color}}; animation-delay: -{{result.delay}}ms">
+        <span class="gd-banner-label">{{result.label}}</span>
+        <span class="gd-banner-title">{{result.title}}</span>
+        <span class="gd-banner-rule"><i></i><b></b><i></i></span>
+        <span class="gd-banner-sub">{{result.sub}}</span>
+    </div>
+    {{/if}}
+    <div class="gd-mind-hint">Огоньки можно брать, бросать и опускать в ядро</div>
+    <div class="gd-mind-controls">
+        <div class="gd-recipe">{{recipe.note}}{{#if recipe.short}} · <em>{{recipe.short}}</em>{{/if}}</div>
+        <button type="button" class="gd-conjure" data-action="conjure" {{#unless recipe.ready}}disabled{{/unless}}>{{ritual.verb}}{{#if cost}} <b>{{cost}}</b>{{/if}}</button>
+        <div class="gd-hd">
+            <span>Кости Хитов {{hd.value}} / {{hd.max}}</span>
+            <div class="gd-pips">{{#each hd.pips}}<span class="gd-pip {{#if this}}on{{/if}}"></span>{{/each}}</div>
+        </div>
+    </div>
+</div>

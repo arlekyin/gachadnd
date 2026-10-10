@@ -1,13 +1,15 @@
-id: "ElJn8Tv9IOQm8NRG"
-name: "Громкоговоритель"
-rarity: "green"
-category: "УТИЛИТА"
+id: ElJn8Tv9IOQm8NRG
+name: Громкоговоритель
+rarity: green
 tags:
   - проклятье
   - разум
-description: "Ваш голос слышен на расстоянии до 300 футов. Вы физически не можете шептать, а любые попытки скрыться или использовать Скрытность совершаются с помехой."
-activation: "none"
+description: Ваш голос слышен на расстоянии до 300 футов. Вы получаете +2 к проверкам Запугивания.
+drawback: Вы физически не можете шептать. Проверки Скрытности вы совершаете с помехой.
 changes:
-  - key: "system.skills.itm.bonus"
-    mode: "add"
-    value: "+2"
+  - key: system.skills.itm.bonuses.check
+    mode: add
+    value: '+2'
+  - key: system.skills.ste.roll.mode
+    mode: add
+    value: '-1'

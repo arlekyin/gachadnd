@@ -1,0 +1,18 @@
+id: bNSOqE4oGMzliURM
+name: Блинк
+rarity: blue
+tags:
+  - движение
+description: Когда вы получаете урон, реакцией телепортируйтесь на расстояние до 10 футов в свободное пространство, которое видите.
+activation: reaction
+trigger:
+  on: damaged
+  use: true
+range: 10
+uses: 3
+recovery: long
+ranks:
+  - text: Дальность телепорта — 15 футов.
+    range: 15
+  - text: Дальность телепорта — 20 футов.
+    range: 20

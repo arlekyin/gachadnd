@@ -1,0 +1,24 @@
+id: FyxfKqQkqtsGHzu2
+name: Симбионт
+rarity: blue
+tags:
+  - кровь
+  - проклятье
+description: В начале каждого своего хода в бою активируйте навык и восстановите количество ПЗ, равное {damage}.
+drawback: Если в начале хода ваши ПЗ ниже половины максимума, совершите спасбросок Мудрости СЛ 12. При провале вы впадаете в ярость и атакуете ближайшее существо.
+activation: turnStart
+trigger:
+  on: turn_start
+  use: true
+damage:
+  - formula: "@prof"
+    type: healing
+ranks:
+  - text: Восстанавливает количество ПЗ, равное {damage}.
+    damage:
+      - formula: "@prof + max(@abilities.con.mod, 0)"
+        type: healing
+  - text: Восстанавливает количество ПЗ, равное {damage}.
+    damage:
+      - formula: "2 * @prof + max(@abilities.con.mod, 0)"
+        type: healing

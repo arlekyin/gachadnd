@@ -1,0 +1,21 @@
+<section class="gd-offerers">
+    {{#if active}}
+    {{#each party}}
+    <div class="gd-offerer" data-actor-id="{{id}}">
+        <div class="gd-offerer-portrait">
+            <img src="{{img}}" alt="">
+            {{#if horseman}}<span class="gd-offerer-rider rider-{{horseman}}" title="Всадник: {{horsemanName}}"></span>{{/if}}
+        </div>
+        <span class="gd-offerer-name">{{name}}</span>
+        <span class="gd-offerer-hp" title="{{hp}} из {{hpMax}} ПЗ"><i style="width: {{hpPct}}%"></i><em>{{hp}} / {{hpMax}}</em></span>
+        {{#if @root.isGM}}
+        <button type="button" data-action="sacrifice" data-actor-id="{{id}}" {{#unless canSacrifice}}disabled{{/unless}} title="Отдать {{cost}} ПЗ постаменту">Жертва · −{{cost}} ПЗ</button>
+        {{else}}
+        <span class="gd-offerer-cost">жертва — {{cost}} ПЗ</span>
+        {{/if}}
+    </div>
+    {{else}}
+    <p class="gd-doom-empty">В отряде нет персонажей игроков.</p>
+    {{/each}}
+    {{/if}}
+</section>

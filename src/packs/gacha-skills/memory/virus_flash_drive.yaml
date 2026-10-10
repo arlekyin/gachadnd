@@ -1,0 +1,19 @@
+id: 0wZibAEuZGXplTBU
+name: Флешка с вирусом
+rarity: green
+tags:
+  - память
+  - яд
+description: За каждые 2 навыка с тегом «яд» в вашей Памяти, включая этот, ваши атаки оружием при попадании наносят дополнительно 1d4 урона Ядом, максимум 3d4. Бонус пересчитывается автоматически.
+memory_scaling:
+  count: tag:яд
+  every: 2
+  max: 3
+  text: Атаки оружием наносят дополнительно {n}d4 урона Ядом.
+  changes:
+    - key: system.bonuses.mwak.damage
+      mode: add
+      value: '+{n}d4[poison]'
+    - key: system.bonuses.rwak.damage
+      mode: add
+      value: '+{n}d4[poison]'

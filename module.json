@@ -4,7 +4,7 @@
   "description": "Модуль интеграции гачи, активных слотов Тумана, синергий и драфта для D&D 5e.",
   "version": "1.0.0",
   "compatibility": {
-    "minimum": "11",
+    "minimum": "12",
     "verified": "12",
     "maximum": "13"
   },
@@ -14,13 +14,7 @@
     }
   ],
   "esmodules": [
-    "scripts/main.js",
-    "scripts/inventory.js",
-    "scripts/ui.js",
-    "scripts/synergy.js",
-    "scripts/loot.js",
-    "scripts/compendium.js",
-    "scripts/map.js"
+    "scripts/main.js"
   ],
   "styles": [
     "styles/gachadnd.css"
@@ -38,21 +32,37 @@
       }
     },
     {
-      "name": "gacha-items",
-      "label": "Gacha: Физические Кристаллы (Предметы)",
-      "path": "packs/gacha-items",
-      "type": "Item",
-      "system": "dnd5e",
+      "name": "gacha-rules",
+      "label": "Gacha: Правила Лабиринта",
+      "path": "packs/gacha-rules",
+      "type": "JournalEntry",
       "ownership": {
         "PLAYER": "OBSERVER",
         "ASSISTANT": "OWNER"
       }
     },
     {
-      "name": "gacha-rules",
-      "label": "Gacha: Правила Тумана",
-      "path": "packs/gacha-rules.db",
-      "type": "JournalEntry"
+      "name": "gacha-gm",
+      "label": "Gacha: Справочник Мастера",
+      "path": "packs/gacha-gm",
+      "type": "JournalEntry",
+      "ownership": {
+        "PLAYER": "NONE",
+        "TRUSTED": "NONE",
+        "ASSISTANT": "OWNER"
+      }
+    },
+    {
+      "name": "gacha-bestiary",
+      "label": "Gacha: Бестиарий Лабиринта",
+      "path": "packs/gacha-bestiary",
+      "type": "Actor",
+      "system": "dnd5e",
+      "ownership": {
+        "PLAYER": "NONE",
+        "TRUSTED": "NONE",
+        "ASSISTANT": "OWNER"
+      }
     }
   ],
   "relationships": {
@@ -63,5 +73,6 @@
         "manifest": "https://raw.githubusercontent.com/foundryvtt/dnd5e/main/system.json"
       }
     ]
-  }
+  },
+  "socket": true
 }

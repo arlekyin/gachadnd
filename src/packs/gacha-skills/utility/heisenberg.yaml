@@ -1,20 +1,23 @@
-id: "7uHkdMIjXJOamv24"
-name: "Хайзенберг"
-rarity: "Синий"
-category: "УТИЛИТА"
+id: 7uHkdMIjXJOamv24
+name: Хайзенберг
+rarity: blue
 tags:
   - разум
   - яд
-description: "Вы получаете постоянный бонус +2 к проверкам Запугивания. Кроме того, раз за этаж вы можете бонусным действием произнести «Я тот, кто стучит», выбрав врага в пределах 30 футов. Цель должна преуспеть в спасброске Мудрости против вашей сложности заклинаний, иначе она становится испуганной до конца своего следующего хода."
-activation: "bonus"
-range: "30"
-uses: 1
-recovery: "floor"
+description: Вы получаете +2 к проверкам Запугивания. Кроме того, бонусным действием вы можете произнести «Я тот, кто стучит», выбрав врага в пределах 30 футов. Цель совершает спасбросок Мудрости — при провале она Испугана до конца своего следующего хода.
+activation: bonus
+recovery: long
+range: 30
 save:
-  ability: "wis"
-  dc:
-    calculation: "spell"
+  ability: wis
+  dc: universal
+  on_save: none
 changes:
-  - key: "system.skills.itm.bonus"
-    mode: "add"
-    value: "+2"
+  - key: system.skills.itm.bonuses.check
+    mode: add
+    value: '+2'
+ranks:
+  - text: 2 заряда.
+    uses: 2
+  - text: 3 заряда.
+    uses: 3

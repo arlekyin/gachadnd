@@ -1,0 +1,9 @@
+id: ltHlLouhP5sz4WEb
+name: Перезарядка
+rarity: purple
+tags:
+  - аномалия
+description: Активируйте навык, чтобы полностью восстановить заряды одного другого навыка из Памяти. Заряды выставляются вручную в Терминале Тумана.
+activation: special
+uses: 1
+recovery: long

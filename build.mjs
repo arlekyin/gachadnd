@@ -1,219 +1,900 @@
+/**
+ * Сборка компендиума навыков: src/packs/gacha-skills/<категория>/*.yaml → dist/packs/gacha-skills/*.json
+ *
+ * Перед записью каждый YAML-файл проверяется по схеме (см. src/packs/gacha-skills/SCHEMA.md).
+ * При любой ошибке сборка останавливается и ничего не записывает.
+ */
+
 import fs from 'fs';
 import path from 'path';
-import * as yaml from 'js-yaml';
 import crypto from 'crypto';
-
-function generateId() {
-    return crypto.randomBytes(8).toString('hex');
-}
-
-const rarityMap = {
-    'серый': { label: 'Серый', img: 'grey_fog_active.webp', color: 'gray' },
-    'зелёный': { label: 'Зелёный', img: 'green_fog_active.webp', color: 'green' },
-    'синий': { label: 'Синий', img: 'blue_fog_active.webp', color: 'blue' },
-    'фиолетовый': { label: 'Фиолетовый', img: 'purple_fog_active.webp', color: 'purple' },
-    'красный': { label: 'Красный', img: 'red_fog_active.webp', color: 'red' },
-    'gray': { label: 'Серый', img: 'grey_fog_active.webp', color: 'gray' },
-    'green': { label: 'Зелёный', img: 'green_fog_active.webp', color: 'green' },
-    'blue': { label: 'Синий', img: 'blue_fog_active.webp', color: 'blue' },
-    'purple': { label: 'Фиолетовый', img: 'purple_fog_active.webp', color: 'purple' },
-    'red': { label: 'Красный', img: 'red_fog_active.webp', color: 'red' }
-};
-
-const recoveryMap = {
-    'short': 'sr',
-    'short rest': 'sr',
-    'короткий': 'sr',
-    'короткий отдых': 'sr',
-    'long': 'lr',
-    'long rest': 'lr',
-    'длинный': 'lr',
-    'длинный отдых': 'lr',
-    'day': 'day',
-    'день': 'day',
-    'забег': 'lr'
-};
+import * as yaml from 'js-yaml';
+import { RECOVERY_VALUES } from './scripts/core/recovery.js';
+import { validateRisk } from './scripts/labyrinth/risk-schema.js';
+import { buildRules } from './tools/rules.mjs';
+import { buildBestiary } from './tools/bestiary.mjs';
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
 const DIST_DIR = './dist/packs/gacha-skills';
+const ICON_DIR = 'modules/gachadnd/assets/icons/skills';
 
-if (fs.existsSync(DIST_DIR)) {
-    fs.rmSync(DIST_DIR, { recursive: true, force: true });
+// ==========================================
+// СПРАВОЧНИКИ СХЕМЫ
+// ==========================================
+
+const RARITIES = {
+    gray: { label: 'Серый', img: 'grey_fog_active.webp' },
+    green: { label: 'Зелёный', img: 'green_fog_active.webp' },
+    blue: { label: 'Синий', img: 'blue_fog_active.webp' },
+    purple: { label: 'Фиолетовый', img: 'purple_fog_active.webp' },
+    red: { label: 'Красный', img: 'red_fog_active.webp' },
+    // Всадники Погибели
+    orange: { label: 'Оранжевый', img: 'orange_fog_active.webp' }
+};
+
+// Папка → категория
+const CATEGORIES = {
+    anomaly: 'АНОМАЛИЯ',
+    damage: 'УРОН',
+    defense: 'ЗАЩИТА',
+    memory: 'ПАМЯТЬ',
+    mobility: 'МОБИЛЬНОСТЬ',
+    resource: 'РЕСУРС',
+    synergy: 'СИНЕРГИЯ',
+    utility: 'УТИЛИТА',
+    horseman: 'ВСАДНИК'
+};
+
+// ==========================================
+// СИНЕРГИИ ТЕГОВ: src/synergies/*.yaml → scripts/memory/synergy/synergy-tiers.js
+// Собираются первыми: теги из них проверяются в навыках
+// ==========================================
+const SYNERGY_SRC_DIR = './src/synergies';
+const SYNERGY_OUT = './scripts/memory/synergy/synergy-tiers.js';
+const SYNERGY_ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+const SYNERGY_ACTIVATIONS = ['action', 'bonus', 'reaction', 'special'];
+const SYNERGY_TARGETS = ['radius', 'sphere', 'cone', 'line', 'cube', 'cylinder'];
+const SYNERGY_MODES = ['custom', 'multiply', 'add', 'downgrade', 'upgrade', 'override'];
+// Автоматизация (scripts/memory/synergy/triggers.js): когда срабатывает, при каких условиях и что делает.
+// Общая схема для синергий (порог) и навыков; у навыка формулы можно брать из его активности (from)
+const TRIGGER_ON = ['damage_roll', 'damaged', 'turn_start', 'combat_start', 'zero_hp', 'kill'];
+const TRIGGER_WHEN = ['self_wounded', 'self_bloodied', 'target_bloodied', 'hostile_target', 'target_anomaly', 'attack_only'];
+const TRIGGER_ONCE = ['turn', 'none', 'primed'];
+const TRIGGER_DAMAGE_TYPES = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
+
+/**
+ * @param {object} trigger
+ * @param {string} f        Путь поля для сообщений
+ * @param {Function} err
+ * @param {{ feature?: object, skill?: object }} owner  Порог синергии (feature) или навык (skill)
+ */
+function validateTrigger(trigger, f, err, { feature, skill } = {}) {
+    const { on, when, once, bonus, heal_self, reduce, use, pay, advantage, revive, burst, min_cr, ...extra } = trigger ?? {};
+    Object.keys(extra).forEach(k => err(`${f}.trigger.${k}`, 'неизвестное поле (допустимы: on, when, once, bonus, heal_self, reduce, use, pay, advantage, revive, burst, min_cr)'));
+    if (!TRIGGER_ON.includes(on)) return err(`${f}.trigger.on`, `допустимо: ${TRIGGER_ON.join(', ')}`);
+    (when ?? []).forEach(w => { if (!TRIGGER_WHEN.includes(w)) err(`${f}.trigger.when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`); });
+    if (once !== undefined && !TRIGGER_ONCE.includes(once)) err(`${f}.trigger.once`, `допустимо: ${TRIGGER_ONCE.join(', ')}`);
+    if (once === 'primed' && !skill) err(`${f}.trigger.once`, 'primed — только у навыка: срабатывание взводится его использованием');
+    const fromOk = (from, need) => {
+        if (!skill) return err(`${f}.trigger`, 'from — только у навыка');
+        if (need === 'damage' && !skill.damage?.length) err(`${f}.trigger`, 'from: damage — у навыка нет damage');
+        if (need === 'roll' && !skill.roll) err(`${f}.trigger`, 'from: roll — у навыка нет roll');
+    };
+    const only = (field, ons) => { if (trigger[field] !== undefined && !ons.includes(on)) err(`${f}.trigger.${field}`, `только для on: ${ons.join(', ')}`); };
+    only('bonus', ['damage_roll']); only('heal_self', ['damage_roll']); only('once', ['damage_roll']);
+    only('reduce', ['damaged']); only('pay', ['turn_start', 'combat_start']); only('advantage', ['turn_start', 'combat_start']);
+    only('revive', ['zero_hp']); only('burst', ['zero_hp']); only('min_cr', ['kill']);
+    if (on === 'zero_hp') {
+        if (!revive?.formula) err(`${f}.trigger.revive.formula`, 'обязательное поле');
+        if (burst && (!(burst.radius > 0) || !['str', 'dex', 'con', 'int', 'wis', 'cha'].includes(burst.save) || !TRIGGER_DAMAGE_TYPES.includes(burst.type))) err(`${f}.trigger.burst`, '{ radius, save: способность, type: тип урона }');
+    }
+    if (on === 'kill' && min_cr !== undefined && !(min_cr >= 0)) err(`${f}.trigger.min_cr`, 'число не меньше 0');
+    if ((on === 'zero_hp' || on === 'kill') && feature && !feature.uses) err(`${f}.trigger`, 'срабатыванию синергии нужна feature с зарядами — они и тратятся');
+    if (on === 'damage_roll') {
+        if (!bonus && !heal_self) err(`${f}.trigger`, 'для damage_roll нужен bonus или heal_self');
+        if (bonus?.from) {
+            if (!['damage', 'roll'].includes(bonus.from)) err(`${f}.trigger.bonus.from`, 'damage или roll');
+            else fromOk(bonus.from, bonus.from);
+            if (bonus.from === 'roll' && !TRIGGER_DAMAGE_TYPES.includes(bonus.type)) err(`${f}.trigger.bonus.type`, 'тип урона dnd5e');
+        } else if (bonus && (!bonus.formula || !TRIGGER_DAMAGE_TYPES.includes(bonus.type))) err(`${f}.trigger.bonus`, '{ formula, type } или { from }');
+        if (bonus?.double_when && !TRIGGER_WHEN.includes(bonus.double_when)) err(`${f}.trigger.bonus.double_when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`);
+        if (heal_self && !heal_self.formula) err(`${f}.trigger.heal_self.formula`, 'обязательное поле');
+    }
+    if (on === 'damaged') {
+        const modes = [reduce, use].filter(Boolean).length;
+        if (modes !== 1) err(`${f}.trigger`, 'для damaged нужен ровно один из reduce, use');
+        if (reduce && !reduce.formula && reduce.from !== 'roll' && reduce.half !== true) err(`${f}.trigger.reduce`, '{ formula }, { from: roll } или { half: true }');
+        if (reduce?.from === 'roll') fromOk('roll', 'roll');
+        if (reduce && feature && !feature.uses) err(`${f}.trigger`, 'реакции синергии нужна feature с зарядами — они и тратятся');
+    }
+    if (on === 'turn_start' || on === 'combat_start') {
+        if (!use && !pay) err(`${f}.trigger`, `для ${on} нужен use или pay`);
+        if (use && !skill) err(`${f}.trigger.use`, 'use — только у навыка с активацией');
+        if (pay && !pay.formula) err(`${f}.trigger.pay.formula`, 'обязательное поле');
+        if (pay && !TRIGGER_DAMAGE_TYPES.includes(pay.type)) err(`${f}.trigger.pay.type`, 'тип урона dnd5e');
+        if (advantage !== undefined && advantage !== 'attacks') err(`${f}.trigger.advantage`, 'допустимо: attacks');
+    }
+    if (use && skill && (skill.activation ?? 'none') === 'none') err(`${f}.trigger.use`, 'у навыка нет активации — использовать нечего');
 }
-fs.mkdirSync(DIST_DIR, { recursive: true });
 
-const categories = fs.readdirSync(BASE_SRC_DIR).filter(item => {
-    return fs.statSync(path.join(BASE_SRC_DIR, item)).isDirectory();
-});
-
-categories.forEach(category => {
-    const currentSrcDir = path.join(BASE_SRC_DIR, category);
-    const files = fs.readdirSync(currentSrcDir).filter(file => file.endsWith('.yaml'));
-
-    files.forEach(file => {
-        const rawData = fs.readFileSync(path.join(currentSrcDir, file), 'utf8');
-        const skill = yaml.load(rawData);
-
-        const rarityKey = skill.rarity ? skill.rarity.toLowerCase() : 'серый';
-        const rarityData = rarityMap[rarityKey] || rarityMap['серый'];
-
-        const usesText = skill.uses ? `${skill.uses}/${skill.recovery || 'забег'}` : (skill.recovery || 'Нет');
-        const descriptionHtml = `
-<p><strong>Категория:</strong> ${skill.category || 'УТИЛИТА'} | <strong>Редкость:</strong> ${rarityData.label}</p>
-<p><strong>Теги синергий:</strong> ${(skill.tags || []).join(', ') || 'нет'}</p>
-<p><strong>Перезарядка / Условия:</strong> ${usesText}</p>
-<hr>
-<p>${skill.description}</p>
-        `.trim();
-
-        const recoveryInput = skill.recovery ? skill.recovery.toLowerCase().trim() : '';
-        const recoverySystemKey = recoveryMap[recoveryInput] || '';
-        
-        // Автоматическое назначение 1 заряда, если указано восстановление, но пропущен параметр uses
-        const usesCount = skill.uses ? `${skill.uses}` : (recoverySystemKey ? "1" : "");
-        const recoveryArray = (recoverySystemKey && usesCount) ? [{ period: recoverySystemKey, type: 'recoverAll' }] : [];
-
-        const itemId = skill.id || generateId();
-
-        const item = {
-            _id: itemId,
-            _key: `!items!${itemId}`,
-            name: skill.name,
-            type: "feat",
-            img: `modules/gachadnd/assets/icons/skills/${rarityData.img}`,
-            system: {
-                description: {
-                    value: descriptionHtml,
-                    chat: "",
-                    unidentified: ""
-                },
-                source: "Gacha Roguelike DnD5e",
-                type: { value: "feat", subtype: "" },
-                uses: {
-                    spent: 0,
-                    max: usesCount,
-                    recovery: recoveryArray
-                },
-                activities: {}
-            },
-            flags: {
-                gachadnd: {
-                    rarity: rarityData.color,
-                    rarity_label: rarityData.label,
-                    category: skill.category || 'УТИЛИТА',
-                    tags: skill.tags || [],
-                    cooldown: usesText,
-                    is_active: skill.activation && skill.activation !== 'none'
-                }
-            },
-            effects: [],
-            folder: null,
-            sort: 0,
-            ownership: { default: 0 }
-        };
-
-        if (skill.activation && skill.activation !== 'none') {
-            const activityId = generateId();
-            
-            let activityType = 'utility';
-            let isHeal = false;
-
-            if (skill.save) {
-                activityType = 'save';
-            } else if (skill.damage && skill.damage.length > 0) {
-                isHeal = skill.damage.some(d => d.type === 'healing' || d.type === 'temphp');
-                activityType = isHeal ? 'heal' : 'damage';
-            }
-
-            const activity = {
-                _id: activityId,
-                type: activityType,
-                name: "Активировать навык",
-                activation: {
-                    type: skill.activation,
-                    value: 1, 
-                    condition: "",
-                    override: false
-                },
-                consumption: {
-                    targets: usesCount ? [{ type: 'itemUses', value: '1' }] : [],
-                    scaling: { allowed: false }
-                }
-            };
-
-            if (skill.range) {
-                activity.range = { value: skill.range, units: "ft" };
-            }
-
-            if (skill.target) {
-                activity.target = {
-                    template: {
-                        count: 1,
-                        type: skill.target.type,
-                        size: `${skill.target.value}`,
-                        units: "ft"
-                    }
-                };
-            }
-
-            if (skill.save) {
-                activity.save = {
-                    ability: [skill.save.ability],
-                    dc: {
-                        calculation: skill.save.dc?.calculation || "spell",
-                        formula: ""
-                    }
-                };
-            }
-
-            if (skill.damage && skill.damage.length > 0) {
-                if (isHeal) {
-                    activity.healing = {
-                        custom: { enabled: true, formula: String(skill.damage[0].formula) },
-                        types: [skill.damage[0].type]
-                    };
-                } else {
-                    activity.damage = {
-                        parts: skill.damage.map(d => ({
-                            custom: { enabled: true, formula: String(d.formula) },
-                            number: null,
-                            denomination: 0,
-                            bonus: "",
-                            types: [d.type]
-                        }))
-                    };
-                }
-            }
-
-            item.system.activities[activityId] = activity;
+function validateSynergy(syn) {
+    const errs = [];
+    const err = (field, msg) => errs.push(`${field}: ${msg}`);
+    const { tag, key, icon, tiers, ...rest } = syn ?? {};
+    Object.keys(rest).forEach(k => err(k, 'неизвестное поле (допустимы: tag, key, icon, tiers)'));
+    if (typeof tag !== 'string' || !tag.trim()) err('tag', 'обязательное поле');
+    if (!/^[a-z]+$/.test(String(key))) err('key', 'латиница в нижнем регистре — ключ для формул');
+    if (typeof icon !== 'string') err('icon', 'путь к иконке');
+    if (!Array.isArray(tiers) || !tiers.length) return [...errs, 'tiers: нужен хотя бы один порог'];
+    tiers.forEach((t, i) => {
+        const f = `tiers[${i}]`;
+        const { count, name, description, changes, feature, trigger, ...more } = t ?? {};
+        Object.keys(more).forEach(k => err(`${f}.${k}`, 'неизвестное поле (допустимы: count, name, description, changes, feature, trigger)'));
+        if (trigger) validateTrigger(trigger, f, err, { feature });
+        if (!Number.isInteger(count) || count < 1) err(`${f}.count`, 'число навыков с тегом — целое больше 0');
+        if (typeof name !== 'string' || !name.trim()) err(`${f}.name`, 'обязательное поле');
+        if (typeof description !== 'string' || !description.trim()) err(`${f}.description`, 'обязательное поле');
+        if (typeof description === 'string' && /(^|[^А-Яа-яA-Za-z])HP([^А-Яа-яA-Za-z]|$)|за этаж|длинн/i.test(description)) err(`${f}.description`, 'устаревшие термины: ПЗ, долгий отдых');
+        (changes ?? []).forEach((c, j) => {
+            if (!/^(system|flags)\.[A-Za-z0-9_.]+$/.test(String(c?.key))) err(`${f}.changes[${j}].key`, 'путь system. или flags.');
+            if (!SYNERGY_MODES.includes(c?.mode)) err(`${f}.changes[${j}].mode`, `допустимо: ${SYNERGY_MODES.join(', ')}`);
+        });
+        if (feature) {
+            const { activation, uses, recovery, range, target, save, damage, heal, roll, ...extra } = feature;
+            Object.keys(extra).forEach(k => err(`${f}.feature.${k}`, 'неизвестное поле'));
+            if (!SYNERGY_ACTIVATIONS.includes(activation)) err(`${f}.feature.activation`, `допустимо: ${SYNERGY_ACTIVATIONS.join(', ')}`);
+            if (uses !== undefined && uses !== 'prof' && !(Number.isInteger(uses) && uses > 0)) err(`${f}.feature.uses`, 'целое больше 0 или prof');
+            if (uses !== undefined && !(recovery in RECOVERY_VALUES)) err(`${f}.feature.recovery`, `допустимо: ${Object.keys(RECOVERY_VALUES).join(', ')}`);
+            if (target && (!SYNERGY_TARGETS.includes(target.type) || !Number.isFinite(target.value))) err(`${f}.feature.target`, '{ type, value }');
+            if (save && !SYNERGY_ABILITIES.includes(save.ability)) err(`${f}.feature.save.ability`, `допустимо: ${SYNERGY_ABILITIES.join(', ')}`);
+            if (save?.on_save && !['half', 'none', 'full'].includes(save.on_save)) err(`${f}.feature.save.on_save`, 'half, none, full');
+            if (damage && !Array.isArray(damage)) err(`${f}.feature.damage`, 'список { formula, type }');
+            if (heal && !heal.formula) err(`${f}.feature.heal.formula`, 'обязательное поле');
+            if (roll && !roll.formula) err(`${f}.feature.roll.formula`, 'обязательное поле');
         }
+    });
+    return errs;
+}
 
-        if (skill.changes && skill.changes.length > 0) {
-            item.effects.push({
-                _id: generateId(),
-                _key: `!items!${itemId}!effects!${generateId()}`,
-                name: skill.name,
-                img: `modules/gachadnd/assets/icons/skills/${rarityData.img}`,
-                changes: skill.changes.map(c => ({
-                    key: c.key,
-                    mode: c.mode === 'add' ? 2 : 0, 
-                    value: c.value,
-                    priority: 20
-                })),
-                disabled: false,
-                transfer: true,
-                flags: {},
-                tint: null
+const synergies = [];
+const synergyErrors = [];
+for (const file of fs.readdirSync(SYNERGY_SRC_DIR).filter(f => f.endsWith('.yaml')).sort()) {
+    let syn;
+    try {
+        syn = yaml.load(fs.readFileSync(path.join(SYNERGY_SRC_DIR, file), 'utf8'));
+    } catch (e) {
+        synergyErrors.push(`synergies/${file}: ошибка YAML — ${e.message}`);
+        continue;
+    }
+    const errs = validateSynergy(syn);
+    if (synergies.some(s => s.tag === syn?.tag || s.key === syn?.key)) errs.push('tag/key: уже используется');
+    if (errs.length) errs.forEach(e => synergyErrors.push(`synergies/${file} → ${e}`));
+    else synergies.push(syn);
+}
+if (synergyErrors.length) {
+    console.error(`Сборка остановлена: ошибок в синергиях — ${synergyErrors.length}.\n`);
+    synergyErrors.forEach(e => console.error(`  ${e}`));
+    process.exit(1);
+}
+fs.writeFileSync(SYNERGY_OUT, `// Создано build.mjs из src/synergies/*.yaml — не редактировать вручную\nexport const SYNERGIES = ${JSON.stringify(synergies, null, 2)};\n`, 'utf8');
+
+// synergy-data.js читает только что записанный synergy-tiers.js — импорт после записи,
+// иначе на чистой копии (файл не хранится в git) сборка не запустится
+const { UNIVERSAL_DC_FORMULA, makeSynergyDictionary } = await import('./scripts/memory/synergy/synergy-data.js');
+const SYNERGY_DICTIONARY = makeSynergyDictionary(synergies);
+const TAGS = synergies.map(s => s.tag);
+const TAG_KEYS = Object.fromEntries(synergies.map(s => [s.tag, s.key]));
+const TAG_NAMES = Object.fromEntries(synergies.map(s => [s.key, s.tag]));
+
+const ACTIVATION_TYPES = [
+    'none', 'action', 'bonus', 'reaction', 'minute', 'hour', 'day', 'longRest', 'shortRest',
+    'encounter', 'turnStart', 'turnEnd', 'legendary', 'mythic', 'lair', 'crew', 'special'
+];
+const ACTIVATION_WITH_VALUE = ['minute', 'hour', 'day'];
+
+const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+const DAMAGE_TYPES = [
+    'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
+    'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'
+];
+const HEALING_TYPES = ['healing', 'temphp'];
+const TEMPLATE_TYPES = ['circle', 'cone', 'cube', 'cylinder', 'line', 'radius', 'sphere', 'square', 'wall'];
+const ON_SAVE = ['half', 'none', 'full'];
+
+// Значения dc, кроме числа и объекта { formula }
+const DC_KEYWORDS = ['spellcasting', 'universal', ...ABILITIES];
+
+const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4, override: 5 };
+
+const ALLOWED_FIELDS = [
+    'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
+    'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact'
+];
+
+// Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
+// значения тех же эффектов. Новых механик ранг не добавляет. Ранг наследует предыдущий ранг.
+const RANK_FIELDS = ['text', 'uses', 'range', 'target', 'damage', 'roll', 'changes'];
+const MAX_EXTRA_RANKS = 2;
+// Уникальные редкости: повтор навыка не поглощается, рангов нет
+const UNIQUE_RARITIES = ['purple', 'red', 'orange'];
+// Всадники Погибели: проклятое состояние и сращённая форма
+const HORSEMEN = ['hunger', 'plague', 'war', 'death'];
+const RANK_LABELS = ['I', 'II', 'III'];
+// Личный эффект вписывает Мастер в копию навыка на листе персонажа (scripts/memory/inventory.js → setPersonalEffect)
+const SCALING_COUNTS = ['memory', 'burned', 'equipped', 'equipped_tags'];
+const SCALING_TAG_COUNTS = ['tag', 'equipped_tag', 'equipped_not_tag'];
+const PERSONAL_PLACEHOLDER = '<div class="gd-personal"><p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p></div>';
+
+// ==========================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ==========================================
+
+const ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+// Детерминированный 16-символьный ID Foundry: одинаковый при каждой сборке
+function stableId(...parts) {
+    const hash = crypto.createHash('sha256').update(parts.join(':')).digest();
+    let id = '';
+    for (let i = 0; i < 16; i++) id += ID_ALPHABET[hash[i] % ID_ALPHABET.length];
+    return id;
+}
+
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// Пустая строка разделяет абзацы, одиночный перевод строки — <br>
+function textToHtml(text) {
+    return String(text).trim().split(/\n\s*\n/)
+        .map(p => `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`)
+        .join('\n');
+}
+
+const isPositiveInt = v => Number.isInteger(v) && v > 0;
+const isNonEmptyString = v => typeof v === 'string' && v.trim() !== '';
+const isNumeric = v => (typeof v === 'number' && v > 0) || (typeof v === 'string' && /^\d+$/.test(v.trim()));
+
+// ==========================================
+// ПРОВЕРКА СХЕМЫ
+// ==========================================
+
+// Навык на указанном ранге (1 — базовый): базовые поля + переопределения рангов II..rank
+function resolveRank(skill, rank) {
+    const { ranks = [], ...base } = skill;
+    const resolved = { ...base };
+    for (const override of ranks.slice(0, rank - 1)) {
+        const { text, ...fields } = override ?? {};
+        Object.assign(resolved, fields);
+    }
+    return resolved;
+}
+
+function validateSkill(skill, folder) {
+    const errors = [];
+    const err = (field, msg) => errors.push(`${field}: ${msg}`);
+
+    if (!skill || typeof skill !== 'object' || Array.isArray(skill)) return ['файл не содержит объект навыка'];
+
+    for (const key of Object.keys(skill)) {
+        if (!ALLOWED_FIELDS.includes(key)) err(key, `неизвестное поле (допустимы: ${ALLOWED_FIELDS.join(', ')})`);
+    }
+
+    if (typeof skill.id !== 'string' || !/^[a-zA-Z0-9]{16}$/.test(skill.id)) err('id', `должен состоять ровно из 16 латинских букв и цифр, получено «${skill.id}»`);
+    if (!isNonEmptyString(skill.name)) err('name', 'обязательное поле');
+    if (!isNonEmptyString(skill.description)) err('description', 'обязательное поле');
+    if (!(skill.rarity in RARITIES)) err('rarity', `«${skill.rarity}» — допустимо: ${Object.keys(RARITIES).join(', ')}`);
+
+    const folderCategory = CATEGORIES[folder];
+    if (!folderCategory) err('category', `папка «${folder}» не сопоставлена ни с одной категорией`);
+    else if (skill.category !== undefined && skill.category !== folderCategory) {
+        err('category', `«${skill.category}» не совпадает с категорией папки «${folder}» (${folderCategory})`);
+    }
+
+    if (skill.tags !== undefined) {
+        if (!Array.isArray(skill.tags)) err('tags', 'должен быть списком');
+        else skill.tags.forEach(t => {
+            if (!TAGS.includes(t)) err('tags', `«${t}» отсутствует в словаре синергий (допустимо: ${TAGS.join(', ')})`);
+        });
+    }
+
+    const activation = skill.activation ?? 'none';
+    if (!ACTIVATION_TYPES.includes(activation)) err('activation', `«${activation}» — допустимо: ${ACTIVATION_TYPES.join(', ')}`);
+    const isActive = activation !== 'none';
+
+    if (skill.uses !== undefined && !isPositiveInt(skill.uses)) err('uses', 'должно быть целым числом больше 0');
+    if (skill.recovery !== undefined && !(skill.recovery in RECOVERY_VALUES)) {
+        err('recovery', `«${skill.recovery}» — допустимо: ${Object.keys(RECOVERY_VALUES).join(', ')}`);
+    }
+    if (skill.forced_loot !== undefined && !isPositiveInt(skill.forced_loot)) err('forced_loot', 'должно быть целым числом больше 0');
+    if (skill.drawback !== undefined && !isNonEmptyString(skill.drawback)) err('drawback', 'должно быть непустой строкой');
+    // impact: true — кадр из снимка сцены; { art } — арт для показа вне сцены вместо иконки навыка
+    if (skill.impact !== undefined && skill.impact !== true) {
+        const { art, ...extra } = typeof skill.impact === 'object' && skill.impact ? skill.impact : { art: null };
+        Object.keys(extra).forEach(k => err(`impact.${k}`, 'неизвестное поле (допустимо: art)'));
+        if (!isNonEmptyString(art)) err('impact.art', 'путь к арту кадра; без арта — impact: true');
+    }
+    if (skill.impact !== undefined) {
+        if (!isActive) err('impact', 'кадр показывается при использовании — нужна activation');
+    }
+
+    if (skill.ranks !== undefined && UNIQUE_RARITIES.includes(skill.rarity)) {
+        err('ranks', `навыки редкости ${UNIQUE_RARITIES.join(', ')} уникальны и не имеют рангов`);
+    } else if (skill.ranks !== undefined) {
+        if (!Array.isArray(skill.ranks) || skill.ranks.length === 0 || skill.ranks.length > MAX_EXTRA_RANKS) {
+            err('ranks', `должен быть списком из 1–${MAX_EXTRA_RANKS} элементов (ранги II и III)`);
+        } else {
+            skill.ranks.forEach((rank, i) => {
+                const label = `ranks[${i}] (ранг ${RANK_LABELS[i + 1]})`;
+                if (!rank || typeof rank !== 'object' || Array.isArray(rank)) return err(label, 'должен быть объектом');
+                Object.keys(rank).forEach(k => {
+                    if (!RANK_FIELDS.includes(k)) err(`${label}.${k}`, `поле нельзя менять по рангам (допустимы: ${RANK_FIELDS.join(', ')})`);
+                });
+                if (!isNonEmptyString(rank.text)) err(`${label}.text`, 'обязательное поле: что даёт ранг');
+                if (!Object.keys(rank).some(k => k !== 'text')) err(label, 'ранг должен менять хотя бы одно число (uses, range, target, damage, roll, changes), а не только текст');
+                if (rank.target && skill.target && rank.target.type !== skill.target.type) err(`${label}.target.type`, 'форма области по рангам не меняется');
+                if (rank.target && !skill.target) err(`${label}.target`, 'у навыка нет области — ранг может только менять её размер');
+                if (rank.roll && !skill.roll) err(`${label}.roll`, 'у навыка нет броска — ранг может только менять его формулу');
+                if (rank.damage) {
+                    const types = d => (Array.isArray(d) ? d : []).map(x => x?.type).join(',');
+                    if (types(rank.damage) !== types(skill.damage)) err(`${label}.damage`, 'типы урона/лечения по рангам не меняются — только формулы');
+                }
+                if (rank.changes) {
+                    const keys = c => (Array.isArray(c) ? c : []).map(x => x?.key).sort().join(',');
+                    if (keys(rank.changes) !== keys(skill.changes)) err(`${label}.changes`, 'ранг может менять только значения тех же эффектов, что и у навыка');
+                }
+                // Ранг проверяется как полноценный навык после наложения переопределений
+                validateSkill(resolveRank(skill, i + 2), folder).forEach(e => errors.push(`${label} → ${e}`));
             });
         }
+    }
+    if (skill.slot_bonus !== undefined && !isPositiveInt(skill.slot_bonus)) err('slot_bonus', 'должно быть целым числом больше 0');
+    if (skill.tagEmitter !== undefined && typeof skill.tagEmitter !== 'boolean') err('tagEmitter', 'должно быть true или false');
 
-        const outputFilename = `${file.replace('.yaml', '')}_${skill.id}.json`;
-        fs.writeFileSync(
-            path.join(DIST_DIR, outputFilename),
-            JSON.stringify(item, null, 2),
-            'utf8'
-        );
+    // Поля активности имеют смысл только при activation, отличном от none
+    for (const field of ['range', 'target', 'save', 'damage', 'roll', 'uses', 'recovery', 'cost']) {
+        if (!isActive && skill[field] !== undefined) err(field, 'задано при activation: none — поле не будет использовано');
+    }
+
+    if (skill.range !== undefined && !isNumeric(skill.range)) err('range', 'должно быть числом (футы)');
+
+    if (skill.cost !== undefined) {
+        const { hp, ...rest } = skill.cost ?? {};
+        Object.keys(rest).forEach(k => err(`cost.${k}`, 'неизвестное поле (допустимо: hp)'));
+        if (hp === undefined || String(hp).trim() === '') err('cost.hp', 'обязательное поле: сколько ПЗ стоит использование (число или формула)');
+    }
+
+    // Бесконечные ранги: каждое слияние прибавляет базовое значение урона
+    if (skill.stacking !== undefined) {
+        if (skill.stacking !== true) err('stacking', 'допустимо только true');
+        if (skill.ranks !== undefined) err('stacking', 'нельзя совмещать с ranks');
+        if (UNIQUE_RARITIES.includes(skill.rarity)) err('stacking', 'фиолетовые и красные навыки уникальны');
+        if (!Array.isArray(skill.damage) || skill.damage.length !== 1 || !/^\d+$/.test(String(skill.damage[0]?.formula))) {
+            err('stacking', 'требует ровно одну запись damage с целым числом в formula (прибавка за ранг)');
+        }
+    }
+
+    if (skill.roll !== undefined) {
+        if (!skill.roll || typeof skill.roll !== 'object' || !isNonEmptyString(String(skill.roll.formula ?? ''))) err('roll.formula', 'обязательное поле');
+        if (skill.save !== undefined || skill.damage !== undefined) err('roll', 'бросок (roll) — для навыков без урона, лечения и спасброска');
+    }
+
+    if (skill.target !== undefined) {
+        if (!TEMPLATE_TYPES.includes(skill.target?.type)) err('target.type', `«${skill.target?.type}» — допустимо: ${TEMPLATE_TYPES.join(', ')}`);
+        if (!isNumeric(skill.target?.value)) err('target.value', 'должно быть числом (футы)');
+    }
+
+    if (skill.save !== undefined) {
+        const { ability, dc, on_save, ...rest } = skill.save ?? {};
+        Object.keys(rest).forEach(k => err(`save.${k}`, 'неизвестное поле (допустимы: ability, dc, on_save)'));
+        if (!ABILITIES.includes(ability)) err('save.ability', `«${ability}» — допустимо: ${ABILITIES.join(', ')}`);
+        const dcValid = dc === undefined || DC_KEYWORDS.includes(dc) || isPositiveInt(dc)
+            || (dc && typeof dc === 'object' && isNonEmptyString(dc.formula) && Object.keys(dc).length === 1);
+        if (!dcValid) err('save.dc', `«${JSON.stringify(dc)}» — допустимо: ${DC_KEYWORDS.join(', ')}, число или { formula: "..." }`);
+        if (on_save !== undefined && !ON_SAVE.includes(on_save)) err('save.on_save', `«${on_save}» — допустимо: ${ON_SAVE.join(', ')}`);
+    }
+
+    if (skill.damage !== undefined) {
+        if (!Array.isArray(skill.damage) || skill.damage.length === 0) err('damage', 'должен быть непустым списком');
+        else {
+            skill.damage.forEach((d, i) => {
+                if (d?.formula === undefined || String(d.formula).trim() === '') err(`damage[${i}].formula`, 'обязательное поле');
+                if (![...DAMAGE_TYPES, ...HEALING_TYPES].includes(d?.type)) err(`damage[${i}].type`, `«${d?.type}» — допустимо: ${[...DAMAGE_TYPES, ...HEALING_TYPES].join(', ')}`);
+            });
+            const healCount = skill.damage.filter(d => HEALING_TYPES.includes(d?.type)).length;
+            if (healCount > 0 && healCount < skill.damage.length) err('damage', 'нельзя смешивать лечение и урон в одном навыке');
+            if (healCount > 1) err('damage', 'лечение поддерживает только одну запись');
+            if (healCount > 0 && skill.save !== undefined) err('damage', 'лечение нельзя совмещать со спасброском');
+        }
+    }
+
+    const checkChanges = (list, field) => {
+        if (!Array.isArray(list) || list.length === 0) return err(field, 'должен быть непустым списком');
+        list.forEach((c, i) => {
+            if (typeof c?.key !== 'string' || !/^(system|flags)\.[A-Za-z0-9_.]+$/.test(c.key)) err(`${field}[${i}].key`, `«${c?.key}» — путь должен начинаться с system. или flags. и состоять из латиницы, цифр, _ и .`);
+            if (!(c?.mode in EFFECT_MODES)) err(`${field}[${i}].mode`, `«${c?.mode}» — допустимо: ${Object.keys(EFFECT_MODES).join(', ')}`);
+            if (c?.value === undefined || c?.value === null) err(`${field}[${i}].value`, 'обязательное поле');
+        });
+    };
+    if (skill.changes !== undefined) checkChanges(skill.changes, 'changes');
+    // Эффекты, действующие только в начатом бою (например, штраф Берсерка); от ранга не зависят
+    if (skill.combat_changes !== undefined) checkChanges(skill.combat_changes, 'combat_changes');
+    // Автоматизация: от ранга не зависит; формулы с from берутся из активности текущего ранга
+    if (skill.trigger !== undefined) validateTrigger(skill.trigger, 'навык', err, { skill });
+
+    // Эффекты, сила которых зависит от состава Памяти или экипировки: объект или список объектов
+    if (skill.memory_scaling !== undefined) {
+        const list = Array.isArray(skill.memory_scaling) ? skill.memory_scaling : [skill.memory_scaling];
+        if (!list.length) err('memory_scaling', 'должен быть объектом или непустым списком');
+        list.forEach((entry, i) => {
+            const field = list.length > 1 || Array.isArray(skill.memory_scaling) ? `memory_scaling[${i}]` : 'memory_scaling';
+            const { count, every, min, max, offset, parity, changes, text, ...rest } = entry ?? {};
+            Object.keys(rest).forEach(k => err(`${field}.${k}`, 'неизвестное поле (допустимы: count, every, min, max, offset, parity, changes, text)'));
+            const [mode, tag] = typeof count === 'string' && count.includes(':') ? [count.slice(0, count.indexOf(':')), count.slice(count.indexOf(':') + 1)] : [count, null];
+            const validCount = tag === null
+                ? SCALING_COUNTS.includes(mode)
+                : SCALING_TAG_COUNTS.includes(mode) && TAGS.includes(tag);
+            if (!validCount) err(`${field}.count`, `«${count}» — допустимо: ${SCALING_COUNTS.join(', ')}, ${SCALING_TAG_COUNTS.map(m => `${m}:<тег>`).join(', ')}`);
+            if (every !== undefined && !isPositiveInt(every)) err(`${field}.every`, 'должно быть целым числом больше 0');
+            if (min !== undefined && !(Number.isInteger(min) && min >= 0)) err(`${field}.min`, 'должно быть целым числом не меньше 0');
+            if (offset !== undefined && !isPositiveInt(offset)) err(`${field}.offset`, 'должно быть целым числом больше 0');
+            if (parity !== undefined && !['even', 'odd'].includes(parity)) err(`${field}.parity`, 'допустимо: even, odd');
+            if (max !== undefined && max !== 'prof' && !isPositiveInt(max)) err(`${field}.max`, 'должно быть целым числом больше 0 или prof');
+            if (text !== undefined && !isNonEmptyString(text)) err(`${field}.text`, 'должно быть непустой строкой');
+            checkChanges(changes, `${field}.changes`);
+        });
+    }
+
+    // Счётчики экипированных тегов в формулах: @flags.gachadnd.counts.<ключ тега>
+    const formulas = [...(skill.damage ?? []).map(d => d?.formula), skill.roll?.formula, skill.cost?.hp].filter(f => f !== undefined).map(String);
+    for (const formula of formulas) {
+        for (const [, key] of formula.matchAll(/@flags\.gachadnd\.counts\.(\w+)/g)) {
+            if (!Object.values(TAG_KEYS).includes(key)) err('formula', `«${key}» — неизвестный ключ тега (допустимо: ${Object.values(TAG_KEYS).join(', ')})`);
+        }
+    }
+    if (skill.memory_bonus !== undefined && !isPositiveInt(skill.memory_bonus)) err('memory_bonus', 'должно быть целым числом больше 0');
+    // Всадник: только оранжевая редкость, обязательны условие сращивания и сращённая форма
+    if ((skill.rarity === 'orange') !== (skill.horseman !== undefined)) err('horseman', 'оранжевая редкость — только у всадников, и всадник — только оранжевый');
+    if (skill.horseman !== undefined) {
+        if (!HORSEMEN.includes(skill.horseman)) err('horseman', `«${skill.horseman}» — допустимо: ${HORSEMEN.join(', ')}`);
+        if (!isNonEmptyString(skill.cleanse)) err('cleanse', 'обязательное поле: условие сращивания');
+        if (skill.cleanse_goal !== undefined && !isPositiveInt(skill.cleanse_goal)) err('cleanse_goal', 'должно быть целым числом больше 0');
+        const { name, description, ...rest } = skill.cleansed ?? {};
+        Object.keys(rest).forEach(k => err(`cleansed.${k}`, 'неизвестное поле (допустимы: name, description)'));
+        if (!isNonEmptyString(name)) err('cleansed.name', 'обязательное поле');
+        if (!isNonEmptyString(description)) err('cleansed.description', 'обязательное поле');
+    } else {
+        ['cleanse', 'cleanse_goal', 'cleansed'].forEach(f => { if (skill[f] !== undefined) err(f, 'только у всадников (horseman)'); });
+    }
+    if (skill.shop_discount !== undefined) {
+        const { per_skill, max, ...rest } = skill.shop_discount ?? {};
+        Object.keys(rest).forEach(k => err(`shop_discount.${k}`, 'неизвестное поле (допустимы: per_skill, max)'));
+        if (!isPositiveInt(per_skill)) err('shop_discount.per_skill', 'процент за навык в Памяти — целое число больше 0');
+        if (max !== undefined && !isPositiveInt(max)) err('shop_discount.max', 'предел скидки в процентах — целое число больше 0');
+    }
+    if (skill.loot_bonus !== undefined && !isPositiveInt(skill.loot_bonus)) err('loot_bonus', 'должно быть целым числом больше 0');
+    if (skill.personal !== undefined && !UNIQUE_RARITIES.includes(skill.rarity)) err('personal', 'личный эффект — только у уникальных навыков (фиолетовых и красных)');
+    for (const field of ['undeletable', 'combat_swap', 'personal']) {
+        if (skill[field] !== undefined && skill[field] !== true) err(field, 'допустимо только true');
+    }
+    if (skill.combat_swap && !(isActive && skill.recovery)) err('combat_swap', 'требует activation и recovery: заряд тратится на замену');
+
+    // {damage} подставляет формулу текущего ранга — у навыка должна быть запись в damage
+    if ([skill.description, skill.drawback].some(t => typeof t === 'string' && t.includes('{damage}'))
+        && !(isActive && Array.isArray(skill.damage) && skill.damage.length)) {
+        err('description', '{damage} требует активации и записи в damage');
+    }
+    if ([skill.description, skill.drawback].some(t => typeof t === 'string' && t.includes('{roll}')) && !skill.roll) {
+        err('description', '{roll} требует поля roll');
+    }
+
+    // [[/heal]] и [[/damage]] без формулы dnd5e разрешает не во всех окнах (в карточке чата — нет)
+    if ([skill.description, skill.drawback].some(t => typeof t === 'string' && /\[\[\/(heal|healing|damage)((\s+(average|extended|temp))*)\s*]]/.test(t))) {
+        err('description', '[[/heal]] и [[/damage]] без формулы не используются — пишите {damage}');
+    }
+
+    return errors;
+}
+
+// ==========================================
+// ПРЕОБРАЗОВАНИЕ В ПРЕДМЕТ dnd5e
+// ==========================================
+
+function buildDc(dc) {
+    if (dc === undefined || dc === 'spellcasting') return { calculation: 'spellcasting', formula: '' };
+    if (ABILITIES.includes(dc)) return { calculation: dc, formula: '' };
+    if (dc === 'universal') return { calculation: '', formula: UNIVERSAL_DC_FORMULA };
+    if (typeof dc === 'number') return { calculation: '', formula: String(dc) };
+    return { calculation: '', formula: String(dc.formula) };
+}
+
+function buildActivity(skill, usesMax) {
+    const id = stableId(skill.id, 'activity', 0);
+    const damage = skill.damage ?? [];
+    const isHeal = damage.length > 0 && HEALING_TYPES.includes(damage[0].type);
+
+    let type = 'utility';
+    if (skill.save) type = 'save';
+    else if (isHeal) type = 'heal';
+    else if (damage.length > 0) type = 'damage';
+
+    const damagePart = d => ({
+        number: null,
+        denomination: null,
+        bonus: '',
+        types: [d.type],
+        custom: { enabled: true, formula: String(d.formula) },
+        scaling: { mode: '', number: null, formula: '' }
     });
-});
 
-console.log('Сборка завершена. База готова к упаковке.');
+    const activity = {
+        _id: id,
+        type,
+        name: 'Активировать навык',
+        activation: {
+            type: skill.activation,
+            value: ACTIVATION_WITH_VALUE.includes(skill.activation) ? 1 : null,
+            condition: '',
+            override: false
+        },
+        consumption: {
+            targets: [
+                ...(usesMax ? [{ type: 'itemUses', target: '', value: '1', scaling: { mode: '', formula: '' } }] : []),
+                // Плата ПЗ — штатный расход атрибута dnd5e: не даёт использовать, если ПЗ не хватает
+                ...(skill.cost?.hp !== undefined ? [{ type: 'attribute', target: 'attributes.hp.value', value: String(skill.cost.hp), scaling: { mode: '', formula: '' } }] : [])
+            ],
+            scaling: { allowed: false, max: '' }
+        }
+    };
+
+    if (skill.range !== undefined) activity.range = { value: String(skill.range), units: 'ft', special: '', override: false };
+
+    if (skill.target) {
+        activity.target = {
+            template: { count: '1', contiguous: false, type: skill.target.type, size: String(skill.target.value), width: '', height: '', units: 'ft' },
+            affects: { count: '', type: '', choice: false, special: '' },
+            prompt: true,
+            override: false
+        };
+    }
+
+    if (type === 'utility' && skill.roll) {
+        activity.roll = { formula: String(skill.roll.formula), name: skill.roll.name ?? 'Бросок', prompt: false, visible: true };
+    }
+
+    if (type === 'save') {
+        activity.save = { ability: [skill.save.ability], dc: buildDc(skill.save.dc) };
+        activity.damage = { onSave: skill.save.on_save ?? 'half', parts: damage.map(damagePart) };
+    } else if (type === 'heal') {
+        activity.healing = damagePart(damage[0]);
+    } else if (type === 'damage') {
+        activity.damage = { critical: { allow: true, bonus: '' }, parts: damage.map(damagePart) };
+    }
+
+    return activity;
+}
+
+// Формула словами, как в описаниях dnd5e: «1d10 + ваш уровень»
+const ABILITY_NAMES = { str: 'Силы', dex: 'Ловкости', con: 'Телосложения', int: 'Интеллекта', wis: 'Мудрости', cha: 'Харизмы' };
+// Дательный падеж первого слагаемого после «равное»: «равное бонусу мастерства + ваш уровень»
+const DATIVE = [['бонус мастерства', 'бонусу мастерства'], ['ваш уровень', 'вашему уровню'], ['модификатор ', 'модификатору ']];
+function formulaToText(formula, { dative = false } = {}) {
+    const perProf = /\(@prof\)d\d+/.test(formula);
+    let text = String(formula)
+        .replace(/\(@flags\.gachadnd\.counts\.(\w+)\)d(\d+)/g, (_, key, die) => `1d${die} за каждый экипированный навык с тегом «${TAG_NAMES[key] ?? key}»`)
+        .replace(/@flags\.gachadnd\.counts\.(\w+)/g, (_, key) => `число экипированных навыков с тегом «${TAG_NAMES[key] ?? key}»`)
+        .replace(/\(@prof\)d(\d+)/g, 'Nd$1')
+        .replace(/max\(@abilities\.(\w+)\.mod,\s*0\)/g, (_, a) => `модификатор ${ABILITY_NAMES[a] ?? a} (не меньше 0)`)
+        .replace(/@abilities\.(\w+)\.mod/g, (_, a) => `модификатор ${ABILITY_NAMES[a] ?? a}`)
+        .replace(/@prof/g, 'бонус мастерства')
+        .replace(/@details\.level/g, 'ваш уровень')
+        .replace(/\s*\*\s*/g, ' × ');
+    if (dative) {
+        const match = DATIVE.find(([nom]) => text.startsWith(nom));
+        if (match) text = match[1] + text.slice(match[0].length);
+    }
+    return perProf ? `${text}, где N — ваш бонус мастерства` : text;
+}
+
+// {damage} → урон или лечение навыка на данном ранге.
+// Постоянный урон (только кости и числа) — кнопкой броска dnd5e, как у заговоров;
+// формула с переменными или лечение — словами, как «1d10 + ваш уровень» у Второго дыхания.
+function withFormula(text, skill) {
+    const damage = skill.damage ?? [];
+    const isConstant = d => !String(d.formula).includes('@');
+    const rendered = damage.length && damage.every(d => isConstant(d) && DAMAGE_TYPES.includes(d.type))
+        ? damage.map(d => `[[/damage ${d.formula} ${d.type}]]`).join(' и ')
+        : null;
+    text = String(text).replaceAll('{roll}', skill.roll ? formulaToText(skill.roll.formula) : '{roll}');
+    if (rendered) return String(text).replaceAll('{damage}', rendered);
+    const formula = damage.map(d => d.formula).join(' + ');
+    return String(text)
+        .replaceAll('равное {damage}', `равное ${formulaToText(formula, { dative: true })}`)
+        .replaceAll('{damage}', formulaToText(formula));
+}
+
+function buildItem(skill, folder, rank = 1) {
+    const maxRank = 1 + (skill.ranks?.length ?? 0);
+    const ranked = resolveRank(skill, rank);
+    // Эффект первооткрывателя: в описании только полученные ранги, следующий раскрывается при слиянии
+    const obtained = (skill.ranks ?? []).slice(0, rank - 1);
+    const rankHtml = skill.stacking ? ['<p><strong>Ранг:</strong> {rank}</p>'] : maxRank > 1 ? [
+        `<p><strong>Ранг:</strong> ${RANK_LABELS[rank - 1]}</p>`,
+        ...(obtained.length ? [
+            '<ul>',
+            ...obtained.map((r, i) => `<li><strong>Ранг ${RANK_LABELS[i + 1]}:</strong> ${escapeHtml(withFormula(r.text, resolveRank(skill, i + 2)))}</li>`),
+            '</ul>'
+        ] : [])
+    ] : [];
+    const hasChanges = [skill, ...(skill.ranks ?? [])].some(r => r?.changes);
+    const rankTexts = (skill.ranks ?? []).map((r, i) => withFormula(r.text, resolveRank(skill, i + 2)));
+    skill = ranked;
+    const rarity = RARITIES[skill.rarity];
+    const category = CATEGORIES[folder];
+    const tags = skill.tags ?? [];
+    const activation = skill.activation ?? 'none';
+    const isActive = activation !== 'none';
+    const img = `${ICON_DIR}/${rarity.img}`;
+
+    const recovery = skill.recovery ? RECOVERY_VALUES[skill.recovery] : null;
+    // Если указан период восстановления, но не указаны заряды — считаем, что заряд один
+    const usesMax = skill.uses ?? (recovery?.period ? 1 : null);
+    const cooldownText = usesMax
+        ? `${usesMax}/${recovery?.label ?? 'без восстановления'}`
+        : 'Нет';
+
+    const description = [
+        `<p><strong>Категория:</strong> ${escapeHtml(category)} | <strong>Редкость:</strong> ${rarity.label}</p>`,
+        `<p><strong>Теги синергий:</strong> ${escapeHtml(tags.join(', ') || 'нет')}</p>`,
+        `<p><strong>Перезарядка:</strong> ${escapeHtml(cooldownText)}</p>`,
+        ...(skill.drawback ? [`<p><strong>Штраф:</strong> ${escapeHtml(withFormula(skill.drawback, skill)).replace(/\n/g, '<br>')}</p>`] : []),
+        ...(skill.cost?.hp !== undefined ? [`<p><strong>Цена:</strong> ${escapeHtml(formulaToText(String(skill.cost.hp)))} ПЗ за использование</p>`] : []),
+        '<hr>',
+        textToHtml(withFormula(skill.description, skill)),
+        ...(skill.personal ? [PERSONAL_PLACEHOLDER] : []),
+        ...(skill.horseman ? [
+            `<p><strong>Сращивание:</strong> ${escapeHtml(skill.cleanse)}</p>`,
+            `<p><strong>Сращённая форма — ${escapeHtml(skill.cleansed.name)}:</strong></p>`,
+            textToHtml(skill.cleansed.description)
+        ] : []),
+        ...rankHtml
+    ].join('\n');
+    // Описание всадника после сращивания: штрафа и условия больше нет
+    const cleansedDescription = skill.horseman ? [
+        `<p><strong>Категория:</strong> ${escapeHtml(category)} | <strong>Редкость:</strong> ${rarity.label}</p>`,
+        `<p><strong>Сращённая форма — ${escapeHtml(skill.cleansed.name)}</strong></p>`,
+        '<hr>',
+        textToHtml(skill.cleansed.description)
+    ].join('\n') : null;
+
+    const item = {
+        _id: skill.id,
+        _key: `!items!${skill.id}`,
+        name: skill.name,
+        type: 'feat',
+        img,
+        system: {
+            description: { value: description, chat: '', unidentified: '' },
+            source: { custom: 'Gacha Roguelike DnD5e' },
+            type: { value: 'feat', subtype: '' },
+            uses: {
+                spent: 0,
+                max: usesMax ? String(usesMax) : '',
+                recovery: (usesMax && recovery?.period) ? [{ period: recovery.period, type: 'recoverAll', formula: '' }] : []
+            },
+            activities: {}
+        },
+        flags: {
+            gachadnd: {
+                skill_id: skill.id,
+                skill_name: skill.name,
+                rarity: skill.rarity,
+                rarity_label: rarity.label,
+                category,
+                tags,
+                cooldown: cooldownText,
+                has_activation: isActive,
+                rank,
+                max_rank: maxRank,
+                // Тексты рангов II–III: для сообщения о слиянии и для Мастера в Терминале
+                ...(rankTexts.length ? { rank_texts: rankTexts } : {}),
+                ...(skill.drawback ? { drawback: skill.drawback } : {}),
+                ...(skill.impact ? { impact: skill.impact.art ? { art: skill.impact.art } : true } : {}),
+                ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
+                ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
+                ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
+                ...(skill.tagEmitter ? { tagEmitter: true } : {}),
+                ...(skill.memory_scaling ? {
+                    memory_scaling: (Array.isArray(skill.memory_scaling) ? skill.memory_scaling : [skill.memory_scaling]).map(entry => ({
+                        ...entry,
+                        changes: entry.changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
+                    }))
+                } : {}),
+                ...(skill.combat_changes ? {
+                    combat_changes: skill.combat_changes.map(c => ({ key: c.key, mode: EFFECT_MODES[c.mode], value: String(c.value) }))
+                } : {}),
+                ...(skill.trigger ? { trigger: skill.trigger } : {}),
+                ...(skill.memory_bonus ? { memory_bonus: skill.memory_bonus } : {}),
+                ...(skill.undeletable ? { undeletable: true } : {}),
+                ...(skill.combat_swap ? { combat_swap: true } : {}),
+                ...(skill.personal ? { personal: true } : {}),
+                ...(skill.loot_bonus ? { loot_bonus: skill.loot_bonus } : {}),
+                ...(skill.shop_discount ? { shop_discount: skill.shop_discount } : {}),
+                ...(skill.horseman ? {
+                    horseman: skill.horseman,
+                    cleansed: false,
+                    cleanse_goal: skill.cleanse_goal ?? null,
+                    cleanse_progress: 0,
+                    cleansed_name: skill.cleansed.name,
+                    cleansed_description: cleansedDescription
+                } : {})
+            }
+        },
+        effects: [],
+        folder: null,
+        sort: 0,
+        ownership: { default: 0 }
+    };
+
+    if (isActive) {
+        const activity = buildActivity(skill, usesMax);
+        item.system.activities[activity._id] = activity;
+    }
+
+    // Эффект создаётся, если изменения есть хотя бы на одном ранге: ранги меняют только его changes
+    if (hasChanges) {
+        const effectId = stableId(skill.id, 'effect', 0);
+        item.effects.push({
+            _id: effectId,
+            _key: `!items.effects!${skill.id}.${effectId}`,
+            name: skill.name,
+            img,
+            changes: (skill.changes ?? []).map(c => ({
+                key: c.key,
+                mode: EFFECT_MODES[c.mode],
+                value: String(c.value),
+                priority: 20
+            })),
+            disabled: false,
+            transfer: true,
+            flags: {},
+            tint: '#ffffff'
+        });
+    }
+
+    return item;
+}
+
+// ==========================================
+// СБОРКА
+// ==========================================
+
+const folders = fs.readdirSync(BASE_SRC_DIR)
+    .filter(item => fs.statSync(path.join(BASE_SRC_DIR, item)).isDirectory())
+    .sort();
+
+const errors = [];
+const items = [];
+const seenIds = new Map();
+const seenNames = new Map();
+
+for (const folder of folders) {
+    const dir = path.join(BASE_SRC_DIR, folder);
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml')).sort();
+
+    for (const file of files) {
+        const relPath = path.join(folder, file);
+        let skill;
+        try {
+            skill = yaml.load(fs.readFileSync(path.join(dir, file), 'utf8'));
+        } catch (e) {
+            errors.push(`${relPath}: ошибка разбора YAML — ${e.message}`);
+            continue;
+        }
+
+        const skillErrors = validateSkill(skill, folder);
+        if (skill?.id) {
+            if (seenIds.has(skill.id)) skillErrors.push(`id: «${skill.id}» уже используется в ${seenIds.get(skill.id)}`);
+            else seenIds.set(skill.id, relPath);
+        }
+        if (skill?.name) {
+            const key = String(skill.name).trim().toLowerCase();
+            if (seenNames.has(key)) skillErrors.push(`name: «${skill.name}» уже используется в ${seenNames.get(key)}`);
+            else seenNames.set(key, relPath);
+        }
+
+        if (skillErrors.length) {
+            skillErrors.forEach(e => errors.push(`${relPath}: ${e}`));
+            continue;
+        }
+
+        let item;
+        if (skill.stacking) {
+            // Шаблон описания с {n} (урон) и {rank}; на листе подставляется при каждом слиянии
+            const template = buildItem({ ...skill, damage: [{ ...skill.damage[0], formula: '{n}' }] }, folder, 1).system.description.value;
+            item = buildItem(skill, folder, 1);
+            item.flags.gachadnd.stack_template = template;
+            item.system.description.value = template.replaceAll('{n}', skill.damage[0].formula).replaceAll('{rank}', 'I');
+        } else item = buildItem(skill, folder, 1);
+        const maxRank = item.flags.gachadnd.max_rank;
+        if (maxRank > 1) {
+            // Данные каждого ранга для повышения ранга на листе персонажа (scripts/memory/inventory.js)
+            item.flags.gachadnd.rank_data = Array.from({ length: maxRank }, (_, i) => {
+                const ranked = buildItem(skill, folder, i + 1);
+                const { spent, ...uses } = ranked.system.uses;
+                return {
+                    system: { description: ranked.system.description, uses, activities: ranked.system.activities },
+                    cooldown: ranked.flags.gachadnd.cooldown,
+                    effects: ranked.effects.map(e => ({ _id: e._id, changes: e.changes }))
+                };
+            });
+        }
+        items.push({ file: `${path.basename(file, path.extname(file))}_${skill.id}.json`, item });
+    }
+}
+
+// ==========================================
+// ИСПЫТАНИЯ РИСКА: src/risks/*.yaml → data/risks.json
+// ==========================================
+const RISK_SRC_DIR = './src/risks';
+const RISK_OUT = './data/risks.json';
+const risks = [];
+if (fs.existsSync(RISK_SRC_DIR)) {
+    for (const file of fs.readdirSync(RISK_SRC_DIR).filter(f => f.endsWith('.yaml')).sort()) {
+        let risk;
+        try {
+            risk = yaml.load(fs.readFileSync(path.join(RISK_SRC_DIR, file), 'utf8'));
+        } catch (e) {
+            errors.push(`risks/${file}: ошибка YAML — ${e.message}`);
+            continue;
+        }
+        const errs = validateRisk(risk);
+        if (risks.some(r => r.id === risk?.id)) errs.push(`id: «${risk.id}» уже используется`);
+        if (errs.length) errs.forEach(e => errors.push(`risks/${file} → ${e}`));
+        else risks.push(risk);
+    }
+}
+
+if (errors.length) {
+    console.error(`Сборка остановлена: ошибок — ${errors.length}.\n`);
+    errors.forEach(e => console.error(`  ${e}`));
+    process.exit(1);
+}
+
+fs.rmSync(DIST_DIR, { recursive: true, force: true });
+fs.mkdirSync(DIST_DIR, { recursive: true });
+for (const { file, item } of items) {
+    fs.writeFileSync(path.join(DIST_DIR, file), JSON.stringify(item, null, 2) + '\n', 'utf8');
+}
+
+fs.mkdirSync(path.dirname(RISK_OUT), { recursive: true });
+fs.writeFileSync(RISK_OUT, JSON.stringify(risks, null, 2) + '\n', 'utf8');
+
+// Базы компендиумов (LevelDB) полностью собираются из dist: старая база удаляется перед упаковкой,
+// иначе неполная или повреждённая база (например, после git pull) не откроется. Мир должен быть закрыт.
+for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm', 'gacha-bestiary']) {
+    try {
+        fs.rmSync(path.join('./packs', pack), { recursive: true, force: true });
+    } catch (e) {
+        console.error(`Не удалось удалить старую базу packs/${pack}: ${e.message}. Закройте мир в Foundry и повторите сборку.`);
+        process.exit(1);
+    }
+}
+
+// Бестиарий: существа Лабиринта
+const creatures = buildBestiary({ distDir: './dist/packs', stableId, skills: items.map(({ item }) => item) });
+
+// Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
+let journals = [];
+try {
+    journals = buildRules({ srcDir: './src/rules', distDir: './dist/packs', items, risks, stableId, synergyDictionary: SYNERGY_DICTIONARY });
+} catch (e) {
+    console.error(`Сборка правил остановлена: ${e.message}`);
+    process.exit(1);
+}
+
+console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, существ — ${creatures.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);

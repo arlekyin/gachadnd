@@ -1,12 +1,36 @@
-id: fanatik_r4LSLSFIm1IVLzoe
+id: r4LSLSFIm1IVLzoe
 name: Фанатик
 rarity: blue
-category: СИНЕРГИЯ
 tags:
   - проклятье
-description: Ваша вера требует жертв. Вы получаете глобальный бонус +2 к броскам атаки. Однако, за каждый экипированный навык без тега [проклятье] вы получаете накопительный штраф -1 к броскам урона (редактируйте штраф в Активных Эффектах вручную).
-activation: none
+description: Ваша вера требует жертв. Вы получаете +2 к броскам атаки.
+drawback: За каждый экипированный навык без тега «проклятье» вы получаете −1 к броскам урона. Штраф пересчитывается автоматически.
 changes:
-  - key: system.bonuses.All-Damage
+  - key: system.bonuses.mwak.attack
     mode: add
     value: '+2'
+  - key: system.bonuses.rwak.attack
+    mode: add
+    value: '+2'
+  - key: system.bonuses.msak.attack
+    mode: add
+    value: '+2'
+  - key: system.bonuses.rsak.attack
+    mode: add
+    value: '+2'
+memory_scaling:
+  count: equipped_not_tag:проклятье
+  text: −{n} к броскам урона.
+  changes:
+    - key: system.bonuses.mwak.damage
+      mode: add
+      value: '-{n}'
+    - key: system.bonuses.rwak.damage
+      mode: add
+      value: '-{n}'
+    - key: system.bonuses.msak.damage
+      mode: add
+      value: '-{n}'
+    - key: system.bonuses.rsak.damage
+      mode: add
+      value: '-{n}'

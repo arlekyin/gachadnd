@@ -1,0 +1,32 @@
+<div class="gd-part-stage {{#if diving}}diving{{/if}} {{#if ringIn}}ring-in{{/if}}" style="--glow: {{ritual.glow}}">
+    <div class="gd-fog"><i></i><i></i><i></i></div>
+    {{!-- Круг ритуала за всем остальным: руны, n-грамма, гнёзда (memory-altar.js, sigilSvg) --}}
+    {{#if sigil}}<div class="gd-sigil-wrap" style="{{core.style}}">{{{sigil}}}</div>{{/if}}
+    <svg class="gd-links" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <g class="gd-flows">
+            {{#each flows}}<line class="{{cls}}" x1="{{x1}}" y1="{{y1}}" x2="{{x2}}" y2="{{y2}}" vector-effect="non-scaling-stroke"/>{{/each}}
+        </g>
+    </svg>
+    {{#if ring}}<div class="gd-orbit"></div>
+    {{!-- Связи кольца: пучки прядей к ядру и воронки между соседями (altar-synapses.js) --}}
+    <canvas class="gd-synapses"></canvas>{{/if}}
+    {{!-- Ядро сознания: белый центр, облако своих волокон, нити навыков (altar-core.js) --}}
+    <canvas class="gd-mind-core" style="{{core.style}}"></canvas>
+    <div class="gd-core" style="{{core.style}}">{{#if ring}}<em>{{ring.filled}} / {{ring.cap}}</em>{{/if}}</div>
+    {{#each sockets}}<div class="gd-socket" style="{{style}}"></div>{{/each}}
+    {{#each nodes}}
+    <div class="gd-node {{cls}}" style="{{style}}" data-item-id="{{id}}" {{#if canMerge}}data-action="mergePick"{{/if}}>
+        {{!-- Навык в кольце — тело нейрона: ядро цвета редкости с ободком, к которому крепятся пряди --}}
+        <span class="gd-node-disc"><b>{{rank}}</b></span>
+        <span class="gd-node-name">{{name}}</span>
+    </div>
+    {{/each}}
+    {{!-- Резонанс: колесо тегов вокруг ядра; пряди от ядра обвивают выбранный --}}
+    {{#if wheel.length}}<canvas class="gd-weave"></canvas>{{/if}}
+    {{#each wheel}}<button type="button" class="gd-wheel-tag {{#if active}}active{{/if}}" style="{{style}}" data-action="tag" data-tag="{{name}}">{{name}}</button>{{/each}}
+    {{!-- Расщепление: кристалл у ядра рассыпается искрами --}}
+    {{#if shards}}<div class="gd-shards" style="{{core.style}}">{{#each shards}}<i style="--a: {{a}}deg; --d: {{d}}s"></i>{{/each}}</div>{{/if}}
+    {{!-- Прогноз: что получится --}}
+    {{#if forecast}}<div class="gd-forecast" style="{{forecast.style}}; --rarity: {{forecast.color}}"><b>{{forecast.text}}</b>{{#if forecast.sub}}<span>{{forecast.sub}}</span>{{/if}}{{#if forecast.pips}}<em>{{#each forecast.pips}}<i class="{{#if this}}on{{/if}}"></i>{{/each}}</em>{{/if}}</div>{{/if}}
+    {{#each focusEmpty}}<div class="gd-focus-empty" style="{{style}}"></div>{{/each}}
+</div>

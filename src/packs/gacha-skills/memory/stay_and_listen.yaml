@@ -1,0 +1,19 @@
+id: MmWLzdERyoLELz6j
+name: Останься и послушай
+rarity: green
+tags:
+  - память
+  - разум
+description: За каждые 4 навыка в вашей Памяти вы получаете +1 к проверкам Магии и Истории, максимум — ваш бонус мастерства. Бонус пересчитывается автоматически.
+memory_scaling:
+  count: memory
+  every: 4
+  max: prof
+  text: +{n} к проверкам Магии и Истории.
+  changes:
+    - key: system.skills.arc.bonuses.check
+      mode: add
+      value: '+{n}'
+    - key: system.skills.his.bonuses.check
+      mode: add
+      value: '+{n}'

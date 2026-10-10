@@ -1,0 +1,19 @@
+id: sqwDiLktVppxQgn3
+name: Второе дыхание
+rarity: green
+tags:
+  - кровь
+description: Бонусным действием восстановите количество ПЗ, равное {damage}.
+activation: bonus
+uses: 1
+recovery: short
+damage:
+  - formula: 1d10 + @details.level
+    type: healing
+ranks:
+  - text: 2 использования за короткий отдых.
+    uses: 2
+  - text: 2 использования, каждое восстанавливает количество ПЗ, равное {damage}.
+    damage:
+      - formula: 2d10 + @details.level
+        type: healing

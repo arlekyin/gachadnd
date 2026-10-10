@@ -1,0 +1,37 @@
+id: finW7G57tX99mX5f
+name: Берсерк
+rarity: green
+tags:
+  - кровь
+  - проклятье
+description: Ваши атаки оружием наносят +2 урона.
+drawback: Пока вы в бою, ваш КД уменьшается на 2.
+activation: none
+combat_changes:
+  - key: system.attributes.ac.bonus
+    mode: add
+    value: '-2'
+changes:
+  - key: system.bonuses.mwak.damage
+    mode: add
+    value: '+2'
+  - key: system.bonuses.rwak.damage
+    mode: add
+    value: '+2'
+ranks:
+  - text: Урон атак оружием +3.
+    changes:
+      - key: system.bonuses.mwak.damage
+        mode: add
+        value: '+3'
+      - key: system.bonuses.rwak.damage
+        mode: add
+        value: '+3'
+  - text: Урон атак оружием +4.
+    changes:
+      - key: system.bonuses.mwak.damage
+        mode: add
+        value: '+4'
+      - key: system.bonuses.rwak.damage
+        mode: add
+        value: '+4'

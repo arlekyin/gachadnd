@@ -1,0 +1,8 @@
+id: 028PHLroFQfGz1hs
+name: Зачистка логов
+rarity: green
+tags:
+  - память
+description: Действием сожгите серый навык из вашей Памяти. До долгого отдыха вы совершаете проверки Скрытности с преимуществом.
+activation: action
+recovery: long
