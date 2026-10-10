@@ -47,6 +47,13 @@ function descriptionBody(html = '') {
     return html.includes('<hr>') ? html.slice(html.indexOf('<hr>') + 4) : html;
 }
 
+// Штраф из обработанного описания: кнопки бросков [[/damage …]] и переносы строк уже готовы.
+// Без описания (старый навык) — текст флага, экранированный
+function drawbackHtml(html = '', fallback = '') {
+    const match = html.match(/<p><strong>Штраф:<\/strong>\s*([\s\S]*?)<\/p>/);
+    return match ? match[1] : foundry.utils.escapeHTML?.(fallback) ?? fallback;
+}
+
 // Характеристики навыка из его активности dnd5e — строки под описанием
 function statsRows(item) {
     const rows = [];
@@ -299,7 +306,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                 ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : []),
                 ...(flags.trigger ? [{ text: 'Срабатывает сам', cls: 'tag' }] : [])
             ],
-            drawback: flags.drawback && !flags.cleansed && !flags.drawback_lifted ? flags.drawback : null,
+            drawback: flags.drawback && !flags.cleansed && !flags.drawback_lifted ? drawbackHtml(descriptions.get(selected.id), flags.drawback) : null,
             notes: view.notes,
             extensions: view.actions.map(({ label, icon, title }, index) => ({ index, label, icon, title })),
             // Снятый штраф (награда события) убирается и из текста описания
