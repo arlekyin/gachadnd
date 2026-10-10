@@ -10,13 +10,13 @@
  * строку атмосферы.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { HOOKS, notifyRestChanged } from "./memory-api.js";
-import { announceRest } from "./memory-altar.js";
+import { MODULE_ID } from "../core/constants.js";
+import { HOOKS, notifyRestChanged } from "../memory/memory-api.js";
+import { announceRest } from "../memory/altar/memory-altar.js";
 import { partyActors } from "./horsemen.js";
 import { getFloor } from "./economy.js";
-import { isCrystalItem } from "./inventory.js";
-import { isMemorySkill, occupiesSlot, naturalSlotCap } from "./synergy.js";
+import { isCrystalItem } from "../memory/inventory.js";
+import { isMemorySkill, occupiesSlot, naturalSlotCap } from "../memory/synergy/synergy.js";
 
 // ==========================================
 // ЗАПАХ

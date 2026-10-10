@@ -5,14 +5,14 @@
  * Вкладка «Слоты» — компактный список экипированного для быстрого доступа в бою.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
-import { HOOKS, restSite, allowSkillChange } from "./memory-api.js";
-import { MemoryAltar } from "./memory-altar.js";
-import { StashWindow } from "./stash.js";
-import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
-import { collectGlossary } from "./glossary.js";
-import { playTerminalSound } from "./sounds.js";
+import { MODULE_ID } from "../../core/constants.js";
+import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "../synergy/synergy.js";
+import { HOOKS, restSite, allowSkillChange } from "../memory-api.js";
+import { MemoryAltar } from "../altar/memory-altar.js";
+import { StashWindow } from "../stash.js";
+import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "../inventory.js";
+import { collectGlossary } from "../../core/glossary.js";
+import { playTerminalSound } from "../../core/sounds.js";
 import { NeuralBackground } from "./neural.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;

@@ -2,9 +2,9 @@
  * Gacha Roguelike dnd5e — Обработка инвентаря и поглощения кристаллов
  */
 
-import { MODULE_ID } from "./constants.js";
-import { getSynergyDictionary } from "./synergy-data.js";
-import { isMemorySkill } from "./synergy.js";
+import { MODULE_ID } from "../core/constants.js";
+import { getSynergyDictionary } from "./synergy/synergy-data.js";
+import { isMemorySkill } from "./synergy/synergy.js";
 import { getSkillPack, currentSkillName, crystalForSkill, buildCrystalData } from "./crystals.js";
 import { allowAbsorb } from "./memory-api.js";
 

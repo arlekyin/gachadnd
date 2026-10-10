@@ -22,7 +22,7 @@
  *   gachadnd.restChanged      ()                            — Привал мог открыться или закрыться.
  */
 
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID } from "../core/constants.js";
 
 export const HOOKS = {
     preAbsorbCrystal: 'gachadnd.preAbsorbCrystal',

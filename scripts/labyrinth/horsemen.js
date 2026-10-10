@@ -7,9 +7,9 @@
  * Остальные эффекты применяет Мастер.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { isMemorySkill, setSkillEquipped } from "./synergy.js";
-import { HOOKS } from "./memory-api.js";
+import { MODULE_ID } from "../core/constants.js";
+import { isMemorySkill, setSkillEquipped } from "../memory/synergy/synergy.js";
+import { HOOKS } from "../memory/memory-api.js";
 
 export const HORSEMEN = {
     hunger: 'Голод',

@@ -9,8 +9,8 @@
  * собираются из арта навыка. «Без вспышек» оставляет только первый кадр — каждый игрок у себя.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { emit, onSocket } from "./socket.js";
+import { MODULE_ID } from "../../core/constants.js";
+import { emit, onSocket } from "../../core/socket.js";
 
 // Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс):
 // первый кадр — 2 кадра анимации, второй — 3, затем резкий возврат к сцене

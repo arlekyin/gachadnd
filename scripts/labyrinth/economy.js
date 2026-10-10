@@ -6,8 +6,8 @@
  * Магические предметы продаются по цене из компендиума; их редкость открывается с этажом.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { HOOKS } from "./memory-api.js";
+import { MODULE_ID } from "../core/constants.js";
+import { HOOKS } from "../memory/memory-api.js";
 
 // Награды золотом: доля базы этажа (минимум–максимум)
 export const GOLD_SHARE = {

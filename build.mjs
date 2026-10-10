@@ -9,8 +9,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import * as yaml from 'js-yaml';
-import { RECOVERY_VALUES } from './scripts/recovery.js';
-import { validateRisk } from './scripts/risk-schema.js';
+import { RECOVERY_VALUES } from './scripts/core/recovery.js';
+import { validateRisk } from './scripts/labyrinth/risk-schema.js';
 import { buildRules } from './tools/rules.mjs';
 import { buildBestiary } from './tools/bestiary.mjs';
 
@@ -46,16 +46,16 @@ const CATEGORIES = {
 };
 
 // ==========================================
-// СИНЕРГИИ ТЕГОВ: src/synergies/*.yaml → scripts/synergy-tiers.js
+// СИНЕРГИИ ТЕГОВ: src/synergies/*.yaml → scripts/memory/synergy/synergy-tiers.js
 // Собираются первыми: теги из них проверяются в навыках
 // ==========================================
 const SYNERGY_SRC_DIR = './src/synergies';
-const SYNERGY_OUT = './scripts/synergy-tiers.js';
+const SYNERGY_OUT = './scripts/memory/synergy/synergy-tiers.js';
 const SYNERGY_ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const SYNERGY_ACTIVATIONS = ['action', 'bonus', 'reaction', 'special'];
 const SYNERGY_TARGETS = ['radius', 'sphere', 'cone', 'line', 'cube', 'cylinder'];
 const SYNERGY_MODES = ['custom', 'multiply', 'add', 'downgrade', 'upgrade', 'override'];
-// Автоматизация (scripts/triggers.js): когда срабатывает, при каких условиях и что делает.
+// Автоматизация (scripts/memory/synergy/triggers.js): когда срабатывает, при каких условиях и что делает.
 // Общая схема для синергий (порог) и навыков; у навыка формулы можно брать из его активности (from)
 const TRIGGER_ON = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
 const TRIGGER_WHEN = ['self_wounded', 'self_bloodied', 'target_bloodied', 'hostile_target', 'target_anomaly', 'attack_only'];
@@ -173,7 +173,7 @@ fs.writeFileSync(SYNERGY_OUT, `// Создано build.mjs из src/synergies/*.
 
 // synergy-data.js читает только что записанный synergy-tiers.js — импорт после записи,
 // иначе на чистой копии (файл не хранится в git) сборка не запустится
-const { UNIVERSAL_DC_FORMULA, makeSynergyDictionary } = await import('./scripts/synergy-data.js');
+const { UNIVERSAL_DC_FORMULA, makeSynergyDictionary } = await import('./scripts/memory/synergy/synergy-data.js');
 const SYNERGY_DICTIONARY = makeSynergyDictionary(synergies);
 const TAGS = synergies.map(s => s.tag);
 const TAG_KEYS = Object.fromEntries(synergies.map(s => [s.tag, s.key]));
@@ -214,7 +214,7 @@ const UNIQUE_RARITIES = ['purple', 'red', 'orange'];
 // Всадники Погибели: проклятое состояние и сращённая форма
 const HORSEMEN = ['hunger', 'plague', 'war', 'death'];
 const RANK_LABELS = ['I', 'II', 'III'];
-// Личный эффект вписывает Мастер в копию навыка на листе персонажа (scripts/inventory.js → setPersonalEffect)
+// Личный эффект вписывает Мастер в копию навыка на листе персонажа (scripts/memory/inventory.js → setPersonalEffect)
 const SCALING_COUNTS = ['memory', 'burned', 'equipped', 'equipped_tags'];
 const SCALING_TAG_COUNTS = ['tag', 'equipped_tag', 'equipped_not_tag'];
 const PERSONAL_PLACEHOLDER = '<div class="gd-personal"><p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p></div>';
@@ -815,7 +815,7 @@ for (const folder of folders) {
         } else item = buildItem(skill, folder, 1);
         const maxRank = item.flags.gachadnd.max_rank;
         if (maxRank > 1) {
-            // Данные каждого ранга для повышения ранга на листе персонажа (scripts/inventory.js)
+            // Данные каждого ранга для повышения ранга на листе персонажа (scripts/memory/inventory.js)
             item.flags.gachadnd.rank_data = Array.from({ length: maxRank }, (_, i) => {
                 const ranked = buildItem(skill, folder, i + 1);
                 const { spent, ...uses } = ranked.system.uses;

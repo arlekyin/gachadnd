@@ -13,12 +13,12 @@
  * Испытания — src/risks/*.yaml, собираются в data/risks.json. Состояние — в узле карты (флаг сцены floorMap).
  */
 
-import { MODULE_ID } from "./constants.js";
-import { HOOKS } from "./memory-api.js";
-import { randomCrystal, crystalForSkill } from "./crystals.js";
+import { MODULE_ID } from "../core/constants.js";
+import { HOOKS } from "../memory/memory-api.js";
+import { randomCrystal, crystalForSkill } from "../memory/crystals.js";
 import { getFloor, rollGold, addGold } from "./economy.js";
 import { partyActors } from "./horsemen.js";
-import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "./socket.js";
+import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
 import { validateRisk } from "./risk-schema.js";
 
 const { ApplicationV2 } = foundry.applications.api;

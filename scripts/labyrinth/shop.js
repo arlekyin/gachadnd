@@ -6,15 +6,15 @@
  * Покупают игроки сами: запрос уходит Мастеру через сокет модуля, Мастер списывает золото и выдаёт товар.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { randomCrystal, crystalForSkill } from "./crystals.js";
-import { isMemorySkill } from "./synergy.js";
+import { MODULE_ID } from "../core/constants.js";
+import { randomCrystal, crystalForSkill } from "../memory/crystals.js";
+import { isMemorySkill } from "../memory/synergy/synergy.js";
 import {
     getFloor, crystalPrice, cleansePrice, rerollPrice, itemPrice, allowedItemRarities,
     shopDiscount, applyDiscount, wealth, pay
 } from "./economy.js";
 
-import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "./socket.js";
+import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 

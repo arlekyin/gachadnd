@@ -15,17 +15,17 @@
  * растущими с этажом. Награда видна до выбора: золото и предметы бросаются заранее.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { onRenderChatMessage } from "./chat-hooks.js";
-import { randomCrystal, randomCrystalWithTag, tagsWithRarity } from "./crystals.js";
-import { isMemorySkill } from "./synergy.js";
-import { getMemoryCapacity, restoreHitDice } from "./inventory.js";
-import { getSynergyDictionary } from "./synergy-data.js";
+import { MODULE_ID } from "../core/constants.js";
+import { onRenderChatMessage } from "../core/chat-hooks.js";
+import { randomCrystal, randomCrystalWithTag, tagsWithRarity } from "../memory/crystals.js";
+import { isMemorySkill } from "../memory/synergy/synergy.js";
+import { getMemoryCapacity, restoreHitDice } from "../memory/inventory.js";
+import { getSynergyDictionary } from "../memory/synergy/synergy-data.js";
 import { getFloor, floorBase, addGold, allowedItemRarities, itemPrice } from "./economy.js";
 import { randomFromPack } from "./shop.js";
 import { getHorseman, isCleansed, addCleanseProgress, partyActors } from "./horsemen.js";
-import { onSocket, requestGM, isActiveGM } from "./socket.js";
-import { addTokenTools } from "./controls.js";
+import { onSocket, requestGM, isActiveGM } from "../core/socket.js";
+import { addTokenTools } from "../core/controls.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 

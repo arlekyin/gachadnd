@@ -21,17 +21,17 @@
  *   - кость добавляется к первому подходящему броску в ход; переброс урона тратит срабатывание;
  *   - источник полученного урона не известен: реакция предлагается на любой урон.
  * Общий выключатель — настройка мира «Автоматизация синергий и навыков» (Мастер). Кроме того,
- * у каждого игрока в настройках модуля окно «Срабатывания» (scripts/automation-settings.js): для
+ * у каждого игрока в настройках модуля окно «Срабатывания» (scripts/core/automation-settings.js): для
  * каждого срабатывания две галочки, как у реакций в Baldur's Gate 3, — «Вкл.» и «Спрашивать».
  * Галочки личные: Foundry v13 хранит их за пользователем, v12 — в браузере игрока. Решает тот
  * клиент, который срабатывание обрабатывает: бросающий урон, владелец при реакции и в начале хода.
  * Со «Спрашивать» доп. урон не добавляется к броску сам, а предлагается кнопкой в чате; остальное — окном.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { onRenderChatMessage } from "./chat-hooks.js";
+import { MODULE_ID } from "../../core/constants.js";
+import { onRenderChatMessage } from "../../core/chat-hooks.js";
 import { getSynergyDictionary } from "./synergy-data.js";
-import { onSocket, emit } from "./socket.js";
+import { onSocket, emit } from "../../core/socket.js";
 
 const SETTING = 'automation';
 const PREFS = 'automationPrefs';

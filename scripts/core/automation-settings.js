@@ -8,9 +8,9 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { getSynergyDictionary } from "./synergy-data.js";
-import { getSkillPack } from "./crystals.js";
-import { readPrefs, getPref, savePrefs, KIND_LABELS, TRIGGER_EVENTS } from "./triggers.js";
+import { getSynergyDictionary } from "../memory/synergy/synergy-data.js";
+import { getSkillPack } from "../memory/crystals.js";
+import { readPrefs, getPref, savePrefs, KIND_LABELS, TRIGGER_EVENTS } from "../memory/synergy/triggers.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 

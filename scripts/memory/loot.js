@@ -2,11 +2,11 @@
  * Gacha Roguelike dnd5e — Генератор лута и гачи (Интерфейс Мастера)
  */
 
-import { MODULE_ID } from "./constants.js";
-import { isMemorySkill } from "./synergy.js";
+import { MODULE_ID } from "../core/constants.js";
+import { isMemorySkill } from "./synergy/synergy.js";
 import { addSkillToMemory } from "./inventory.js";
 import { randomCrystal, randomCrystalWithTag, crystalImage } from "./crystals.js";
-import { SYNERGIES } from "./synergy-tiers.js";
+import { SYNERGIES } from "./synergy/synergy-tiers.js";
 import { HOOKS } from "./memory-api.js";
 import { startDraft } from "./draft.js";
 

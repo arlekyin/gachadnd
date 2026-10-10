@@ -9,11 +9,11 @@
  * Состояние — на узле карты (node.portal.pledges: { actorId: { itemId: количество } }); пишет его Мастер.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "./socket.js";
+import { MODULE_ID } from "../core/constants.js";
+import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
 import { partyActors } from "./horsemen.js";
 import { getFloor } from "./economy.js";
-import { isCrystalItem } from "./inventory.js";
+import { isCrystalItem } from "../memory/inventory.js";
 import { crystalWeight, setAnchor, isAnchorOpen } from "./anchor.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;

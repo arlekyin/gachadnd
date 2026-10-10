@@ -12,8 +12,8 @@
  * возвращают ступень к базовой.
  */
 
-import { MODULE_ID } from "./constants.js";
-import { isActiveGM } from "./socket.js";
+import { MODULE_ID } from "../core/constants.js";
+import { isActiveGM } from "../core/socket.js";
 import { partyActors } from "./horsemen.js";
 
 const STEPS = ['низкий', 'умеренный', 'высокий', 'высокий+', 'высокий++'];

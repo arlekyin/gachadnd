@@ -6,7 +6,7 @@
  * в компендиуме (флаг skill_id), поэтому переименование навыка не ломает уже выданные кристаллы.
  */
 
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID } from "../core/constants.js";
 
 export function getSkillPack() {
     return game.packs.get(`${MODULE_ID}.gacha-skills`) || game.packs.get('world.gacha-skills');
