@@ -29,7 +29,24 @@ export function buildBestiary({ distDir, stableId, skills }) {
     const out = path.join(distDir, 'gacha-bestiary');
     fs.rmSync(out, { recursive: true, force: true });
     fs.mkdirSync(out, { recursive: true });
-    const actors = [devourer(stableId, skills), scrap(stableId), portal(stableId)];
+    // Папки компендиума: существа рядом со своей свитой, призывы навыков — под именем навыка
+    const folder = (key, name, color, sort) => ({
+        _id: stableId('bestiary', 'folder', key), name, type: 'Actor', folder: null, sorting: 'a', sort, color,
+        description: '', flags: {}, _key: `!folders!${stableId('bestiary', 'folder', key)}`
+    });
+    const folders = {
+        devourer: folder('devourer', 'Пожиратель', '#4a2a5a', 100),
+        checkmate: folder('checkmate', 'Шах и мат', '#6e5a32', 200),
+        scene: folder('scene', 'Метки сцены', '#3d4a4a', 300)
+    };
+    const actors = [
+        [devourer(stableId, skills), 'devourer'], [scrap(stableId), 'devourer'],
+        ...chessPieces(stableId).map(a => [a, 'checkmate']),
+        [portal(stableId), 'scene']
+    ].map(([actor, key]) => ({ ...actor, folder: folders[key]._id }));
+    for (const f of Object.values(folders)) {
+        fs.writeFileSync(path.join(out, `_folder_${f.name}_${f._id}.json`), JSON.stringify(f, null, 2) + '\n', 'utf8');
+    }
     for (const actor of actors) {
         fs.writeFileSync(path.join(out, `${actor.name}_${actor._id}.json`), JSON.stringify(actor, null, 2) + '\n', 'utf8');
     }
@@ -421,6 +438,55 @@ function portal(stableId) {
         flags: { gachadnd: { creature: 'portal' } },
         _key: `!actors!${A}`
     };
+}
+
+// ==========================================
+// ШАХ И МАТ — фигуры, которых призывает навык
+// ==========================================
+
+// Фигура не атакует: действует ходом, который делает владелец навыка бонусным действием.
+// ПЗ по навыку — 5 + уровень владельца; у актёра стоит значение для 3-го уровня, Мастер правит на поле
+function chessPieces(stableId) {
+    const pieces = [
+        { key: 'knight', name: 'Конь', move: 'Ходит буквой «Г» — на две клетки по прямой и одну в сторону, перепрыгивая через всё.',
+          effect: 'Встал на клетку врага: тот совершает спасбросок Телосложения против универсальной Сложности владельца. При провале враг Опутан — придавлен конём и повторяет спасбросок в конце каждого своего хода. При успехе отталкивается на 5 футов в сторону, противоположную коню.' },
+        { key: 'rook', name: 'Ладья', move: 'Ходит по прямой до 30 футов.',
+          effect: 'Каждый союзник, через клетку которого она проходит, восстанавливает 1d8 + бонус мастерства владельца ПЗ и благословлён до конца своего следующего хода: +1d4 к броскам атаки и спасброскам.' },
+        { key: 'bishop', name: 'Слон', move: 'Ходит по диагонали до 30 футов.',
+          effect: 'Каждый враг, через клетку которого он проходит, получает 2d6 урона психической энергией и совершает спасбросок Мудрости против универсальной Сложности владельца. При провале до конца своего следующего хода он вычитает 1d4 из бросков атаки и спасбросков.' }
+    ];
+    return pieces.map(({ key, name, move, effect }) => {
+        const A = stableId('bestiary', 'chess', key);
+        const img = `modules/gachadnd/assets/bestiary/chess-${key}.webp`;
+        return {
+            _id: A, name, type: 'npc', img,
+            system: {
+                abilities: Object.fromEntries(['str', 'dex', 'con', 'int', 'wis', 'cha'].map(k => [k, { value: 10, proficient: 0, bonuses: { check: '', save: '' } }])),
+                attributes: {
+                    ac: { flat: 13, calc: 'natural', formula: '' },
+                    hp: { value: 8, max: 8, temp: 0, tempmax: 0, formula: '' },
+                    movement: { walk: 0, climb: 0, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false }
+                },
+                details: {
+                    biography: { value: html(`Фигура навыка «Шах и мат». ${move}`, effect, 'Не атакует и не ходит сама: владелец навыка бонусным действием передвигает одну фигуру. КД 13, ПЗ — 5 + уровень владельца (у актёра — для 3-го уровня). Пропадает на 0 ПЗ или в конце боя.'), public: '' },
+                    type: { value: 'construct', subtype: 'фигура', swarm: '', custom: '' }, cr: 0
+                },
+                traits: { size: 'sm', ci: { value: ['charmed', 'frightened', 'poisoned'], custom: '' }, languages: { value: [], custom: '' } },
+                source: { custom: 'Gacha Roguelike', book: '', page: '', license: '', rules: '2024', revision: 1 }
+            },
+            prototypeToken: {
+                name, displayName: 30, displayBars: 30, actorLink: false, disposition: 1,
+                bar1: { attribute: 'attributes.hp' }, width: 1, height: 1,
+                texture: { src: img, scaleX: 1, scaleY: 1 }, sight: { enabled: false }
+            },
+            items: [
+                feat(A, stableId('bestiary', 'chess', key, 'move'), `Ход: ${name.toLowerCase()}`, img, html(move, effect))
+            ],
+            effects: [], folder: null, sort: 0, ownership: { default: 0 },
+            flags: { gachadnd: { creature: `chess-${key}` } },
+            _key: `!actors!${A}`
+        };
+    });
 }
 
 function biography() {
