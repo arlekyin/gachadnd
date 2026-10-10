@@ -11,6 +11,9 @@
     {{#if scent}}
     <span class="gd-map-scent" style="--scent: {{scent.color}}" title="Запах отряда · Шёпот от {{scent.thresholds.whisper}}, Охота от {{scent.thresholds.hunt}} · видит только Мастер"><i class="fas {{scent.icon}}"></i> {{scent.label}} · {{scent.value}}</span>
     {{/if}}
+    {{#if pulse}}
+    <span class="gd-map-pulse" style="--pulse: {{pulse.color}}" title="{{pulse.detail}} · видит только Мастер"><i class="fas fa-heart-pulse"></i> Пульс: {{pulse.last}} · {{pulse.shift}} — Монстры {{pulse.mob}}, Элита {{pulse.elite}}</span>
+    {{/if}}
     <div class="gd-map-legend">
         {{#each legend}}<span style="--node: {{color}}" title="{{label}}"><i class="fas {{icon}}"></i>{{count}}</span>{{/each}}
     </div>

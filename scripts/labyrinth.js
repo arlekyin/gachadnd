@@ -16,15 +16,17 @@ import { addTokenTools } from "./controls.js";
 import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
 import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
 import { PortalWindow } from "./portal.js";
+import { registerPulseSettings, resetPulse, pulseReport } from "./pulse.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
     registerRiskSettings();
     registerAnchorSettings();
+    registerPulseSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
-    floorSetting.onChange = value => { previous?.(value); expireFloorSlots(); };
+    floorSetting.onChange = value => { previous?.(value); expireFloorSlots(); resetPulse(); };
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
         openMapTerminal: () => GachaMapTerminal.open(),
         openDoomAltar: () => DoomAltar.open(),
@@ -38,7 +40,9 @@ Hooks.once('init', () => {
         // Запах отряда для Пожирателя: { value, state, label, thresholds, members }
         scent: () => partyScent(),
         // Портал в Предел на Привале: окно платы кристаллами у всех
-        openPortal: () => PortalWindow.open()
+        openPortal: () => PortalWindow.open(),
+        // Пульс отряда: ступень сложности боёв и итог последнего боя
+        pulse: () => pulseReport()
     });
 });
 
