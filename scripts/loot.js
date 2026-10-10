@@ -9,13 +9,34 @@ import { randomCrystal, crystalImage } from "./crystals.js";
 import { HOOKS } from "./memory-api.js";
 import { startDraft } from "./draft.js";
 
-const RARITY_WEIGHTS = {
-    'gray': 600,
-    'green': 250,
-    'blue': 100,
-    'purple': 40,
-    'red': 9
-};
+// Веса редкости по этажам забега: чем глубже, тем больше редких
+const RARITY_WEIGHTS_BY_FLOOR = [
+    { upTo: 2, weights: { gray: 600, green: 250, blue: 100, purple: 40, red: 9 } },
+    { upTo: 5, weights: { gray: 400, green: 300, blue: 180, purple: 90, red: 20 } },
+    { upTo: Infinity, weights: { gray: 200, green: 300, blue: 250, purple: 150, red: 40 } }
+];
+
+// Мягкая гарантия на отряд: с 8-го кристалла подряд без фиолетового или красного шанс растёт на 6 %
+// за каждый следующий, 15-й — гарантированно фиолетовый или красный; каждый 40-й без красного — красный
+export const PITY = { softFrom: 8, step: 0.06, hard: 15, red: 40 };
+const RARE = ['purple', 'red'];
+
+export function registerLootSettings() {
+    game.settings.register(MODULE_ID, 'lootPity', { scope: 'world', config: false, type: Object, default: { miss: 0, red: 0 } });
+}
+
+// Этаж знает Лабиринт; без него — первый
+function currentFloor() {
+    try {
+        return Math.max(1, Number(game.settings.get(MODULE_ID, 'runFloor')) || 1);
+    } catch (err) {
+        return 1;
+    }
+}
+
+export function rarityWeights(floor = currentFloor()) {
+    return { ...RARITY_WEIGHTS_BY_FLOOR.find(t => floor <= t.upTo).weights };
+}
 
 const RARITY_COLORS = {
     'gray': '#7f7f7f', 'green': '#1eff00', 'blue': '#0070dd', 
@@ -30,19 +51,43 @@ const ROOM_TEMPLATES = {
     'cursed': { name: 'Проклятая комната', chancePerPlayer: 2.0, bonusRoll: false, excludeOrange: true, requiredTag: 'проклят' }
 };
 
-function rollRarity(bonusRoll = false, excludeOrange = false) {
-    let weights = { ...RARITY_WEIGHTS };
-    if (bonusRoll) delete weights['gray'];
-    if (excludeOrange) delete weights['orange'];
-
-    let totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-    let roll = Math.floor(Math.random() * totalWeight) + 1;
-    
+function pickWeighted(weights) {
+    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+    let roll = Math.random() * total;
     for (const [rarity, weight] of Object.entries(weights)) {
-        if (roll <= weight) return rarity;
+        if (roll < weight) return rarity;
         roll -= weight;
     }
-    return bonusRoll ? 'green' : 'gray'; 
+    return Object.keys(weights)[0];
+}
+
+/**
+ * Редкость кристалла добычи. pity — счётчики мягкой гарантии ({ miss, red }); бросок их наращивает.
+ * Без pity — чистые веса этажа (Жадность и прочие побочные броски).
+ */
+function rollRarity(bonusRoll = false, excludeOrange = false, pity = null) {
+    const weights = rarityWeights();
+    if (bonusRoll) delete weights.gray;
+    if (!pity) return pickWeighted(weights);
+
+    pity.miss += 1;
+    pity.red += 1;
+    const rare = Object.fromEntries(RARE.map(r => [r, weights[r]]));
+    let rarity;
+    if (pity.red >= PITY.red) rarity = 'red';
+    else if (pity.miss >= PITY.hard) rarity = pickWeighted(rare);
+    else {
+        const bonus = Math.max(0, pity.miss - PITY.softFrom + 1) * PITY.step;
+        rarity = Math.random() < bonus ? pickWeighted(rare) : pickWeighted(weights);
+    }
+    return rarity;
+}
+
+// Счётчики гарантии сбрасывает выпавший кристалл, а не заказанная редкость: проклятой комнате может не
+// найтись фиолетового навыка с нужным тегом
+function settlePity(pity, rarity) {
+    if (RARE.includes(rarity)) pity.miss = 0;
+    if (rarity === 'red') pity.red = 0;
 }
 
 export class GachaLootTerminal extends Application {
@@ -133,14 +178,19 @@ export class GachaLootTerminal extends Application {
             .flatMap(a => a.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active))
             .reduce((sum, i) => sum + (Number(i.flags[MODULE_ID].loot_bonus) || 0), 0);
 
+        // Мягкая гарантия считается только для бросков без фильтра редкости
+        const pity = { miss: 0, red: 0, ...game.settings.get(MODULE_ID, 'lootPity') };
         const drops = [];
         for (let i = 0; i < dropsCount; i++) {
             let targetRarity = rarityFilter;
-            if (rarityFilter === 'any') targetRarity = rollRarity(template.bonusRoll, template.excludeOrange);
+            if (rarityFilter === 'any') targetRarity = rollRarity(template.bonusRoll, template.excludeOrange, pity);
 
             const crystal = await randomCrystal(targetRarity, template.requiredTag);
             if (crystal) drops.push({ crystal, rarity: crystal.flags[MODULE_ID].rarity });
+            if (crystal && rarityFilter === 'any') settlePity(pity, crystal.flags[MODULE_ID].rarity);
         }
+
+        if (rarityFilter === 'any') await game.settings.set(MODULE_ID, 'lootPity', { miss: pity.miss, red: pity.red });
 
         const targets = canvas.tokens.controlled;
         const targetActor = targets.length === 1 ? targets[0].actor : null;
@@ -159,6 +209,8 @@ export class GachaLootTerminal extends Application {
         await Promise.all(loot.tasks);
 
         const forced = await this.applyForcedLoot(template, rarityFilter);
+        // Гарантия близко — игроки видят только атмосферу, без чисел
+        if (rarityFilter === 'any' && pity.miss >= PITY.softFrom - 1) loot.lines.push('<div style="text-align: center; margin-top: 8px; color: #b9a6d8; font-style: italic;"><i class="fas fa-smog"></i> Туман густеет: вероятность копится.</div>');
         await this.printLootCard(template.name, drops, targetActor, forced, loot.lines, draftOrder);
     }
 

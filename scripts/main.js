@@ -6,7 +6,7 @@
 export { MODULE_ID } from "./constants.js";
 import { MODULE_ID } from "./constants.js";
 import { MemoryTerminal } from "./ui.js";
-import { GachaLootTerminal } from "./loot.js";
+import { GachaLootTerminal, registerLootSettings } from "./loot.js";
 import "./compendium.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./recovery.js";
 import { registerSoundSettings } from "./sounds.js";
@@ -32,6 +32,7 @@ Hooks.once('init', () => {
     registerImpactSettings();
     registerMemorySettings();
     registerDraftSettings();
+    registerLootSettings();
     registerTriggerSettings();
     registerAutomationMenu();
 

@@ -6,7 +6,7 @@
     </header>
     <ol class="gd-draft-order">
         {{#each order}}
-        <li class="{{#if current}}current{{/if}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if count}}<b>{{count}}</b>{{/if}}</li>
+        <li class="{{#if current}}current{{/if}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if lagging}}<i class="fas fa-arrow-up" title="Выбирает первым вне очереди: меньше всех фиолетовых и красных навыков"></i>{{/if}}{{#if count}}<b>{{count}}</b>{{/if}}</li>
         {{/each}}
     </ol>
     <div class="gd-draft-pool">
