@@ -17,6 +17,7 @@
     {{/if}}
     {{#if synergies.length}}
     <div class="gd-synergies"><div class="gd-build-title">Активные синергии</div>
+        <div class="gd-syn-list">
         {{#each synergies}}
         <div class="gd-syn {{#if open}}open{{/if}} {{#if system}}system{{/if}}">
             <div class="gd-syn-main" data-action="expand" data-doc-id="{{id}}">
@@ -27,6 +28,7 @@
             {{#if open}}<div class="gd-syn-desc">{{{desc}}}</div>{{/if}}
         </div>
         {{/each}}
+        </div>
     </div>
     {{/if}}
     <div class="gd-glossary">

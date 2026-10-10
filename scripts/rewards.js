@@ -17,7 +17,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { onRenderChatMessage } from "./chat-hooks.js";
-import { randomCrystal, randomCrystalWithTag } from "./crystals.js";
+import { randomCrystal, randomCrystalWithTag, tagsWithRarity } from "./crystals.js";
 import { isMemorySkill } from "./synergy.js";
 import { getMemoryCapacity, restoreHitDice } from "./inventory.js";
 import { getSynergyDictionary } from "./synergy-data.js";
@@ -105,10 +105,11 @@ const POOL = {
         },
         choice: 'tag',
         apply: async (actor, o, choice) => {
-            // Нужная редкость с этим тегом; если таких навыков нет — ближайшая ниже, затем выше
+            // Нужная редкость с этим тегом. Игрок выбирает только из тегов этой редкости, поэтому запасной
+            // путь нужен лишь на случай изменившегося компендиума — и он идёт только вниз: награда не выше обещанной
             const order = ['gray', 'green', 'blue', 'purple'];
             const at = order.indexOf(o.rarity);
-            const tries = [o.rarity, ...order.slice(0, at).reverse(), ...order.slice(at + 1)];
+            const tries = [o.rarity, ...order.slice(0, at).reverse()];
             let crystal = null;
             for (const rarity of tries) if ((crystal = await randomCrystalWithTag(rarity, choice))) break;
             if (crystal) await actor.createEmbeddedDocuments('Item', [crystal]);
@@ -267,7 +268,10 @@ async function chooseReward(message, index) {
     if (!actor.isOwner) return ui.notifications.warn('Награду выбирает владелец персонажа.');
     let choice = null;
     if (option.choice === 'tag') {
-        const tags = Object.keys(getSynergyDictionary());
+        // Только теги, у которых есть навыки обещанной редкости
+        const available = new Set(await tagsWithRarity(option.rarity));
+        const tags = Object.keys(getSynergyDictionary()).filter(t => available.has(t));
+        if (!tags.length) return ui.notifications.warn('Нет навыков этой редкости ни с одним тегом.');
         choice = await foundry.applications.api.DialogV2.prompt({
             window: { title: 'Тег кристалла' },
             content: `<p>Кристалл какого тега?</p><select name="tag">${tags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select>`,

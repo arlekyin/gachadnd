@@ -127,7 +127,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         }
     };
 
-    static PARTS = Object.fromEntries(['backdrop', ...CONTENT_PARTS].map(id => [id, { template: `${TEMPLATES}/${id}.hbs`, scrollable: { deck: ['.gd-deck'], side: ['.gd-glossary'] }[id] }]));
+    static PARTS = Object.fromEntries(['backdrop', ...CONTENT_PARTS].map(id => [id, { template: `${TEMPLATES}/${id}.hbs`, scrollable: { deck: ['.gd-deck'], side: ['.gd-glossary', '.gd-syn-list'] }[id] }]));
 
     get title() {
         return `Терминал Тумана: ${this.actor.name}`;
