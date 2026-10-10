@@ -67,6 +67,9 @@ function activity(id, type, name, { activation = 'action', range, self = false, 
 
 const html = (...paragraphs) => paragraphs.map(p => p.startsWith('<') ? p : `<p>${p}</p>`).join('');
 
+// Расход легендарных действий: dnd5e списывает их из ресурса актёра
+const legendaryCost = n => ({ targets: [{ type: 'attribute', target: 'resources.legact.value', value: String(n), scaling: { mode: '', formula: '' } }], scaling: { allowed: false, max: '' }, spellSlot: true });
+
 function item(actorId, id, type, name, img, description, system = {}, activities = []) {
     return {
         _id: id, name, type, img,
@@ -117,6 +120,22 @@ function devourer(stableId, skills) {
             'Пожиратель знает, где лежит каждый кристалл на этаже и у кого он.',
             'Он совершает атаки с <strong>преимуществом</strong> по существу, у которого больше всего кристаллов (по весу: серый и зелёный — 1, синий — 2, фиолетовый — 3, красный и оранжевый — 5).'
         )),
+        feat(A, id('seam'), 'Шов', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
+            'Пожиратель не выходит из готового портала — он рвёт ткань узла там, где сильнее всего пахнет.',
+            '<ul><li><strong>Знак.</strong> В начале раунда, когда он прорывается, в воздухе проступает трещина над носителем самого большого запаса кристаллов: всем видно, у кого он появится, но не раньше этого раунда.</li>' +
+            '<li><strong>Выход.</strong> На счёте инициативы 20 он появляется в свободном месте в пределах 10 футов от этого носителя и сразу совершает ход.</li>' +
+            '<li><strong>Наполовину в Пределе.</strong> До конца своего первого хода он неуязвим к урону и состояниям: заготовленные ловушки и залпы в точку появления уходят в туман.</li></ul>'
+        )),
+        feat(A, id('layers'), 'Слои памяти', 'modules/gachadnd/assets/icons/skills/purple_fog_crystall.webp', html(
+            'Тело Пожирателя — три слоя чужих воспоминаний; каждый — треть его максимума ПЗ (при 90 ПЗ — по 30).',
+            '<ul><li>За один раунд — от начала его хода до начала следующего — разрушить можно <strong>только один слой</strong>. Урон сверх границы слоя в этом раунде пропадает: память осыпается, но держит.</li>' +
+            '<li>Разрушенный слой отмечайте зарядом этой особенности. Слой рушится — Пожиратель на миг рассыпается и собирается: Отрыжка памяти срабатывает на первом слое, а не на половине ПЗ.</li>' +
+            '<li>Убить его можно не быстрее чем за три раунда — он успеет ходить.</li></ul>'
+        ), [], { max: '3', spent: 0, recovery: [] }),
+        feat(A, id('adapt'), 'Адаптация', 'modules/gachadnd/assets/icons/skills/blue_fog_crystall.webp', html(
+            'Он помнит, чем его ранили. Когда рушится слой памяти, Пожиратель получает <strong>сопротивление</strong> к типу урона, который нанёс этому слою больше всего, до конца встречи. Повторная адаптация к тому же типу — <strong>иммунитет</strong>.',
+            'Мастер добавляет тип в сопротивления на листе. Бить одним и тем же — порох, огонь, излюбленный навык — всё хуже с каждым слоем.'
+        )),
         feat(A, id('belly'), 'Брюхо', 'modules/gachadnd/assets/icons/skills/purple_fog_crystall.webp', html(
             'Проглоченные Укусом кристаллы лежат в Брюхе отдельной кучей до конца встречи. Мастер переносит их в инвентарь Пожирателя и отмечает вес.',
             '<strong>Насытился.</strong> Если в начале его хода вес Брюха не меньше <strong>3 + Насыщение</strong>, он рассыпается туманом и уходит вместе с Брюхом: эти кристаллы потеряны для отряда, Насыщение +1.'
@@ -154,7 +173,7 @@ function devourer(stableId, skills) {
         ), [activity(id('memory', 'roll'), 'utility', 'Всплывает', { activation: 'special', roll: { formula: '1d6', name: 'Память Пожирателя', prompt: false, visible: true } })]),
         ...MEMORY.map((name, n) => memorySkill(A, id('memory', String(n + 1)), n + 1, skills.find(i => i.name === name), name)),
         feat(A, id('burp'), 'Отрыжка памяти', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
-            'Один раз за встречу, когда ПЗ Пожирателя впервые опускаются до половины или ниже, он выкашливает 2 Огрызков памяти в свободные места в пределах 10 футов. Они действуют сразу после него.'
+            'Когда рушится первый слой памяти, Пожиратель выкашливает 2 Огрызков памяти в свободные места в пределах 10 футов. Они действуют сразу после него.'
         )),
         feat(A, id('lair'), 'Разрыв ткани (логово)', 'modules/gachadnd/assets/icons/skills/red_fog_active.webp', html(
             'Узел, куда он прорвался, рвётся. На счёте инициативы 20 (проигрывая ничьи) бросьте 1к4:',
@@ -183,10 +202,28 @@ function devourer(stableId, skills) {
         feat(A, id('reroll'), 'Перекрутка', 'modules/gachadnd/assets/icons/skills/blue_fog_active.webp', html(
             'Реакция, 1 раз в раунд. Когда существо в пределах 60 футов, которое Пожиратель видит, попадает по нему атакой или преуспевает в спасброске против его эффекта, бросок перебрасывается. Существо обязано взять новый результат.'
         ), [activity(id('reroll', 'use'), 'utility', 'Перекрутка', { activation: 'reaction', range: 60, roll: { formula: '', name: '', prompt: false, visible: false } })]),
-        feat(A, id('legres'), 'Легендарное сопротивление (Насыщение 2+)', 'modules/gachadnd/assets/icons/skills/purple_fog_crystall.webp', html(
-            'С Насыщения 2: один раз за встречу, проваливая спасбросок, Пожиратель может считать его успешным.',
-            'Эффект Насыщения 2 и выше добавляет 1 к максимуму легендарных сопротивлений; перед встречей поставьте текущее значение равным максимуму.'
+        feat(A, id('legres'), 'Легендарное сопротивление', 'modules/gachadnd/assets/icons/skills/purple_fog_crystall.webp', html(
+            'Один раз за встречу (с Насыщения 2 — дважды), проваливая спасбросок, Пожиратель может считать его успешным.',
+            'Эффект Насыщения 2 и выше добавляет 1 к максимуму; перед встречей поставьте текущее значение равным максимуму.'
         )),
+        feat(A, id('legendary'), 'Легендарные действия', 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp', html(
+            'Пожиратель совершает 2 легендарных действия за раунд, сразу после хода другого существа; восстанавливает их в начале своего хода.',
+            '<ul><li><strong>Тень (1).</strong> Перемещается на расстояние до половины скорости, не провоцируя атак.</li>' +
+            '<li><strong>Коготь (1).</strong> Одна атака Когтем.</li>' +
+            '<li><strong>Глоток (2).</strong> Одна атака Укусом-пожиранием.</li></ul>'
+        ), [
+            activity(id('legendary', 'shadow'), 'utility', 'Тень', { activation: 'legendary', consumption: legendaryCost(1), roll: { formula: '', name: '', prompt: false, visible: false } }),
+            activity(id('legendary', 'claw'), 'attack', 'Коготь (легендарное)', {
+                activation: 'legendary', range: 5, consumption: legendaryCost(1),
+                attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
+                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 6, ['slashing'], '2d6 + @abilities.str.mod')] }
+            }),
+            activity(id('legendary', 'bite'), 'attack', 'Глоток (легендарное, 2)', {
+                activation: 'legendary', range: 5, consumption: legendaryCost(2),
+                attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
+                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 8, ['piercing'], '2d8 + @abilities.str.mod')] }
+            })
+        ]),
         item(A, id('heart'), 'loot', 'Сердце аномалии', 'modules/gachadnd/assets/icons/skills/red_fog_crystall.webp', html(
             'Остаётся, когда Пожиратель рассыпается туманом. Пульсирует в такт чужим воспоминаниям.',
             'Носитель навыка «Пожиратель» может съесть его в этом бою. Иначе — ценный трофей: его можно продать или обменять на Событии.'
@@ -205,7 +242,7 @@ function devourer(stableId, skills) {
             ...(n >= 2 ? [{ key: 'system.resources.legres.max', mode: 2, value: '1', priority: 20 }] : [])
         ],
         description: html(`Насыщение ${n}: +${n} к попаданию и Сл, +${15 * (n >= 3 ? n - 1 : 1)} к максимуму ПЗ` +
-            (n >= 2 ? ', легендарное сопротивление 1, Память — два броска на выбор' : '') +
+            (n >= 2 ? ', легендарное сопротивление +1, Память — два броска на выбор' : '') +
             (n >= 3 ? ', Укус глотает 2 кристалла' : '') + '. Включайте только один эффект Насыщения.'),
         duration: {}, origin: null, statuses: [], flags: {}, tint: '#ffffff',
         _key: `!actors.effects!${A}.${id('satiety', String(n))}`
@@ -221,7 +258,7 @@ function devourer(stableId, skills) {
                 .map(([key, value]) => [key, { value, proficient: ['dex', 'wis'].includes(key) ? 1 : 0, bonuses: { check: '', save: '' } }])),
             attributes: {
                 ac: { flat: 14, calc: 'natural', formula: '' },
-                hp: { value: 68, max: 68, temp: 0, tempmax: 0, formula: '8d8 + 32' },
+                hp: { value: 90, max: 90, temp: 0, tempmax: 0, formula: '13d8 + 32' },
                 movement: { walk: 40, climb: 30, burrow: 0, fly: 0, swim: 0, units: 'ft', hover: false },
                 senses: { darkvision: 60, blindsight: 30, tremorsense: 0, truesight: 0, units: 'ft', special: '' }
             },
@@ -236,7 +273,7 @@ function devourer(stableId, skills) {
                 ci: { value: ['charmed', 'frightened'], custom: '' },
                 languages: { value: [], custom: 'понимает языки, которые знал, но говорит только «ещё»' }
             },
-            resources: { legact: { value: 0, max: 0 }, legres: { value: 0, max: 0 }, lair: { value: true, initiative: 20 } },
+            resources: { legact: { value: 2, max: 2 }, legres: { value: 1, max: 1 }, lair: { value: true, initiative: 20 } },
             source: { custom: 'Gacha Roguelike', book: '', page: '', license: '', rules: '2024', revision: 1 }
         },
         prototypeToken: {
