@@ -15,10 +15,47 @@ import path from 'path';
 const IMG = 'modules/gachadnd/assets/bestiary/devourer.webp';
 const TOKEN = 'modules/gachadnd/assets/bestiary/devourer-token.webp';
 const SATIETY = '@flags.gachadnd.satiety';
-const DC = `14 + ${SATIETY}`;
+// Глубина — номер этажа: эффект «Глубина N» задаёт прибавку к попаданию и Сл и к урону каждого удара
+const DEPTH = '@flags.gachadnd.depth';
+const DEPTH_DAMAGE = '@flags.gachadnd.depthDamage';
+const DC = `14 + ${SATIETY} + ${DEPTH}`;
+const HIT = `${SATIETY} + ${DEPTH}`;
 
-// Память Пожирателя: навыки компендиума по граням к6. В бою доступен только навык выпавшей грани
-const MEMORY = ['Квен', 'Удалой рывок', 'Хайзенберг', 'Игни', 'Нейрализатор', 'Фус-Ро-Да'];
+// Память Пожирателя: навыки компендиума по граням. В бою доступен только навык выпавшей грани.
+// Грани 7–8 открываются с Глубины 4 (к8), 9–10 — с Глубины 7 (к10)
+const MEMORY = ['Квен', 'Удалой рывок', 'Хайзенберг', 'Игни', 'Нейрализатор', 'Фус-Ро-Да', 'Мегумин', 'Кукловод', 'ЗА ВАРУДО', 'Ещё один потомок Вергилия'];
+const MEMORY_DEPTH = face => face >= 9 ? 7 : face >= 7 ? 4 : 1;
+// Ранги навыков Памяти: ранг II с Глубины 3, ранг III с Глубины 6
+const RANK_DEPTH = { 2: 3, 3: 6 };
+
+/**
+ * Глубина N — эффект номера этажа. Профиль листа — второй этаж (Глубина 2, без изменений).
+ * hit — к попаданию и Сл, damage — к урону каждого удара, hp — к максимуму ПЗ, ac — к КД,
+ * legact / legres — к числу легендарных действий и сопротивлений.
+ */
+const DEPTHS = {
+    1: { hit: -1, damage: 0, hp: -40, ac: -1, legact: 0, legres: 0 },
+    2: { hit: 0, damage: 0, hp: 0, ac: 0, legact: 0, legres: 0 },
+    3: { hit: 1, damage: 2, hp: 40, ac: 0, legact: 0, legres: 0 },
+    4: { hit: 1, damage: 4, hp: 80, ac: 1, legact: 0, legres: 1 },
+    5: { hit: 2, damage: 6, hp: 120, ac: 1, legact: 1, legres: 1 },
+    6: { hit: 2, damage: 8, hp: 160, ac: 2, legact: 1, legres: 1 },
+    7: { hit: 3, damage: 10, hp: 200, ac: 2, legact: 1, legres: 1 },
+    8: { hit: 3, damage: 12, hp: 240, ac: 3, legact: 1, legres: 2 },
+    9: { hit: 4, damage: 14, hp: 280, ac: 3, legact: 1, legres: 2 },
+    10: { hit: 4, damage: 16, hp: 320, ac: 4, legact: 1, legres: 2 }
+};
+// Что открывает глубина: строки эффекта и особенностей «Глубина N+»
+const DEPTH_UNLOCKS = {
+    3: 'серые, зелёные и синие навыки Памяти — ранг II',
+    4: 'Память — к8: грани 7. Мегумин и 8. Кукловод; легендарное сопротивление +1',
+    5: 'Мультиатака — три атаки; 3 легендарных действия, новое — Всплытие (2)',
+    6: 'навыки Памяти — ранг III; Глубокая адаптация',
+    7: 'Память — к10: грани 9. ЗА ВАРУДО и 10. Ещё один потомок Вергилия; Кража навыка',
+    8: 'легендарное сопротивление +1; Отрыжка памяти — 4 Огрызка',
+    9: 'Разрыв ткани дважды за раунд (счёт 20 и 10)',
+    10: 'Последний слой'
+};
 
 /**
  * @param {{ distDir: string, stableId: (...parts: string[]) => string, skills: object[] }} options
@@ -112,7 +149,7 @@ const natural = (actorId, id, name, img, description, dice, activities) => item(
     equipped: true, identified: true, proficient: 1, properties: [],
     range: { value: null, long: null, units: 'ft', reach: null },
     uses: { max: '', spent: 0, recovery: [] },
-    damage: { base: part(dice[0], dice[1], [dice[2]]), versatile: part(null, null, []) },
+    damage: { base: { ...part(dice[0], dice[1], [dice[2]]), bonus: dice[3] ?? '' }, versatile: part(null, null, []) },
     type: { value: 'natural', baseItem: '' }
 }, activities);
 
@@ -125,7 +162,7 @@ function devourer(stableId, skills) {
     const id = (...parts) => stableId('bestiary', 'devourer', ...parts);
     const attack = (key, name) => activity(id(key, 'attack'), 'attack', name, {
         range: 5,
-        attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
+        attack: { ability: 'str', bonus: HIT, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
         damage: { critical: { bonus: '' }, includeBase: true, parts: [] }
     });
     const digest = (key, label, amount) => activity(id('bite', 'heal', key), 'heal', `Переварить: ${label}`, {
@@ -152,7 +189,8 @@ function devourer(stableId, skills) {
         feat(A, id('adapt'), 'Адаптация', 'modules/gachadnd/assets/icons/skills/blue_fog_crystall.webp', html(
             'Он помнит, чем его ранили. Когда рушится слой памяти, Пожиратель получает <strong>сопротивление</strong> к типу урона, который нанёс этому слою больше всего, до конца встречи. Повторная адаптация к тому же типу — <strong>иммунитет</strong>.',
             'Мастер добавляет тип в сопротивления на листе. Бить одним и тем же — порох, огонь, излюбленный навык — всё хуже с каждым слоем.',
-            '<strong>Между возвращениями.</strong> Рассыпаясь туманом, он уносит одну адаптацию — самую сильную (иммунитет, иначе сопротивление к урону, который он получил больше всего), и возвращается с ней. Остальные пропадают. Когда охота кончается — Запах ниже Шёпота или отряд откупился, — он забывает всё.'
+            '<strong>Между возвращениями.</strong> Рассыпаясь туманом, он уносит одну адаптацию — самую сильную (иммунитет, иначе сопротивление к урону, который он получил больше всего), и возвращается с ней. Остальные пропадают. Когда охота кончается — Запах ниже Шёпота или отряд откупился, — он забывает всё.',
+            '<strong>Глубокая адаптация (Глубина 6+).</strong> Рушащийся слой даёт сопротивление сразу к двум типам урона — двум самым сильным по этому слою.'
         )),
         feat(A, id('belly'), 'Брюхо', 'modules/gachadnd/assets/icons/skills/purple_fog_crystall.webp', html(
             'Проглоченные Укусом кристаллы лежат в Брюхе отдельной кучей до конца встречи. Мастер переносит их в инвентарь Пожирателя и отмечает вес.',
@@ -163,16 +201,17 @@ function devourer(stableId, skills) {
             '<ul><li>Он выплёвывает Брюхо: проглоченные кристаллы падают на пол, их можно подобрать.</li><li>Остаётся <strong>Сердце аномалии</strong> (в инвентаре Пожирателя).</li><li>Золото: База этажа × 0,3.</li><li>Насыщение +1. Он вернётся, если Запах отряда не упадёт ниже порога Шёпота.</li></ul>'
         )),
         feat(A, id('multiattack'), 'Мультиатака', 'icons/skills/melee/blade-tips-triple-steel.webp', html(
-            'Пожиратель совершает две атаки: две Когтем или одну Когтем и одну Укусом-пожиранием.'
+            'Пожиратель совершает две атаки: две Когтем или одну Когтем и одну Укусом-пожиранием. С Глубины 5 — три атаки, Укусом не больше одной.'
         ), [activity(id('multiattack', 'use'), 'utility', 'Мультиатака', { roll: { formula: '', name: '', prompt: false, visible: false } })]),
         natural(A, id('claw'), 'Коготь', 'icons/skills/melee/strike-slashes-red.webp', html(
-            'Рукопашная атака: досягаемость 5 футов. Урон 2к8 + модификатор Силы, рубящий. К попаданию прибавляется Насыщение.'
-        ), [2, 8, 'slashing'], [attack('claw', 'Коготь')]),
+            'Рукопашная атака: досягаемость 5 футов. Урон 2к8 + модификатор Силы, рубящий. К попаданию прибавляются Насыщение и Глубина, к урону — прибавка Глубины.'
+        ), [2, 8, 'slashing', DEPTH_DAMAGE], [attack('claw', 'Коготь')]),
         natural(A, id('bite'), 'Укус-пожирание', 'icons/creatures/abilities/mouth-teeth-long-red.webp', html(
-            'Рукопашная атака: досягаемость 5 футов. Урон 3к8 + модификатор Силы, колющий. К попаданию прибавляется Насыщение.',
+            'Рукопашная атака: досягаемость 5 футов. Урон 3к8 + модификатор Силы, колющий. К попаданию прибавляются Насыщение и Глубина, к урону — прибавка Глубины.',
+            '<strong>Кража навыка (Глубина 7+).</strong> Если цель провалила спасбросок от Пожирания кристалла на 5 и больше, он вырывает вместо кристалла случайный экипированный навык: навык не действует до конца встречи или пока у Пожирателя не рухнет следующий слой памяти.',
             '<strong>Пожирание кристалла.</strong> Если у цели есть кристаллы, она проходит спасбросок Ловкости (Сл 14 + Насыщение). При провале случайный кристалл из её инвентаря уходит в Брюхо.',
             '<strong>Переварить.</strong> Пожиратель восстанавливает 5 ПЗ за каждую единицу веса проглоченного кристалла: кнопки по редкости.'
-        ), [3, 8, 'piercing'], [
+        ), [3, 8, 'piercing', DEPTH_DAMAGE], [
             attack('bite', 'Укус'),
             activity(id('bite', 'save'), 'save', 'Пожирание кристалла', {
                 activation: 'special', range: 5,
@@ -185,16 +224,21 @@ function devourer(stableId, skills) {
             digest('red', 'красный или оранжевый', 25)
         ]),
         feat(A, id('memory'), 'Память Пожирателя', 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp', html(
-            'Он держал в голове слишком много навыков — шесть ещё всплывают. В начале каждого своего хода Пожиратель бросает 1к6: в этот ход он может использовать только навык выпавшей грани, по его обычной активации и без расхода зарядов. Остальные заперты. С Насыщения 2 он бросает дважды и выбирает.',
-            '<ol>' + MEMORY.map(name => `<li>${name}</li>`).join('') + '</ol>',
-            'Сл навыков — 14 + Насыщение. Навыки — отдельные строки на листе с номером грани.'
-        ), [activity(id('memory', 'roll'), 'utility', 'Всплывает', { activation: 'special', roll: { formula: '1d6', name: 'Память Пожирателя', prompt: false, visible: true } })]),
-        ...MEMORY.map((name, n) => memorySkill(A, id('memory', String(n + 1)), n + 1, skills.find(i => i.name === name), name)),
+            'Он держал в голове слишком много навыков — они ещё всплывают. В начале каждого своего хода Пожиратель бросает кость Памяти: в этот ход он может использовать только навык выпавшей грани, по его обычной активации и без расхода зарядов. Остальные заперты. С Насыщения 2 он бросает дважды и выбирает.',
+            'Кость Памяти растёт с Глубиной: к6 на этажах 1–3, к8 с Глубины 4, к10 с Глубины 7. Ранги навыков: ранг II с Глубины 3, ранг III с Глубины 6 — отдельные действия навыка с пометкой ранга.',
+            '<ol>' + MEMORY.map((name, n) => `<li>${name}${MEMORY_DEPTH(n + 1) > 1 ? ` <em>(Глубина ${MEMORY_DEPTH(n + 1)}+)</em>` : ''}</li>`).join('') + '</ol>',
+            'Сл навыков — 14 + Насыщение + Глубина. Навыки — отдельные строки на листе с номером грани.'
+        ), [
+            activity(id('memory', 'roll'), 'utility', 'Всплывает (к6, Глубина 1–3)', { activation: 'special', roll: { formula: '1d6', name: 'Память Пожирателя', prompt: false, visible: true } }),
+            activity(id('memory', 'roll8'), 'utility', 'Всплывает (к8, Глубина 4–6)', { activation: 'special', roll: { formula: '1d8', name: 'Память Пожирателя', prompt: false, visible: true } }),
+            activity(id('memory', 'roll10'), 'utility', 'Всплывает (к10, Глубина 7+)', { activation: 'special', roll: { formula: '1d10', name: 'Память Пожирателя', prompt: false, visible: true } })
+        ]),
+        ...MEMORY.map((name, n) => memorySkill(A, id, n + 1, skills.find(i => i.name === name), name)),
         feat(A, id('burp'), 'Отрыжка памяти', 'modules/gachadnd/assets/icons/skills/grey_fog_active.webp', html(
-            'Когда рушится первый слой памяти, Пожиратель выкашливает 2 Огрызков памяти в свободные места в пределах 10 футов. Они действуют сразу после него.'
+            'Когда рушится первый слой памяти, Пожиратель выкашливает 2 Огрызков памяти (с Глубины 8 — 4) в свободные места в пределах 10 футов. Они действуют сразу после него.'
         )),
         feat(A, id('lair'), 'Разрыв ткани (логово)', 'modules/gachadnd/assets/icons/skills/red_fog_active.webp', html(
-            'Узел, куда он прорвался, рвётся. На счёте инициативы 20 (проигрывая ничьи) бросьте 1к4:',
+            'Узел, куда он прорвался, рвётся. На счёте инициативы 20 (проигрывая ничьи) бросьте 1к4; с Глубины 9 — ещё раз на счёте 10:',
             '<ol>' +
             '<li><strong>Тяга запаха.</strong> Каждое существо с кристаллами в пределах 60 футов совершает спасбросок Силы (Сл 14 + Насыщение) или притягивается на 10 футов к Пожирателю.</li>' +
             '<li><strong>Туманная стена.</strong> Стена тумана длиной 30 футов и высотой 10 футов в пределах 60 футов: местность сильно заслонена до следующего счёта 20. Слепое зрение Пожирателя её не замечает.</li>' +
@@ -225,23 +269,28 @@ function devourer(stableId, skills) {
             'Эффект Насыщения 2 и выше добавляет 1 к максимуму; перед встречей поставьте текущее значение равным максимуму.'
         )),
         feat(A, id('legendary'), 'Легендарные действия', 'modules/gachadnd/assets/icons/skills/purple_fog_active.webp', html(
-            'Пожиратель совершает 2 легендарных действия за раунд, сразу после хода другого существа; восстанавливает их в начале своего хода.',
+            'Пожиратель совершает 2 легендарных действия за раунд (с Глубины 5 — 3), сразу после хода другого существа; восстанавливает их в начале своего хода.',
             '<ul><li><strong>Тень (1).</strong> Перемещается на расстояние до половины скорости, не провоцируя атак.</li>' +
             '<li><strong>Коготь (1).</strong> Одна атака Когтем.</li>' +
-            '<li><strong>Глоток (2).</strong> Одна атака Укусом-пожиранием.</li></ul>'
+            '<li><strong>Глоток (2).</strong> Одна атака Укусом-пожиранием.</li>' +
+            '<li><strong>Всплытие (2, Глубина 5+).</strong> Бросок кости Памяти и навык выпавшей грани.</li></ul>'
         ), [
+            activity(id('legendary', 'surface'), 'utility', 'Всплытие (легендарное, 2)', { activation: 'legendary', consumption: legendaryCost(2), roll: { formula: '', name: '', prompt: false, visible: false } }),
             activity(id('legendary', 'shadow'), 'utility', 'Тень', { activation: 'legendary', consumption: legendaryCost(1), roll: { formula: '', name: '', prompt: false, visible: false } }),
             activity(id('legendary', 'claw'), 'attack', 'Коготь (легендарное)', {
                 activation: 'legendary', range: 5, consumption: legendaryCost(1),
-                attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
-                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 8, ['slashing'], '2d8 + @abilities.str.mod')] }
+                attack: { ability: 'str', bonus: HIT, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
+                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(2, 8, ['slashing'], `2d8 + @abilities.str.mod + ${DEPTH_DAMAGE}`)] }
             }),
             activity(id('legendary', 'bite'), 'attack', 'Глоток (легендарное, 2)', {
                 activation: 'legendary', range: 5, consumption: legendaryCost(2),
-                attack: { ability: 'str', bonus: SATIETY, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
-                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(3, 8, ['piercing'], '3d8 + @abilities.str.mod')] }
+                attack: { ability: 'str', bonus: HIT, critical: { threshold: null }, flat: false, type: { value: 'melee', classification: 'weapon' } },
+                damage: { critical: { bonus: '' }, includeBase: false, parts: [part(3, 8, ['piercing'], `3d8 + @abilities.str.mod + ${DEPTH_DAMAGE}`)] }
             })
         ]),
+        feat(A, id('lastlayer'), 'Последний слой (Глубина 10)', 'modules/gachadnd/assets/icons/skills/red_fog_crystall.webp', html(
+            'Только на десятом этаже. Первый раз, когда ПЗ Пожирателя падают до 0, он не рассыпается: выплёвывает Брюхо, собирается из всего, что съел за забег, и встаёт с половиной максимума ПЗ и одним новым слоем памяти. Адаптации сбрасываются, кость Памяти бросается дважды до конца боя.'
+        )),
         item(A, id('heart'), 'loot', 'Сердце аномалии', 'modules/gachadnd/assets/icons/skills/red_fog_crystall.webp', html(
             'Остаётся, когда Пожиратель рассыпается туманом. Пульсирует в такт чужим воспоминаниям.',
             'Носитель навыка «Пожиратель» может съесть его в этом бою. Иначе — ценный трофей: его можно продать или обменять на Событии.'
@@ -265,6 +314,32 @@ function devourer(stableId, skills) {
         duration: {}, origin: null, statuses: [], flags: {}, tint: '#ffffff',
         _key: `!actors.effects!${A}.${id('satiety', String(n))}`
     }));
+
+    // Глубина: Мастер включает один эффект — номер текущего этажа
+    for (const [n, d] of Object.entries(DEPTHS).map(([k, v]) => [Number(k), v])) {
+        const opened = Object.entries(DEPTH_UNLOCKS).filter(([k]) => Number(k) <= n).map(([k, text]) => `<li>Глубина ${k}: ${text}</li>`).join('');
+        const signed = v => (v > 0 ? `+${v}` : String(v));
+        effects.push({
+            _id: id('depth', String(n)),
+            name: `Глубина ${n}`,
+            img: 'modules/gachadnd/assets/icons/skills/grey_fog_crystall.webp',
+            disabled: true, transfer: false,
+            changes: [
+                { key: 'flags.gachadnd.depth', mode: 5, value: String(d.hit), priority: 20 },
+                { key: 'flags.gachadnd.depthDamage', mode: 5, value: String(d.damage), priority: 20 },
+                ...(d.hp ? [{ key: 'system.attributes.hp.max', mode: 2, value: String(d.hp), priority: 20 }] : []),
+                ...(d.ac ? [{ key: 'system.attributes.ac.bonus', mode: 2, value: signed(d.ac), priority: 20 }] : []),
+                ...(d.legact ? [{ key: 'system.resources.legact.max', mode: 2, value: String(d.legact), priority: 20 }] : []),
+                ...(d.legres ? [{ key: 'system.resources.legres.max', mode: 2, value: String(d.legres), priority: 20 }] : [])
+            ],
+            description: html(`Этаж ${n}: ${signed(d.hit)} к попаданию и Сл, ${signed(d.damage)} к урону ударов, ${signed(d.hp)} к максимуму ПЗ, ${signed(d.ac)} к КД` +
+                (d.legact ? `, легендарных действий +${d.legact}` : '') + (d.legres ? `, легендарных сопротивлений +${d.legres}` : '') + '.',
+                opened ? `<ul>${opened}</ul>` : 'Новых способностей нет.',
+                'Включайте один эффект Глубины — номер текущего этажа — вместе с эффектом Насыщения. После смены максимума ПЗ поставьте текущие ПЗ равными максимуму.'),
+            duration: {}, origin: null, statuses: [], flags: {}, tint: '#ffffff',
+            _key: `!actors.effects!${A}.${id('depth', String(n))}`
+        });
+    }
 
     return {
         _id: A,
@@ -304,26 +379,46 @@ function devourer(stableId, skills) {
         items,
         effects,
         folder: null, sort: 0, ownership: { default: 0 },
-        flags: { gachadnd: { satiety: 0, creature: 'devourer' } },
+        flags: { gachadnd: { satiety: 0, depth: 0, depthDamage: 0, creature: 'devourer' } },
         _key: `!actors!${A}`
     };
 }
 
 // Навык из компендиума в Памяти Пожирателя: без зарядов и флагов модуля (это не Память персонажа:
-// синергии и триггеры его не трогают), Сл — общая формула Пожирателя
-function memorySkill(actorId, id, face, source, name) {
+// синергии и триггеры его не трогают), Сл — общая формула Пожирателя. Ранги II и III — отдельные действия
+// того же навыка с пометкой Глубины, с которой они открываются
+function memorySkill(actorId, makeId, face, source, name) {
     if (!source) throw new Error(`Бестиарий: навык «${name}» не найден в компендиуме навыков`);
+    const id = makeId('memory', String(face));
     const copy = structuredClone(source);
-    const activities = Object.fromEntries(Object.values(copy.system.activities ?? {}).map(a => {
+    const prepare = (a, rank) => {
         a.consumption = { targets: [], scaling: { allowed: false, max: '' }, spellSlot: true };
+        a.uses = { spent: 0, max: '', recovery: [] };
         if (a.save) a.save.dc = { calculation: '', formula: DC };
+        if (rank > 1) {
+            a._id = makeId('memory', String(face), a._id, `r${rank}`);
+            a.name = `${a.name || copy.name} · ранг ${'I'.repeat(rank)} (Глубина ${RANK_DEPTH[rank]}+)`;
+            a.sort = rank * 100;
+        }
         return [a._id, a];
-    }));
+    };
+    const activities = Object.fromEntries(Object.values(copy.system.activities ?? {}).map(a => prepare(a, 1)));
+    const ranks = copy.flags?.gachadnd?.rank_data ?? [];
+    const rankTexts = [];
+    for (let rank = 2; rank <= ranks.length; rank++) {
+        for (const a of Object.values(structuredClone(ranks[rank - 1].system.activities ?? {}))) {
+            const [key, value] = prepare(a, rank);
+            activities[key] = value;
+        }
+        rankTexts.push(`<h3>Ранг ${'I'.repeat(rank)} — Глубина ${RANK_DEPTH[rank]}+</h3>${ranks[rank - 1].system.description?.value ?? ''}`);
+    }
+    const depth = MEMORY_DEPTH(face);
+    const note = `Память Пожирателя, грань ${face}${depth > 1 ? ` (Глубина ${depth}+)` : ''}: доступен в ход, когда выпала эта грань.`;
     return {
         _id: id, name: `${face}. ${copy.name}`, type: copy.type, img: copy.img,
         system: {
             ...copy.system,
-            description: { value: `<p><em>Память Пожирателя, грань ${face}: доступен в ход, когда выпала эта грань.</em></p>${copy.system.description?.value ?? ''}`, chat: '' },
+            description: { value: `<p><em>${note}</em></p>${copy.system.description?.value ?? ''}${rankTexts.join('')}`, chat: '' },
             uses: { max: '', spent: 0, recovery: [] },
             activities
         },
@@ -499,7 +594,9 @@ function biography() {
         '<tr><td>от 4 + 2Э</td><td>Шёпот: туман пахнет металлом, кристаллы гудят, сквозь стены — «ещё…»</td></tr>' +
         '<tr><td>от 6 + 3Э</td><td>Охота: на следующем подходящем узле он прорывается</td></tr>' +
         '</tbody></table>',
-        'Прорывается на узлы Монстры, Элита (третьей стороной), Событие, Привал (до отдыха). Не входит на Босса, Магазин, Риск, Погибель. Шёпот всегда за узел до Охоты.',
+        'Прорывается на узлы Монстры, Элита (третьей стороной), Событие, Привал (до отдыха). Не входит на Заставу, Босса, Магазин, Риск, Погибель. Шёпот всегда за узел до Охоты.',
+        '<h2>Глубина</h2>',
+        'Номер этажа. На листе включите эффект «Глубина N» вместе с «Насыщением»: Глубина растит числа и открывает способности, Насыщение — возвращения и кормления. Лист без эффектов — второй этаж.',
         '<h2>Насыщение</h2>',
         '+1 за каждое возвращение и каждое кормление. Предел — номер этажа + 1. Ниже предела он возвращается через 2 узла Охоты, на пределе — на каждом подходящем узле. Переход на следующий этаж Насыщение не сбрасывает. На листе включите эффект «Насыщение N».',
         '<h2>Свита и местность</h2>',
