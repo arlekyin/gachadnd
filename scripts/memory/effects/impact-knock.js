@@ -11,14 +11,14 @@
 
 // Хронометраж, мс
 // tense — крупный план до взрыва: камера уже там (склейка), ползёт ближе, Сайтама замахивается,
-// цель дрожит; lunge — рывок Сайтамы к цели; burst — разлёт и тряска после взрыва; pop — за сколько
+// цель дрожит; lunge — рывок Сайтамы к цели, взрыв — в момент касания; burst — разлёт и тряска после взрыва; pop — за сколько
 // разлёт выстреливает на полную длину; squash — сжатие и отскок цели от удара;
 // back — возврат камеры: рывком, а не плавно
-const T = { tense: 300, lunge: 50, burst: 190, pop: 45, squash: 150, ghosts: 160, hold: 110, invert: 130, fly: 280, back: 70 };
+const T = { tense: 750, lunge: 150, burst: 190, pop: 45, squash: 220, ghosts: 420, hold: 110, invert: 130, fly: 280, back: 70 };
 // Камера на крупном плане ползёт ещё ближе, доля
 const CREEP = 0.07;
 // Замах Сайтамы назад — доля клетки; дрожь цели — CSS-пиксели
-const WINDUP = 0.35, TREMBLE = 1.6;
+const WINDUP = 0.7, TREMBLE = 1.6;
 // Тряска от взрыва, CSS-пиксели: затухает за время разлёта
 const SHAKE = 34;
 // Наезд: Сайтама и цель занимают такую долю экрана; не больше MAX_ZOOM от текущего
@@ -208,7 +208,7 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
     stage.addChild(layer);
 
     // Расписание
-    const s2 = T.tense, s3 = s2 + T.burst, s4 = s3 + T.hold, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
+    const sl = T.tense, s2 = sl + T.lunge, s3 = s2 + T.burst, s4 = s3 + T.hold, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
     let burstPlayed = false;
     const shake = { x: 0, y: 0 };
 
@@ -244,17 +244,22 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
                 const unit = 1 / stage.scale.x;
                 // Сайтама: замах назад, рывок к цели, после отлёта — обратно на место
                 if (casterCopy) {
-                    const p = t < s2 ? lerp(0, 1, easeOut(Math.min(1, t / (s2 * 0.7)))) : 0;
-                    const pos = t < s2 ? { x: lerp(home.x, windup.x, p), y: lerp(home.y, windup.y, p) }
-                        : t < s2 + T.lunge ? (f => ({ x: lerp(windup.x, contact.x, f), y: lerp(windup.y, contact.y, f) }))(easeOut((t - s2) / T.lunge))
+                    // Замах — за первую половину крупного плана, дальше Сайтама держит его
+                    const p = easeOut(Math.min(1, t / (sl * 0.5)));
+                    const pos = t < sl ? { x: lerp(home.x, windup.x, p), y: lerp(home.y, windup.y, p) }
+                        // Рывок разгоняется к цели: быстрее всего — в момент удара
+                        : t < s2 ? (f => ({ x: lerp(windup.x, contact.x, f), y: lerp(windup.y, contact.y, f) }))(((t - sl) / T.lunge) ** 2)
                         : t < s5 ? contact
                         : (f => ({ x: lerp(contact.x, home.x, f), y: lerp(contact.y, home.y, f) }))(easeOut(Math.min(1, (t - s5) / T.fly)));
                     casterCopy.position.set(pos.x, pos.y);
                 }
-                // Следы рывка вспыхивают с рывком и гаснут
-                for (const { ghost, base } of ghosts) ghost.alpha = t < s2 ? 0 : base * Math.max(0, 1 - (t - s2) / T.ghosts);
-                // Цель: дрожит до взрыва; от удара сжимается вдоль него и отскакивает
-                const tremble = t < s2 ? TREMBLE * unit * (t / s2) : 0;
+                // Следы рывка: каждый остаётся, когда Сайтама его прошёл, и гаснет после удара
+                ghosts.forEach(({ ghost, base }, i) => {
+                    const passed = sl + T.lunge * Math.sqrt((i + 1) / 4);
+                    ghost.alpha = t < passed ? 0 : base * (t < s2 ? 1 : Math.max(0, 1 - (t - s2) / T.ghosts));
+                });
+                // Цель: дрожит до взрыва, сильнее к удару; от удара сжимается вдоль него и отскакивает
+                const tremble = t < s2 ? TREMBLE * unit * Math.min(1, t / sl) : 0;
                 const sq = t < s2 ? 0 : (t - s2) / T.squash;
                 const squash = sq >= 1 ? 0 : sq < 0.25 ? sq / 0.25 : Math.cos((sq - 0.25) / 0.75 * Math.PI * 1.5) * (1 - sq);
                 targetWrap.scale.set(1 - 0.22 * squash, 1 + 0.12 * squash);
