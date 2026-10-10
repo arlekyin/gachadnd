@@ -13,8 +13,8 @@
  * Ингредиенты ритуалов — только кристаллы из инвентаря. Навыки Памяти уже стали частью
  * персонажа: Алтарь их не сжигает — это делает Очистка в Магазине. В Слиянии неэкипированные
  * навыки с повтором появляются в тумане как цели, а не как ингредиенты.
- * Красные и оранжевые кристаллы в ритуалах не участвуют. Повтор, который нельзя слить
- * (уникальный навык или максимальный ранг), в Переплавке считается за два кристалла.
+ * Красные и оранжевые кристаллы в ритуалах не участвуют. Каждый кристалл в Переплавке весит 1,
+ * в том числе повтор навыка, который слить уже нельзя.
  */
 
 import { MODULE_ID } from "./constants.js";
@@ -57,9 +57,7 @@ function ingredients(actor) {
         if (!RITUAL_RARITIES.includes(flags.rarity)) continue;
         if (isCrystalItem(item) && isUsableCrystal(item)) {
             const name = currentSkillName(flags, item.name);
-            const memory = actor.items.find(i => isMemorySkill(i) && currentSkillName(i.flags[MODULE_ID], i.name) === name);
-            // Повтор, который нельзя слить, весит в Переплавке вдвое
-            const weight = memory && !canRankUp(memory) ? 2 : 1;
+            const weight = 1;
             for (let n = 0; n < (item.system?.quantity ?? 1); n++) {
                 list.push({ key: `${item.id}:${n}`, item, kind: 'crystal', rarity: flags.rarity, name, tags: flags.tags ?? [], weight });
             }
@@ -404,7 +402,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#cards = new Map([
             ...fogItems.map(ing => [ing.key, {
                 ...memoryCard(ing.item, ing.kind),
-                note: ing.kind === 'skill' ? 'Навык из Памяти: бросьте в него повторный кристалл' : ing.weight > 1 ? 'Повтор без слияния — в Переплавке весит вдвое' : ''
+                note: ing.kind === 'skill' ? 'Навык из Памяти: бросьте в него повторный кристалл' : ''
             }]),
             ...equipped.map(item => [item.id, memoryCard(item, 'skill')])
         ]);
@@ -415,7 +413,6 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             return {
                 key: ing.key, itemId: ing.item.id, kind: ing.kind, name: ing.name, view, pos,
                 cls: view.cls.join(' '), tap: view.tap ?? '', mergeSkill: view.mergeSkill ?? '',
-                double: ing.weight > 1,
                 style: `${at(pos)}; --rarity: ${RARITY[ing.rarity]?.color ?? '#c9a75d'}; --delay: ${bobPhase(ing.key)}s`
             };
         });
@@ -471,7 +468,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     _onRender(context, options) {
         super._onRender(context, options);
         this.element.style.setProperty('--glow', context.ritual.glow);
-        // Ритуал — классом окна: огоньки не перерисовываются при смене ритуала, а метка «×2» нужна только в Переплавке
+        // Ритуал — классом окна: огоньки не перерисовываются при смене ритуала
         for (const key of Object.keys(RITUALS)) this.element.classList.toggle(`gd-ritual-${key}`, key === context.ritual.key);
         this.#dived = true;
         this.#bindCard();
