@@ -6,7 +6,7 @@
     {{#if isGM}}
     <div class="gd-map-gm">
         <label title="Номер нового этажа. От него зависят цены и награды золотом.">Этаж <input type="number" name="floor" value="{{nextFloor}}" min="1" max="20"></label>
-        <label title="Сколько рядов узлов между Входом и Боссом">Рядов <input type="number" name="length" value="6" min="3" max="15"></label>
+        <label title="Сколько рядов узлов от Входа до Босса. С 6 рядов посередине встаёт Застава.">Рядов <input type="number" name="length" value="11" min="3" max="15"></label>
         <button type="button" data-action="generate"><i class="fas fa-feather-pointed"></i> Начертить этаж</button>
     </div>
     {{/if}}

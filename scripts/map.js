@@ -21,6 +21,9 @@ const MAP_DATA = {
     NODE_SHOP: 'shop',
     NODE_REST: 'rest',
     NODE_DOOM: 'doom',
+    // Застава — средний ряд из одного узла: все пути сходятся на элитном бою, после него отряд получает уровень
+    NODE_OUTPOST: 'outpost',
+    OUTPOST_MIN_ROWS: 5,
     // Узел Погибели появляется не на каждом этаже и не чаще одного раза
     DOOM_CHANCE: 0.5,
     
@@ -37,19 +40,19 @@ const MAP_DATA = {
     LABELS: {
         'start': 'Вход', 'boss': 'Босс', 'mob': 'Монстры', 'elite': 'Элита',
         'event': 'Событие', 'risk': 'Риск', 'shop': 'Магазин', 'rest': 'Привал',
-        'doom': 'Погибель'
+        'doom': 'Погибель', 'outpost': 'Застава'
     },
     
     ICONS: {
         'start': 'fa-dungeon', 'boss': 'fa-skull', 'mob': 'fa-ghost', 'elite': 'fa-dragon',
         'event': 'fa-question', 'risk': 'fa-exclamation-triangle', 'shop': 'fa-coins', 'rest': 'fa-campground',
-        'doom': 'fa-horse-head'
+        'doom': 'fa-horse-head', 'outpost': 'fa-shield-halved'
     },
     
     COLORS: {
         'start': '#7a7062', 'boss': '#ff003c', 'mob': '#8c8275', 'elite': '#ff8000',
         'event': '#0070dd', 'risk': '#a335ee', 'shop': '#ffaa00', 'rest': '#1eff00',
-        'doom': '#e6dcc3'
+        'doom': '#e6dcc3', 'outpost': '#d4a64a'
     }
 };
 
@@ -93,11 +96,13 @@ function buildContentTypes(count) {
 
 function generateMapGraph(length) {
     const contentRows = Math.max(1, length - 1);
-    const widths = Array.from({ length: contentRows }, () => 
+    // Застава — посередине этажа, если рядов хватает (номер ряда от Входа)
+    const outpostRow = contentRows >= MAP_DATA.OUTPOST_MIN_ROWS ? Math.ceil(contentRows / 2) : 0;
+    const widths = Array.from({ length: contentRows }, (_, i) => i + 1 === outpostRow ? 1 :
         Math.floor(Math.random() * (MAP_DATA.MAX_WIDTH - MAP_DATA.MIN_WIDTH + 1)) + MAP_DATA.MIN_WIDTH
     );
     
-    const totalContentNodes = widths.reduce((a, b) => a + b, 0);
+    const totalContentNodes = widths.reduce((a, b) => a + b, 0) - (outpostRow ? 1 : 0);
     const types = buildContentTypes(totalContentNodes);
     
     let rows = [];
@@ -117,7 +122,7 @@ function generateMapGraph(length) {
         let w = widths[r - 1];
         let rowNodes = [];
         for (let c = 0; c < w; c++) {
-            let node = makeNode(r, c, types[typeIndex++]);
+            let node = makeNode(r, c, r === outpostRow ? MAP_DATA.NODE_OUTPOST : types[typeIndex++]);
             rowNodes.push(node);
             nodes.push(node);
         }
@@ -179,7 +184,7 @@ const NODE_HINTS = {
     rest: 'щёлкните ещё раз, чтобы открыть портал в Якорь'
 };
 // Порядок типов в легенде
-const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'boss'];
+const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost', 'boss'];
 
 /* ---------- Набросок от руки ----------
  * Всё «нарисованное» строится из случайных чисел с зерном от самой карты: у всех клиентов и при каждой
@@ -204,8 +209,8 @@ const inkValues = forms => [...forms, forms[0]].join(';');
  * depth — 0 у нижнего края, 1 у верхнего; scale — во сколько раз уменьшены значки, подписи и штрихи */
 const FAR_SCALE = 0.62;
 const depthScale = y => 1 - (1 - FAR_SCALE) * Math.min(1, Math.max(0, (94 - y) / 86));
-function toTrapezoid(x, depth) {
-    const y = 94 - 86 * depth * (1.35 - 0.35 * depth); // ряды сближаются к дальнему краю
+function toTrapezoid(x, depth, squeeze = 0.35) {
+    const y = 94 - 86 * depth * (1 + squeeze - squeeze * depth); // ряды сближаются к дальнему краю; на длинном этаже — слабее
     return { x: 50 + (x - 50) * depthScale(y), y, k: depthScale(y) };
 }
 
@@ -399,7 +404,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         const coords = {};
         rows.forEach((row, r) => {
             const depth = r / Math.max(1, rows.length - 1);
-            row.forEach((node, c) => { coords[node.id] = toTrapezoid(6 + ((c + 0.5) / row.length) * 88, depth); });
+            row.forEach((node, c) => { coords[node.id] = toTrapezoid(6 + ((c + 0.5) / row.length) * 88, depth, rows.length > 8 ? 0.1 : 0.35); });
         });
 
         inkClock = performance.now() / 1000;
@@ -465,7 +470,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
 
     static async #onGenerate() {
         if (!game.user.isGM) return;
-        const length = parseInt(this.element.querySelector('[name="length"]')?.value) || 6;
+        const length = parseInt(this.element.querySelector('[name="length"]')?.value) || 11;
         // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
         const floor = Math.max(1, parseInt(this.element.querySelector('[name="floor"]')?.value) || getFloor());
         await game.settings.set(MODULE_ID, 'runFloor', floor);
