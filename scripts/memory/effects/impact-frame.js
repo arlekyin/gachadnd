@@ -20,11 +20,14 @@
  * сцене, как импакт-кадры Roblox: фильтр сцены делает её контрастной ч/б и рассекает по линии
  * шаблона навыка (половины разъезжаются вдоль неё), токены удара — силуэты с обводкой, камера
  * делает рывок к точке удара; поверх — разрез и полосы от него. Второй кадр — инверсия.
+ * fists — пять кулаков Сайтамы (impact-fists.js): кадр идёт после любого применённого урона
+ * взведённого навыка, а не только решающего.
  * Значки состояний токенов (череп, кровотечение) в снимок сцены не попадают.
  */
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
+import { playFists } from "./impact-fists.js";
 
 // Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс),
 // хитстоп тяжёлого удара в играх — 50–100 мс: первый кадр — 2 кадра анимации, второй — 2
@@ -143,10 +146,11 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
     if (!(amount > 0)) return;
     const source = armedSource();
     if (!source) return;
-    const hp = actor.system.attributes?.hp;
-    if (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2)) return;
-    armed.delete(source[0]);
     const { art, style, tokenId: casterId, line } = source[1];
+    const hp = actor.system.attributes?.hp;
+    // Кулаки — сам удар Сайтамы: кадр после любого урона; остальные — только после решающего
+    if (style !== 'fists' && (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2))) return;
+    armed.delete(source[0]);
     const point = tokenPoint(actor);
     const data = {
         art, style, sceneId: canvas?.scene?.id ?? null, point, disarm: source[0], tokens: [casterId, tokenId(actor)].filter(Boolean),
@@ -793,6 +797,38 @@ function synthExplosion(volume) {
     noise.start(t);
 }
 
+// Удар кулака: короткий низкий хлопок и щелчок шума
+function synthPunch(volume) {
+    audio ??= new AudioContext();
+    if (audio.state === 'suspended') audio.resume();
+    const t = audio.currentTime;
+    const out = audio.createGain();
+    out.gain.value = volume;
+    out.connect(audio.destination);
+    const thump = audio.createOscillator();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(170, t);
+    thump.frequency.exponentialRampToValueAtTime(45, t + 0.14);
+    const thumpGain = audio.createGain();
+    thumpGain.gain.setValueAtTime(1.4, t);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    thump.connect(thumpGain).connect(out);
+    thump.start(t); thump.stop(t + 0.22);
+    const length = Math.round(audio.sampleRate * 0.06);
+    const buffer = audio.createBuffer(1, length, audio.sampleRate);
+    const ch = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 2;
+    const noise = audio.createBufferSource();
+    noise.buffer = buffer;
+    const filter = audio.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1800;
+    const noiseGain = audio.createGain();
+    noiseGain.gain.value = 0.9;
+    noise.connect(filter).connect(noiseGain).connect(out);
+    noise.start(t);
+}
+
 function playSound() {
     if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
     const volume = game.settings.get(MODULE_ID, 'soundsVolume');
@@ -813,6 +849,23 @@ let playing = false;
 export async function playImpact({ art, style = null, sceneId, point, tokens, line = null }) {
     if (playing || !game.settings.get(MODULE_ID, 'impactFrames')) return;
     playing = true;
+    if (style === 'fists') {
+        const calm = game.settings.get(MODULE_ID, 'impactCalm');
+        const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+        // Удары — синтез; последний — тот же взрыв, что у остальных кадров (или звук из настроек)
+        const onHit = final => {
+            if (final) return playSound();
+            if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
+            try { synthPunch(game.settings.get(MODULE_ID, 'soundsVolume')); } catch (error) { console.warn(`${MODULE_ID} | звук удара`, error); }
+        };
+        try {
+            await playFists({ calm, slow, onHit });
+        } catch (error) {
+            console.error(`${MODULE_ID} | импакт-кадр`, error);
+        }
+        playing = false;
+        return;
+    }
     // Разрез — в самой сцене; без сцены кадр собирается по-старому
     if (style === 'slash' && line) {
         try {
