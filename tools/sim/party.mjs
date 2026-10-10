@@ -3,13 +3,17 @@
  *
  * Из экспорта берутся числа, которые лежат в данных листа: характеристики, уровни классов, доспехи,
  * оружие, заклинания с ячейками, навыки Памяти (экипированные) и кристаллы в инвентаре. Активные эффекты,
- * синергии и бонусы предметов, которые dnd5e считает при загрузке мира, в экспорте не видны — их можно
- * вписать в overrides.json (КД, ПЗ, бонус к попаданию и урону).
+ * Учитываются и навыки Памяти, и синергии: включённые активные эффекты актёра и экипированных предметов
+ * (КД, характеристики, бонусы к атаке и урону, Сл, сопротивления), способности синергий с уроном и
+ * автоматические срабатывания (доп. урон, реакции на урон, плата за преимущество, Кровавый пакт).
+ * Навыки без чисел (контроль, перемещение, утилиты) в бою не участвуют — отчёт их перечисляет.
+ * Чего не видно в экспорте, можно вписать в overrides.json (КД, ПЗ, бонус к попаданию и урону).
  */
 
 import fs from 'fs';
 import path from 'path';
 import { average } from './dice.mjs';
+import { SYNERGIES } from '../../scripts/memory/synergy/synergy-tiers.js';
 
 const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const SCENT_WEIGHT = { gray: 1, green: 1, blue: 2, purple: 3, red: 5, orange: 5 };
@@ -77,18 +81,89 @@ function armorClass(actor, mods, data) {
     return Math.round(base + shieldBonus + (Number(average(ac.bonus || '0', data)) || 0));
 }
 
+const isSkill = item => item.type === 'feat' && !!item.flags?.gachadnd?.skill_name && !item.flags.gachadnd.is_crystal_item && !item.flags.gachadnd.is_synergy_item;
+
+// Включённые эффекты: актёра (синергии, перегрузка) и экипированных предметов (навыки Памяти, доспехи)
+function activeEffects(actor) {
+    const list = [...(actor.effects ?? [])];
+    for (const item of actor.items) {
+        const flags = item.flags?.gachadnd ?? {};
+        if (flags.is_crystal_item) continue;
+        if (isSkill(item) && !flags.is_active) continue;
+        if (['weapon', 'equipment'].includes(item.type) && item.system?.equipped === false) continue;
+        for (const effect of item.effects ?? []) if (effect.transfer !== false) list.push({ ...effect, source: item.name });
+    }
+    return list.filter(e => !e.disabled);
+}
+
+/**
+ * Изменения эффектов, которые влияют на бой. Значения — формулы dnd5e, поэтому складываются строками.
+ * @returns {{ abilities: object, numbers: object, formulas: object, resist: Set, vulnerable: Set, used: string[] }}
+ */
+function readEffects(effects) {
+    const out = { abilities: {}, numbers: {}, formulas: {}, resist: new Set(), vulnerable: new Set(), used: new Set() };
+    const FORMULA = /^system\.bonuses\.(mwak|rwak|msak|rsak)\.(attack|damage)$|^system\.bonuses\.(spell\.dc|abilities\.save)$|^system\.attributes\.(ac\.bonus|hp\.bonuses\.overall|hp\.bonuses\.level|hp\.max)$/;
+    for (const effect of effects) {
+        for (const change of effect.changes ?? []) {
+            const key = String(change.key ?? '');
+            const value = String(change.value ?? '');
+            const ability = key.match(/^system\.abilities\.(\w+)\.value$/);
+            if (ability) {
+                out.abilities[ability[1]] = (out.abilities[ability[1]] ?? 0) + (Number(change.mode) === 5 ? 0 : Number(value) || 0);
+                out.used.add(effect.name);
+            } else if (FORMULA.test(key)) {
+                const name = key.replace(/^system\./, '');
+                out.formulas[name] = `${out.formulas[name] ?? '0'} + (${value.replace(/^\+/, '') || 0})`;
+                out.used.add(effect.name);
+            } else if (key === 'system.traits.dr.value') { value.split(/[;,]/).forEach(t => t && out.resist.add(t.trim())); out.used.add(effect.name); }
+            else if (key === 'system.traits.dv.value') { value.split(/[;,]/).forEach(t => t && out.vulnerable.add(t.trim())); out.used.add(effect.name); }
+        }
+    }
+    return out;
+}
+
+// Срабатывания: пороги синергий по счётчикам тегов и экипированные навыки с trigger
+function readTriggers(actor, data) {
+    const counts = actor.flags?.gachadnd?.counts ?? {};
+    const features = actor.items.filter(i => i.flags?.gachadnd?.is_synergy_item);
+    const usesOf = item => Math.max(0, Math.floor(Number(average(item?.system?.uses?.max || '0', data)) || 0)) || null;
+    const triggers = [];
+    for (const syn of SYNERGIES) {
+        syn.tiers.forEach((tier, i) => {
+            if (!tier.trigger || (counts[syn.key] ?? 0) < tier.count) return;
+            const label = syn.tag.charAt(0).toUpperCase() + syn.tag.slice(1);
+            const name = `${label} ${['I', 'II', 'III', 'IV'][i]}: ${tier.name}`;
+            triggers.push({ name, trigger: tier.trigger, uses: usesOf(features.find(f => f.name === name)) });
+        });
+    }
+    for (const item of actor.items.filter(i => isSkill(i) && i.flags.gachadnd.is_active && i.flags.gachadnd.trigger)) {
+        const activity = activitiesOf(item)[0];
+        triggers.push({
+            name: item.name, trigger: item.flags.gachadnd.trigger, uses: usesOf(item),
+            fromDamage: activity?.damage?.parts?.[0] ? { formula: partFormula(activity.damage.parts[0]), type: partType(activity.damage.parts[0]) } : null,
+            fromRoll: activity?.roll?.formula ?? null
+        });
+    }
+    return triggers;
+}
+
 /** Персонаж из экспорта Foundry → модель для боя */
 export function loadActor(actor, overrides = {}) {
     const classes = actor.items.filter(i => i.type === 'class');
     const level = classes.reduce((sum, c) => sum + (Number(c.system.levels) || 0), 0) || Number(actor.system.details?.level) || 1;
     const prof = profBonus(level);
-    const mods = Object.fromEntries(ABILITIES.map(a => [a, mod(actor.system.abilities?.[a]?.value)]));
+    const effects = readEffects(activeEffects(actor));
+    const scores = Object.fromEntries(ABILITIES.map(a => [a, (Number(actor.system.abilities?.[a]?.value) || 10) + (effects.abilities[a] ?? 0)]));
+    const mods = Object.fromEntries(ABILITIES.map(a => [a, mod(scores[a])]));
     const data = {
-        prof, details: { level }, attributes: { prof },
-        abilities: Object.fromEntries(ABILITIES.map(a => [a, { mod: mods[a], value: actor.system.abilities?.[a]?.value ?? 10 }])),
+        prof, details: { level }, attributes: { prof }, flags: actor.flags ?? {},
+        abilities: Object.fromEntries(ABILITIES.map(a => [a, { mod: mods[a], value: scores[a] }])),
         classes: Object.fromEntries(classes.map(c => [classKey(c), { levels: c.system.levels }]))
     };
-    const saves = Object.fromEntries(ABILITIES.map(a => [a, mods[a] + (actor.system.abilities?.[a]?.proficient ? prof : 0)]));
+    const bonus = name => effects.formulas[name] ?? '0';
+    const flat = name => Math.round(Number(average(bonus(name), data)) || 0);
+    const saveBonus = flat('bonuses.abilities.save');
+    const saves = Object.fromEntries(ABILITIES.map(a => [a, mods[a] + (actor.system.abilities?.[a]?.proficient ? prof : 0) + saveBonus]));
     const classLevel = key => classes.filter(c => classKey(c).includes(key)).reduce((s, c) => s + (c.system.levels ?? 0), 0);
     const attacksPerAction = Math.max(1, ...Object.entries(EXTRA_ATTACK).map(([key, steps]) => {
         const l = classLevel(key);
@@ -103,7 +178,7 @@ export function loadActor(actor, overrides = {}) {
 
     const options = [];
     const heals = [];
-    const addActivity = (item, activity, { kind, resource, toHit, abilityMod, dc, cantrip = false, attacks = 1, sneak = false }) => {
+    const addActivity = (item, activity, { kind, resource, toHit, abilityMod, dc, cantrip = false, attacks = 1, sneak = false, attackKind = null }) => {
         const scale = formula => cantrip && formula ? `(${formula}) * ${cantripTier}` : formula;
         const parts = (activity.damage?.parts ?? []).map(p => ({ formula: scale(partFormula(p)), type: partType(p) })).filter(p => p.formula);
         if (activity.type === 'heal') {
@@ -120,6 +195,10 @@ export function loadActor(actor, overrides = {}) {
         }
         if (!parts.length) return;
         parts.forEach(p => { p.formula = `${p.formula} + ${extra.damage}`; });
+        // Бонусы эффектов к атаке и урону: оружие — mwak/rwak, заклинания с атакой — msak/rsak
+        const kindKey = activity.type === 'attack' ? attackKind : null;
+        if (kindKey && parts[0]) parts[0].formula = `${parts[0].formula} + ${bonus(`bonuses.${kindKey}.damage`)}`;
+        if (kindKey) toHit = (toHit ?? 0) + flat(`bonuses.${kindKey}.attack`);
         const type = activity.type === 'attack' ? 'attack' : activity.type === 'save' ? 'save' : 'auto';
         options.push({
             name: activity.name && activity.name !== item.name ? `${item.name}: ${activity.name}` : item.name,
@@ -139,7 +218,7 @@ export function loadActor(actor, overrides = {}) {
                 const ability = activity.attack?.ability || (finesse ? (mods.dex > mods.str ? 'dex' : 'str') : ranged ? 'dex' : 'str');
                 const abilityMod = mods[ability] ?? 0;
                 const toHit = abilityMod + (item.system.proficient === 0 ? 0 : prof) + (Number(item.system.magicalBonus) || 0) + (Number(average(activity.attack?.bonus || '0', data)) || 0);
-                addActivity(item, activity, { kind: 'weapon', toHit, abilityMod, attacks: attacksPerAction, sneak: rogue > 0 && (finesse || ranged) });
+                addActivity(item, activity, { kind: 'weapon', toHit, abilityMod, attacks: attacksPerAction, sneak: rogue > 0 && (finesse || ranged), attackKind: ranged ? 'rwak' : 'mwak' });
             }
         } else if (item.type === 'spell') {
             const prep = item.system.preparation ?? {};
@@ -149,19 +228,20 @@ export function loadActor(actor, overrides = {}) {
             for (const activity of activitiesOf(item)) {
                 addActivity(item, activity, {
                     kind: 'spell', resource, cantrip: level === 0, abilityMod: spellMod,
-                    toHit: spellMod + prof, dc: 8 + prof + spellMod
+                    toHit: spellMod + prof, dc: 8 + prof + spellMod + flat('bonuses.spell.dc'),
+                    attackKind: Number(activity.range?.value) > 5 || activity.range?.units === 'ft' && Number(activity.range?.value) > 5 ? 'rsak' : 'msak'
                 });
             }
-        } else if (item.type === 'feat' && (flags.is_active || (!flags.skill_name && Number(average(item.system.uses?.max || '0', data)) > 0))) {
-            // Навыки Памяти — только экипированные; особенности класса — с зарядами
-            if (flags.is_crystal_item || flags.is_synergy_item) continue;
+        } else if (item.type === 'feat' && (flags.is_active || flags.is_synergy_item || (!flags.skill_name && Number(average(item.system.uses?.max || '0', data)) > 0))) {
+            // Навыки Памяти — только экипированные; способности синергий; особенности класса — с зарядами
+            if (flags.is_crystal_item) continue;
             const uses = Math.max(0, Math.floor(Number(average(item.system.uses?.max || '0', data)) || 0));
             const resource = uses ? { uses: item.name, max: uses } : null;
             for (const activity of activitiesOf(item)) {
                 const ability = activity.attack?.ability || activity.save?.dc?.calculation || spellAbility;
                 const abilityMod = mods[ability] ?? spellMod;
                 const dcFormula = activity.save?.dc?.formula;
-                const dc = dcFormula ? Math.round(average(dcFormula.replace(/@flags\.gachadnd\.dc_bonus/g, '0'), data)) : 8 + prof + Math.max(mods.str, mods.dex, mods.con, mods.int, mods.wis, mods.cha);
+                const dc = dcFormula ? Math.round(average(dcFormula, data)) : 8 + prof + Math.max(mods.str, mods.dex, mods.con, mods.int, mods.wis, mods.cha) + (Number(data.flags.gachadnd?.dc_bonus) || 0);
                 addActivity(item, activity, { kind: 'feat', resource, toHit: abilityMod + prof, abilityMod, dc });
             }
         }
@@ -185,10 +265,19 @@ export function loadActor(actor, overrides = {}) {
         .filter(i => i.flags?.gachadnd?.is_crystal_item || /^Кристалл:/.test(i.name))
         .flatMap(i => Array(Math.max(1, Number(i.system?.quantity) || 1)).fill(SCENT_WEIGHT[i.flags?.gachadnd?.rarity] ?? 1));
 
+    // Навыки Памяти без чисел для боя: в прогоне не участвуют, отчёт их называет
+    const withNumbers = new Set([...options, ...heals].map(o => o.name.split(':')[0]));
+    const triggers = readTriggers(actor, data);
+    const silent = actor.items.filter(i => isSkill(i) && i.flags.gachadnd.is_active)
+        .map(i => i.name).filter(n => !withNumbers.has(n) && !triggers.some(t => t.name === n) && !effects.used.has(n));
+    const hpEffects = flat('attributes.hp.bonuses.overall') + flat('attributes.hp.bonuses.level') * level + flat('attributes.hp.max');
+
     return {
-        name: actor.name, level, prof, mods, saves,
-        ac: Number(overrides.ac) || armorClass(actor, mods, data),
-        hp: Number(overrides.hp) || hitPoints(actor, level, mods.con),
+        name: actor.name, level, prof, mods, saves, triggers, silent,
+        effectsUsed: [...effects.used], resist: [...effects.resist], vulnerable: [...effects.vulnerable],
+        universalDc: 8 + prof + Math.max(...Object.values(mods)) + (Number(data.flags.gachadnd?.dc_bonus) || 0), data,
+        ac: Number(overrides.ac) || armorClass(actor, mods, data) + flat('attributes.ac.bonus'),
+        hp: Number(overrides.hp) || hitPoints(actor, level, mods.con) + hpEffects,
         init: mods.dex, options, heals, slots, crystals,
         sneak: rogue ? `${Math.ceil(rogue / 2)}d6` : null
     };

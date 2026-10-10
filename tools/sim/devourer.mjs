@@ -82,6 +82,8 @@ class Fight {
         this.p = profile;
         this.pcs = party.map(pc => ({
             ...pc, maxHp: pc.hp, hp: pc.hp, crystals: [...pc.crystals], slots: { ...pc.slots }, uses: {},
+            triggers: pc.triggers ?? [], resist: new Set(pc.resist ?? []), vulnerable: new Set(pc.vulnerable ?? []),
+            triggerUses: {}, reaction: true, advantage: false,
             frightened: false, lostTurn: false, disadvantage: false
         }));
         const dv = this.dv = {
@@ -156,14 +158,89 @@ class Fight {
     }
 
     // ---------- Урон по персонажу ----------
-    hurtPc(pc, amount) {
+    hurtPc(pc, amount, type = null) {
         if (pc.hp <= 0 || amount <= 0) return;
+        if (type && pc.resist.has(type)) amount = Math.floor(amount / 2);
+        if (type && pc.vulnerable.has(type)) amount *= 2;
+        // Реакция на урон (Кровавый щит, Уно-реверс): одна за раунд, тратит заряд
+        const reaction = pc.reaction && this.#ready(pc, 'damaged').find(t => t.trigger.reduce);
+        if (reaction) {
+            pc.reaction = false;
+            this.#spendTrigger(pc, reaction);
+            const { reduce } = reaction.trigger;
+            const back = reduce.half ? Math.floor(amount / 2) : Math.min(amount, Math.round(rollFormula(reduce.formula ?? reaction.fromRoll ?? '0', pc.data ?? {}, { rng: this.rng })));
+            amount -= back;
+            if (reduce.half) this.hurtDevourer(back, type ?? 'force');
+            this.say(`${pc.name}: ${reaction.name} — урон меньше на ${back}`);
+        }
         pc.hp -= amount;
         this.stats.devourerDamage += amount;
-        if (pc.hp <= 0) {
-            pc.hp = 0;
-            this.stats.downs += 1;
-            this.say(`${pc.name} падает`);
+        if (pc.hp > 0) return;
+        // Кровавый пакт: вместо 0 ПЗ — 1 ПЗ и лечение, враги рядом получают столько же
+        const pact = this.#ready(pc, 'zero_hp')[0];
+        if (pact) {
+            this.#spendTrigger(pc, pact);
+            const healed = Math.round(rollFormula(pact.trigger.revive.formula, pc.data ?? {}, { rng: this.rng }));
+            pc.hp = Math.min(pc.maxHp, 1 + healed);
+            const burst = pact.trigger.burst;
+            if (burst) {
+                const saved = rollD20(0, this.rng) + (this.p.saves[burst.save] ?? 0) >= pc.universalDc;
+                this.hurtDevourer(saved ? Math.floor(healed / 2) : healed, burst.type);
+            }
+            this.say(`${pc.name}: ${pact.name} — остаётся с ${pc.hp} ПЗ`);
+            return;
+        }
+        pc.hp = 0;
+        this.stats.downs += 1;
+        this.say(`${pc.name} падает`);
+    }
+
+    // ---------- Срабатывания навыков и синергий ----------
+    #ready(pc, on) {
+        return pc.triggers.filter(t => t.trigger.on === on && (t.uses === null || (pc.triggerUses[t.name] ?? t.uses) > 0));
+    }
+
+    #spendTrigger(pc, t) {
+        if (t.uses !== null) pc.triggerUses[t.name] = (pc.triggerUses[t.name] ?? t.uses) - 1;
+    }
+
+    #condition(pc, when, option) {
+        const dv = this.dv;
+        return {
+            self_wounded: pc.hp < pc.maxHp, self_bloodied: pc.hp <= pc.maxHp / 2,
+            target_bloodied: dv.hp <= dv.max / 2, hostile_target: true,
+            target_anomaly: true, attack_only: option?.type === 'attack'
+        }[when] ?? false;
+    }
+
+    // Доп. урон и лечение после урона: по умолчанию 1 раз в ход
+    #onDamageDealt(pc, option) {
+        for (const t of this.#ready(pc, 'damage_roll')) {
+            const { when = [], once = 'turn', bonus, heal_self } = t.trigger;
+            if (once !== 'none' && pc.turnFired?.has(t.name)) continue;
+            if (!when.every(w => this.#condition(pc, w, option))) continue;
+            pc.turnFired ??= new Set();
+            pc.turnFired.add(t.name);
+            this.#spendTrigger(pc, t);
+            if (bonus) {
+                const formula = bonus.from === 'damage' ? t.fromDamage?.formula : bonus.from === 'roll' ? t.fromRoll : bonus.formula;
+                const type = bonus.from === 'damage' ? t.fromDamage?.type : bonus.type;
+                if (!formula) continue;
+                const twice = bonus.double_when && this.#condition(pc, bonus.double_when, option) ? 2 : 1;
+                const dealt = this.hurtDevourer(Math.round(rollFormula(formula, pc.data ?? {}, { rng: this.rng })) * twice, type ?? 'force');
+                this.say(`${pc.name}: ${t.name} +${dealt}`);
+            }
+            if (heal_self) pc.hp = Math.min(pc.maxHp, pc.hp + Math.round(rollFormula(heal_self.formula, pc.data ?? {}, { rng: this.rng })));
+        }
+    }
+
+    // Начало хода и боя: плата уроном за преимущество (Проклятье I)
+    #onTurnStart(pc, on) {
+        for (const t of this.#ready(pc, on)) {
+            const { pay, advantage } = t.trigger;
+            if (!pay || pc.hp <= pc.maxHp / 2) continue;
+            pc.hp = Math.max(1, pc.hp - Math.round(rollFormula(pay.formula, pc.data ?? {}, { rng: this.rng })));
+            if (advantage === 'attacks') pc.advantage = true;
         }
     }
 
@@ -177,6 +254,7 @@ class Fight {
         this.#setFloor();
         dv.reaction = true;
         dv.warudo = false;
+        for (const pc of this.pcs) pc.reaction = true;
         if (sum(dv.belly) >= p.bellyLimit) return 'left';
         const targets = alive(this.pcs);
         if (!targets.length) return null;
@@ -190,11 +268,11 @@ class Fight {
         let usedAction = false;
         const rank = p.rank;
         const save = (pc, ability) => this.pcSave(pc, ability);
-        const area = (count, formula, ability, label) => {
+        const area = (count, formula, ability, label, type) => {
             const hit = alive(this.pcs).sort(() => rng() - 0.5).slice(0, count);
             for (const pc of hit) {
                 const dmg = rollFormula(formula, {}, { rng });
-                this.hurtPc(pc, save(pc, ability) ? Math.floor(dmg / 2) : dmg);
+                this.hurtPc(pc, save(pc, ability) ? Math.floor(dmg / 2) : dmg, type);
             }
             this.say(`Память ${face}: ${label} по ${hit.map(x => x.name).join(', ')}`);
             usedAction = true;
@@ -204,13 +282,13 @@ class Fight {
             case 1: dv.temp = Math.max(dv.temp, 5 + rank * DEVOURER.prof); this.say(`Память 1: Квен, ${dv.temp} временных ПЗ`); break;
             case 2: { const t = scent(); if (!save(t, 'str')) { advantageAll = true; this.say(`Память 2: Удалой рывок, ${t.name} сбит с ног`); } break; }
             case 3: { const t = strongest(); if (!save(t, 'wis')) { t.frightened = true; this.say(`Память 3: Хайзенберг, ${t.name} испуган`); } break; }
-            case 4: if (this.#multiattackValue() < 2 * average(rank >= 2 ? '3d6' : '2d6')) area(rank >= 3 ? 3 : 2, rank >= 2 ? '3d6' : '2d6', 'dex', 'Игни'); break;
+            case 4: if (this.#multiattackValue() < 2 * average(rank >= 2 ? '3d6' : '2d6')) area(rank >= 3 ? 3 : 2, rank >= 2 ? '3d6' : '2d6', 'dex', 'Игни', 'fire'); break;
             case 5: { const t = strongest(); if (!save(t, 'wis')) { t.disadvantage = true; this.say(`Память 5: Нейрализатор, ${t.name} с помехой`); } usedAction = true; break; }
-            case 6: area(2, `${DEVOURER.prof + 1}d8`, 'str', 'Фус-Ро-Да'); break;
-            case 7: area(3, '8d6', 'dex', 'Мегумин'); break;
+            case 6: area(2, `${DEVOURER.prof + 1}d8`, 'str', 'Фус-Ро-Да', 'thunder'); break;
+            case 7: area(3, '8d6', 'dex', 'Мегумин', 'fire'); break;
             case 8: { const t = strongest(); if (!save(t, 'wis')) { t.lostTurn = true; this.say(`Память 8: Кукловод, ${t.name} теряет ход`); } usedAction = true; break; }
             case 9: dv.warudo = true; this.say('Память 9: ЗА ВАРУДО наготове'); break;
-            case 10: area(2, '10d10', 'dex', 'Ещё один потомок Вергилия'); break;
+            case 10: area(2, '10d10', 'dex', 'Ещё один потомок Вергилия', 'force'); break;
         }
         if (!usedAction) this.#multiattack(scent, advantageAll);
         this.#scrapsTurn();
@@ -238,7 +316,7 @@ class Fight {
         if (roll !== 20 && (roll === 1 || roll + p.hit < target.ac)) return false;
         const [n, die] = weapon;
         const dmg = rollFormula(`${n}d${die}`, {}, { rng: this.rng, crit: roll === 20 }) + p.damage;
-        this.hurtPc(target, dmg);
+        this.hurtPc(target, dmg, weapon[2]);
         return true;
     }
 
@@ -276,7 +354,7 @@ class Fight {
             // Кристаллы гудят: носители веса 3+ — спасбросок Мудрости, 3к6 психической энергией
             for (const pc of alive(this.pcs).filter(pc => carried(pc) >= 3)) {
                 const dmg = rollFormula('3d6', {}, { rng: this.rng });
-                this.hurtPc(pc, this.pcSave(pc, 'wis') ? Math.floor(dmg / 2) : dmg);
+                this.hurtPc(pc, this.pcSave(pc, 'wis') ? Math.floor(dmg / 2) : dmg, 'psychic');
             }
             this.say('Логово: Кристаллы гудят');
         }
@@ -300,7 +378,7 @@ class Fight {
                 }
             } else {
                 const victim = pick(alive(this.pcs), this.rng);
-                if (victim && rollD20(0, this.rng) + 4 >= victim.ac) this.hurtPc(victim, rollFormula('1d6', {}, { rng: this.rng }) + 2);
+                if (victim && rollD20(0, this.rng) + 4 >= victim.ac) this.hurtPc(victim, rollFormula('1d6', {}, { rng: this.rng }) + 2, 'piercing');
             }
         }
     }
@@ -330,7 +408,7 @@ class Fight {
     // Средний урон варианта по Пожирателю с учётом КД, спасбросков и адаптаций
     #expected(pc, o) {
         const dmg = sum(o.parts.map(part => average(part.formula, o.data) * this.#multiplier(part.type)));
-        const edge = pc.disadvantage || pc.frightened ? -1 : 0;
+        const edge = (pc.advantage ? 1 : 0) - (pc.disadvantage || pc.frightened ? 1 : 0);
         if (o.type === 'attack') {
             const p = hitChance(o.toHit, this.p.ac, edge);
             return (dmg * p + (pc.sneak && o.sneak ? average(pc.sneak) * p : 0)) * (o.attacks ?? 1);
@@ -352,7 +430,9 @@ class Fight {
         this.#spend(pc, o);
         const before = this.dv.hp + this.dv.temp;
         this.#apply(pc, o);
-        if (this.log) this.say(`${pc.name}: ${o.name} — ${before - this.dv.hp - this.dv.temp} урона`);
+        const dealt = before - this.dv.hp - this.dv.temp;
+        if (this.log) this.say(`${pc.name}: ${o.name} — ${dealt} урона`);
+        if (dealt > 0 && this.dv.hp > 0) this.#onDamageDealt(pc, o);
     }
 
     #apply(pc, o) {
@@ -363,7 +443,7 @@ class Fight {
             this.say(`ЗА ВАРУДО: ${o.name} ${pc.name} уходит в пустоту`);
             return;
         }
-        const edge = pc.disadvantage || pc.frightened ? -1 : 0;
+        const edge = (pc.advantage ? 1 : 0) - (pc.disadvantage || pc.frightened ? 1 : 0);
         let sneakUsed = false;
         for (let i = 0; i < (o.attacks ?? 1); i++) {
             if (this.dv.hp <= 0) return;
@@ -397,7 +477,10 @@ class Fight {
 
     pcTurn(pc) {
         if (pc.hp <= 0) return;
+        pc.turnFired = new Set();
         if (pc.lostTurn) { pc.lostTurn = false; return; }
+        if (this.stats.round === 1) this.#onTurnStart(pc, 'combat_start');
+        this.#onTurnStart(pc, 'turn_start');
         // Лечение лежащего союзника важнее урона
         const down = this.pcs.find(x => x.hp <= 0);
         const heal = down && pc.heals.find(h => !h.resource || this.#available(pc, { resource: h.resource }));
@@ -431,6 +514,7 @@ class Fight {
     #endTurn(pc) {
         pc.disadvantage = false;
         pc.frightened = false;
+        pc.advantage = false;
     }
 
     // ---------- Раунды ----------
@@ -497,6 +581,10 @@ function describeParty(party) {
         const slots = Object.entries(pc.slots).map(([l, n]) => `${l}:${n}`).join(' ');
         lines.push(`  ${pc.name} — ур. ${pc.level}, КД ${pc.ac}, ПЗ ${pc.hp}, кристаллы ${sum(pc.crystals)} (вес)${slots ? `, ячейки ${slots}` : ''}${pc.sneak ? `, скрытая атака ${pc.sneak}` : ''}`);
         lines.push(`    варианты: ${options.join('; ') || '—'}${pc.options.length > 4 ? ` и ещё ${pc.options.length - 4}` : ''}`);
+        if (pc.effectsUsed?.length) lines.push(`    эффекты: ${pc.effectsUsed.join(', ')}`);
+        if (pc.resist?.length) lines.push(`    сопротивления: ${pc.resist.join(', ')}`);
+        if (pc.triggers?.length) lines.push(`    срабатывания: ${pc.triggers.map(t => `${t.name} (${t.trigger.on})`).join(', ')}`);
+        if (pc.silent?.length) lines.push(`    не учтены (нет чисел для боя): ${pc.silent.join(', ')}`);
     }
     return lines.join('\n');
 }
