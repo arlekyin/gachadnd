@@ -7,8 +7,6 @@ import { onNodeEntered } from "./horsemen.js";
 import { DoomAltar } from "./altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
-import { announceRest } from "./memory-altar.js";
-import { HOOKS, notifyRestChanged } from "./memory-api.js";
 import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 
@@ -165,13 +163,6 @@ export function isPartyAtRest(scene = canvas.scene) {
     return node?.type === 'rest';
 }
 
-// Подключение к Памяти: отряд на узле Привала — Привал открыт
-Hooks.on(HOOKS.queryRest, state => {
-    if (isPartyAtRest()) Object.assign(state, { atRest: true, site: 'rest', label: 'Привал' });
-});
-Hooks.on('updateScene', (scene, changes) => {
-    if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) notifyRestChanged();
-});
 
 // ==========================================
 // ОКНО КАРТЫ
@@ -509,7 +500,6 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         await leaveAnchor();
         await onNodeEntered(nodeData.type);
         openNodeWindow(nodeData.type);
-        if (nodeData.type === MAP_DATA.NODE_REST) announceRest();
 
         const label = MAP_DATA.LABELS[nodeData.type] ?? nodeData.label;
         await ChatMessage.create({
