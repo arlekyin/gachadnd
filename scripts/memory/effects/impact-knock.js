@@ -9,7 +9,11 @@
  */
 
 // Хронометраж, мс
-const T = { zoom: 320, gray: 140, burst: 190, hold: 110, invert: 130, fly: 280, back: 260 };
+// burst — разлёт и тряска после взрыва; pop — за сколько разлёт выстреливает на полную длину;
+// back — возврат камеры: рывком, а не плавно
+const T = { zoom: 320, gray: 140, burst: 190, pop: 45, hold: 110, invert: 130, fly: 280, back: 70 };
+// Тряска от взрыва, CSS-пиксели: затухает за время разлёта
+const SHAKE = 34;
 // Наезд: Сайтама и цель занимают такую долю экрана; не больше MAX_ZOOM от текущего
 const FILL = 0.75, MAX_ZOOM = 3;
 
@@ -187,19 +191,23 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
                 const t = (now - t0) / slow;
                 if (t >= end || !canvas.ready) return finish();
                 // Камера: наезд, держится, после отлёта — обратно
-                const k = t < s1 ? easeInOut(t / s1) : t < s6 ? 1 : 1 - easeInOut((t - s6) / T.back);
+                const k = t < s1 ? easeInOut(t / s1) : t < s6 ? 1 : 1 - easeOut((t - s6) / T.back);
                 if (t >= s2 && !burstPlayed) {
                     burstPlayed = true;
                     onBurst();
-                    const p = 14 / scale;
-                    shake.x = (Math.random() - 0.5) * p * scale; shake.y = (Math.random() - 0.5) * p * scale;
+                    const angle = Math.random() * Math.PI * 2;
+                    shake.x = Math.cos(angle) * SHAKE; shake.y = Math.sin(angle) * SHAKE;
                 }
                 const shaking = t >= s2 && t < s3;
-                camera(k, shaking ? shake.x * (1 - (t - s2) / T.burst) : 0, shaking ? shake.y * (1 - (t - s2) / T.burst) : 0);
+                // Тряска: камеру бросает туда-обратно, размах быстро гаснет
+                const jolt = shaking ? (1 - (t - s2) / T.burst) ** 2 * Math.cos((t - s2) / 18 * Math.PI) : 0;
+                camera(k, shake.x * jolt, shake.y * jolt);
                 // Затемнение: при наезде — наполовину, со взрывом — полностью, при отлёте уходит
                 dark.alpha = t < s2 ? 0.55 * Math.min(1, t / s1) : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
                 // Взрыв растёт из-за цели и гаснет вместе с затемнением
-                burst.scale.set(t < s2 ? 0 : easeOut(Math.min(1, (t - s2) / T.burst)));
+                // Разлёт выстреливает за T.pop с перелётом и отскакивает к полной длине
+                const pop = (t - s2) / T.pop;
+                burst.scale.set(t < s2 ? 0 : pop < 1 ? 0.35 + 0.85 * easeOut(pop) : 1 + 0.2 * Math.max(0, 1 - (pop - 1) / 2));
                 burst.alpha = t < s5 ? 1 : Math.max(0, 1 - (t - s5) / (T.fly * 0.6));
                 layer.filters = !calm && t >= s4 && t < s5 ? [invert] : null;
                 // Отлёт: копия цели летит, настоящий токен на старом месте скрыт
