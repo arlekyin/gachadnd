@@ -1,0 +1,41 @@
+<div class="gd-portal">
+    <div class="gd-portal-rift">
+        <div class="gd-portal-vortex" style="--fill: {{progress}}%"></div>
+        <div class="gd-portal-toll">
+            <span class="gd-portal-caption">Плата вероятностью</span>
+            <strong>{{total}} / {{toll}}</strong>
+        </div>
+        <span class="gd-portal-hint">Левый щелчок по кристаллу — положить в разрыв, правый — забрать</span>
+    </div>
+    {{#unless atRest}}
+    <p class="gd-portal-empty">Портал открывается только на Привале.</p>
+    {{else}}
+    <div class="gd-portal-party">
+        {{#each party}}
+        <section class="gd-portal-member {{#unless editable}}locked{{/unless}}">
+            <header><img src="{{img}}" alt=""> <span>{{name}}</span> <b>{{given}}</b></header>
+            <div class="gd-portal-crystals">
+                {{#each crystals}}
+                <button type="button" class="gd-portal-crystal {{#if pledged}}pledged{{/if}}" style="--rarity: {{color}}"
+                    {{#if ../editable}}data-action="pledge" data-actor-id="{{../id}}" data-item-id="{{id}}"{{else}}disabled{{/if}}
+                    title="{{name}} · вес {{weight}}">
+                    <img src="{{img}}" alt="">
+                    <span class="gd-portal-name">{{name}}</span>
+                    <span class="gd-portal-count">{{#if pledged}}{{pledged}} / {{/if}}{{quantity}}</span>
+                </button>
+                {{else}}
+                <span class="gd-portal-none">нет кристаллов</span>
+                {{/each}}
+            </div>
+        </section>
+        {{/each}}
+    </div>
+    <footer class="gd-portal-footer">
+        {{#if isGM}}
+        <button type="button" class="gd-portal-open" data-action="open" {{#unless ready}}disabled{{/unless}}><i class="fas fa-hurricane"></i> Открыть портал</button>
+        {{else}}
+        <span>{{#if ready}}Плата набрана — портал открывает Мастер{{else}}Нужно ещё {{missing}}{{/if}}</span>
+        {{/if}}
+    </footer>
+    {{/unless}}
+</div>

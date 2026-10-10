@@ -38,13 +38,17 @@ export function scentThresholds(floor = getFloor()) {
     return { whisper: 4 + 2 * floor, hunt: 6 + 3 * floor };
 }
 
+/** Вес кристалла — сколько вероятности он несёт: для Запаха и платы за портал */
+export function crystalWeight(item) {
+    return SCENT_WEIGHT[item.flags?.[MODULE_ID]?.rarity ?? 'gray'] ?? 1;
+}
+
 /** Запах одного персонажа: кристаллы в инвентаре и слоты перегрузки. Навыки в Памяти не пахнут */
 export function actorScent(actor) {
     let crystals = 0;
     for (const item of actor.items) {
         if (!isCrystalItem(item)) continue;
-        const rarity = item.flags?.[MODULE_ID]?.rarity ?? 'gray';
-        crystals += (SCENT_WEIGHT[rarity] ?? 1) * Math.max(0, Number(item.system?.quantity ?? 1));
+        crystals += crystalWeight(item) * Math.max(0, Number(item.system?.quantity ?? 1));
     }
     const active = actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID]?.is_active && occupiesSlot(i)).length;
     const overload = Math.max(0, active - naturalSlotCap(actor));
@@ -136,9 +140,11 @@ export async function setAnchor(open = true) {
     if (open === isAnchorOpen()) return;
     await game.settings.set(MODULE_ID, 'anchorOpen', open);
     if (!open) {
+        const map = canvas.scene?.getFlag(MODULE_ID, 'floorMap');
+        const here = { mob: 'Монстры', elite: 'Элита', event: 'Событие', risk: 'Риск', shop: 'Магазин', rest: 'Привал', doom: 'Погибель', boss: 'Босс', start: 'Вход' }[map?.nodes?.find(n => n.id === map.currentNodeId)?.type];
         return ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ alias: 'Якорь' }),
-            content: '<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд покидает купол Якоря. Голодные души смыкаются за спиной.</div>'
+            content: `<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд покидает купол Якоря и возвращается в Лабиринт${here ? ` — на узел «${here}»` : ''}. Голодные души смыкаются за спиной.</div>`
         });
     }
     announceRest();

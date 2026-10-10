@@ -15,6 +15,7 @@ import { registerEconomySettings } from "./economy.js";
 import { addTokenTools } from "./controls.js";
 import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
 import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
+import { PortalWindow } from "./portal.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -35,7 +36,9 @@ Hooks.once('init', () => {
         // Якорь — хаб в Пределе: game.gachadnd.setAnchor(true) открывает Алтарь всем, false закрывает
         setAnchor: (open = true) => setAnchor(open),
         // Запах отряда для Пожирателя: { value, state, label, thresholds, members }
-        scent: () => partyScent()
+        scent: () => partyScent(),
+        // Портал в Предел на Привале: окно платы кристаллами у всех
+        openPortal: () => PortalWindow.open()
     });
 });
 
