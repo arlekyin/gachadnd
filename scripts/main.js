@@ -14,6 +14,7 @@ import { registerImpactSettings } from "./impact-frame.js";
 import { giveCrystal } from "./inventory.js";
 import { registerSocket } from "./socket.js";
 import { MemoryAltar, announceRest } from "./memory-altar.js";
+import { StashWindow } from "./stash.js";
 import { registerMemorySettings } from "./memory-api.js";
 import { registerTriggerSettings } from "./triggers.js";
 import { registerAutomationMenu } from "./automation-settings.js";
@@ -47,6 +48,8 @@ Hooks.once('init', () => {
             if (existing) existing.bringToTop(); else new GachaLootTerminal().render(true);
         },
         openMemoryAltar: (actor) => MemoryAltar.open(actor),
+        // Хранилище кристаллов персонажа (там же, где Алтарь)
+        openStash: (actor) => StashWindow.open(actor),
         // Привал без карты: Мастер открывает и закрывает его вручную; при открытии у игроков открывается Алтарь
         setRest: async (open = true) => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ Открывать Привал может только Мастер.");

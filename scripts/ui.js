@@ -9,6 +9,7 @@ import { MODULE_ID } from "./constants.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "./synergy.js";
 import { HOOKS, restSite, allowSkillChange } from "./memory-api.js";
 import { MemoryAltar } from "./memory-altar.js";
+import { StashWindow } from "./stash.js";
 import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapacity, romanRank, setPersonalEffect } from "./inventory.js";
 import { collectGlossary } from "./glossary.js";
 import { playTerminalSound } from "./sounds.js";
@@ -122,6 +123,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             expand: MemoryTerminal.#onExpand,
             openSheet: MemoryTerminal.#onOpenSheet,
             openAltar: MemoryTerminal.#onOpenAltar,
+            openStash: function () { StashWindow.open(this.actor); },
             editPersonal: MemoryTerminal.#onEditPersonal,
             extension: MemoryTerminal.#onExtension
         }
