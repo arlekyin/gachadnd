@@ -5,7 +5,8 @@
 import { MODULE_ID } from "./constants.js";
 import { isMemorySkill } from "./synergy.js";
 import { addSkillToMemory } from "./inventory.js";
-import { randomCrystal, crystalImage } from "./crystals.js";
+import { randomCrystal, randomCrystalWithTag, crystalImage } from "./crystals.js";
+import { SYNERGIES } from "./synergy-tiers.js";
 import { HOOKS } from "./memory-api.js";
 import { startDraft } from "./draft.js";
 
@@ -23,6 +24,23 @@ const RARE = ['purple', 'red'];
 
 export function registerLootSettings() {
     game.settings.register(MODULE_ID, 'lootPity', { scope: 'world', config: false, type: Object, default: { miss: 0, red: 0 } });
+}
+
+// Подсказка Тумана: каждый пятый кристалл добычи (в среднем) несёт тег, которому кому-то из отряда
+// не хватает одного экипированного навыка до следующей ступени синергии
+const NEAR_TAG_CHANCE = 0.2;
+
+function nearTags() {
+    const tags = new Set();
+    for (const actor of game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner)) {
+        const counts = actor.getFlag(MODULE_ID, 'counts') ?? {};
+        for (const { tag, key, tiers } of SYNERGIES) {
+            const have = counts[key] ?? 0;
+            const next = tiers.find(t => t.count > have);
+            if (have > 0 && next && next.count - have === 1) tags.add(tag);
+        }
+    }
+    return [...tags];
 }
 
 // Этаж знает Лабиринт; без него — первый
@@ -180,12 +198,14 @@ export class GachaLootTerminal extends Application {
 
         // Мягкая гарантия считается только для бросков без фильтра редкости
         const pity = { miss: 0, red: 0, ...game.settings.get(MODULE_ID, 'lootPity') };
+        const near = template.requiredTag ? [] : nearTags();
         const drops = [];
         for (let i = 0; i < dropsCount; i++) {
             let targetRarity = rarityFilter;
             if (rarityFilter === 'any') targetRarity = rollRarity(template.bonusRoll, template.excludeOrange, pity);
 
-            const crystal = await randomCrystal(targetRarity, template.requiredTag);
+            const hint = near.length && Math.random() < NEAR_TAG_CHANCE ? near[Math.floor(Math.random() * near.length)] : null;
+            const crystal = (hint && await randomCrystalWithTag(targetRarity, hint)) || await randomCrystal(targetRarity, template.requiredTag);
             if (crystal) drops.push({ crystal, rarity: crystal.flags[MODULE_ID].rarity });
             if (crystal && rarityFilter === 'any') settlePity(pity, crystal.flags[MODULE_ID].rarity);
         }
