@@ -10,7 +10,7 @@ const MODULE_ID = 'gachadnd';
 const SOUNDS = {
     equip: { name: 'Звук экипировки', fallback: () => CONFIG.sounds?.notification ?? 'sounds/notify.wav' },
     unequip: { name: 'Звук снятия', fallback: () => CONFIG.sounds?.lock ?? 'sounds/lock.wav' },
-    merge: { name: 'Звук слияния на Привале', fallback: () => CONFIG.sounds?.combat ?? 'sounds/drums.wav' }
+    merge: { name: 'Звук слияния на Алтаре Памяти', fallback: () => CONFIG.sounds?.combat ?? 'sounds/drums.wav' }
 };
 
 export function registerSoundSettings() {

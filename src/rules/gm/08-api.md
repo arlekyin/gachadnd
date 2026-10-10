@@ -10,7 +10,7 @@
 | `game.gachadnd.openShop()` | Магазин на текущем узле |
 | `game.gachadnd.openRisk()` | Риск на текущем узле |
 | `game.gachadnd.openDoomAltar()` | Алтарь Погибели на текущем узле |
-| `game.gachadnd.openMemoryAltar(actor)` | Алтарь Памяти персонажа (на Привале) |
+| `game.gachadnd.openMemoryAltar(actor)` | Алтарь Памяти персонажа (Мастер — в любой момент) |
 | `game.gachadnd.setRest(true)` / `setRest(false)` | открыть или закрыть Привал без карты; при открытии у игроков открывается Алтарь Памяти |
 | `game.gachadnd.setAnchor(true)` / `setAnchor(false)` | открыть или закрыть Якорь (то же, что кнопка Якорь) |
 | `game.gachadnd.scent()` | Запах отряда: `{ value, state, label, thresholds, members }` |

@@ -124,7 +124,7 @@ export function isAnchorOpen() {
     }
 }
 
-// Алтарь в Якоре открыт так же, как на Привале; подпись в Терминале — «Якорь»
+// В Лабиринте Алтарь открыт только в Якоре; подпись в Терминале — «Якорь»
 Hooks.on(HOOKS.queryRest, state => {
     if (isAnchorOpen()) Object.assign(state, { atRest: true, site: 'anchor', label: 'Якорь' });
 });

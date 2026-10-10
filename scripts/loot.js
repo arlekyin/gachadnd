@@ -206,7 +206,7 @@ export class GachaLootTerminal extends Application {
 
         const forcedText = {
             added: () => 'занесён в Память',
-            duplicate: () => 'повтор — кристалл в инвентаре, слияние на Привале',
+            duplicate: () => 'повтор — кристалл в инвентаре, слияние на Алтаре Памяти',
             replaced: r => `занесён в Память, сгорел «${r.replacedName}»`,
             burned: () => 'сгорел'
         };

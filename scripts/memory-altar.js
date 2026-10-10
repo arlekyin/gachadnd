@@ -1,5 +1,5 @@
 /**
- * Gacha Roguelike dnd5e — Алтарь Памяти: погружение в сознание персонажа на Привале
+ * Gacha Roguelike dnd5e — Алтарь Памяти: погружение в сознание персонажа на Привале или в Якоре
  *
  * В центре ядро сознания, на орбите — экипированные навыки Памяти. Кристаллы и
  * неэкипированные навыки дрейфуют огоньками в тумане; выбранные стягиваются к ядру.
@@ -342,7 +342,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         actor ??= game.user.character ?? canvas.tokens?.controlled[0]?.actor;
         if (!actor) return ui.notifications.warn('Выберите своего персонажа.');
         if (!actor.isOwner) return ui.notifications.warn('Алтарь открывается только для своего персонажа.');
-        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn('Алтарь Памяти доступен только на Привале или в Якоре.');
+        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn('Алтарь Памяти доступен только в Якоре.');
         const existing = foundry.applications.instances?.get(`gachadnd-memory-altar-${actor.id}`);
         if (existing) return existing.render({ force: true });
         return new MemoryAltar(actor, { position: MemoryAltar.#fullscreen() }).render({ force: true });

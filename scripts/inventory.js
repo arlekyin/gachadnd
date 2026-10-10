@@ -153,7 +153,7 @@ export async function announceRankUp(actor, item, rank, note = '') {
     });
 }
 
-// Цена улучшения на Привале в Костях Хитов: ранг II — 1, ранг III — 2
+// Цена улучшения на Алтаре Памяти в Костях Хитов: ранг II — 1, ранг III — 2
 export const FORGE_COST = { 2: 1, 3: 2 };
 
 // Кости Хитов: тратятся с самых маленьких, возвращаются в самые большие
@@ -222,7 +222,7 @@ export function findDuplicateCrystal(actor, item) {
         && currentSkillName(i.flags?.[MODULE_ID], i.name).trim().toLowerCase() === key);
 }
 
-// Слияние на Привале: повторный кристалл + Кости Хитов → ранг; кости списываются с самых маленьких
+// Слияние на Алтаре Памяти: повторный кристалл + Кости Хитов → ранг; кости списываются с самых маленьких
 export async function forgeSkill(actor, item) {
     if (!canRankUp(item)) return ui.notifications.warn(`⚠️ Навык «${item.name}» нельзя улучшить.`);
     const crystal = findDuplicateCrystal(actor, item);
@@ -232,7 +232,7 @@ export async function forgeSkill(actor, item) {
     if (!(await spendHitDice(actor, cost))) return ui.notifications.warn(`⚠️ Не хватает Костей Хитов: нужно ${cost}, доступно ${availableHitDice(actor)}.`);
     await consumeCrystal(crystal);
     await rankUpSkill(item);
-    await announceRankUp(actor, item, rank, `Привал: слит повторный кристалл, потрачено Костей Хитов — ${cost}`);
+    await announceRankUp(actor, item, rank, `Алтарь Памяти: слит повторный кристалл, потрачено Костей Хитов — ${cost}`);
 }
 
 /**
@@ -242,7 +242,7 @@ export async function forgeSkill(actor, item) {
 export function checkMemoryAccess(actor, skillName) {
     const existing = findMemorySkill(actor, skillName);
     if (existing) {
-        if (canRankUp(existing)) return { ok: false, reason: `Навык «${skillName}» уже в Памяти. Повторный кристалл сливается с ним на Привале кнопкой «Слить» в Терминале Тумана.` };
+        if (canRankUp(existing)) return { ok: false, reason: `Навык «${skillName}» уже в Памяти. Повторный кристалл сливается с ним на Алтаре Памяти (Якорь) — кнопкой «Слить» в Терминале Тумана.` };
         if ((existing.flags[MODULE_ID].max_rank ?? 1) === 1) return { ok: false, reason: `Навык «${skillName}» уникален и уже есть в Памяти.` };
         return { ok: false, reason: `Навык «${skillName}» уже в Памяти на максимальном ранге.` };
     }
@@ -262,7 +262,7 @@ export async function addSkillToMemory(actor, skillName, { forced = false, extra
     const existing = findMemorySkill(actor, skillName);
     if (existing) {
         if (!forced) return { status: 'blocked', reason: checkMemoryAccess(actor, skillName).reason };
-        // Повтор с доступным рангом остаётся кристаллом в инвентаре — его сливают на Привале
+        // Повтор с доступным рангом остаётся кристаллом в инвентаре — его сливают на Алтаре Памяти
         if (canRankUp(existing)) return { status: 'duplicate' };
         await addBurned(actor, 1);
         return { status: 'burned' };
