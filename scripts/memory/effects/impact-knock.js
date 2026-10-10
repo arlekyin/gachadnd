@@ -9,17 +9,23 @@
  * Сам перенос токена на новое место делает клиент Мастера, когда его показ закончился.
  */
 
-// Хронометраж, мс
-// tense — крупный план до взрыва: камера уже там (склейка), ползёт ближе, Сайтама замахивается,
-// цель дрожит; lunge — рывок Сайтамы к цели, взрыв — в момент касания; burst — разлёт и тряска после взрыва; pop — за сколько
-// разлёт выстреливает на полную длину; squash — сжатие и отскок цели от удара;
-// back — возврат камеры: рывком, а не плавно
-// PACE замедляет весь этап, кроме взрывных мгновений: выстрела разлёта и рывка камеры назад
-const PACE = 1.3;
-const T = Object.fromEntries(Object.entries({ tense: 1000, lunge: 170, burst: 190, squash: 420, ghosts: 420, hold: 110, invert: 130, fly: 280 })
-    .map(([key, ms]) => [key, ms * PACE]).concat([['pop', 45], ['back', 70]]));
-// Замах занимает такую долю крупного плана, остальное — Сайтама держит его, цель дрожит
-const WINDUP_SHARE = 0.65;
+// Хронометраж, мс. У каждого фрагмента свой темп: медленно — то, что надо рассмотреть
+// (подъезд, замах, удержание, разлёт после взрыва), быстро — сами удары (конец рывка, выстрел
+// разлёта, инверсия, отлёт, возврат камеры).
+// approach — камера едет к токенам, сцена уходит в ч/б, выезжают кинополосы; windup — замах
+// Сайтамы с пружиной; brace — он держит замах, цель дрожит, камера клонится; lunge — рывок, взрыв —
+// в момент касания; burst — тряска от взрыва; pop — выстрел разлёта на полную длину; squash —
+// качание токенов от удара; ghosts — следы рывка; hold — разлёт на виду; invert — инверсия;
+// fly — отлёт цели; back — возврат камеры рывком
+const T = {
+    approach: 520, windup: 700, brace: 450, lunge: 200, burst: 250, pop: 45, squash: 450,
+    ghosts: 450, hold: 220, invert: 140, fly: 300, back: 70
+};
+// Наклон камеры, радианы: перед ударом клонится в одну сторону, от взрыва её бросает в другую,
+// во время отлёта она продолжает плыть
+const TILT = { brace: -0.026, blast: 0.07, drift: 0.02 };
+// Кинополосы: доля высоты экрана сверху и снизу
+const BARS = 0.11;
 // Камера на крупном плане ползёт ещё ближе, доля
 const CREEP = 0.07;
 // Замах Сайтамы назад — доля клетки; дрожь цели — CSS-пиксели
@@ -35,6 +41,8 @@ function seeded(seed) {
 }
 
 const easeOut = t => 1 - (1 - t) ** 3;
+const easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+const clamp01 = t => Math.min(1, Math.max(0, t));
 // Пружина: 0 → 1 с перелётом и затухающими колебаниями
 const springTo = t => t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(t * Math.PI * 2.6);
 // Затухающее колебание около нуля после толчка: x — время в долях, 0 → 1
@@ -152,27 +160,49 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
     if (!stage || !renderer || !globalThis.PIXI || !target || !knock) return Promise.resolve(false);
 
-    const saved = { x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y };
+    const saved = { x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y, rot: stage.rotation ?? 0 };
     const view = canvas.app.view ?? canvas.app.canvas;
     const rect = view.getBoundingClientRect();
     // Наезд на середину между Сайтамой и целью; в кадре — оба токена, шлейф может уходить за край
     const a = caster?.center ?? knock.from, b = knock.from;
     const radius = Math.max(target.w ?? 0, target.h ?? 0, canvas.dimensions.size) / 2;
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     // Центр кадра чуть смещён к цели: за ней разлёт
-    const half = ['x', 'y'].map(axis => Math.max(...[a, b].map(p => Math.abs(p[axis] - mid[axis]))) + radius * 1.5);
+    // В кадре и точка замаха Сайтамы: он отходит назад от цели
+    const gap = Math.hypot(b.x - a.x, b.y - a.y) || 1, back = WINDUP * canvas.dimensions.size;
+    const windupPoint = { x: a.x - (b.x - a.x) / gap * back, y: a.y - (b.y - a.y) / gap * back };
+    const span = { x: (windupPoint.x + b.x) / 2, y: (windupPoint.y + b.y) / 2 };
+    const half = ['x', 'y'].map(axis => Math.max(...[a, b, windupPoint].map(p => Math.abs(p[axis] - span[axis]))) + radius * 1.5);
     const maxScale = Math.min(saved.sx * MAX_ZOOM, globalThis.CONFIG?.Canvas?.maxZoom ?? 3);
     const fit = Math.min(rect.width * FILL / (2 * half[0]), rect.height * FILL / (2 * half[1]));
     const scale = Math.max(saved.sx, Math.min(maxScale, fit));
-    const at = (s, center) => ({ x: rect.width / 2 - (center.x - stage.pivot.x) * s, y: rect.height / 2 - (center.y - stage.pivot.y) * s });
-    const focus = { x: lerp(mid.x, b.x, 0.35), y: lerp(mid.y, b.y, 0.35) };
-    // Камера: k — от обычного вида (0) к крупному плану (1); creep — доползание на крупном плане
-    const camera = (k, creep, dx = 0, dy = 0) => {
-        const zoomed = scale * (1 + CREEP * creep), close = at(zoomed, focus);
-        const s = lerp(saved.sx, zoomed, k);
-        stage.scale.set(s, s * saved.sy / saved.sx);
-        stage.position.set(lerp(saved.x, close.x, k) + dx, lerp(saved.y, close.y, k) + dy);
+    // Положение сцены, при котором точка center — в центре экрана при масштабе s и повороте rot
+    const at = (s, center, rot = 0) => {
+        const dx = (center.x - stage.pivot.x) * s, dy = (center.y - stage.pivot.y) * s;
+        const cos = Math.cos(rot), sin = Math.sin(rot);
+        return { x: rect.width / 2 - (dx * cos - dy * sin), y: rect.height / 2 - (dx * sin + dy * cos) };
     };
+    // Центр кадра — между точкой замаха и целью, чуть ближе к цели: за ней разлёт
+    const focus = { x: lerp(span.x, b.x, 0.15), y: lerp(span.y, b.y, 0.15) };
+    // Камера: k — от обычного вида (0) к крупному плану (1); creep — доползание на крупном плане
+    const camera = (k, creep, dx = 0, dy = 0, tilt = 0) => {
+        const zoomed = scale * (1 + CREEP * creep), rot = tilt * k, s = lerp(saved.sx, zoomed, k);
+        // Точка фокуса в центре экрана на любом шаге: камера едет по прямой и наклоняется вокруг неё
+        const center = { x: lerp(stage.pivot.x + (rect.width / 2 - saved.x) / saved.sx, focus.x, k), y: lerp(stage.pivot.y + (rect.height / 2 - saved.y) / saved.sy, focus.y, k) };
+        const pos = at(s, center, rot);
+        stage.scale.set(s, s * saved.sy / saved.sx);
+        stage.rotation = saved.rot + rot;
+        stage.position.set(pos.x + dx, pos.y + dy);
+    };
+    // Кинополосы сверху и снизу — поверх всего, не наклоняются с камерой
+    const bars = ['top', 'bottom'].map(side => {
+        const bar = document.createElement('div');
+        bar.className = `gd-letterbox gd-letterbox-${side}`;
+        bar.style.height = `${BARS * 100}vh`;
+        document.body.append(bar);
+        return bar;
+    });
+    const showBars = k => bars.forEach((bar, i) => bar.style.transform = `translateY(${(i ? 1 : -1) * (1 - k) * 100}%)`);
+    showBars(0);
 
     // Слой кадра поверх сцены: затемнение, взрыв, копии токенов. Инверсия — фильтром слоя
     const layer = new PIXI.Container();
@@ -237,7 +267,7 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
     stage.addChild(layer);
 
     // Расписание
-    const sl = T.tense, s2 = sl + T.lunge, s3 = s2 + T.burst, s4 = s3 + T.hold, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
+    const sa = T.approach, sw = sa + T.windup, sl = sw + T.brace, s2 = sl + T.lunge, s3 = s2 + T.burst, s4 = s3 + T.hold, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
     let burstPlayed = false;
     const shake = { x: 0, y: 0 };
 
@@ -245,6 +275,8 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
         const t0 = performance.now();
         const finish = () => {
             camera(0, 0);
+            stage.rotation = saved.rot;
+            bars.forEach(bar => bar.remove());
             dropGray();
             // Сайтама на месте — его токен виден сразу; цель — когда Мастер её перенёс
             if (caster?.mesh?.gdAlpha !== undefined) { caster.mesh.alpha = caster.mesh.gdAlpha; delete caster.mesh.gdAlpha; }
@@ -257,8 +289,14 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
                 const t = (now - t0) / slow;
                 if (t >= end || !canvas.ready) return finish();
                 // Камера: склейка на крупный план, там ползёт ближе; после отлёта — рывком обратно
-                const k = t < s6 ? 1 : 1 - easeOut((t - s6) / T.back);
-                const creep = easeOut(Math.min(1, t / s3));
+                // Камера: подъезжает к токенам, на крупном плане ползёт ближе; после отлёта — рывком обратно
+                const k = t < sa ? easeInOut(t / sa) : t < s6 ? 1 : 1 - easeOut((t - s6) / T.back);
+                const creep = easeOut(clamp01((t - sa) / (s3 - sa)));
+                // Наклон: клонится, пока Сайтама держит замах; взрыв бросает её в другую сторону, дальше плывёт
+                const tilt = t < s2 ? TILT.brace * easeInOut(clamp01((t - sw) / (T.brace + T.lunge)))
+                    : lerp(TILT.brace, TILT.blast, springTo(clamp01((t - s2) / 200))) + TILT.drift * clamp01((t - s2) / (s6 - s2));
+                showBars(t < sa ? easeOut(t / sa) : t < s6 ? 1 : 1 - clamp01((t - s6) / T.back));
+                gray.alpha = clamp01(t / sa);
                 if (t >= s2 && !burstPlayed) {
                     burstPlayed = true;
                     onBurst();
@@ -268,26 +306,27 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
                 const shaking = t >= s2 && t < s3;
                 // Тряска: камеру бросает туда-обратно, размах быстро гаснет
                 const jolt = shaking ? (1 - (t - s2) / T.burst) ** 2 * Math.cos((t - s2) / 18 * Math.PI) : 0;
-                camera(k, creep, shake.x * jolt, shake.y * jolt);
+                camera(k, creep, shake.x * jolt, shake.y * jolt, tilt);
                 // Затемнение: на крупном плане — наполовину, со взрывом — полностью, при отлёте уходит
-                dark.alpha = t < s2 ? 0.55 : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
+                dark.alpha = t < s2 ? 0.55 * clamp01(t / sa) : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
                 const unit = 1 / stage.scale.x;
                 // Сцена возвращает цвет с отлётом
                 if (t >= s5) dropGray();
                 // Сайтама: замах назад с пружинящим перелётом, рывок к цели, после отлёта — обратно на место.
                 // Пружина в теле: на замахе сжат вдоль удара, в рывке вытянут, от касания — сплющен и качается
                 if (casterWrap) {
-                    const wind = Math.min(1, t / (sl * WINDUP_SHARE));
+                    const wind = clamp01((t - sa) / T.windup);
                     const p = springTo(wind);
                     const lunge = Math.max(0, Math.min(1, (t - sl) / T.lunge));
                     const pos = t < sl ? { x: lerp(home.x, windup.x, p), y: lerp(home.y, windup.y, p) }
                         // Рывок разгоняется к цели: быстрее всего — в момент удара
-                        : t < s2 ? { x: lerp(windup.x, contact.x, lunge ** 2), y: lerp(windup.y, contact.y, lunge ** 2) }
+                        : t < s2 ? { x: lerp(windup.x, contact.x, lunge ** 3), y: lerp(windup.y, contact.y, lunge ** 3) }
                         : t < s5 ? contact
                         : (f => ({ x: lerp(contact.x, home.x, f), y: lerp(contact.y, home.y, f) }))(easeOut(Math.min(1, (t - s5) / T.fly)));
                     casterWrap.position.set(pos.x, pos.y);
                     // Вдоль удара: сжатие на замахе (держится, слегка пульсирует), вытяжение в рывке, сплющивание от касания
                     const charge = t < sl ? 0.18 * Math.min(1, wind * 1.4) * (1 + 0.15 * Math.sin(t / 55)) : 0;
+                    // Рывок разгоняется: медленный отрыв, быстрый конец
                     const stretch = t >= sl && t < s2 ? 0.35 * lunge : 0;
                     const recoil = t >= s2 ? -0.25 * wobble((t - s2) / T.squash) : 0;
                     const along = 1 - charge + stretch + recoil;
@@ -295,11 +334,11 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
                 }
                 // Следы рывка: каждый остаётся, когда Сайтама его прошёл, и гаснет после удара
                 ghosts.forEach(({ ghost, base }, i) => {
-                    const passed = sl + T.lunge * Math.sqrt((i + 1) / 4);
+                    const passed = sl + T.lunge * Math.cbrt((i + 1) / 4);
                     ghost.alpha = t < passed ? 0 : base * (t < s2 ? 1 : Math.max(0, 1 - (t - s2) / T.ghosts));
                 });
                 // Цель: дрожит до взрыва, сильнее к удару; от удара сплющивается вдоль него и качается, как пружина
-                const tremble = t < s2 ? TREMBLE * unit * Math.min(1, t / sl) : 0;
+                const tremble = t < s2 ? TREMBLE * unit * clamp01((t - sa) / (sl - sa)) : 0;
                 const hit = t < s2 ? 0 : wobble((t - s2) / T.squash);
                 targetWrap.scale.set(1 - 0.3 * hit, 1 + 0.18 * hit);
                 // Взрыв растёт из-за цели и гаснет вместе с затемнением

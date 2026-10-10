@@ -2157,3 +2157,15 @@
 .gd-loot-hint { margin: 0; font-size: 0.9em; color: #6b6357; font-style: italic; }
 .gd-loot-go { height: auto; padding: 12px; background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border: 1px solid #ffaa00; border-radius: 4px; color: #ffaa00; font-size: 1.25em; font-weight: bold; }
 .gd-loot-go:hover { box-shadow: 0 0 10px rgba(255, 170, 0, 0.35); }
+
+/* Кинополосы импакт-кадра: сверху и снизу, выезжают из-за края экрана */
+.gd-letterbox {
+    position: fixed;
+    left: 0;
+    width: 100vw;
+    background: #000;
+    z-index: 10001;
+    pointer-events: none;
+}
+.gd-letterbox-top { top: 0; }
+.gd-letterbox-bottom { bottom: 0; }
