@@ -57,7 +57,7 @@ const SYNERGY_TARGETS = ['radius', 'sphere', 'cone', 'line', 'cube', 'cylinder']
 const SYNERGY_MODES = ['custom', 'multiply', 'add', 'downgrade', 'upgrade', 'override'];
 // Автоматизация (scripts/memory/synergy/triggers.js): когда срабатывает, при каких условиях и что делает.
 // Общая схема для синергий (порог) и навыков; у навыка формулы можно брать из его активности (from)
-const TRIGGER_ON = ['damage_roll', 'damaged', 'turn_start', 'combat_start'];
+const TRIGGER_ON = ['damage_roll', 'damaged', 'turn_start', 'combat_start', 'zero_hp', 'kill'];
 const TRIGGER_WHEN = ['self_wounded', 'self_bloodied', 'target_bloodied', 'hostile_target', 'target_anomaly', 'attack_only'];
 const TRIGGER_ONCE = ['turn', 'none', 'primed'];
 const TRIGGER_DAMAGE_TYPES = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
@@ -69,8 +69,8 @@ const TRIGGER_DAMAGE_TYPES = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'l
  * @param {{ feature?: object, skill?: object }} owner  Порог синергии (feature) или навык (skill)
  */
 function validateTrigger(trigger, f, err, { feature, skill } = {}) {
-    const { on, when, once, bonus, heal_self, reduce, use, pay, advantage, ...extra } = trigger ?? {};
-    Object.keys(extra).forEach(k => err(`${f}.trigger.${k}`, 'неизвестное поле (допустимы: on, when, once, bonus, heal_self, reduce, use, pay, advantage)'));
+    const { on, when, once, bonus, heal_self, reduce, use, pay, advantage, revive, burst, min_cr, ...extra } = trigger ?? {};
+    Object.keys(extra).forEach(k => err(`${f}.trigger.${k}`, 'неизвестное поле (допустимы: on, when, once, bonus, heal_self, reduce, use, pay, advantage, revive, burst, min_cr)'));
     if (!TRIGGER_ON.includes(on)) return err(`${f}.trigger.on`, `допустимо: ${TRIGGER_ON.join(', ')}`);
     (when ?? []).forEach(w => { if (!TRIGGER_WHEN.includes(w)) err(`${f}.trigger.when`, `допустимо: ${TRIGGER_WHEN.join(', ')}`); });
     if (once !== undefined && !TRIGGER_ONCE.includes(once)) err(`${f}.trigger.once`, `допустимо: ${TRIGGER_ONCE.join(', ')}`);
@@ -83,6 +83,13 @@ function validateTrigger(trigger, f, err, { feature, skill } = {}) {
     const only = (field, ons) => { if (trigger[field] !== undefined && !ons.includes(on)) err(`${f}.trigger.${field}`, `только для on: ${ons.join(', ')}`); };
     only('bonus', ['damage_roll']); only('heal_self', ['damage_roll']); only('once', ['damage_roll']);
     only('reduce', ['damaged']); only('pay', ['turn_start', 'combat_start']); only('advantage', ['turn_start', 'combat_start']);
+    only('revive', ['zero_hp']); only('burst', ['zero_hp']); only('min_cr', ['kill']);
+    if (on === 'zero_hp') {
+        if (!revive?.formula) err(`${f}.trigger.revive.formula`, 'обязательное поле');
+        if (burst && (!(burst.radius > 0) || !['str', 'dex', 'con', 'int', 'wis', 'cha'].includes(burst.save) || !TRIGGER_DAMAGE_TYPES.includes(burst.type))) err(`${f}.trigger.burst`, '{ radius, save: способность, type: тип урона }');
+    }
+    if (on === 'kill' && min_cr !== undefined && !(min_cr >= 0)) err(`${f}.trigger.min_cr`, 'число не меньше 0');
+    if ((on === 'zero_hp' || on === 'kill') && feature && !feature.uses) err(`${f}.trigger`, 'срабатыванию синергии нужна feature с зарядами — они и тратятся');
     if (on === 'damage_roll') {
         if (!bonus && !heal_self) err(`${f}.trigger`, 'для damage_roll нужен bonus или heal_self');
         if (bonus?.from) {
