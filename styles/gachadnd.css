@@ -2114,3 +2114,30 @@
 .gd-stash-none { opacity: 0.45; font-size: 12px; font-style: italic; }
 .gachadnd-memory-altar button.gd-stash-open { width: auto; height: auto; margin: 8px 0 0; padding: 6px 14px; align-self: flex-start; background: rgba(7, 8, 11, 0.7); border: 1px solid #3a4148; border-radius: 3px; color: #a9bbb6; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
 .gachadnd-memory-altar button.gd-stash-open:hover { border-color: #a9bbb6; color: #eef3f1; }
+
+/* ---------- Распределение добычи по очереди ---------- */
+.gachadnd-draft .window-content { padding: 0; background: #0b0a0a; color: #d0c9c0; }
+.gd-draft { display: flex; flex-direction: column; height: 100%; }
+.gd-draft-head { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px 6px; }
+.gd-draft-room { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8c8275; }
+.gd-draft-turn { margin-left: auto; color: #ffaa00; font-size: 15px; }
+.gd-draft-order { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 4px 16px 10px; list-style: none; border-bottom: 1px solid #2a2626; }
+.gd-draft-order li { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border: 1px solid #2a2626; border-radius: 14px; font-size: 12px; opacity: 0.6; }
+.gd-draft-order li.current { opacity: 1; border-color: #ffaa00; box-shadow: 0 0 8px rgba(255, 170, 0, 0.35); }
+.gd-draft-order img { width: 22px; height: 22px; border: none; border-radius: 50%; object-fit: cover; }
+.gd-draft-order b { color: #ffaa00; }
+.gd-draft-pool { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; align-content: start; padding: 12px 16px; }
+.gd-draft-crystal {
+    display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    width: 100%; height: auto; margin: 0; padding: 6px; text-align: left; line-height: 1.2;
+    background: #111; border: 1px solid var(--rarity); border-radius: 4px; color: inherit; cursor: pointer;
+}
+.gd-draft-crystal:hover:not(:disabled) { background: color-mix(in srgb, var(--rarity) 16%, #111); box-shadow: 0 0 10px color-mix(in srgb, var(--rarity) 45%, transparent); }
+.gd-draft-crystal:disabled { cursor: default; opacity: 0.8; }
+.gd-draft-crystal img { grid-row: span 2; width: 40px; height: 40px; border: 1px solid var(--rarity); border-radius: 3px; }
+.gd-draft-name { color: var(--rarity); font-weight: 700; font-size: 14px; }
+.gd-draft-meta { font-size: 11px; color: #8c8275; }
+.gd-draft-gm { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 16px; border-top: 1px solid #2a2626; }
+.gd-draft-gm button { width: auto; padding: 4px 12px; }
+.gd-draft-empty { padding: 24px; text-align: center; opacity: 0.6; }
+.gd-draft-chat div { margin-top: 3px; }

@@ -15,6 +15,7 @@ import { giveCrystal } from "./inventory.js";
 import { registerSocket } from "./socket.js";
 import { MemoryAltar, announceRest } from "./memory-altar.js";
 import { StashWindow } from "./stash.js";
+import { registerDraftSettings, DraftWindow } from "./draft.js";
 import { registerMemorySettings } from "./memory-api.js";
 import { registerTriggerSettings } from "./triggers.js";
 import { registerAutomationMenu } from "./automation-settings.js";
@@ -30,6 +31,7 @@ Hooks.once('init', () => {
     registerSoundSettings();
     registerImpactSettings();
     registerMemorySettings();
+    registerDraftSettings();
     registerTriggerSettings();
     registerAutomationMenu();
 
@@ -50,6 +52,8 @@ Hooks.once('init', () => {
         openMemoryAltar: (actor) => MemoryAltar.open(actor),
         // Хранилище кристаллов персонажа (там же, где Алтарь)
         openStash: (actor) => StashWindow.open(actor),
+        // Окно распределения добычи (если оно идёт)
+        openDraft: () => DraftWindow.show(),
         // Привал без карты: Мастер открывает и закрывает его вручную; при открытии у игроков открывается Алтарь
         setRest: async (open = true) => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ Открывать Привал может только Мастер.");

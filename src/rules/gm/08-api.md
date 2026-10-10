@@ -11,6 +11,7 @@
 | `game.gachadnd.openRisk()` | Риск на текущем узле |
 | `game.gachadnd.openDoomAltar()` | Алтарь Погибели на текущем узле |
 | `game.gachadnd.openMemoryAltar(actor)` | Алтарь Памяти персонажа (Мастер — в любой момент) |
+| `game.gachadnd.openDraft()` | окно идущего распределения добычи |
 | `game.gachadnd.openStash(actor)` | Хранилище кристаллов персонажа (там же, где Алтарь; Мастер — в любой момент) |
 | `game.gachadnd.setRest(true)` / `setRest(false)` | открыть или закрыть Привал без карты; при открытии у игроков открывается Алтарь Памяти |
 | `game.gachadnd.setAnchor(true)` / `setAnchor(false)` | открыть или закрыть Якорь (то же, что кнопка Якорь) |

@@ -7,6 +7,7 @@ import { isMemorySkill } from "./synergy.js";
 import { addSkillToMemory } from "./inventory.js";
 import { randomCrystal, crystalImage } from "./crystals.js";
 import { HOOKS } from "./memory-api.js";
+import { startDraft } from "./draft.js";
 
 const RARITY_WEIGHTS = {
     'gray': 600,
@@ -73,10 +74,10 @@ export class GachaLootTerminal extends Application {
             <div>
                 <label style="display: block; font-size: 1.15em; color: #8c8275; margin-bottom: 6px;">Тип завершенной комнаты:</label>
                 <select id="gacha-room-type" style="width: 100%; background: #161414; color: #f5efe6; border: 1px solid #3d3834; height: 30px; border-radius: 4px;">
-                    <option value="normal">Обычная комната (25% на игрока)</option>
-                    <option value="elite">Элитный противник (50% на игрока)</option>
-                    <option value="boss">Босс (100% на игрока)</option>
-                    <option value="cursed">Проклятая комната (150% на игрока)</option>
+                    <option value="normal">Обычная комната (1 на игрока)</option>
+                    <option value="elite">Элитный противник, Застава (1,5 на игрока)</option>
+                    <option value="boss">Босс (2 на игрока)</option>
+                    <option value="cursed">Проклятая комната (2 на игрока)</option>
                 </select>
             </div>
             <div>
@@ -144,8 +145,12 @@ export class GachaLootTerminal extends Application {
         const targets = canvas.tokens.controlled;
         const targetActor = targets.length === 1 ? targets[0].actor : null;
 
+        // Выделен один токен — добыча целиком ему; иначе кристаллы делятся по очереди
+        let draftOrder = null;
         if (targetActor && drops.length > 0) {
             await targetActor.createEmbeddedDocuments("Item", drops.map(d => d.crystal));
+        } else if (drops.length > 0) {
+            draftOrder = await startDraft(template.name, drops.map(d => d.crystal));
         }
 
         // Подключённые системы добавляют своё (Лабиринт — золото комнаты) и строку в карточку
@@ -154,7 +159,7 @@ export class GachaLootTerminal extends Application {
         await Promise.all(loot.tasks);
 
         const forced = await this.applyForcedLoot(template, rarityFilter);
-        await this.printLootCard(template.name, drops, targetActor, forced, loot.lines);
+        await this.printLootCard(template.name, drops, targetActor, forced, loot.lines, draftOrder);
     }
 
     // Жадность: персонажи с экипированным навыком forced_loot получают кристаллы сразу в Память, без выбора
@@ -182,7 +187,7 @@ export class GachaLootTerminal extends Application {
         return results;
     }
 
-    async printLootCard(roomName, drops, targetActor, forced = [], lines = []) {
+    async printLootCard(roomName, drops, targetActor, forced = [], lines = [], draftOrder = null) {
         let contentHtml = ``;
         if (drops.length === 0) {
             contentHtml = `<div style="text-align: center; padding: 15px; color: #7a7062;">Ничего ценного...</div>`;
@@ -216,7 +221,9 @@ export class GachaLootTerminal extends Application {
                 ${forced.map(r => `<div style="font-size: 0.9em; color: #d0c9c0;"><strong>${r.actor.name}:</strong> <span style="color: ${RARITY_COLORS[r.rarity] || '#aaa'};">${r.skillName}</span> — ${forcedText[r.status]?.(r) ?? r.status}</div>`).join('')}
             </div>` : '';
 
-        const statusText = targetActor ? `<span style="color: #1eff00;">Добыча добавлена: <strong>${targetActor.name}</strong></span>` : `<span style="color: #ffaa00;">Токен не выделен.</span>`;
+        const statusText = targetActor ? `<span style="color: #1eff00;">Добыча добавлена: <strong>${targetActor.name}</strong></span>`
+            : draftOrder ? `<span style="color: #ffaa00;">Кристаллы делятся по очереди: ${draftOrder.join(' → ')}</span>`
+            : drops.length ? `<span style="color: #ffaa00;">Токен не выделен, персонажей отряда нет.</span>` : '';
 
         ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ alias: "Туманный Разлом" }),
