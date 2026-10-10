@@ -108,6 +108,16 @@ export async function randomCrystalWithTag(rarity, tag) {
     return buildCrystalData(await pack.getDocument(entry._id));
 }
 
+// Теги, у которых есть навыки данной редкости, — чтобы игрок не выбирал тег, которого на этой редкости нет
+export async function tagsWithRarity(rarity) {
+    const pack = getSkillPack();
+    if (!pack) return [];
+    const index = await pack.getIndex({ fields: [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`] });
+    const tags = new Set();
+    for (const e of index) if (e.flags?.[MODULE_ID]?.rarity === rarity) (e.flags[MODULE_ID].tags ?? []).forEach(t => tags.add(t));
+    return [...tags];
+}
+
 // Кристалл конкретного навыка — по id или имени
 export async function crystalForSkill({ skillId, skillName } = {}) {
     const pack = getSkillPack();

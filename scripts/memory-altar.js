@@ -471,6 +471,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     _onRender(context, options) {
         super._onRender(context, options);
         this.element.style.setProperty('--glow', context.ritual.glow);
+        // Ритуал — классом окна: огоньки не перерисовываются при смене ритуала, а метка «×2» нужна только в Переплавке
+        for (const key of Object.keys(RITUALS)) this.element.classList.toggle(`gd-ritual-${key}`, key === context.ritual.key);
         this.#dived = true;
         this.#bindCard();
         if (options.parts?.includes('stage')) {

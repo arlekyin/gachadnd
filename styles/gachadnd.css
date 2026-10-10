@@ -904,6 +904,10 @@
 .gachadnd-terminal .gd-deck-title { font-family: "Modesto Condensed", serif; text-transform: uppercase; color: #9fd9c8; letter-spacing: 1px; font-size: 1.15em; }
 .gachadnd-terminal .gd-deck-title span { color: #e9f3ef; margin-left: 6px; }
 .gachadnd-terminal .gd-synergies {
+  /* Много синергий — список прокручивается сам, глоссарий под ним остаётся виден */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
   padding: 8px 10px;
   border: 1px solid #2f4440;
   border-radius: 4px;
@@ -912,6 +916,7 @@
   flex-direction: column;
   gap: 4px;
 }
+.gachadnd-terminal .gd-syn-list { display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding-right: 2px; }
 .gachadnd-terminal .gd-syn { border-left: 3px solid #c9a75d; border-radius: 3px; background: rgba(255, 255, 255, 0.02); }
 .gachadnd-terminal .gd-syn.system { border-left-color: #ff3b3b; }
 .gachadnd-terminal .gd-syn-main { display: flex; align-items: center; gap: 8px; padding: 4px 6px; cursor: pointer; }
@@ -2013,3 +2018,7 @@
     z-index: 10000;
     pointer-events: none;
 }
+
+/* Метка «×2» у повтора без слияния — только в Переплавке, где вес и важен; в других ритуалах она читалась
+   как «два кристалла» */
+.gachadnd-memory-altar:not(.gd-ritual-smelt) .gd-mote-double { display: none; }
