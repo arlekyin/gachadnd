@@ -1,7 +1,7 @@
 /**
  * Gacha Roguelike dnd5e — Отлёт цели (второй этап кадра Сайтамы)
  *
- * После кулаков — склейка на крупный план Сайтамы и цели, их токены чёрно-белые; камера ползёт
+ * После кулаков — склейка на крупный план Сайтамы и цели, сцена чёрно-белая; камера ползёт
  * ближе, Сайтама замахивается назад, цель дрожит. На взрыве Сайтама рывком бросается к цели,
  * цель сжимается от удара. Всё остальное уходит в чёрное, и за целью вырастает белый взрыв — шлейф
  * в сторону отлёта с лучами. Кадр инвертируется, цель отлетает по прямой от Сайтамы,
@@ -14,11 +14,16 @@
 // цель дрожит; lunge — рывок Сайтамы к цели, взрыв — в момент касания; burst — разлёт и тряска после взрыва; pop — за сколько
 // разлёт выстреливает на полную длину; squash — сжатие и отскок цели от удара;
 // back — возврат камеры: рывком, а не плавно
-const T = { tense: 750, lunge: 150, burst: 190, pop: 45, squash: 220, ghosts: 420, hold: 110, invert: 130, fly: 280, back: 70 };
+// PACE замедляет весь этап, кроме взрывных мгновений: выстрела разлёта и рывка камеры назад
+const PACE = 1.3;
+const T = Object.fromEntries(Object.entries({ tense: 1000, lunge: 170, burst: 190, squash: 420, ghosts: 420, hold: 110, invert: 130, fly: 280 })
+    .map(([key, ms]) => [key, ms * PACE]).concat([['pop', 45], ['back', 70]]));
+// Замах занимает такую долю крупного плана, остальное — Сайтама держит его, цель дрожит
+const WINDUP_SHARE = 0.65;
 // Камера на крупном плане ползёт ещё ближе, доля
 const CREEP = 0.07;
 // Замах Сайтамы назад — доля клетки; дрожь цели — CSS-пиксели
-const WINDUP = 0.7, TREMBLE = 1.6;
+const WINDUP = 1.2, TREMBLE = 1.6;
 // Тряска от взрыва, CSS-пиксели: затухает за время разлёта
 const SHAKE = 34;
 // Наезд: Сайтама и цель занимают такую долю экрана; не больше MAX_ZOOM от текущего
@@ -30,6 +35,10 @@ function seeded(seed) {
 }
 
 const easeOut = t => 1 - (1 - t) ** 3;
+// Пружина: 0 → 1 с перелётом и затухающими колебаниями
+const springTo = t => t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(t * Math.PI * 2.6);
+// Затухающее колебание около нуля после толчка: x — время в долях, 0 → 1
+const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4.5 * x) * Math.cos(x * Math.PI * 5);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
@@ -177,21 +186,27 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
     const casterCopy = caster ? tokenCopy(caster) : null, targetCopy = tokenCopy(target);
     // Направление удара: от Сайтамы к цели
     const dir = Math.atan2(b.y - a.y, b.x - a.x), ux = Math.cos(dir), uy = Math.sin(dir);
+    // Рамки, повёрнутые по удару: сжатие и растяжение токенов идут вдоль удара, а не по осям картинки
+    const wrap = copy => {
+        const frame = new PIXI.Container();
+        frame.rotation = dir;
+        if (copy) {
+            frame.position.set(copy.position.x, copy.position.y);
+            copy.position.set(0, 0);
+            copy.rotation -= dir;
+            frame.addChild(copy);
+        }
+        return frame;
+    };
+    const casterWrap = casterCopy ? wrap(casterCopy) : null;
     const casterRadius = caster ? Math.max(caster.w ?? 0, caster.h ?? 0, canvas.dimensions.size) / 2 : 0;
     // Замах: назад от цели; рывок: вплотную к цели
     const home = { x: a.x, y: a.y };
     const windup = { x: a.x - ux * WINDUP * canvas.dimensions.size, y: a.y - uy * WINDUP * canvas.dimensions.size };
     const reachDist = Math.max(0, Math.hypot(b.x - a.x, b.y - a.y) - (casterRadius + radius) * 0.95);
     const contact = { x: a.x + ux * reachDist, y: a.y + uy * reachDist };
-    // Цель — в рамке, повёрнутой по удару: сжатие идёт вдоль удара, а не по осям картинки
-    const targetWrap = new PIXI.Container();
+    const targetWrap = wrap(targetCopy);
     targetWrap.position.set(b.x, b.y);
-    targetWrap.rotation = dir;
-    if (targetCopy) {
-        targetCopy.position.set(0, 0);
-        targetCopy.rotation -= dir;
-        targetWrap.addChild(targetCopy);
-    }
     // Следы рывка: полупрозрачные копии Сайтамы между замахом и целью
     const ghosts = caster ? [0.25, 0.5, 0.75].map(f => {
         const ghost = tokenCopy(caster);
@@ -199,7 +214,21 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
         ghost.alpha = 0;
         return { ghost, base: 0.2 + f * 0.3 };
     }) : [];
-    layer.addChild(dark, burst, ...ghosts.map(g => g.ghost), ...[casterCopy, targetWrap].filter(Boolean));
+    layer.addChild(dark, burst, ...ghosts.map(g => g.ghost), ...[casterWrap, targetWrap].filter(Boolean));
+    // Сцена чёрно-белая с первого кадра крупного плана до отлёта
+    const gray = new PIXI.ColorMatrixFilter();
+    gray.desaturate();
+    gray.contrast(0.35, true);
+    const savedFilters = { filters: stage.filters, area: stage.filterArea };
+    stage.filters = [...(savedFilters.filters ?? []), gray];
+    stage.filterArea = renderer.screen;
+    let grayOn = true;
+    const dropGray = () => {
+        if (!grayOn) return;
+        grayOn = false;
+        stage.filters = savedFilters.filters ?? null;
+        stage.filterArea = savedFilters.area ?? null;
+    };
     // Настоящие токены скрыты на весь кадр: двигаются их копии
     for (const token of [caster, target]) if (token?.mesh) { token.mesh.gdAlpha ??= token.mesh.alpha; token.mesh.alpha = 0; }
     const invert = new PIXI.ColorMatrixFilter();
@@ -216,6 +245,7 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
         const t0 = performance.now();
         const finish = () => {
             camera(0, 0);
+            dropGray();
             // Сайтама на месте — его токен виден сразу; цель — когда Мастер её перенёс
             if (caster?.mesh?.gdAlpha !== undefined) { caster.mesh.alpha = caster.mesh.gdAlpha; delete caster.mesh.gdAlpha; }
             layer.destroy({ children: true });
@@ -242,27 +272,36 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
                 // Затемнение: на крупном плане — наполовину, со взрывом — полностью, при отлёте уходит
                 dark.alpha = t < s2 ? 0.55 : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
                 const unit = 1 / stage.scale.x;
-                // Сайтама: замах назад, рывок к цели, после отлёта — обратно на место
-                if (casterCopy) {
-                    // Замах — за первую половину крупного плана, дальше Сайтама держит его
-                    const p = easeOut(Math.min(1, t / (sl * 0.5)));
+                // Сцена возвращает цвет с отлётом
+                if (t >= s5) dropGray();
+                // Сайтама: замах назад с пружинящим перелётом, рывок к цели, после отлёта — обратно на место.
+                // Пружина в теле: на замахе сжат вдоль удара, в рывке вытянут, от касания — сплющен и качается
+                if (casterWrap) {
+                    const wind = Math.min(1, t / (sl * WINDUP_SHARE));
+                    const p = springTo(wind);
+                    const lunge = Math.max(0, Math.min(1, (t - sl) / T.lunge));
                     const pos = t < sl ? { x: lerp(home.x, windup.x, p), y: lerp(home.y, windup.y, p) }
                         // Рывок разгоняется к цели: быстрее всего — в момент удара
-                        : t < s2 ? (f => ({ x: lerp(windup.x, contact.x, f), y: lerp(windup.y, contact.y, f) }))(((t - sl) / T.lunge) ** 2)
+                        : t < s2 ? { x: lerp(windup.x, contact.x, lunge ** 2), y: lerp(windup.y, contact.y, lunge ** 2) }
                         : t < s5 ? contact
                         : (f => ({ x: lerp(contact.x, home.x, f), y: lerp(contact.y, home.y, f) }))(easeOut(Math.min(1, (t - s5) / T.fly)));
-                    casterCopy.position.set(pos.x, pos.y);
+                    casterWrap.position.set(pos.x, pos.y);
+                    // Вдоль удара: сжатие на замахе (держится, слегка пульсирует), вытяжение в рывке, сплющивание от касания
+                    const charge = t < sl ? 0.18 * Math.min(1, wind * 1.4) * (1 + 0.15 * Math.sin(t / 55)) : 0;
+                    const stretch = t >= sl && t < s2 ? 0.35 * lunge : 0;
+                    const recoil = t >= s2 ? -0.25 * wobble((t - s2) / T.squash) : 0;
+                    const along = 1 - charge + stretch + recoil;
+                    casterWrap.scale.set(along, 1 / Math.sqrt(Math.max(0.4, along)));
                 }
                 // Следы рывка: каждый остаётся, когда Сайтама его прошёл, и гаснет после удара
                 ghosts.forEach(({ ghost, base }, i) => {
                     const passed = sl + T.lunge * Math.sqrt((i + 1) / 4);
                     ghost.alpha = t < passed ? 0 : base * (t < s2 ? 1 : Math.max(0, 1 - (t - s2) / T.ghosts));
                 });
-                // Цель: дрожит до взрыва, сильнее к удару; от удара сжимается вдоль него и отскакивает
+                // Цель: дрожит до взрыва, сильнее к удару; от удара сплющивается вдоль него и качается, как пружина
                 const tremble = t < s2 ? TREMBLE * unit * Math.min(1, t / sl) : 0;
-                const sq = t < s2 ? 0 : (t - s2) / T.squash;
-                const squash = sq >= 1 ? 0 : sq < 0.25 ? sq / 0.25 : Math.cos((sq - 0.25) / 0.75 * Math.PI * 1.5) * (1 - sq);
-                targetWrap.scale.set(1 - 0.22 * squash, 1 + 0.12 * squash);
+                const hit = t < s2 ? 0 : wobble((t - s2) / T.squash);
+                targetWrap.scale.set(1 - 0.3 * hit, 1 + 0.18 * hit);
                 // Взрыв растёт из-за цели и гаснет вместе с затемнением
                 // Разлёт выстреливает за T.pop с перелётом и отскакивает к полной длине
                 const pop = (t - s2) / T.pop;
