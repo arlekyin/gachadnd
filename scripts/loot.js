@@ -22,10 +22,11 @@ const RARITY_COLORS = {
 };
 
 const ROOM_TEMPLATES = {
-    'normal': { name: 'Обычная комната', chancePerPlayer: 0.25, bonusRoll: false },
-    'elite': { name: 'Элитный противник', chancePerPlayer: 0.5, bonusRoll: true },
-    'boss': { name: 'Босс', chancePerPlayer: 1.0, bonusRoll: true },
-    'cursed': { name: 'Проклятая комната', chancePerPlayer: 1.5, bonusRoll: false, excludeOrange: true, requiredTag: 'проклят' }
+    // Цель — 5–6 кристаллов на игрока за этаж: путь из 5 узлов даёт в среднем 1,75 Монстров и 0,75 Элиты, плюс Босс
+    'normal': { name: 'Обычная комната', chancePerPlayer: 1.0, bonusRoll: false },
+    'elite': { name: 'Элитный противник', chancePerPlayer: 1.5, bonusRoll: true },
+    'boss': { name: 'Босс', chancePerPlayer: 2.0, bonusRoll: true },
+    'cursed': { name: 'Проклятая комната', chancePerPlayer: 2.0, bonusRoll: false, excludeOrange: true, requiredTag: 'проклят' }
 };
 
 function rollRarity(bonusRoll = false, excludeOrange = false) {
