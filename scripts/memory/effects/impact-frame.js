@@ -16,9 +16,10 @@
  * Границы светлого размазаны к точке удара, как в рисованных импакт-кадрах. Без сцены кадры
  * собираются из арта навыка. «Без вспышек» оставляет только первый кадр — каждый игрок у себя.
  *
- * Навык может задать свой рисунок кадра (impact.style). slash — разрез Ямато: экран рассечён по
- * линии шаблона навыка, половины сцены разъезжаются вдоль неё; от линии в стороны — белые полосы
- * на чёрном, во втором кадре — инверсия. Рисунок векторный и строится в разрешении экрана.
+ * Навык может задать свой рисунок кадра (impact.style). slash — разрез Ямато, собранный в самой
+ * сцене, как импакт-кадры Roblox: фильтр сцены делает её контрастной ч/б и рассекает по линии
+ * шаблона навыка (половины разъезжаются вдоль неё), токены удара — силуэты с обводкой, камера
+ * делает рывок к точке удара; поверх — разрез и полосы от него. Второй кадр — инверсия.
  * Значки состояний токенов (череп, кровотечение) в снимок сцены не попадают.
  */
 
@@ -438,7 +439,7 @@ function portraitSource(tokenIds) {
  * поэтому сцена перерисовывается и копируется в той же задаче, до вывода на экран.
  * @returns {HTMLCanvasElement|null}  null — сцены нет, она другая или снимок пуст.
  */
-function captureScene(sceneId, width = SHOT_WIDTH) {
+function captureScene(sceneId) {
     const app = canvas?.app;
     const view = app?.view ?? app?.canvas;
     if (!canvas?.ready || !view || (sceneId && canvas.scene?.id !== sceneId)) return null;
@@ -449,7 +450,7 @@ function captureScene(sceneId, width = SHOT_WIDTH) {
         app.renderer.render(app.stage);
         // Снимок сразу уменьшается: дальнейшая обработка идёт по малому холсту
         const shot = document.createElement('canvas');
-        shot.width = Math.min(width, view.width);
+        shot.width = Math.min(SHOT_WIDTH, view.width);
         shot.height = Math.round(shot.width * view.height / view.width);
         const x = shot.getContext('2d', { willReadFrequently: true });
         x.drawImage(view, 0, 0, shot.width, shot.height);
@@ -527,84 +528,222 @@ function visibleRange(S, E, W, H) {
     return t1 > t0 ? [t0, t1] : null;
 }
 
+// Хронометраж и камера разреза: рывок к точке удара, в первом кадре — толчок
+const SLASH_ZOOM = { start: 1.06, first: 1.16, second: 1.12 };
+// Сдвиг половин сцены по линии разреза, CSS-пиксели при высоте экрана 1000: вдоль линии и поперёк
+const SLASH_SPLIT = { first: [60, 14], second: [130, 34] };
+
 /**
- * Два кадра разреза в разрешении экрана. Экран рассечён по прямой линии шаблона от края до края:
- * половины сцены, переведённые в контрастный ч/б, разъезжаются вдоль неё в разные стороны и чуть
- * расходятся. По видимой части линии шаблона — рваная полоса разреза, сужающаяся к концу шаблона,
- * и клинья-полосы в стороны. Кадр 1: тёмная сцена, белые линии на чёрном; кадр 2 — инверсия.
- * @param {HTMLCanvasElement} shot  Снимок сцены.
- * @param {{from: {x, y}, to: {x, y}}} line  Линия в координатах сцены.
- * @param {number} W, H  Размер кадра в пикселях устройства.
- * @param {{fx: number, fy: number}} focus  Точка наезда камеры — доли экрана.
- * @returns {{first: HTMLCanvasElement, second: HTMLCanvasElement, screen: true}|null}
+ * Фильтр всей сцены: цветокоррекция кадра и разрез. По обе стороны линии сцена берётся со сдвигом
+ * вдоль линии в разные стороны и чуть врозь, щель между половинами — цвета фона кадра.
+ * Режим 0 — стартовый кадр: цвет с поднятым контрастом; 1 — ч/б, тёмное; 2 — ч/б, инверсия.
  */
-function slashFrames(shot, line, W, H, focus) {
-    const view = canvas?.app?.view ?? canvas?.app?.canvas;
-    if (!view || !line) return null;
-    // Экран в CSS-пикселях → пиксели кадра: на экране с масштабом 125–200 % кадр не растягивается
-    const css = view.getBoundingClientRect(), ratio = W / innerWidth;
-    const rect = { left: css.left * ratio, top: css.top * ratio, width: css.width * ratio, height: css.height * ratio };
-    const toScreen = p => { const q = canvas.stage.worldTransform.apply({ x: p.x, y: p.y }); return { x: (css.left + q.x) * ratio, y: (css.top + q.y) * ratio }; };
+const SLASH_SHADER = `
+precision highp float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec4 inputSize;
+uniform vec4 outputFrame;
+uniform vec4 filterClamp;
+uniform vec2 uPoint;
+uniform vec2 uDir;
+uniform vec2 uSplit;
+uniform float uMode;
+uniform float uDim;
+void main() {
+    vec2 screen = vTextureCoord * inputSize.xy + outputFrame.xy;
+    vec2 normal = vec2(-uDir.y, uDir.x);
+    float side = dot(screen - uPoint, normal) < 0.0 ? -1.0 : 1.0;
+    float gap = abs(dot(screen - uPoint, normal)) < uSplit.y ? 1.0 : 0.0;
+    vec2 coord = vTextureCoord - (uDir * uSplit.x + normal * uSplit.y) * side * inputSize.zw;
+    bool outside = any(lessThan(coord, filterClamp.xy)) || any(greaterThan(coord, filterClamp.zw));
+    vec4 color = outside ? vec4(0.0, 0.0, 0.0, 1.0) : texture2D(uSampler, coord);
+    vec3 rgb = color.a > 0.0 ? color.rgb / color.a : vec3(0.0);
+    if (uMode < 0.5) {
+        rgb = clamp((rgb - 0.5) * 1.45 + 0.5, 0.0, 1.0);
+        gl_FragColor = vec4(rgb, 1.0);
+        return;
+    }
+    float v = dot(rgb, vec3(0.299, 0.587, 0.114));
+    v = clamp((v - 0.5) * 2.4 + 0.45, 0.0, 1.0);
+    v = mix(v, 0.0, gap);
+    if (uMode > 1.5) v = 1.0 - v;
+    gl_FragColor = vec4(vec3(v * uDim), 1.0);
+}`;
+
+/**
+ * Силуэты токенов поверх сцены, под фильтром кадра: картинка токена тушью — светлое белым,
+ * остальное чёрным — на белой обводке. Фильтр второго кадра инвертирует их — как Highlight в Roblox.
+ * Силуэт повторяет форму картинки токена: прозрачное в ней — не фигура.
+ */
+function silhouettes(tokenIds) {
+    const layer = new PIXI.Container();
+    const outline = 3 / (canvas.stage.scale.x || 1);
+    // Тушь: яркость с порогом 0,55 и резким переходом
+    const ink = new PIXI.ColorMatrixFilter();
+    const K = 10, row = [0.299 * K, 0.587 * K, 0.114 * K, 0, -0.55 * K];
+    ink.matrix = [...row, ...row, ...row, 0, 0, 0, 1, 0];
+    for (const id of tokenIds ?? []) {
+        const token = canvas.tokens?.get(id);
+        const mesh = token?.mesh;
+        if (!mesh?.texture || token.visible === false) continue;
+        const copy = (tint, dx = 0, dy = 0, filter = null) => {
+            const sprite = new PIXI.Sprite(mesh.texture);
+            sprite.anchor.set(mesh.anchor?.x ?? 0.5, mesh.anchor?.y ?? 0.5);
+            sprite.position.set(mesh.position.x + dx, mesh.position.y + dy);
+            sprite.scale.set(mesh.scale.x, mesh.scale.y);
+            sprite.rotation = mesh.rotation;
+            sprite.tint = tint;
+            if (filter) sprite.filters = [filter];
+            layer.addChild(sprite);
+        };
+        for (let i = 0; i < 12; i++) copy(0xffffff, Math.cos(i * Math.PI / 6) * outline, Math.sin(i * Math.PI / 6) * outline);
+        copy(0xffffff, 0, 0, ink);
+    }
+    return layer;
+}
+
+// Значки состояний, полосы и имена токенов на время кадра скрыты: череп поверженного — не часть удара
+function hideTokenMarks() {
+    const hidden = [];
+    for (const token of canvas.tokens?.placeables ?? []) {
+        for (const part of [token.effects, token.bars, token.nameplate, token.tooltip, token.targetArrows, token.border]) {
+            if (part?.visible) { part.visible = false; hidden.push(part); }
+        }
+    }
+    return () => hidden.forEach(part => part.visible = true);
+}
+
+// Точка сцены → CSS-пиксели холста по текущей камере (сцена — корень, без поворота)
+const toView = p => {
+    const stage = canvas.stage;
+    return { x: stage.position.x + (p.x - stage.pivot.x) * stage.scale.x, y: stage.position.y + (p.y - stage.pivot.y) * stage.scale.y };
+};
+
+/**
+ * Разрез и полосы — вектор на прозрачном холсте поверх сцены, в пикселях устройства.
+ * Разрез — рваная полоса по видимой части шаблона, сужается к его концу; от неё в стороны клинья.
+ */
+function drawSlash(ctx, line, color) {
+    const ratio = devicePixelRatio, W = ctx.canvas.width, H = ctx.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const toScreen = p => { const q = toView(p); return { x: q.x * ratio, y: q.y * ratio }; };
     const S = toScreen(line.from), E = toScreen(line.to);
     const len = Math.hypot(E.x - S.x, E.y - S.y);
     const range = len >= 1 ? visibleRange(S, E, W, H) : null;
-    if (!range) return null;
-    const D = { x: (E.x - S.x) / len, y: (E.y - S.y) / len }, N = { x: -D.y, y: D.x };
-    const at = (t, off = 0) => ({ x: S.x + (E.x - S.x) * t + N.x * off, y: S.y + (E.y - S.y) * t + N.y * off });
-    const k = Math.min(W, H) / 1000, far = Math.hypot(W, H) * 2;
-    // Сдвиг половин: вдоль линии и поперёк неё; во втором кадре половины разъехались дальше
-    const SHIFT = [70 * k, 150 * k], APART = [16 * k, 40 * k], CORE = 12 * k;
+    if (!range) return;
     const [t0, t1] = range;
-    const seen = (t1 - t0) * len;
-
-    // Клинья: основание на линии, кончик в стороне, с наклоном по ходу удара. Число — по видимой длине
+    const N = { x: -(E.y - S.y) / len, y: (E.x - S.x) / len }, D = { x: -N.y, y: N.x };
+    const at = (t, off = 0) => ({ x: S.x + (E.x - S.x) * t + N.x * off, y: S.y + (E.y - S.y) * t + N.y * off });
+    const k = Math.min(W, H) / 1000, seen = (t1 - t0) * len;
     const rnd = seeded(11);
-    const wedges = Array.from({ length: Math.round(25 + 100 * seen / H) }, () => ({
-        t: t0 + rnd() * (t1 - t0), side: rnd() < 0.5 ? -1 : 1,
-        length: (35 + rnd() ** 2 * 480) * k, width: (2 + rnd() * 8) * k, lean: (rnd() - 0.3) * 0.5
-    }));
-    // Края полосы разреза: рваные, общие для обоих кадров
-    const STEPS = 80, edge = Array.from({ length: 2 * (STEPS + 1) }, () => 0.85 + rnd() * 0.3);
-    // Полоса сужается к концу шаблона; чуть заходит за начало — разрез выходит из-под клинка
-    const coreT = i => (t0 === 0 ? -14 * k / len : t0) + (t1 - (t0 === 0 ? -14 * k / len : t0)) * i / STEPS;
-    const coreW = (t, j) => CORE * (1 - Math.max(0, t) * 0.7) * edge[j];
-
-    const frame = invert => {
-        const c = document.createElement('canvas'); c.width = W; c.height = H;
-        const x = c.getContext('2d');
-        x.fillStyle = invert ? '#fff' : '#000';
-        x.fillRect(0, 0, W, H);
-        // Лёгкий наезд к точке удара прямо в векторе: линии остаются резкими
-        const zoom = invert ? 1.03 : 1.06, fx = W * focus.fx, fy = H * focus.fy;
-        x.setTransform(zoom, 0, 0, zoom, fx - fx * zoom, fy - fy * zoom);
-        for (const side of [1, -1]) {
-            x.save();
-            x.beginPath();
-            const a = { x: S.x - D.x * far, y: S.y - D.y * far }, b = { x: S.x + D.x * far, y: S.y + D.y * far };
-            x.moveTo(a.x, a.y); x.lineTo(b.x, b.y);
-            x.lineTo(b.x + N.x * side * far, b.y + N.y * side * far); x.lineTo(a.x + N.x * side * far, a.y + N.y * side * far);
-            x.closePath(); x.clip();
-            x.filter = invert ? 'grayscale(1) invert(1) contrast(2.2)' : 'grayscale(1) contrast(2.2) brightness(0.9)';
-            const along = SHIFT[+invert] * side, across = APART[+invert] * side;
-            x.drawImage(shot, rect.left + D.x * along + N.x * across, rect.top + D.y * along + N.y * across, rect.width, rect.height);
-            x.restore();
-        }
-        x.fillStyle = invert ? '#000' : '#fff';
-        for (const w of wedges) {
-            const base = at(w.t);
-            x.beginPath();
-            x.moveTo(base.x + D.x * w.width, base.y + D.y * w.width);
-            x.lineTo(base.x - D.x * w.width, base.y - D.y * w.width);
-            x.lineTo(base.x + (N.x * w.side + D.x * w.lean) * w.length, base.y + (N.y * w.side + D.y * w.lean) * w.length);
-            x.closePath(); x.fill();
-        }
-        x.beginPath();
-        for (let i = 0; i <= STEPS; i++) { const t = coreT(i), p = at(t, coreW(t, i)); i ? x.lineTo(p.x, p.y) : x.moveTo(p.x, p.y); }
-        for (let i = STEPS; i >= 0; i--) { const t = coreT(i), p = at(t, -coreW(t, STEPS + 1 + i)); x.lineTo(p.x, p.y); }
-        x.closePath(); x.fill();
-        return c;
+    ctx.fillStyle = color;
+    for (let i = 0, n = Math.round(25 + 100 * seen / H); i < n; i++) {
+        const t = t0 + rnd() * (t1 - t0), side = rnd() < 0.5 ? -1 : 1;
+        const length = (35 + rnd() ** 2 * 480) * k, width = (2 + rnd() * 8) * k, lean = (rnd() - 0.3) * 0.5;
+        const base = at(t);
+        ctx.beginPath();
+        ctx.moveTo(base.x + D.x * width, base.y + D.y * width);
+        ctx.lineTo(base.x - D.x * width, base.y - D.y * width);
+        ctx.lineTo(base.x + (N.x * side + D.x * lean) * length, base.y + (N.y * side + D.y * lean) * length);
+        ctx.closePath(); ctx.fill();
+    }
+    const STEPS = 80, from = t0 === 0 ? -14 * k / len : t0;
+    const half = (i, sign) => {
+        const t = from + (t1 - from) * i / STEPS;
+        return at(t, sign * 12 * k * (1 - Math.max(0, t) * 0.7) * (0.85 + rnd() * 0.3));
     };
-    return { first: frame(false), second: frame(true), screen: true };
+    ctx.beginPath();
+    for (let i = 0; i <= STEPS; i++) { const p = half(i, 1); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }
+    for (let i = STEPS; i >= 0; i--) { const p = half(i, -1); ctx.lineTo(p.x, p.y); }
+    ctx.closePath(); ctx.fill();
+}
+
+/**
+ * Импакт-кадр разреза в самой сцене, как в Roblox: не снимок, а живая сцена под фильтром —
+ * цветокоррекция кадра (ColorCorrection), силуэты токенов (Highlight), камера (наезд и толчок)
+ * и разрез поверх. Всё рисуется движком в разрешении экрана.
+ * @returns {boolean}  false — сцены нет или она другая: кадр собирается по-старому.
+ */
+function playEngineSlash({ sceneId, point, tokens, line }) {
+    const stage = canvas?.stage, renderer = canvas?.app?.renderer;
+    if (!canvas?.ready || !stage || !renderer || !globalThis.PIXI || (sceneId && canvas.scene?.id !== sceneId)) return false;
+    const calm = game.settings.get(MODULE_ID, 'impactCalm');
+    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+
+    const filter = new PIXI.Filter(undefined, SLASH_SHADER, { uPoint: [0, 0], uDir: [1, 0], uSplit: [0, 0], uMode: 0, uDim: 1 });
+    const saved = { filters: stage.filters, filterArea: stage.filterArea, x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y };
+    const showMarks = hideTokenMarks();
+    const figures = silhouettes(tokens);
+    figures.visible = false;
+    stage.addChild(figures);
+    stage.filters = [...(saved.filters ?? []), filter];
+    stage.filterArea = renderer.screen;
+
+    const cv = document.createElement('canvas');
+    cv.className = 'gd-impact';
+    cv.width = Math.round(innerWidth * devicePixelRatio); cv.height = Math.round(innerHeight * devicePixelRatio);
+    document.body.append(cv);
+    const ctx = cv.getContext('2d');
+    playSound();
+
+    // Камера: наезд вокруг точки удара — она остаётся на месте экрана
+    const view = canvas.app.view ?? canvas.app.canvas;
+    const focus = screenFocus(point), rect = view.getBoundingClientRect();
+    const fx = rect.width * focus.fx, fy = rect.height * focus.fy;
+    const camera = (zoom, dx = 0, dy = 0) => {
+        stage.scale.set(saved.sx * zoom, saved.sy * zoom);
+        stage.position.set(fx - (fx - saved.x) * zoom + dx, fy - (fy - saved.y) * zoom + dy);
+    };
+    const k = Math.min(rect.width, rect.height) / 1000;
+    const ox = (Math.random() - 0.5) * 24 * k, oy = (Math.random() - 0.5) * 24 * k;
+    // Линия в координатах экрана — после камеры: шейдер работает в CSS-пикселях холста
+    const aim = split => {
+        const S = toView(line.from), E = toView(line.to);
+        const len = Math.hypot(E.x - S.x, E.y - S.y) || 1;
+        filter.uniforms.uPoint = [S.x, S.y];
+        filter.uniforms.uDir = [(E.x - S.x) / len, (E.y - S.y) / len];
+        filter.uniforms.uSplit = split ? [split[0] * k, split[1] * k] : [0, 0];
+    };
+
+    let phase = null;
+    const t0 = performance.now();
+    const finish = () => {
+        stage.filters = saved.filters ?? null;
+        stage.filterArea = saved.filterArea ?? null;
+        stage.scale.set(saved.sx, saved.sy);
+        stage.position.set(saved.x, saved.y);
+        figures.destroy({ children: true });
+        showMarks();
+        cv.remove();
+        playing = false;
+    };
+    const tick = now => {
+        try {
+            const t = (now - t0) / slow;
+            if (t >= (calm ? T.calm : T.end) || !canvas.ready) return finish();
+            const next = t < T.start ? 'start' : (calm || t < T.first) ? 'first' : 'second';
+            if (next !== phase) {
+                phase = next;
+                if (phase === 'start') camera(SLASH_ZOOM.start, -ox / 2, -oy / 2);
+                else if (phase === 'first') camera(SLASH_ZOOM.first, ox, oy);
+                else camera(SLASH_ZOOM.second, -ox / 3, -oy / 3);
+                aim(phase === 'start' ? null : SLASH_SPLIT[phase]);
+                filter.uniforms.uMode = phase === 'start' ? 0 : phase === 'first' ? 1 : 2;
+                // Без вспышек: первый кадр приглушён, белое становится серым
+                filter.uniforms.uDim = calm ? 0.55 : 1;
+                figures.visible = phase !== 'start';
+                if (phase === 'start') ctx.clearRect(0, 0, cv.width, cv.height);
+                else drawSlash(ctx, line, phase === 'first' ? (calm ? '#8c8c8c' : '#fff') : '#000');
+            }
+            requestAnimationFrame(tick);
+        } catch (error) {
+            finish();
+            console.error(`${MODULE_ID} | импакт-кадр`, error);
+        }
+    };
+    requestAnimationFrame(tick);
+    return true;
 }
 
 // ==========================================
@@ -674,17 +813,22 @@ let playing = false;
 export async function playImpact({ art, style = null, sceneId, point, tokens, line = null }) {
     if (playing || !game.settings.get(MODULE_ID, 'impactFrames')) return;
     playing = true;
+    // Разрез — в самой сцене; без сцены кадр собирается по-старому
+    if (style === 'slash' && line) {
+        try {
+            if (playEngineSlash({ sceneId, point, tokens, line })) return;
+        } catch (error) {
+            console.warn(`${MODULE_ID} | разрез в сцене`, error);
+        }
+    }
     let pair, focus = { fx: 0.5, fy: 0.5 };
-    // Разрез рисуется поверх снимка без попиксельной обработки — снимок в полном разрешении экрана
-    const slash = style === 'slash' && !!line;
-    const shot = captureScene(sceneId, slash ? Infinity : SHOT_WIDTH);
+    const shot = captureScene(sceneId);
     console.info(`${MODULE_ID} | импакт-кадр: ${shot ? `снимок сцены ${shot.width}×${shot.height}` : 'арт навыка'}`);
     if (shot) focus = screenFocus(point);
-    const portrait = slash ? null : portraitSource(tokens);
+    const portrait = portraitSource(tokens);
     try {
-        // Свой рисунок навыка; иначе крупный план портрета; без него — из снимка сцены, без сцены — из арта навыка
-        if (slash && shot) pair = slashFrames(shot, line, Math.round(innerWidth * devicePixelRatio), Math.round(innerHeight * devicePixelRatio), focus);
-        if (!pair && portrait) pair = await portraitFrames(portrait, innerWidth, innerHeight).catch(() => null);
+        // Кадры удара — крупный план портрета; без него — из снимка сцены, без сцены — из арта навыка
+        if (portrait) pair = await portraitFrames(portrait, innerWidth, innerHeight).catch(() => null);
         if (!pair && shot) pair = impactPair(shot, focus.fx, focus.fy, await figureLayer(tokens, shot));
         if (!pair) pair = await artPair(art);
     } catch (error) {
@@ -694,9 +838,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
     const cv = document.createElement('canvas');
     cv.className = 'gd-impact';
-    // Кадры в разрешении экрана — в пикселях устройства, остальные — в CSS-пикселях
-    const ratio = pair.screen ? devicePixelRatio : 1;
-    cv.width = Math.round(innerWidth * ratio); cv.height = Math.round(innerHeight * ratio);
+    cv.width = innerWidth; cv.height = innerHeight;
     document.body.append(cv);
     const ctx = cv.getContext('2d');
     const W = cv.width, H = cv.height, cx = W * focus.fx, cy = H * focus.fy;
@@ -711,12 +853,6 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         ctx.drawImage(src, fx - (fx - bx) * zoom + ox, fy - (fy - by) * zoom + oy, src.width * base * zoom, src.height * base * zoom);
     };
     const zoomOf = z => pair.portrait ? 1 + (z - 1) * 0.3 : z;
-    // Кадры в разрешении экрана с наездом внутри: встают 1:1, первый — с толчком камеры
-    const place = (src, dx, dy) => {
-        ctx.fillStyle = src === pair.first ? '#000' : '#fff';
-        ctx.fillRect(0, 0, W, H);
-        ctx.drawImage(src, dx * ratio, dy * ratio);
-    };
 
     // Стартовый кадр — живая сцена, застывшая с рывком к точке удара и поднятым контрастом;
     // первый кадр удара сдвинут и чуть крупнее, второй встаёт на место
@@ -729,7 +865,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             const t = (now - t0) / slow;
             if (t >= (calm ? T.calm : T.end)) return finish();
             // Чёрно-белые кадры растягиваются без сглаживания: края остаются резкими, а не мутными
-            ctx.imageSmoothingEnabled = !!(shot && t < T.start) || !!pair.portrait || !!pair.screen;
+            ctx.imageSmoothingEnabled = !!(shot && t < T.start) || !!pair.portrait;
             if (shot && t < T.start) {
                 ctx.filter = 'contrast(1.45) saturate(1.3)';
                 cover(shot, ZOOM.start, -ox / 2, -oy / 2);
@@ -737,11 +873,9 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             } else if (calm || t < T.first) {
                 // Без вспышек: первый кадр приглушён — белое становится серым
                 if (calm) ctx.filter = 'brightness(0.55)';
-                if (pair.screen) place(pair.first, ox, oy);
-                else cover(pair.first, zoomOf(ZOOM.first), ox, oy, pair.portrait);
+                cover(pair.first, zoomOf(ZOOM.first), ox, oy, pair.portrait);
                 ctx.filter = 'none';
-            } else if (pair.screen) place(pair.second, -ox / 3, -oy / 3);
-            else cover(pair.second, zoomOf(ZOOM.second), 0, 0, pair.portrait);
+            } else cover(pair.second, zoomOf(ZOOM.second), 0, 0, pair.portrait);
             requestAnimationFrame(tick);
         } catch (error) {
             finish();
