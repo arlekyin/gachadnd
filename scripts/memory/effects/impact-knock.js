@@ -25,7 +25,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 /**
  * Куда отлетает цель: по прямой от нанёсшего удар на feet футов, до первой стены.
  * Считается там, где применён урон, и рассылается всем вместе с кадром.
- * @returns {{tokenId, x, y, from: {x, y}, to: {x, y}}|null}  x, y — новый левый верхний угол токена.
+ * @returns {{tokenId, x, y, reach, from: {x, y}, to: {x, y}}|null}  x, y — новый левый верхний угол токена; reach — полная дальность.
  */
 export function knockback(casterId, targetId, feet) {
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
@@ -61,7 +61,7 @@ export function knockback(casterId, targetId, feet) {
         corner.x = Math.min(Math.max(corner.x, rect.x), rect.x + rect.width - w);
         corner.y = Math.min(Math.max(corner.y, rect.y), rect.y + rect.height - h);
     }
-    return { tokenId: targetId, x: corner.x, y: corner.y, from: { x: b.x, y: b.y }, to: { x: corner.x + w / 2, y: corner.y + h / 2 } };
+    return { tokenId: targetId, x: corner.x, y: corner.y, reach, from: { x: b.x, y: b.y }, to: { x: corner.x + w / 2, y: corner.y + h / 2 } };
 }
 
 // Копия картинки токена в слое кадра: на месте токена, с его масштабом и поворотом
@@ -82,35 +82,38 @@ function tokenCopy(token) {
 }
 
 /**
- * Белый взрыв за целью: голова вокруг токена и шлейф с зубцами в сторону отлёта (ось x),
- * поверх — лучи разной длины, как разлёт от взрыва. Зубцы шлейфа кончаются у точки отлёта:
- * взрыв показывает, куда полетит цель.
- * @param {number} radius  Радиус токена — голова и основание шлейфа.
- * @param {number} reach   Расстояние до точки отлёта.
+ * Разлёт за целью: белые линии на чёрном в сторону отлёта (ось x) — как след от взрыва.
+ * Линии гуще у оси, разной длины и толщины, часть — пунктиром; каждая сужается к обоим концам,
+ * как мазок. Длина разлёта — расстояние отлёта.
+ * @param {number} radius  Радиус токена: линии начинаются у его края.
+ * @param {number} reach   Расстояние отлёта.
  */
 function burstGraphic(radius, reach) {
     const g = new PIXI.Graphics();
-    const rnd = seeded(13), R = radius, U = Math.max(reach, radius * 3) / 8;
-    // Лучи: узкие клинья от головы назад, в конусе шлейфа
-    g.beginFill(0xffffff);
-    for (let i = 0; i < 70; i++) {
-        const a = (rnd() - 0.5) * 1.3, w = 0.006 + rnd() ** 2 * 0.03, from = R * 0.8 + U * rnd() * 2, to = U * (4 + rnd() ** 0.7 * 6);
+    const rnd = seeded(13), R = radius, L = Math.max(reach, radius * 4);
+    const SPREAD = 0.95;
+    const stroke = (a, from, to, w) => {
+        const mid = from + (to - from) * (0.25 + rnd() * 0.2);
         g.drawPolygon([
-            Math.cos(a - w) * from, Math.sin(a - w) * from, Math.cos(a) * to, Math.sin(a) * to, Math.cos(a + w) * from, Math.sin(a + w) * from
+            Math.cos(a) * from, Math.sin(a) * from,
+            Math.cos(a - w) * mid, Math.sin(a - w) * mid,
+            Math.cos(a) * to, Math.sin(a) * to,
+            Math.cos(a + w) * mid, Math.sin(a + w) * mid
         ]);
+    };
+    g.beginFill(0xffffff);
+    for (let i = 0; i < 420; i++) {
+        // Гуще у оси: угол — разность двух случайных
+        const a = (rnd() - rnd()) * SPREAD;
+        const from = R * (0.95 + rnd() * 0.9) + L * rnd() ** 3 * 0.4;
+        const to = from + L * (0.25 + rnd() ** 0.6 * 0.95) * (1 - Math.abs(a) / SPREAD * 0.6);
+        const w = (0.002 + rnd() ** 3 * 0.02) * (1 - Math.abs(a) / SPREAD * 0.5);
+        if (rnd() < 0.3) {
+            // Пунктир: несколько коротких штрихов вдоль одного луча
+            const parts = 2 + Math.floor(rnd() * 3), step = (to - from) / parts;
+            for (let k = 0; k < parts; k++) stroke(a, from + step * k, from + step * (k + 0.35 + rnd() * 0.35), w * 0.8);
+        } else stroke(a, from, to, w);
     }
-    // Шлейф с зубцами на конце, как на эскизе
-    // Ширина шлейфа: у головы — токен, к зубцам расходится до ±3U
-    const j = () => (rnd() - 0.5) * 0.25 * U, side = v => Math.max(R * 1.15, U * v);
-    g.drawPolygon([
-        0, -1.15 * R,
-        3.2 * U + j(), -side(1.9) + j(), 6.4 * U + j(), -side(2.7) + j(), 7.4 * U, -side(3.1),
-        5.9 * U + j(), -side(1.7) + j(), 8.1 * U, -side(1.3),
-        6.0 * U + j(), -0.4 * U + j(), 7.7 * U, 0.25 * U, 7.9 * U, 0.6 * U,
-        6.1 * U + j(), side(1.0) + j(), 7.3 * U, side(2.7),
-        5.0 * U + j(), side(2.4) + j(), 2.6 * U + j(), side(1.8) + j(), 0, 1.15 * R
-    ]);
-    g.drawCircle(0, 0, 1.2 * R);
     g.endFill();
     return g;
 }
@@ -137,12 +140,13 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
     const a = caster?.center ?? knock.from, b = knock.from;
     const radius = Math.max(target.w ?? 0, target.h ?? 0, canvas.dimensions.size) / 2;
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    // Центр кадра чуть смещён к цели: за ней разлёт
     const half = ['x', 'y'].map(axis => Math.max(...[a, b].map(p => Math.abs(p[axis] - mid[axis]))) + radius * 1.5);
     const maxScale = Math.min(saved.sx * MAX_ZOOM, globalThis.CONFIG?.Canvas?.maxZoom ?? 3);
     const fit = Math.min(rect.width * FILL / (2 * half[0]), rect.height * FILL / (2 * half[1]));
     const scale = Math.max(saved.sx, Math.min(maxScale, fit));
     const at = (s, center) => ({ x: rect.width / 2 - (center.x - stage.pivot.x) * s, y: rect.height / 2 - (center.y - stage.pivot.y) * s });
-    const close = at(scale, mid);
+    const close = at(scale, { x: lerp(mid.x, b.x, 0.35), y: lerp(mid.y, b.y, 0.35) });
     const camera = (k, dx = 0, dy = 0) => {
         const s = lerp(saved.sx, scale, k);
         stage.scale.set(s, s * saved.sy / saved.sx);
@@ -154,7 +158,7 @@ export function playKnock({ casterId, targetId, knock, calm = false, slow = 1, h
     const dark = new PIXI.Graphics();
     dark.beginFill(0x000000).drawRect(-1e6, -1e6, 2e6, 2e6).endFill();
     dark.alpha = 0;
-    const burst = burstGraphic(radius, Math.hypot(knock.to.x - b.x, knock.to.y - b.y));
+    const burst = burstGraphic(radius, knock.reach ?? Math.hypot(knock.to.x - b.x, knock.to.y - b.y));
     burst.position.set(b.x, b.y);
     burst.rotation = Math.atan2(knock.to.y - b.y, knock.to.x - b.x);
     burst.scale.set(0, 0);
