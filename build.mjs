@@ -28,8 +28,8 @@ const RARITIES = {
     blue: { label: 'Синий', img: 'blue_fog_active.webp' },
     purple: { label: 'Фиолетовый', img: 'purple_fog_active.webp' },
     red: { label: 'Красный', img: 'red_fog_active.webp' },
-    // Всадники Погибели; своей иконки пока нет
-    orange: { label: 'Оранжевый', img: 'red_fog_active.webp' }
+    // Всадники Погибели
+    orange: { label: 'Оранжевый', img: 'orange_fog_active.webp' }
 };
 
 // Папка → категория
