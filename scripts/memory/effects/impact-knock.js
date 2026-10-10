@@ -83,14 +83,14 @@ function tokenCopy(token) {
 
 /**
  * Разлёт за целью: белые линии на чёрном в сторону отлёта (ось x) — как след от взрыва.
- * Линии гуще у оси, разной длины и толщины, часть — пунктиром; каждая сужается к обоим концам,
- * как мазок. Длина разлёта — расстояние отлёта.
+ * Линии по всему конусу, у оси немного гуще, разной длины и толщины, часть — пунктиром; каждая сужается к обоим концам,
+ * как мазок. Разлёт вдвое длиннее расстояния отлёта.
  * @param {number} radius  Радиус токена: линии начинаются у его края.
  * @param {number} reach   Расстояние отлёта.
  */
 function burstGraphic(radius, reach) {
     const g = new PIXI.Graphics();
-    const rnd = seeded(13), R = radius, L = Math.max(reach, radius * 4);
+    const rnd = seeded(13), R = radius, L = Math.max(reach * 2, radius * 8);
     const SPREAD = 0.95;
     const stroke = (a, from, to, w) => {
         const mid = from + (to - from) * (0.25 + rnd() * 0.2);
@@ -102,12 +102,12 @@ function burstGraphic(radius, reach) {
         ]);
     };
     g.beginFill(0xffffff);
-    for (let i = 0; i < 420; i++) {
-        // Гуще у оси: угол — разность двух случайных
-        const a = (rnd() - rnd()) * SPREAD;
+    for (let i = 0; i < 700; i++) {
+        // Почти равномерно по конусу, у оси чуть гуще: сплошного белого быть не должно
+        const u = rnd() * 2 - 1, a = Math.sign(u) * Math.abs(u) ** 1.25 * SPREAD;
         const from = R * (0.95 + rnd() * 0.9) + L * rnd() ** 3 * 0.4;
         const to = from + L * (0.25 + rnd() ** 0.6 * 0.95) * (1 - Math.abs(a) / SPREAD * 0.6);
-        const w = (0.002 + rnd() ** 3 * 0.02) * (1 - Math.abs(a) / SPREAD * 0.5);
+        const w = (0.0015 + rnd() ** 4 * 0.014) * (1 - Math.abs(a) / SPREAD * 0.4);
         if (rnd() < 0.3) {
             // Пунктир: несколько коротких штрихов вдоль одного луча
             const parts = 2 + Math.floor(rnd() * 3), step = (to - from) / parts;
