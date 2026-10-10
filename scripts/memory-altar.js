@@ -27,6 +27,7 @@ import {
 } from "./inventory.js";
 import { isAtRest } from "./memory-api.js";
 import { onSocket, emit } from "./socket.js";
+import { StashWindow } from "./stash.js";
 import { MindPhysics } from "./mind-physics.js";
 import { AltarSynapses, ResonanceWeave } from "./altar-synapses.js";
 import { MindCore } from "./altar-core.js";
@@ -325,7 +326,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             ritual: MemoryAltar.#onRitual,
             tag: MemoryAltar.#onTag,
             mergePick: MemoryAltar.#onMergePick,
-            conjure: MemoryAltar.#onConjure
+            conjure: MemoryAltar.#onConjure,
+            stash: function () { StashWindow.open(this.actor); }
         }
     };
 

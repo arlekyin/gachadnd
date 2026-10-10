@@ -1,0 +1,25 @@
+<div class="gd-stash">
+    {{#unless open}}<p class="gd-stash-closed">Хранилище доступно только у Алтаря Памяти.</p>{{/unless}}
+    <section class="gd-stash-col">
+        <h3><i class="fas fa-sack"></i> Сумка <small>пахнет</small></h3>
+        <div class="gd-stash-list">
+            {{#each bag}}
+            <button type="button" class="gd-stash-crystal" style="--rarity: {{color}}" data-action="deposit" data-item-id="{{id}}" title="Отложить в Хранилище">
+                <img src="{{img}}" alt=""><span class="gd-stash-name">{{name}}</span>{{#if (gt quantity 1)}}<span class="gd-stash-count">×{{quantity}}</span>{{/if}}
+                <i class="fas fa-arrow-right"></i>
+            </button>
+            {{else}}<span class="gd-stash-none">кристаллов нет</span>{{/each}}
+        </div>
+    </section>
+    <section class="gd-stash-col">
+        <h3><i class="fas fa-box-archive"></i> Хранилище <small>не пахнет</small></h3>
+        <div class="gd-stash-list">
+            {{#each stash}}
+            <button type="button" class="gd-stash-crystal" style="--rarity: {{color}}" data-action="withdraw" data-key="{{key}}" title="Забрать в сумку">
+                <i class="fas fa-arrow-left"></i>
+                <img src="{{img}}" alt=""><span class="gd-stash-name">{{name}}</span>{{#if (gt quantity 1)}}<span class="gd-stash-count">×{{quantity}}</span>{{/if}}
+            </button>
+            {{else}}<span class="gd-stash-none">пусто</span>{{/each}}
+        </div>
+    </section>
+</div>

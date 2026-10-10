@@ -2091,3 +2091,26 @@
 .gd-portal-footer { flex: none; display: flex; justify-content: center; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 13px; }
 .gd-portal-open { width: auto; padding: 6px 18px; background: #3a3d44; border: 1px solid #9d9d9d; color: #f0f1f3; }
 .gd-portal-open:disabled { opacity: 0.4; }
+
+/* ---------- Хранилище кристаллов у Алтаря ---------- */
+.gachadnd-stash .window-content { padding: 0; background: linear-gradient(180deg, #14161b, #0b0c0f); color: #e4e6ea; }
+.gd-stash { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; height: 100%; }
+.gd-stash-closed { grid-column: 1 / -1; margin: 0; padding: 8px 14px; background: rgba(255, 90, 70, 0.12); color: #ff9f8f; font-size: 12px; }
+.gd-stash-col { grid-row: 2; display: flex; flex-direction: column; min-height: 0; padding: 12px 14px; }
+.gd-stash-col + .gd-stash-col { border-left: 1px solid rgba(255, 255, 255, 0.08); }
+.gd-stash-col h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; border: none; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; }
+.gd-stash-col h3 small { margin-left: auto; font-size: 10px; letter-spacing: 0.15em; opacity: 0.5; }
+.gd-stash-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.gd-stash-crystal {
+    display: flex; align-items: center; gap: 8px; width: 100%; height: auto; margin: 0; padding: 3px 8px 3px 3px;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid color-mix(in srgb, var(--rarity) 35%, transparent); border-radius: 4px;
+    color: inherit; font-size: 13px; line-height: 1.2; text-align: left; cursor: pointer;
+}
+.gd-stash-crystal:hover { background: color-mix(in srgb, var(--rarity) 14%, #0b0c0f); }
+.gd-stash-crystal img { width: 26px; height: 26px; border: none; flex: none; }
+.gd-stash-crystal .gd-stash-name { flex: 1; color: var(--rarity); }
+.gd-stash-crystal .gd-stash-count { opacity: 0.7; }
+.gd-stash-crystal > i { opacity: 0.4; font-size: 11px; }
+.gd-stash-none { opacity: 0.45; font-size: 12px; font-style: italic; }
+.gachadnd-memory-altar button.gd-stash-open { width: auto; height: auto; margin: 8px 0 0; padding: 6px 14px; align-self: flex-start; background: rgba(7, 8, 11, 0.7); border: 1px solid #3a4148; border-radius: 3px; color: #a9bbb6; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+.gachadnd-memory-altar button.gd-stash-open:hover { border-color: #a9bbb6; color: #eef3f1; }
