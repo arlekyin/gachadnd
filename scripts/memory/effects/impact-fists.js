@@ -16,7 +16,8 @@
 // и он летит дольше (finalFly)
 const T = {
     dark: 220, firstFly: 180, fly: 115, hold: 75, pause: 280, finalFly: 160,
-    cracks: 170, flash: 200, fade: 380, finalHold: 110, crack: 120, shake: 240, puff: 600, pop: 280
+    cracks: 170, flash: 200, fade: 380, finalHold: 420, finalNegative: 120, crack: 120, shake: 240, puff: 600, pop: 280,
+    ripple: 520
 };
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
 const SHAKE = { hit: 0.028, final: 0.05 };
@@ -58,6 +59,7 @@ const easeIn = t => t * t * t;
 const easeOut = t => 1 - (1 - t) ** 3;
 const clamp01 = t => Math.min(1, Math.max(0, t));
 const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => t * t * (3 - 2 * t);
 // Затухающее колебание около нуля: x — время в долях, 0 → 1
 const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4 * x) * Math.cos(x * Math.PI * 4);
 
@@ -66,112 +68,156 @@ const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4 * x) * Math.cos(x * Math.P
 // ==========================================
 
 /**
- * Кулак анфас, костяшками в экран: сверху четыре бугра пальцев, поперёк низа — большой палец.
- * Координаты — в долях ширины кулака, центр в (0, 0). У каждого кулака свои мелкие неровности.
+ * Кулак анфас, костяшками в экран: почти квадратный, сверху — мягкие бугры пальцев, внизу —
+ * подвёрнутый большой палец. Координаты — в долях ширины кулака, центр в (0, 0).
+ * У каждого кулака свои мелкие неровности.
  */
 function fistShape(seed) {
     const rnd = seeded(seed);
-    const peaks = [-0.34, -0.42, -0.41, -0.33].map(y => y + (rnd() - 0.5) * 0.03);
-    return { peaks, valley: -0.24 + (rnd() - 0.5) * 0.02 };
+    const peaks = [-0.4, -0.46, -0.45, -0.39].map(y => y + (rnd() - 0.5) * 0.02);
+    return { peaks, valley: -0.33 + (rnd() - 0.5) * 0.015, tilt: (rnd() - 0.5) * 0.04 };
 }
 
 function fistPath(ctx, shape) {
-    const { peaks, valley } = shape;
+    const { peaks, valley, tilt } = shape;
     ctx.beginPath();
-    ctx.moveTo(-0.5, -0.12);
-    // Бугры пальцев: от впадины к впадине через вершину
+    ctx.moveTo(-0.5, -0.24);
+    // Бугры пальцев — невысокие: кулак сжат, пальцы прижаты
     for (let i = 0; i < 4; i++) {
-        const x0 = -0.5 + i * 0.25, x1 = x0 + 0.25, y0 = i ? valley : -0.12, y1 = i === 3 ? -0.1 : valley;
-        ctx.bezierCurveTo(x0, peaks[i] - 0.02, x1, peaks[i] - 0.02, x1, y1);
+        const x0 = -0.5 + i * 0.25, x1 = x0 + 0.25, y1 = i === 3 ? -0.24 + tilt : valley;
+        ctx.bezierCurveTo(x0 + 0.02, peaks[i], x1 - 0.02, peaks[i], x1, y1);
     }
-    // Правый край, низ кулака и большой палец слева
-    ctx.bezierCurveTo(0.53, 0.05, 0.52, 0.3, 0.36, 0.4);
-    ctx.bezierCurveTo(0.12, 0.47, -0.3, 0.46, -0.44, 0.36);
-    ctx.bezierCurveTo(-0.58, 0.24, -0.56, 0.02, -0.5, -0.12);
+    // Правый край почти прямой, низ — подвёрнутый большой палец, левый край чуть скруглён
+    ctx.bezierCurveTo(0.54, 0.0, 0.52, 0.28, 0.4, 0.38);
+    ctx.bezierCurveTo(0.2, 0.46, -0.25, 0.47, -0.42, 0.38);
+    ctx.bezierCurveTo(-0.56, 0.28, -0.54, -0.02, -0.5, -0.24);
     ctx.closePath();
 }
 
+// Шум значений: плавные пятна — штриховка ложится клочьями, как печать на шершавой бумаге
+function valueNoise(seed, cells = 9) {
+    const rnd = seeded(seed), grid = Array.from({ length: (cells + 1) ** 2 }, () => rnd());
+    return (u, v) => {
+        const x = (u + 0.75) / 1.5 * cells, y = (v + 0.75) / 1.5 * cells;
+        const ix = Math.max(0, Math.min(cells - 1, Math.floor(x))), iy = Math.max(0, Math.min(cells - 1, Math.floor(y)));
+        const fx = x - ix, fy = y - iy, at = (a, b) => grid[(iy + b) * (cells + 1) + ix + a];
+        const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+        return (at(0, 0) * (1 - sx) + at(1, 0) * sx) * (1 - sy) + (at(0, 1) * (1 - sx) + at(1, 1) * sx) * sy;
+    };
+}
+
 /**
- * Рисунок кулака — один раз, заранее: мягкое белое тело со светящимся краем, растровая
- * штриховка в тени (слева и снизу, гуще к краю) и линии пальцев углём в несколько проходов.
- * В кадре рисунок только масштабируется и поворачивается — подробный, но дешёвый.
+ * Рисунок кулака — один раз, заранее, как кадр аниме-импакта:
+ *  - белое тело с неровным мягким краем, как мазок мела, и лёгкий объём (светлее сверху справа);
+ *  - зернистая штриховка печати в тени — слева, снизу и у края, клочьями;
+ *  - линии пальцев сухим углём: три штриха сверху вниз, сходящиеся в линию у основания пальцев.
+ * Второй рисунок — размытое белое пятно той же формы: так кулак выглядит издалека, пока летит.
+ * В кадре рисунки только масштабируются и поворачиваются — подробно, но дёшево.
  * @param {object} shape  Форма из fistShape.
  * @param {number} size   Ширина кулака в рисунке, пиксели.
- * @returns {{canvas: HTMLCanvasElement, size: number}}
+ * @returns {{canvas: HTMLCanvasElement, blob: HTMLCanvasElement, size: number}}
  */
 function fistSprite(shape, size, seed) {
-    const S = Math.ceil(size * 1.5), c = document.createElement('canvas');
-    c.width = c.height = S;
-    const x = c.getContext('2d');
+    const S = Math.ceil(size * 1.5);
+    const make = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
+    const c = make(), x = c.getContext('2d');
     const rnd = seeded(seed);
     const toPx = (u, v) => [S / 2 + u * size, S / 2 + v * size];
     x.setTransform(size, 0, 0, size, S / 2, S / 2);
     const px = 1 / size;
 
-    // Контур: точки края лучами из центра — для рваного края и расстояния до края
-    fistPath(x, shape);
-    const edge = [];
-    for (let i = 0; i < 180; i++) {
-        const a = i / 180 * Math.PI * 2;
-        let r = 0.05;
-        while (r < 0.8 && x.isPointInPath(...toPx(Math.cos(a) * r, Math.sin(a) * r + 0.02))) r += 0.004;
-        edge.push({ u: Math.cos(a) * r, v: Math.sin(a) * r + 0.02, a });
-    }
-
-    // Тело: белое, край мягко светится
-    x.save();
-    x.shadowColor = 'rgba(255,248,245,0.95)';
-    x.shadowBlur = size * 0.035;
-    x.fillStyle = '#fbf6f3';
-    fistPath(x, shape);
-    x.fill();
-    x.restore();
-    // Растровая штриховка: сетка точек под 45°, точка крупнее там, где тень — у края, слева и снизу
-    // (свет сверху справа). Контур — отдельным путём: точки рисуются своими путями
+    // Контур — отдельным путём: штрихи и точки рисуются своими путями
     const body = new Path2D();
     fistPath({ beginPath() {}, moveTo: (...a) => body.moveTo(...a), bezierCurveTo: (...a) => body.bezierCurveTo(...a), closePath: () => body.closePath() }, shape);
-    x.fillStyle = 'rgba(40,30,30,0.7)';
-    const coarse = edge.filter((_, i) => i % 3 === 0);
-    const step = px * 5, dotMax = step * 0.42;
-    for (let gy = -0.75; gy < 0.75; gy += step) {
-        for (let gx = -0.75; gx < 0.75; gx += step) {
-            const u = (gx - gy) * Math.SQRT1_2, v = (gx + gy) * Math.SQRT1_2;
-            if (Math.abs(u) > 0.6 || Math.abs(v) > 0.5 || !x.isPointInPath(body, ...toPx(u, v))) continue;
-            let near = 1;
-            for (const p of coarse) near = Math.min(near, Math.hypot(p.u - u, p.v - v));
-            // Тень: сторона от света (слева снизу) — сильнее; у освещённого края растр почти пропадает
-            const dark = Math.min(1, Math.max(0, -u * 0.9 + v * 0.9 + 0.25));
-            const shade = Math.min(1, Math.max(0, 1 - near / 0.09) * (0.15 + 0.75 * dark) + Math.max(0, -u * 0.8 + v * 0.7 - 0.15) * 0.8);
-            if (shade < 0.08) continue;
-            x.beginPath();
-            x.arc(u, v, dotMax * Math.sqrt(shade), 0, Math.PI * 2);
-            x.fill();
-        }
+    // Точки края лучами из центра — для неровного края и расстояния до края
+    const edge = [];
+    for (let i = 0; i < 240; i++) {
+        const a = i / 240 * Math.PI * 2;
+        let r = 0.05;
+        while (r < 0.8 && x.isPointInPath(body, ...toPx(Math.cos(a) * r, Math.sin(a) * r + 0.02))) r += 0.003;
+        edge.push({ u: Math.cos(a) * r, v: Math.sin(a) * r + 0.02, a });
     }
+    // Неровный край мелом: контур по точкам края с плавной случайной волной
+    const wave = valueNoise(seed + 5, 24);
+    const ragged = new Path2D();
+    edge.forEach((p, i) => {
+        const j = (wave(Math.cos(p.a) * 0.7, Math.sin(p.a) * 0.7) - 0.5) * 0.045 + (rnd() - 0.5) * 0.008;
+        const u = p.u + Math.cos(p.a) * j, v = p.v + Math.sin(p.a) * j;
+        i ? ragged.lineTo(u, v) : ragged.moveTo(u, v);
+    });
+    ragged.closePath();
 
-    // Линии пальцев углём: каждая — несколько дрожащих проходов разной толщины
-    x.strokeStyle = 'rgba(20,14,14,0.6)';
+    // Тело: мягкий светящийся ореол и белая заливка
+    x.save();
+    x.filter = `blur(${Math.max(1, size * 0.012)}px)`;
+    x.fillStyle = 'rgba(255,250,248,0.9)';
+    x.fill(ragged);
+    x.restore();
+    x.fillStyle = '#fbf7f4';
+    x.fill(ragged);
+    // Объём: к низу и влево чуть серее
+    x.save();
+    x.clip(ragged);
+    const shade = x.createLinearGradient(0.35, -0.4, -0.45, 0.45);
+    shade.addColorStop(0, 'rgba(255,255,255,0)');
+    shade.addColorStop(0.55, 'rgba(200,190,186,0.12)');
+    shade.addColorStop(1, 'rgba(150,140,136,0.35)');
+    x.fillStyle = shade;
+    x.fillRect(-0.8, -0.8, 1.6, 1.6);
+
+    // Штриховка печати: мелкие тёмные точки и чёрточки, гуще в тени и у края, клочьями
+    const patch = valueNoise(seed + 11, 10);
+    const coarse = edge.filter((_, i) => i % 6 === 0);
+    for (let i = 0; i < 45000; i++) {
+        const u = (rnd() - 0.5) * 1.15, v = (rnd() - 0.5) * 1.0;
+        // Тень — слева и снизу; у края гуще только на теневой стороне: светлый край остаётся белым
+        const side = Math.max(0, -u * 0.9 + v * 0.8 + 0.05);
+        if (side < 0.05 && rnd() > 0.1) continue;
+        let near = 1;
+        for (const p of coarse) near = Math.min(near, Math.hypot(p.u - u, p.v - v));
+        const tone = (Math.max(0, 1 - near / 0.12) * 0.5 * Math.min(1, side * 2) + side * 0.7) * (0.3 + patch(u, v) * 1.2);
+        if (rnd() > tone * 0.5) continue;
+        const d = px * (0.7 + rnd() * 1.1);
+        x.fillStyle = `rgba(50,40,40,${0.35 + rnd() * 0.35})`;
+        // Чёрточки печати — горизонтальные, как в отсканированной манге
+        if (rnd() < 0.3) x.fillRect(u, v, d * (2 + rnd() * 3), d * 0.8);
+        else x.fillRect(u, v, d, d);
+    }
+    x.restore();
+
+    // Линии пальцев сухим углём: несколько дрожащих проходов, часть с разрывами
     x.lineCap = 'round';
     x.lineJoin = 'round';
     const charcoal = (points, width) => {
-        for (let pass = 0; pass < 4; pass++) {
-            const j = () => (rnd() - 0.5) * 0.008;
-            x.lineWidth = width * (0.3 + rnd() * 0.5);
+        for (let pass = 0; pass < 5; pass++) {
+            const j = () => (rnd() - 0.5) * 0.009;
+            x.strokeStyle = `rgba(30,20,20,${0.45 + rnd() * 0.3})`;
+            x.lineWidth = width * (0.35 + rnd() * 0.65);
+            x.setLineDash(pass > 2 ? [0.02 + rnd() * 0.05, 0.004 + rnd() * 0.012] : []);
             x.beginPath();
             x.moveTo(points[0][0] + j(), points[0][1] + j());
             for (let i = 1; i < points.length; i++) x.lineTo(points[i][0] + j(), points[i][1] + j());
             x.stroke();
         }
+        x.setLineDash([]);
     };
-    const w = 0.016;
-    // Между пальцами — вниз от впадины и в конце загиб вдоль низа
-    for (const [i, mx] of [[0, -0.25], [1, 0], [2, 0.25]]) {
-        charcoal([[mx - 0.01, shape.valley + 0.05], [mx, -0.03], [mx + 0.01, 0.08], [mx + 0.02, 0.14]], w);
+    const w = 0.022;
+    // Три штриха между пальцами, чуть веером: сверху крючок, внизу короткий загиб вдоль основания
+    // пальца — штрихи не сливаются в одну линию
+    for (const [mx, lean, top, bottom, foot] of [[-0.23, -0.05, -0.24, 0.2, 0.09], [0.02, 0, -0.29, 0.18, 0.1], [0.26, 0.06, -0.26, 0.15, 0.07]]) {
+        charcoal([[mx - 0.025, top + 0.02], [mx, top], [mx + lean * 0.4, top + (bottom - top) * 0.45], [mx + lean, bottom], [mx + lean + foot, bottom + 0.012]], w);
     }
-    // Большой палец: сгиб поперёк низа и складка у основания
-    charcoal([[-0.46, 0.1], [-0.3, 0.13], [-0.1, 0.16], [0.08, 0.19], [0.16, 0.24]], w);
-    charcoal([[-0.4, 0.31], [-0.27, 0.35], [-0.14, 0.35]], w * 0.7);
-    return { canvas: c, size };
+    // Сгиб большого пальца — короткий штрих снизу слева
+    charcoal([[-0.44, 0.0], [-0.43, 0.16], [-0.36, 0.25]], w * 0.75);
+
+    // Размытое пятно той же формы — кулак издалека
+    const blob = make(), bx = blob.getContext('2d');
+    bx.setTransform(size, 0, 0, size, S / 2, S / 2);
+    bx.filter = `blur(${Math.max(2, size * 0.05)}px)`;
+    bx.fillStyle = '#fbf7f4';
+    bx.fill(ragged);
+    bx.fill(ragged);
+    return { canvas: c, blob, size };
 }
 
 // Рисунки кулаков между показами: размер экрана обычно не меняется
@@ -192,13 +238,13 @@ export function prepareFists() {
 }
 
 // Нарисовать заготовку кулака: центр (x, y), ширина size, поворот, растяжение вдоль осей кулака
-function drawSprite(ctx, sprite, x, y, size, rot, sx = 1, sy = 1) {
-    const k = size / sprite.size, S = sprite.canvas.width;
+function drawSprite(ctx, sprite, x, y, size, rot, sx = 1, sy = 1, image = sprite.canvas) {
+    const k = size / sprite.size, S = image.width;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(rot);
     ctx.scale(k * sx, k * sy);
-    ctx.drawImage(sprite.canvas, -S / 2, -S / 2);
+    ctx.drawImage(image, -S / 2, -S / 2);
     ctx.restore();
 }
 
@@ -291,6 +337,47 @@ function drawFlash(ctx, W, H, power, rays) {
 }
 
 // ==========================================
+// ВОЛНЫ
+// ==========================================
+
+/**
+ * Волны на воде: кадр выводится кольцами вокруг точки удара, каждое кольцо — со своим
+ * масштабом. Масштаб колеблется вдоль радиуса бегущей волной: изображение то растягивается,
+ * то сжимается, и по кадру расходятся круги. За фронтом волны и к концу — спокойно.
+ * @param {number} age  Доля времени волн, 0 → 1.
+ */
+function ripple(out, image, cx, cy, age, unit) {
+    const W = image.width, H = image.height;
+    const reach = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
+    const front = reach * (0.15 + 0.95 * easeOut(age));
+    const wavelength = unit * 0.11, rings = 36, calmDown = (1 - age) ** 1.5;
+    out.drawImage(image, 0, 0);
+    for (let i = rings - 1; i >= 0; i--) {
+        const r0 = front * i / rings, r1 = front * (i + 1) / rings, r = (r0 + r1) / 2;
+        // Сильнее у фронта, к центру гаснет; к концу показа — всё спокойнее
+        const strength = 0.05 * calmDown * (0.25 + 0.75 * (r / front));
+        const s = 1 + strength * Math.sin((r - front) / wavelength * Math.PI * 2);
+        out.save();
+        out.beginPath();
+        out.arc(cx, cy, r1, 0, Math.PI * 2);
+        out.arc(cx, cy, r0, 0, Math.PI * 2, true);
+        out.clip();
+        out.drawImage(image, cx - cx * s, cy - cy * s, W * s, H * s);
+        out.restore();
+    }
+    // Гребни волн — тонкие светлые круги
+    out.lineWidth = unit * 0.003;
+    for (let k = 0; k < 4; k++) {
+        const r = front - k * wavelength * 1.3;
+        if (r <= 0) continue;
+        out.strokeStyle = `rgba(255,255,255,${0.35 * calmDown * (1 - k / 4)})`;
+        out.beginPath();
+        out.arc(cx, cy, r, 0, Math.PI * 2);
+        out.stroke();
+    }
+}
+
+// ==========================================
 // ПОКАЗ
 // ==========================================
 
@@ -310,8 +397,12 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
         cv.width = Math.round(innerWidth * devicePixelRatio);
         cv.height = Math.round(innerHeight * devicePixelRatio);
         document.body.append(cv);
-        const ctx = cv.getContext('2d');
+        const out = cv.getContext('2d');
         const W = cv.width, H = cv.height, unit = Math.min(W, H);
+        // Кадр рисуется в буфер, на экран — целиком или кольцами волн после пятого удара
+        const buffer = document.createElement('canvas');
+        buffer.width = W; buffer.height = H;
+        const ctx = buffer.getContext('2d');
         const rnd = seeded(101);
         const rays = Array.from({ length: 90 }, () => ({ a: rnd() * Math.PI * 2, w: 0.002 + rnd() ** 2 * 0.012 }));
         // Полёт каждого кулака: откуда (рядом с центром), изгиб дуги, начальный поворот;
@@ -394,7 +485,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
             });
             const hitting = schedule.findIndex(s => t >= s.hit && t < s.hit + T.hold);
             const finale = t >= lastHit;
-            setNegative(!calm && (hitting >= 0 || (finale && (quick || t < lastHit + T.cracks))));
+            setNegative(!calm && (hitting >= 0 || (finale && t < lastHit + (quick ? T.finalNegative : T.cracks))));
 
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, W, H);
@@ -446,15 +537,27 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
                         const g = place(fl, k - lag);
                         ctx.save();
                         ctx.globalAlpha *= alpha;
-                        drawSprite(ctx, sprites[i], g.x, g.y, g.size, g.rot);
+                        drawSprite(ctx, sprites[i], g.x, g.y, g.size, g.rot, 1, 1, sprites[i].blob);
                         ctx.restore();
                     }
                 }
                 const p = place(fl, k);
-                // Попадание: кулак пружинит, потом медленно наезжает дальше — кадр не замирает
                 // Попадание: кулак сплющивается и пружинит (шире и ниже, потом наоборот), потом медленно наезжает
                 const w = after >= 0 ? wobble(after / T.pop) : 0, creep = after >= 0 ? 1 + 0.04 * clamp01(after / 1200) : 1;
-                drawSprite(ctx, sprites[i], p.x, p.y, p.size * creep, p.rot, 1 + 0.2 * w, 1 - 0.16 * w);
+                // Пока летит, кулак сначала — размытое белое пятно, и только на подлёте проступает рисунок
+                const formed = smooth(clamp01((k - 0.45) / 0.45));
+                if (formed < 1) {
+                    ctx.save();
+                    ctx.globalAlpha *= 1 - formed * 0.6;
+                    drawSprite(ctx, sprites[i], p.x, p.y, p.size * (1.06 - 0.06 * formed), p.rot, 1, 1, sprites[i].blob);
+                    ctx.restore();
+                }
+                if (formed > 0) {
+                    ctx.save();
+                    ctx.globalAlpha *= formed;
+                    drawSprite(ctx, sprites[i], p.x, p.y, p.size * creep, p.rot, 1 + 0.2 * w, 1 - 0.16 * w);
+                    ctx.restore();
+                }
             });
 
             // После пятого удара — вспышка и сквозь неё сцена
@@ -462,6 +565,12 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
                 const p = (t - lastHit - T.cracks) / T.flash;
                 drawFlash(ctx, W, H, Math.min(1, p * 1.6), rays);
             }
+            // На экран: после пятого удара — волнами, как от камня в воде; иначе целиком
+            out.setTransform(1, 0, 0, 1, 0, 0);
+            out.clearRect(0, 0, W, H);
+            const rippleAge = (t - lastHit) / T.ripple;
+            if (finale && rippleAge < 1) ripple(out, buffer, flights[4].x, flights[4].y, rippleAge, unit);
+            else out.drawImage(buffer, 0, 0);
             requestAnimationFrame(frame);
           } catch (error) {
             cv.remove();
