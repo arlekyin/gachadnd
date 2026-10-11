@@ -52,12 +52,15 @@ const lerp = (a, b, t) => a + (b - a) * t;
 /**
  * Куда отлетает цель: по прямой от нанёсшего удар на feet футов, до первой стены.
  * Считается там, где применён урон, и рассылается всем вместе с кадром.
- * @returns {{tokenId, x, y, reach, from: {x, y}, to: {x, y}}|null}  x, y — новый левый верхний угол токена; reach — полная дальность.
+ * @returns {{tokenId, casterId, x, y, reach, from: {x, y}, to: {x, y}}|null}  x, y — новый левый верхний угол токена; reach — полная дальность.
  */
 export function knockback(casterId, targetId, feet) {
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
     const dims = canvas?.dimensions;
-    if (!caster || !target || !dims?.distance) return null;
+    if (!caster || !target || !dims?.distance) {
+        console.info(`gachadnd | импакт: отлёта не будет — ${!caster ? 'нет токена нанёсшего удар на сцене' : !target ? 'нет токена цели на сцене' : 'у сцены нет масштаба'}`);
+        return null;
+    }
     const a = caster.center, b = target.center;
     let dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
@@ -88,7 +91,7 @@ export function knockback(casterId, targetId, feet) {
         corner.x = Math.min(Math.max(corner.x, rect.x), rect.x + rect.width - w);
         corner.y = Math.min(Math.max(corner.y, rect.y), rect.y + rect.height - h);
     }
-    return { tokenId: targetId, x: corner.x, y: corner.y, reach, from: { x: b.x, y: b.y }, to: { x: corner.x + w / 2, y: corner.y + h / 2 } };
+    return { tokenId: targetId, casterId, x: corner.x, y: corner.y, reach, from: { x: b.x, y: b.y }, to: { x: corner.x + w / 2, y: corner.y + h / 2 } };
 }
 
 // Копия картинки токена в слое кадра: на месте токена, с его масштабом и поворотом

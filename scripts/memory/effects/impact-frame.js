@@ -36,8 +36,13 @@ const KNOCK_FEET = 30;
 // Хронометраж, мс. Рисунок импакт-кадра в аниме держится 1–3 кадра при 24 к/с (≈42–125 мс),
 // хитстоп тяжёлого удара в играх — 50–100 мс: первый кадр — 2 кадра анимации, второй — 2
 const T = { start: 84, first: 168, end: 252, calm: 168 };
-// Сколько взвод ждёт урона: навык использован, броски и применение урона — следом
-const ARM_MS = 90 * 1000;
+// Сколько взвод ждёт урона: навык использован, выбор цели, броски и применение урона — следом
+const ARM_MS = 5 * 60 * 1000;
+// Сторож показа: если кадр не закончился за это время (×замедление), экран и сцена возвращаются
+const WATCHDOG_MS = 20 * 1000;
+
+// Журнал решений в консоли (F12): почему кадр показан или пропущен
+const trace = message => console.info(`${MODULE_ID} | импакт: ${message}`);
 // Наезд камеры к точке удара: в стартовом кадре слабый, в кадрах удара — сильный, фигура крупнее
 const ZOOM = { start: 1.1, first: 1.35, second: 1.3 };
 // Ширина снимка для обработки: 1280 — резкость на весь экран при задержке ~0,1 с сверх 800;
@@ -108,6 +113,7 @@ onSocket('impactArm', message => arm(message));
 
 function arm({ actorId, art, style = null, tokenId, line = null }) {
     armed.set(actorId, { art, style, tokenId, line, until: Date.now() + ARM_MS });
+    trace(`взведён ${game.actors.get(actorId)?.name ?? actorId}${style ? ` (${style})` : ''}, ждёт урона ${ARM_MS / 60000} мин${tokenId ? '' : '; токена на сцене нет'}`);
 }
 
 // Шаблон-линия → отрезок в координатах сцены: от начала шаблона по его направлению на его длину
@@ -131,12 +137,17 @@ function tokenLine(fromId, toPoint) {
 
 // Чей это урон: источник dnd5e не сообщает. Берётся взведённый персонаж, чей сейчас ход;
 // вне боя — любой взведённый (взводы живут недолго)
+// В бою — взведённый персонаж, чей ход; если ход не его, но взведён ровно один — он
+// (урон часто применяют уже после передачи хода)
 function armedSource() {
     const now = Date.now();
-    for (const [id, a] of armed) if (a.until < now) armed.delete(id);
+    for (const [id, a] of armed) if (a.until < now) { armed.delete(id); trace(`взвод ${game.actors.get(id)?.name ?? id} истёк`); }
+    if (!armed.size) return null;
     const turn = game.combat?.started ? game.combat.combatant?.actor?.id : null;
-    if (turn) return armed.has(turn) ? [turn, armed.get(turn)] : null;
-    return armed.entries().next().value ?? null;
+    if (turn && armed.has(turn)) return [turn, armed.get(turn)];
+    if (!turn || armed.size === 1) return armed.entries().next().value;
+    trace('взведено несколько персонажей, ход ни одного из них — неясно, чей урон');
+    return null;
 }
 
 const tokenPoint = actor => {
@@ -153,7 +164,8 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
     const { art, style, tokenId: casterId, line } = source[1];
     const hp = actor.system.attributes?.hp;
     // Кулаки — сам удар Сайтамы: кадр после любого урона; остальные — только после решающего
-    if (style !== 'fists' && (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2))) return;
+    if (style !== 'fists' && (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2))) return trace(`урон ${amount} по ${actor.name} не решающий — кадр ждёт дальше`);
+    trace(`урон ${amount} по ${actor.name} — кадр`);
     armed.delete(source[0]);
     const point = tokenPoint(actor);
     const data = {
@@ -161,6 +173,7 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
         line: style === 'slash' ? line ?? tokenLine(casterId, point) : null,
         knock: style === 'fists' ? knockback(casterId, tokenId(actor), KNOCK_FEET) : null
     };
+    if (style === 'fists' && !casterId) trace('у нанёсшего удар не было токена на сцене при использовании навыка');
     emit('impactFrame', data);
     playImpact(data);
 });
@@ -756,6 +769,34 @@ function playEngineSlash({ sceneId, point, tokens, line }) {
 }
 
 // ==========================================
+// ПРОВЕРКА
+// ==========================================
+
+/**
+ * Показать кадр навыка без использования и урона: выделенный токен — нанёсший удар,
+ * цель (клавиша T) — цель. Для макроса: game.gachadnd.impactTest('fists').
+ * @param {'fists'|'slash'|null} style
+ * @param {object} [options]
+ * @param {boolean} [options.move=false]  Отлёт по-настоящему: Мастер переносит цель.
+ * @param {boolean} [options.everyone=false]  Показать всем игрокам, а не только себе.
+ */
+export function impactTest(style = 'fists', { move = false, everyone = false } = {}) {
+    const caster = canvas?.tokens?.controlled[0], target = game.user.targets.first();
+    if (!caster || !target) return ui.notifications.warn('Выделите токен нанёсшего удар и возьмите цель клавишей T.');
+    if (move && !game.user.isGM) return ui.notifications.warn('Переносить цель может только Мастер.');
+    const point = { x: target.center.x, y: target.center.y };
+    const data = {
+        art: caster.actor?.img ?? caster.document.texture.src, style, sceneId: canvas.scene.id, point, tokens: [caster.id, target.id],
+        line: style === 'slash' ? tokenLine(caster.id, point) : null,
+        knock: style === 'fists' ? knockback(caster.id, target.id, KNOCK_FEET) : null,
+        dry: !move
+    };
+    trace(`проверка ${style ?? 'кадра'}: ${caster.name} → ${target.name}${move ? ', с переносом цели' : ''}`);
+    if (everyone) emit('impactFrame', data);
+    return playImpact(data);
+}
+
+// ==========================================
 // ЗВУК
 // ==========================================
 
@@ -869,11 +910,34 @@ function playSound() {
 
 let playing = false;
 
-export async function playImpact({ art, style = null, sceneId, point, tokens, line = null, knock = null }) {
+// Убрать всё, что кадр мог оставить, если он оборвался: холсты, кинополосы, скрытые токены
+function cleanupImpact() {
+    document.querySelectorAll('.gd-impact, .gd-letterbox').forEach(el => el.remove());
+    for (const token of canvas?.tokens?.placeables ?? []) {
+        if (token.mesh?.gdAlpha !== undefined) { token.mesh.alpha = token.mesh.gdAlpha; delete token.mesh.gdAlpha; }
+    }
+}
+
+let playId = 0;
+
+export async function playImpact({ art, style = null, sceneId, point, tokens, line = null, knock = null, dry = false }) {
     // Отлёт — правило навыка, а не украшение: Мастер переносит цель, даже если кадры у него выключены
-    if (style === 'fists' && knock && (playing || !game.settings.get(MODULE_ID, 'impactFrames'))) return moveKnocked(sceneId, knock);
-    if (playing || !game.settings.get(MODULE_ID, 'impactFrames')) return;
+    if (style === 'fists' && knock && (playing || !game.settings.get(MODULE_ID, 'impactFrames'))) {
+        trace(playing ? 'предыдущий кадр ещё идёт — только перенос цели' : 'импакт-кадры выключены в настройках — только перенос цели');
+        return dry ? null : moveKnocked(sceneId, knock);
+    }
+    if (playing) return trace('предыдущий кадр ещё идёт — этот пропущен');
+    if (!game.settings.get(MODULE_ID, 'impactFrames')) return trace('импакт-кадры выключены в настройках клиента');
     playing = true;
+    // Сторож: кадр, который по какой-то причине не закончился, не должен заблокировать следующие
+    const id = ++playId;
+    const slowFactor = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    setTimeout(() => {
+        if (!playing || id !== playId) return;
+        trace('кадр не закончился вовремя — экран возвращён');
+        cleanupImpact();
+        playing = false;
+    }, WATCHDOG_MS * slowFactor);
     if (style === 'fists') {
         const calm = game.settings.get(MODULE_ID, 'impactCalm');
         const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
@@ -885,14 +949,17 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         };
         try {
             await playFists({ calm, slow, onHit });
-            if (knock && canvas?.ready && canvas.scene?.id === sceneId) {
-                await playKnock({ casterId: tokens?.[0], targetId: knock.tokenId, knock, calm, slow, hideMarks: hideTokenMarks, onBurst: playSound });
+            if (!knock) trace('отлёта нет: не вычислена точка (см. выше)');
+            else if (!canvas?.ready || canvas.scene?.id !== sceneId) trace('отлёт не показан: у вас открыта другая сцена');
+            else if (!(await playKnock({ casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, calm, slow, hideMarks: hideTokenMarks, onBurst: playSound }))) {
+                trace('отлёт не показан: токен цели не найден на сцене');
             }
         } catch (error) {
             console.error(`${MODULE_ID} | импакт-кадр`, error);
+            cleanupImpact();
         }
-        playing = false;
-        if (knock) moveKnocked(sceneId, knock);
+        if (id === playId) playing = false;
+        if (knock) dry ? setTimeout(cleanupImpact, 100) : moveKnocked(sceneId, knock);
         return;
     }
     // Разрез — в самой сцене; без сцены кадр собирается по-старому

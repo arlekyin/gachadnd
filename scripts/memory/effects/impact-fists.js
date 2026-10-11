@@ -208,6 +208,8 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
 
         const t0 = performance.now();
         const frame = now => {
+          // Ошибка в кадре не должна оставить экран закрытым, а показ — незавершённым
+          try {
             const t = (now - t0) / slow;
             if (t >= end) { cv.remove(); return resolve(); }
             // Удары: звук и толчок — один раз на кулак
@@ -256,6 +258,11 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
                 }
             }
             requestAnimationFrame(frame);
+          } catch (error) {
+            cv.remove();
+            console.error('gachadnd | кулаки', error);
+            resolve();
+          }
         };
         requestAnimationFrame(frame);
     });

@@ -10,7 +10,7 @@ import { GachaLootTerminal, registerLootSettings } from "./memory/loot.js";
 import "./core/compendium.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./core/recovery.js";
 import { registerSoundSettings } from "./core/sounds.js";
-import { registerImpactSettings } from "./memory/effects/impact-frame.js";
+import { registerImpactSettings, impactTest } from "./memory/effects/impact-frame.js";
 import { giveCrystal } from "./memory/inventory.js";
 import { registerSocket } from "./core/socket.js";
 import { MemoryAltar, announceRest } from "./memory/altar/memory-altar.js";
@@ -38,6 +38,8 @@ Hooks.once('init', () => {
 
     // Лабиринт дописывает в этот же объект свои функции
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
+        // Проверка импакт-кадра без навыка и урона: выделенный токен бьёт цель (T)
+        impactTest,
         openTerminal: (actor) => {
             const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
             if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
