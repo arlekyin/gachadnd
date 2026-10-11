@@ -16,15 +16,33 @@ const T = { dark: 220, fly: 170, hold: 90, firstFly: 230, cracks: 170, flash: 20
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
 const SHAKE = { hit: 0.028, final: 0.05 };
 // Цвета обычного кадра: тёплый белый и тёмный; негатив делает их холодными, как в аниме
-const COLOR = { fist: '#f7ece8', old: '#a99f9b', ink: '#1c1212', crack: '#ffe4dc', glow: 'rgba(255,150,140,0.9)', puff: '255,236,230' };
-// Куда прилетают кулаки: доли экрана, размер — доля меньшей стороны экрана, поворот
+const COLOR = { fist: '#f7ece8', old: '#a99f9b', ink: '#1c1212', crack: '#ffe4dc', glow: 'rgba(255,140,130,0.35)', puff: '255,236,230' };
+// Куда прилетают кулаки: первые четыре — по углам экрана, пятый — в центре; поворот у каждого свой.
+// Размеры подобраны так, чтобы кулаки не перекрывали друг друга
 const FISTS = [
-    { x: 0.3, y: 0.36, size: 0.55, rot: -0.22 },
-    { x: 0.72, y: 0.62, size: 0.6, rot: 0.26 },
-    { x: 0.69, y: 0.3, size: 0.5, rot: 0.1 },
-    { x: 0.27, y: 0.7, size: 0.56, rot: -0.32 },
-    { x: 0.5, y: 0.52, size: 1.05, rot: 0 }
+    { corner: [-1, -1], rot: -0.22 },
+    { corner: [1, 1], rot: 0.26 },
+    { corner: [1, -1], rot: 0.14 },
+    { corner: [-1, 1], rot: -0.3 },
+    { corner: null, rot: 0 }
 ];
+// Угловой кулак — доля меньшей стороны экрана; отступ от края и зазор до центрального — тоже
+const CORNER = { size: 0.42, pad: 0.03, gap: 0.03 };
+
+// Места и размеры кулаков на экране W×H, пиксели
+function layout(W, H) {
+    const unit = Math.min(W, H), size = unit * CORNER.size, pad = unit * CORNER.pad;
+    // Высота кулака — около 0,9 ширины
+    const corners = FISTS.slice(0, 4).map(({ corner: [cx, cy] }) => ({
+        x: cx < 0 ? pad + size / 2 : W - pad - size / 2,
+        y: cy < 0 ? pad + size * 0.45 : H - pad - size * 0.45,
+        size
+    }));
+    // Центральный — во всю ширину между угловыми, но не больше 0,75 и не меньше 0,4 меньшей стороны
+    const free = W - 2 * (pad + size + unit * CORNER.gap);
+    const center = { x: W / 2, y: H * 0.52, size: Math.min(unit * 0.75, Math.max(unit * 0.4, free)) };
+    return [...corners, center];
+}
 
 function seeded(seed) {
     let s = seed;
@@ -140,20 +158,23 @@ function cracks(cx, cy, reach, seed) {
     return segments;
 }
 
-function drawCracks(ctx, segments, progress, color, glow = null, blur = 0) {
+// Трещины одним путём; свет — тот же путь широкой полупрозрачной линией под основной
+// (размытие тени на сотнях линий в каждом кадре тормозит показ)
+function drawCracks(ctx, segments, progress, color, glow = null, glowWidth = 0) {
     ctx.save();
-    ctx.strokeStyle = color;
     ctx.lineCap = 'round';
-    // Свет из трещин: размытое свечение вокруг линий
-    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = blur; }
-    for (const s of segments) {
-        if (s.at > progress) continue;
-        ctx.lineWidth = s.width;
+    ctx.lineJoin = 'round';
+    const visible = segments.filter(s => s.at <= progress);
+    const path = width => {
         ctx.beginPath();
-        ctx.moveTo(s.x0, s.y0);
-        ctx.lineTo(s.x1, s.y1);
+        for (const s of visible) { ctx.moveTo(s.x0, s.y0); ctx.lineTo(s.x1, s.y1); }
+        ctx.lineWidth = width;
         ctx.stroke();
-    }
+    };
+    const width = visible.length ? visible.reduce((sum, s) => sum + s.width, 0) / visible.length : 0;
+    if (glow && glowWidth > 0) { ctx.strokeStyle = glow; path(width + glowWidth); }
+    ctx.strokeStyle = color;
+    path(width);
     ctx.restore();
 }
 
@@ -221,15 +242,16 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
         const rays = Array.from({ length: 90 }, () => ({ a: rnd() * Math.PI * 2, w: 0.002 + rnd() ** 2 * 0.012 }));
         // Полёт каждого кулака: откуда (рядом с центром), изгиб дуги, начальный поворот;
         // трещины и пыль удара — вокруг места попадания
+        const spots = layout(W, H);
         const flights = FISTS.map((f, i) => {
-            const size = unit * f.size, x = W * f.x, y = H * f.y;
+            const { size, x, y } = spots[i];
             const from = { x: W * (0.5 + (rnd() - 0.5) * 0.12), y: H * (0.5 + (rnd() - 0.5) * 0.12) };
             const bend = (rnd() < 0.5 ? -1 : 1) * (0.12 + rnd() * 0.12) * unit;
             const dx = x - from.x, dy = y - from.y, len = Math.hypot(dx, dy) || 1;
             return {
                 size, x, y, from, rot0: f.rot + (rnd() < 0.5 ? -1 : 1) * (0.6 + rnd() * 0.5),
                 control: { x: (from.x + x) / 2 - dy / len * bend, y: (from.y + y) / 2 + dx / len * bend },
-                cracks: cracks(x, y, size * (i === 4 ? 0.8 : 1), 77 + i * 13),
+                cracks: cracks(x, y, size * (i === 4 ? 0.9 : 1), 77 + i * 13),
                 puffs: Array.from({ length: 5 }, () => ({ a: rnd() * Math.PI * 2, dist: size * (0.55 + rnd() * 0.5), size: size * (0.06 + rnd() * 0.06) }))
             };
         });
@@ -257,6 +279,16 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
         const struck = new Set();
         let shake = { a: 0, power: 0, at: -1e9 };
         let negative = null;
+        // Трещины прежних ударов — готовый слой: рисуются один раз, а не в каждом кадре
+        const baked = document.createElement('canvas');
+        baked.width = W; baked.height = H;
+        const bakedCtx = baked.getContext('2d');
+        const bakedSet = new Set();
+        const bake = i => {
+            if (bakedSet.has(i)) return;
+            bakedSet.add(i);
+            drawCracks(bakedCtx, flights[i].cracks, 1, COLOR.crack, COLOR.glow, unit * 0.006);
+        };
         const setNegative = on => {
             if (on === negative) return;
             negative = on;
@@ -298,6 +330,14 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
             }
 
             const current = schedule.findLastIndex(q => t >= q.start);
+            // Трещины прежних кулаков — из готового слоя, тусклее
+            for (let i = 0; i < current; i++) if (t >= schedule[i].hit) bake(i);
+            if (bakedSet.size) {
+                ctx.save();
+                ctx.globalAlpha *= 0.5;
+                ctx.drawImage(baked, 0, 0);
+                ctx.restore();
+            }
             schedule.forEach((s, i) => {
                 if (t < s.start) return;
                 const fl = flights[i], k = clamp01((t - s.start) / (s.hit - s.start)), after = t - s.hit;
@@ -305,7 +345,6 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
                 // Трещины и свет удара — под кулаком; у прежних кулаков тусклее
                 if (after >= 0) {
                     ctx.save();
-                    ctx.globalAlpha *= old ? 0.45 : 1;
                     // Вспышка света из места удара
                     const flash = 1 - clamp01(after / 260);
                     if (flash > 0) {
@@ -315,7 +354,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
                         ctx.fillStyle = g;
                         ctx.fillRect(fl.x - fl.size * 1.2, fl.y - fl.size * 1.2, fl.size * 2.4, fl.size * 2.4);
                     }
-                    drawCracks(ctx, fl.cracks, clamp01(after / T.crack), COLOR.crack, COLOR.glow, unit * 0.012 * (0.4 + flash));
+                    if (!bakedSet.has(i)) drawCracks(ctx, fl.cracks, clamp01(after / T.crack), COLOR.crack, COLOR.glow, unit * 0.006 * (1 + 2 * flash));
                     drawPuffs(ctx, fl.puffs, fl.x, fl.y, after / T.puff, COLOR.puff);
                     ctx.restore();
                 }
