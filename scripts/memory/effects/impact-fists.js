@@ -301,7 +301,9 @@ function drawFlash(ctx, W, H, power, rays) {
  * @param {(final: boolean) => void} options.onHit  Звук удара; final — пятый кулак.
  * @returns {Promise<void>}  Когда сцена вернулась.
  */
-export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
+// quick — кулаки сразу после кадров света и молний: экран уже тёмный, затемнение мгновенное
+export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = false } = {}) {
+    const dark = quick ? 40 : T.dark;
     return new Promise(resolve => {
         const cv = document.createElement('canvas');
         cv.className = 'gd-impact';
@@ -343,7 +345,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
 
         // Расписание: начало полёта и момент удара каждого кулака
         const schedule = [];
-        let clock = T.dark;
+        let clock = dark;
         FISTS.forEach((_, i) => {
             if (i === 4) clock += T.pause;
             const fly = i === 0 ? T.firstFly : i === 4 ? T.finalFly : T.fly;
@@ -397,7 +399,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
             const fade = t > lastHit + T.cracks + T.flash ? 1 - (t - lastHit - T.cracks - T.flash) / T.fade : 1;
             ctx.globalAlpha = Math.max(0, fade);
             // Фон: сцена темнеет и такой остаётся; негатив делает её светлой
-            ctx.fillStyle = `rgba(0,0,0,${0.9 * Math.min(1, t / T.dark)})`;
+            ctx.fillStyle = `rgba(0,0,0,${0.9 * Math.min(1, t / dark)})`;
             ctx.fillRect(0, 0, W, H);
             // Тряска: экран бросает туда-обратно, размах быстро гаснет
             const sk = (t - shake.at) / T.shake;
