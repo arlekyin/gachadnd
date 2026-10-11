@@ -298,7 +298,7 @@ function drawFlash(ctx, W, H, power, rays) {
  * @param {object} options
  * @param {boolean} options.calm  Без инверсий и белой вспышки.
  * @param {number} options.slow   Замедление.
- * @param {(final: boolean) => void} options.onHit  Звук удара; final — пятый кулак.
+ * @param {(final: boolean, index: number) => void} options.onHit  Звук удара; final — пятый кулак.
  * @returns {Promise<void>}  Когда сцена вернулась.
  */
 // quick — кулаки сразу после кадров света и молний: экран уже тёмный, затемнение мгновенное
@@ -388,7 +388,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
             schedule.forEach((s, i) => {
                 if (t >= s.hit && !struck.has(i)) {
                     struck.add(i);
-                    onHit(i === 4);
+                    onHit(i === 4, i);
                     shake = { a: rnd() * Math.PI * 2, power: unit * (i === 4 ? SHAKE.final : SHAKE.hit), at: s.hit };
                 }
             });

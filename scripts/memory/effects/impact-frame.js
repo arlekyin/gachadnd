@@ -30,6 +30,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 import { playFists, prepareFists } from "./impact-fists.js";
 import { knockback, playSaitama } from "./impact-knock.js";
+import { playCue } from "./impact-sound.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -77,6 +78,15 @@ export function registerImpactSettings() {
         type: Number,
         range: { min: 1, max: 30, step: 1 },
         default: 1
+    });
+    game.settings.register(MODULE_ID, 'impactSoundFolder', {
+        name: 'Папка звуков импакт-кадров',
+        hint: 'Своя озвучка удара Сайтамы: файлы approach, inhale, lunge, contact, punch, punchFinal, fly, land, ok (.ogg). Пусто — звуки синтезируются в браузере.',
+        scope: 'world',
+        config: true,
+        type: String,
+        filePicker: 'folder',
+        default: ''
     });
     game.settings.register(MODULE_ID, 'impactSound', {
         name: 'Звук импакт-кадра',
@@ -846,56 +856,6 @@ function synthExplosion(volume) {
     noise.start(t);
 }
 
-// Удар кулака: короткий низкий хлопок и щелчок шума
-function synthPunch(volume) {
-    audio ??= new AudioContext();
-    if (audio.state === 'suspended') audio.resume();
-    const t = audio.currentTime;
-    const out = audio.createGain();
-    out.gain.value = volume;
-    out.connect(audio.destination);
-    const thump = audio.createOscillator();
-    thump.type = 'sine';
-    thump.frequency.setValueAtTime(170, t);
-    thump.frequency.exponentialRampToValueAtTime(45, t + 0.14);
-    const thumpGain = audio.createGain();
-    thumpGain.gain.setValueAtTime(1.4, t);
-    thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-    thump.connect(thumpGain).connect(out);
-    thump.start(t); thump.stop(t + 0.22);
-    const length = Math.round(audio.sampleRate * 0.06);
-    const buffer = audio.createBuffer(1, length, audio.sampleRate);
-    const ch = buffer.getChannelData(0);
-    for (let i = 0; i < length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 2;
-    const noise = audio.createBufferSource();
-    noise.buffer = buffer;
-    const filter = audio.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 1800;
-    const noiseGain = audio.createGain();
-    noiseGain.gain.value = 0.9;
-    noise.connect(filter).connect(noiseGain).connect(out);
-    noise.start(t);
-}
-
-/**
- * Цель Сайтамы — на новое место. Переносит активный Мастер, когда у него кончился показ.
- * У всех токен цели во время отлёта скрыт: он возвращается, когда перенос дошёл, или через 2 с.
- */
-function moveKnocked(sceneId, knock) {
-    const restore = () => {
-        const token = canvas?.tokens?.get(knock.tokenId);
-        if (token?.mesh && token.mesh.gdAlpha !== undefined) { token.mesh.alpha = token.mesh.gdAlpha; delete token.mesh.gdAlpha; }
-        try { token?.renderFlags?.set({ refreshState: true }); } catch { /* старый движок — достаточно прозрачности */ }
-    };
-    setTimeout(restore, 2000);
-    if (game.users.activeGM?.id !== game.user.id) return;
-    const doc = game.scenes.get(sceneId)?.tokens.get(knock.tokenId);
-    doc?.update({ x: knock.x, y: knock.y }, { animate: false })
-        .then(restore)
-        .catch(error => console.warn(`${MODULE_ID} | отлёт цели`, error));
-}
-
 function playSound() {
     if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
     const volume = game.settings.get(MODULE_ID, 'soundsVolume');
@@ -944,23 +904,19 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
     if (style === 'fists') {
         const calm = game.settings.get(MODULE_ID, 'impactCalm');
         const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
-        // Удары — синтез; последний — тот же взрыв, что у остальных кадров (или звук из настроек)
-        const onHit = final => {
-            if (final) return playSound();
+        // Звуки моментов: синтез или файлы из папки звуков (impact-sound.js)
+        const onCue = (name, options = {}) => {
             if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-            try { synthPunch(game.settings.get(MODULE_ID, 'soundsVolume')); } catch (error) { console.warn(`${MODULE_ID} | звук удара`, error); }
+            playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), folder: game.settings.get(MODULE_ID, 'impactSoundFolder'), ...options });
         };
-        const punch = () => {
-            if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-            try { synthPunch(game.settings.get(MODULE_ID, 'soundsVolume')); } catch (error) { console.warn(`${MODULE_ID} | звук удара`, error); }
-        };
+        const onHit = (final, index) => onCue(final ? 'punchFinal' : 'punch', { index });
         try {
             const fists = (quick = false) => playFists({ calm, slow, onHit, quick });
             if (!knock) { trace('отлёта нет: не вычислена точка (см. выше) — только кулаки'); await fists(); }
             else if (!canvas?.ready || canvas.scene?.id !== sceneId) { trace('у вас открыта другая сцена — только кулаки'); await fists(); }
             else if (!(await playSaitama({
                 casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, calm, slow,
-                hideMarks: hideTokenMarks, onContact: punch, between: () => fists(true), onBurst: playSound, onLand: punch
+                hideMarks: hideTokenMarks, between: () => fists(true), onCue
             }))) {
                 trace('токен цели не найден на сцене — только кулаки');
                 await fists();
