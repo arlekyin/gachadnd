@@ -20,14 +20,15 @@
 // Хронометраж, мс. Медленно — то, что надо рассмотреть, быстро — сами удары.
 // approach — подъезд; inhale — вдох (windup — его часть с замахом); lunge — рывок; turn — резкий
 // поворот камеры на рывке; light — кадры света и молний: связка, каждый мелькает на 3–4 кадра
-// экрана, без своей анимации (beam — столб света, cone — молнии в тёмном конусе, остальное —
-// молнии во все стороны);
+// экрана, без своей анимации (star — звезда взрыва с лучами, blot — чёрная клякса на белом,
+// white — белый кадр, beam — столб света, cone — молнии в тёмном конусе, остальное — молнии
+// во все стороны);
 // lines — разлёт линий за целью: первый мелькающий кадр касания, появляется сразу целиком;
 // burst — тряска; squash — качание токенов от удара; ghosts — следы рывка; fly — полёт цели;
 // hitstop — стоп-кадр приземления; wave — ударная волна; settle — сцена после приземления до
 // возврата камеры; back — возврат камеры; cracks — трещины в земле гаснут; ok — реплика Сайтамы
 const T = {
-    approach: 520, inhale: 1000, windup: 650, lunge: 200, turn: 160, light: 170, beam: 50, cone: 60,
+    approach: 520, inhale: 1000, windup: 650, lunge: 200, turn: 160, light: 270, star: 35, blot: 35, white: 30, beam: 50, cone: 60,
     lines: 70, burst: 250, squash: 450, ghosts: 450, fly: 380, hitstop: 70, wave: 380, settle: 450,
     back: 70, cracks: 1700, ok: 1200
 };
@@ -254,6 +255,52 @@ function drawLight(ctx, W, H, P, f, set, calm) {
             }
         }
     };
+    // Промежуточные кадры между разлётом линий и столбом: звезда взрыва, клякса, белый.
+    // «Без вспышек» — их нет, сразу молнии в конусе
+    const pre = T.star + T.blot + T.white;
+    if (f < pre && !calm) {
+        if (f < T.star) {
+            // Звезда взрыва: тёмно-серый фон, лучи от точки удара во все стороны, белая звезда
+            ctx.fillStyle = '#1c1c1c';
+            ctx.fillRect(0, 0, W, H);
+            const R = Math.hypot(W, H);
+            for (const r of set.rays) {
+                ctx.strokeStyle = `rgba(255,255,255,${r.alpha})`;
+                ctx.lineWidth = r.w * unit;
+                ctx.beginPath();
+                ctx.moveTo(P.x + Math.cos(r.a) * r.from * unit, P.y + Math.sin(r.a) * r.from * unit);
+                ctx.lineTo(P.x + Math.cos(r.a) * R, P.y + Math.sin(r.a) * R);
+                ctx.stroke();
+            }
+            glow(P.x, P.y, unit * 0.35, 0.8);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            set.star.forEach(([a, r], i) => {
+                const x = P.x + Math.cos(a) * r * unit, y = P.y + Math.sin(a) * r * unit * 0.8;
+                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+            });
+            ctx.closePath();
+            ctx.fill();
+        } else if (f < T.star + T.blot) {
+            // Клякса: чёрный рваный силуэт с шипами на белом
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            set.blot.forEach(([a, r], i) => {
+                const x = P.x + Math.cos(a) * r * unit, y = P.y + Math.sin(a) * r * unit;
+                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+            });
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            // Белый кадр с едва заметными следами
+            ctx.fillStyle = '#fbfbfb';
+            ctx.fillRect(0, 0, W, H);
+        }
+        return;
+    }
+    f -= calm ? 0 : pre;
     if (f < T.beam && !calm) {
         // 1. Столб света
         ctx.fillStyle = '#000';
@@ -345,6 +392,25 @@ function lightSet(ctx, unit) {
         glints: Array.from({ length: 5 }, () => ({ dx: (rnd() - 0.5) * 0.9, dy: -rnd() * 0.5, r: 0.08 + rnd() * 0.15 })),
         streaks: Array.from({ length: 4 }, () => ({ dy: (rnd() - 0.65) * 0.6, h: unit * (0.003 + rnd() * 0.005), alpha: 0.4 + rnd() * 0.6 })),
         veins: Array.from({ length: 10 }, () => ({ side: rnd() < 0.5 ? -1 : 1, at: 0.6 + rnd() * 0.35, y: rnd() * 0.5, w: 0.01 + rnd() * 0.02, len: 0.1 + rnd() * 0.25 })),
+        // Звезда взрыва: длинные горизонтальные концы, короче — вертикальные, рваные бугры между ними
+        // Звезда взрыва: ядро и сужающиеся к остриям лучи — длинные в стороны, короче вверх-вниз,
+        // мелкие рваные бугры по диагоналям
+        star: (() => {
+            const arms = [[0, 0.95, 0.42], [Math.PI, 0.9, 0.4], [-Math.PI / 2, 0.5, 0.32], [Math.PI / 2, 0.42, 0.3]];
+            for (let i = 0; i < 6; i++) arms.push([Math.PI / 4 + i * Math.PI / 3 + (rnd() - 0.5) * 0.4, 0.2 + rnd() * 0.12, 0.25]);
+            return Array.from({ length: 240 }, (_, i) => {
+                const a = i / 240 * Math.PI * 2 - Math.PI;
+                let r = 0.12 + rnd() * 0.015;
+                for (const [axis, length, width] of arms) {
+                    const d = Math.abs(Math.atan2(Math.sin(a - axis), Math.cos(a - axis)));
+                    if (d < width) r = Math.max(r, length * (1 - d / width) ** 2.2 + 0.12 * (1 - d / width));
+                }
+                return [a, r];
+            });
+        })(),
+        rays: Array.from({ length: 260 }, () => ({ a: rnd() * Math.PI * 2, from: 0.15 + rnd() * 0.5, w: 0.001 + rnd() ** 3 * 0.004, alpha: 0.35 + rnd() * 0.6 })),
+        // Клякса: центр и шипы разной длины; часть уходит за край экрана
+        blot: Array.from({ length: 34 }, (_, i) => [i / 34 * Math.PI * 2 + (rnd() - 0.5) * 0.08, i % 2 ? 0.3 + rnd() * 0.15 : 0.55 + rnd() ** 0.7 * 0.7]),
         splash: Array.from({ length: 90 }, () => ({ a: (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 1.0, len: 0.12 + rnd() ** 2 * 0.3, w: 0.004 + rnd() * 0.006 }))
     };
 }
