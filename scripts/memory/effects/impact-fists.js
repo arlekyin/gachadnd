@@ -253,9 +253,13 @@ function loadFistArt() {
 }
 
 /**
- * Кулак из рисунка — один раз на размер, поверх — эффекты:
- *  - мягкий светящийся ореол по силуэту;
- *  - зернистая штриховка печати в тени (слева и снизу), клочьями, только по телу;
+ * Кулак из рисунка — один раз на размер, поверх — эффекты как в рисованном оригинале; они же
+ * прячут огрехи трассировки:
+ *  - свечение: широкий мягкий ореол вокруг силуэта и пересвет — белое «выжигает» часть тела
+ *    сверху справа, линии там бледнеют;
+ *  - штрих печати: короткие горизонтальные чёрточки и точки лентами вдоль линий и по теневой
+ *    стороне (слева и снизу), клочьями, только по телу;
+ *  - мыло: несколько мягких пятен, где рисунок размыт, — края и части кулака не в фокусе;
  *  - размытое белое пятно силуэта — кулак издалека, пока летит.
  * @param {number} size  Ширина кулака, пиксели.
  */
@@ -263,9 +267,10 @@ function artSprite({ img, box }, size, seed) {
     const k = size / box.w, w = Math.ceil(box.w * k), h = Math.ceil(box.h * k);
     const S = Math.ceil(Math.max(w, h) * 1.5), ox = (S - w) / 2, oy = (S - h) / 2;
     const make = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
+    const rnd = seeded(seed);
     // Сам рисунок в нужном размере: вектор — резкий при любом увеличении
-    const drawing = make();
-    drawing.getContext('2d').drawImage(img, box.x, box.y, box.w, box.h, ox, oy, w, h);
+    const drawing = make(), dx = drawing.getContext('2d', { willReadFrequently: true });
+    dx.drawImage(img, box.x, box.y, box.w, box.h, ox, oy, w, h);
     // Силуэт — белым
     const silhouette = make(), sx = silhouette.getContext('2d');
     sx.drawImage(drawing, 0, 0);
@@ -273,29 +278,85 @@ function artSprite({ img, box }, size, seed) {
     sx.fillStyle = '#fbf7f4';
     sx.fillRect(0, 0, S, S);
 
-    const c = make(), x = c.getContext('2d');
-    x.filter = `blur(${Math.max(1, size * 0.014)}px)`;
-    x.drawImage(silhouette, 0, 0);
-    x.filter = 'none';
+    // Где линии: тёмные пиксели рисунка, размытые — плотность штриха рядом с ними
+    const ink = make(), ix = ink.getContext('2d', { willReadFrequently: true });
+    {
+        const src = dx.getImageData(0, 0, S, S), d = src.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const dark = d[i + 3] > 40 && d[i] + d[i + 1] + d[i + 2] < 300;
+            d[i] = d[i + 1] = d[i + 2] = 0; d[i + 3] = dark ? 255 : 0;
+        }
+        const tmp = make(); tmp.getContext('2d').putImageData(src, 0, 0);
+        ix.filter = `blur(${Math.max(2, size * 0.035)}px)`;
+        ix.drawImage(tmp, 0, 0);
+    }
+    const near = ix.getImageData(0, 0, S, S).data;
+
+    const body = make(), x = body.getContext('2d');
     x.drawImage(drawing, 0, 0);
-    // Штриховка печати — на отдельном слое, обрезанном по силуэту
+    // Пересвет сверху справа: белое поверх рисунка, линии там бледнеют
+    {
+        const g = x.createRadialGradient(ox + w * 0.78, oy + h * 0.18, 0, ox + w * 0.78, oy + h * 0.18, Math.max(w, h) * 0.55);
+        g.addColorStop(0, 'rgba(255,253,250,0.75)');
+        g.addColorStop(0.5, 'rgba(255,253,250,0.3)');
+        g.addColorStop(1, 'rgba(255,253,250,0)');
+        x.save();
+        x.globalCompositeOperation = 'source-atop';
+        x.fillStyle = g;
+        x.fillRect(0, 0, S, S);
+        x.restore();
+    }
+    // Штрих печати
     const grain = make(), gx = grain.getContext('2d');
-    const rnd = seeded(seed), patch = valueNoise(seed + 11, 10);
-    const count = Math.round(w * h * 0.06);
+    const patch = valueNoise(seed + 11, 12);
+    const count = Math.round(w * h * 0.11);
+    const dot = Math.max(1, size * 0.0032);
     for (let i = 0; i < count; i++) {
-        const u = rnd(), v = rnd();
-        // Тень: слева и снизу, свет — сверху справа
-        const side = Math.max(0, (1 - u) * 0.8 + v * 0.9 - 0.75);
-        const tone = side * (0.3 + patch(u * 1.5 - 0.75, v * 1.5 - 0.75) * 1.3);
-        if (rnd() > tone * 0.6) continue;
-        const d = Math.max(1, size * 0.0025) * (0.8 + rnd());
-        gx.fillStyle = `rgba(45,35,35,${0.35 + rnd() * 0.35})`;
-        if (rnd() < 0.35) gx.fillRect(ox + u * w, oy + v * h, d * (2 + rnd() * 3), d * 0.8);
-        else gx.fillRect(ox + u * w, oy + v * h, d, d);
+        const u = rnd(), v = rnd(), px = Math.round(ox + u * w), py = Math.round(oy + v * h);
+        const nearInk = near[(py * S + px) * 4 + 3] / 255;
+        const side = Math.max(0, (1 - u) * 0.8 + v * 0.9 - 0.8);
+        const tone = Math.min(1, nearInk * 1.6 + side) * (0.25 + patch(u * 1.5 - 0.75, v * 1.5 - 0.75) * 1.35);
+        if (rnd() > tone * 0.7) continue;
+        const d = dot * (0.7 + rnd() * 0.8);
+        gx.fillStyle = `rgba(40,32,32,${0.4 + rnd() * 0.4})`;
+        if (rnd() < 0.55) gx.fillRect(px, py, d * (2.5 + rnd() * 4), d * 0.75);
+        else gx.fillRect(px, py, d, d);
     }
     gx.globalCompositeOperation = 'destination-in';
     gx.drawImage(silhouette, 0, 0);
     x.drawImage(grain, 0, 0);
+
+    // Мыло: размытая копия сквозь мягкие пятна — у краёв и в паре мест на теле
+    {
+        const soft = make(), fx = soft.getContext('2d');
+        fx.filter = `blur(${Math.max(1.5, size * 0.012)}px)`;
+        fx.drawImage(body, 0, 0);
+        fx.filter = 'none';
+        const mask = make(), mx = mask.getContext('2d');
+        const spots = [[0.05 + rnd() * 0.15, 0.3 + rnd() * 0.5], [0.85 + rnd() * 0.12, 0.2 + rnd() * 0.6], [0.3 + rnd() * 0.4, 0.88 + rnd() * 0.1], [rnd(), rnd() * 0.3], [0.25 + rnd() * 0.5, 0.3 + rnd() * 0.4]];
+        for (const [u, v] of spots) {
+            const cx = ox + u * w, cy = oy + v * h, r = Math.max(w, h) * (0.14 + rnd() * 0.14);
+            const g = mx.createRadialGradient(cx, cy, 0, cx, cy, r);
+            g.addColorStop(0, 'rgba(0,0,0,1)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            mx.fillStyle = g;
+            mx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        }
+        fx.globalCompositeOperation = 'destination-in';
+        fx.drawImage(mask, 0, 0);
+        x.drawImage(soft, 0, 0);
+    }
+
+    // Итог: свечение под телом — широкое мягкое и плотное узкое
+    const c = make(), cx = c.getContext('2d');
+    cx.filter = `blur(${Math.max(3, size * 0.05)}px)`;
+    cx.globalAlpha = 0.85;
+    cx.drawImage(silhouette, 0, 0);
+    cx.filter = `blur(${Math.max(1, size * 0.012)}px)`;
+    cx.globalAlpha = 1;
+    cx.drawImage(silhouette, 0, 0);
+    cx.filter = 'none';
+    cx.drawImage(body, 0, 0);
 
     const blob = make(), bx = blob.getContext('2d');
     bx.filter = `blur(${Math.max(2, size * 0.05)}px)`;
