@@ -27,7 +27,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
-import { playFists } from "./impact-fists.js";
+import { playFists, prepareFists } from "./impact-fists.js";
 import { knockback, playKnock } from "./impact-knock.js";
 
 // Отлёт цели Сайтамы, футы
@@ -113,6 +113,8 @@ onSocket('impactArm', message => arm(message));
 
 function arm({ actorId, art, style = null, tokenId, line = null }) {
     armed.set(actorId, { art, style, tokenId, line, until: Date.now() + ARM_MS });
+    // Рисунки кулаков — пока бросают урон, а не в момент удара
+    if (style === 'fists') setTimeout(() => { try { prepareFists(); } catch (error) { console.warn(`${MODULE_ID} | рисунки кулаков`, error); } }, 50);
     trace(`взведён ${game.actors.get(actorId)?.name ?? actorId}${style ? ` (${style})` : ''}, ждёт урона ${ARM_MS / 60000} мин${tokenId ? '' : '; токена на сцене нет'}`);
 }
 

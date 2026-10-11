@@ -15,7 +15,7 @@
 // Первые четыре удара — очередью: короткий полёт и удержание; перед пятым — пауза (pause),
 // и он летит дольше (finalFly)
 const T = {
-    dark: 220, firstFly: 180, fly: 115, hold: 55, pause: 280, finalFly: 160,
+    dark: 220, firstFly: 180, fly: 115, hold: 75, pause: 280, finalFly: 160,
     cracks: 170, flash: 200, fade: 380, crack: 120, shake: 240, puff: 600, pop: 280
 };
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
@@ -57,6 +57,7 @@ function seeded(seed) {
 const easeIn = t => t * t * t;
 const easeOut = t => 1 - (1 - t) ** 3;
 const clamp01 = t => Math.min(1, Math.max(0, t));
+const lerp = (a, b, t) => a + (b - a) * t;
 // Затухающее колебание около нуля: x — время в долях, 0 → 1
 const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4 * x) * Math.cos(x * Math.PI * 4);
 
@@ -91,46 +92,113 @@ function fistPath(ctx, shape) {
 }
 
 /**
- * @param {CanvasRenderingContext2D} ctx
- * @param {object} shape   Форма из fistShape.
- * @param {number} x, y    Центр, пиксели.
- * @param {number} size    Ширина кулака, пиксели.
- * @param {string} fill, ink  Цвет кулака и линий.
+ * Рисунок кулака — один раз, заранее: мягкое белое тело со светящимся краем, растровая
+ * штриховка в тени (слева и снизу, гуще к краю) и линии пальцев углём в несколько проходов.
+ * В кадре рисунок только масштабируется и поворачивается — подробный, но дешёвый.
+ * @param {object} shape  Форма из fistShape.
+ * @param {number} size   Ширина кулака в рисунке, пиксели.
+ * @returns {{canvas: HTMLCanvasElement, size: number}}
  */
-function drawFist(ctx, shape, x, y, size, rot, fill, ink) {
+function fistSprite(shape, size, seed) {
+    const S = Math.ceil(size * 1.5), c = document.createElement('canvas');
+    c.width = c.height = S;
+    const x = c.getContext('2d');
+    const rnd = seeded(seed);
+    const toPx = (u, v) => [S / 2 + u * size, S / 2 + v * size];
+    x.setTransform(size, 0, 0, size, S / 2, S / 2);
+    const px = 1 / size;
+
+    // Контур: точки края лучами из центра — для рваного края и расстояния до края
+    fistPath(x, shape);
+    const edge = [];
+    for (let i = 0; i < 180; i++) {
+        const a = i / 180 * Math.PI * 2;
+        let r = 0.05;
+        while (r < 0.8 && x.isPointInPath(...toPx(Math.cos(a) * r, Math.sin(a) * r + 0.02))) r += 0.004;
+        edge.push({ u: Math.cos(a) * r, v: Math.sin(a) * r + 0.02, a });
+    }
+
+    // Тело: белое, край мягко светится
+    x.save();
+    x.shadowColor = 'rgba(255,248,245,0.95)';
+    x.shadowBlur = size * 0.035;
+    x.fillStyle = '#fbf6f3';
+    fistPath(x, shape);
+    x.fill();
+    x.restore();
+    // Растровая штриховка: сетка точек под 45°, точка крупнее там, где тень — у края, слева и снизу
+    // (свет сверху справа). Контур — отдельным путём: точки рисуются своими путями
+    const body = new Path2D();
+    fistPath({ beginPath() {}, moveTo: (...a) => body.moveTo(...a), bezierCurveTo: (...a) => body.bezierCurveTo(...a), closePath: () => body.closePath() }, shape);
+    x.fillStyle = 'rgba(40,30,30,0.7)';
+    const coarse = edge.filter((_, i) => i % 3 === 0);
+    const step = px * 5, dotMax = step * 0.42;
+    for (let gy = -0.75; gy < 0.75; gy += step) {
+        for (let gx = -0.75; gx < 0.75; gx += step) {
+            const u = (gx - gy) * Math.SQRT1_2, v = (gx + gy) * Math.SQRT1_2;
+            if (Math.abs(u) > 0.6 || Math.abs(v) > 0.5 || !x.isPointInPath(body, ...toPx(u, v))) continue;
+            let near = 1;
+            for (const p of coarse) near = Math.min(near, Math.hypot(p.u - u, p.v - v));
+            // Тень: сторона от света (слева снизу) — сильнее; у освещённого края растр почти пропадает
+            const dark = Math.min(1, Math.max(0, -u * 0.9 + v * 0.9 + 0.25));
+            const shade = Math.min(1, Math.max(0, 1 - near / 0.09) * (0.15 + 0.75 * dark) + Math.max(0, -u * 0.8 + v * 0.7 - 0.15) * 0.8);
+            if (shade < 0.08) continue;
+            x.beginPath();
+            x.arc(u, v, dotMax * Math.sqrt(shade), 0, Math.PI * 2);
+            x.fill();
+        }
+    }
+
+    // Линии пальцев углём: каждая — несколько дрожащих проходов разной толщины
+    x.strokeStyle = 'rgba(20,14,14,0.6)';
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    const charcoal = (points, width) => {
+        for (let pass = 0; pass < 4; pass++) {
+            const j = () => (rnd() - 0.5) * 0.008;
+            x.lineWidth = width * (0.3 + rnd() * 0.5);
+            x.beginPath();
+            x.moveTo(points[0][0] + j(), points[0][1] + j());
+            for (let i = 1; i < points.length; i++) x.lineTo(points[i][0] + j(), points[i][1] + j());
+            x.stroke();
+        }
+    };
+    const w = 0.016;
+    // Между пальцами — вниз от впадины и в конце загиб вдоль низа
+    for (const [i, mx] of [[0, -0.25], [1, 0], [2, 0.25]]) {
+        charcoal([[mx - 0.01, shape.valley + 0.05], [mx, -0.03], [mx + 0.01, 0.08], [mx + 0.02, 0.14]], w);
+    }
+    // Большой палец: сгиб поперёк низа и складка у основания
+    charcoal([[-0.46, 0.1], [-0.3, 0.13], [-0.1, 0.16], [0.08, 0.19], [0.16, 0.24]], w);
+    charcoal([[-0.4, 0.31], [-0.27, 0.35], [-0.14, 0.35]], w * 0.7);
+    return { canvas: c, size };
+}
+
+// Рисунки кулаков между показами: размер экрана обычно не меняется
+const spriteCache = new Map();
+
+// Рисунки всех пяти кулаков для экрана W×H — из запаса или заново
+function fistSprites(W, H) {
+    return layout(W, H).map((spot, i) => {
+        const size = Math.ceil(spot.size * 1.2), key = `${i}:${size}`;
+        if (!spriteCache.has(key)) spriteCache.set(key, fistSprite(fistShape(31 + i * 17), size, 31 + i * 17));
+        return spriteCache.get(key);
+    });
+}
+
+/** Нарисовать кулаки заранее (≈0,3 с), чтобы показ начался без задержки: зовётся при взводе навыка */
+export function prepareFists() {
+    fistSprites(Math.round(innerWidth * devicePixelRatio), Math.round(innerHeight * devicePixelRatio));
+}
+
+// Нарисовать заготовку кулака: центр (x, y), ширина size, поворот, растяжение вдоль осей кулака
+function drawSprite(ctx, sprite, x, y, size, rot, sx = 1, sy = 1) {
+    const k = size / sprite.size, S = sprite.canvas.width;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(rot);
-    ctx.scale(size, size);
-    const px = 1 / size;
-    // Кайма цвета линий отделяет кулак от фона и от соседних кулаков
-    fistPath(ctx, shape);
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 0.045;
-    ctx.stroke();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    // Линии пером: толще в середине, тоньше к концам
-    ctx.fillStyle = ink;
-    const stroke = (x0, y0, cx, cy, x1, y1, w) => {
-        const len = Math.hypot(x1 - x0, y1 - y0), nx = -(y1 - y0) / len * w, ny = (x1 - x0) / len * w;
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.quadraticCurveTo(cx + nx, cy + ny, x1, y1);
-        ctx.quadraticCurveTo(cx - nx, cy - ny, x0, y0);
-        ctx.fill();
-    };
-    const w = Math.max(0.011, 2.5 * px);
-    // Между пальцами — от впадины вниз, к большому пальцу
-    for (const [i, mx] of [[0, -0.25], [1, 0], [2, 0.25]].map(([i, m]) => [i, m])) {
-        stroke(mx, shape.valley + 0.03, mx + 0.01, 0.0, mx + 0.02 - i * 0.01, 0.12 + i * 0.02, w);
-    }
-    // Большой палец: сгиб поперёк низа и его кончик под средними пальцами
-    stroke(-0.5, 0.06, -0.15, 0.1, 0.2, 0.17, w * 1.1);
-    stroke(0.2, 0.17, 0.25, 0.22, 0.22, 0.3, w * 0.8);
-    // Складка у основания большого пальца
-    stroke(-0.42, 0.28, -0.3, 0.32, -0.16, 0.3, w * 0.7);
+    ctx.scale(k * sx, k * sy);
+    ctx.drawImage(sprite.canvas, -S / 2, -S / 2);
     ctx.restore();
 }
 
@@ -242,15 +310,17 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
         document.body.append(cv);
         const ctx = cv.getContext('2d');
         const W = cv.width, H = cv.height, unit = Math.min(W, H);
-        const shapes = FISTS.map((_, i) => fistShape(31 + i * 17));
         const rnd = seeded(101);
         const rays = Array.from({ length: 90 }, () => ({ a: rnd() * Math.PI * 2, w: 0.002 + rnd() ** 2 * 0.012 }));
         // Полёт каждого кулака: откуда (рядом с центром), изгиб дуги, начальный поворот;
         // трещины и пыль удара — вокруг места попадания
         const spots = layout(W, H);
+        // Рисунки кулаков — заранее, в размере попадания с запасом на пружину
+        const sprites = fistSprites(W, H);
         const flights = FISTS.map((f, i) => {
             const { size, x, y } = spots[i];
-            const from = { x: W * (0.5 + (rnd() - 0.5) * 0.12), y: H * (0.5 + (rnd() - 0.5) * 0.12) };
+            // Вылетает издалека рядом со своим местом, чуть ближе к центру экрана
+            const from = { x: lerp(x, W / 2, 0.3) + (rnd() - 0.5) * size * 0.3, y: lerp(y, H / 2, 0.3) + (rnd() - 0.5) * size * 0.3 };
             const bend = (rnd() < 0.5 ? -1 : 1) * (0.12 + rnd() * 0.12) * unit;
             const dx = x - from.x, dy = y - from.y, len = Math.hypot(dx, dy) || 1;
             return {
@@ -278,7 +348,8 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
             if (i === 4) clock += T.pause;
             const fly = i === 0 ? T.firstFly : i === 4 ? T.finalFly : T.fly;
             schedule.push({ start: clock, hit: clock + fly });
-            clock += fly + T.hold;
+            // Следующий вылетает сразу, ещё во время негатива этого удара
+            clock += fly;
         });
         const lastHit = schedule[4].hit;
         const end = lastHit + T.cracks + T.flash + T.fade;
@@ -371,14 +442,15 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
                         const g = place(fl, k - lag);
                         ctx.save();
                         ctx.globalAlpha *= alpha;
-                        drawFist(ctx, shapes[i], g.x, g.y, g.size, g.rot, COLOR.fist, COLOR.ink);
+                        drawSprite(ctx, sprites[i], g.x, g.y, g.size, g.rot);
                         ctx.restore();
                     }
                 }
                 const p = place(fl, k);
                 // Попадание: кулак пружинит, потом медленно наезжает дальше — кадр не замирает
-                const pop = after >= 0 ? 1 + 0.12 * wobble(after / T.pop) + 0.04 * clamp01(after / 1200) : 1;
-                drawFist(ctx, shapes[i], p.x, p.y, p.size * pop, p.rot, old ? COLOR.old : COLOR.fist, COLOR.ink);
+                // Попадание: кулак сплющивается и пружинит (шире и ниже, потом наоборот), потом медленно наезжает
+                const w = after >= 0 ? wobble(after / T.pop) : 0, creep = after >= 0 ? 1 + 0.04 * clamp01(after / 1200) : 1;
+                drawSprite(ctx, sprites[i], p.x, p.y, p.size * creep, p.rot, 1 + 0.2 * w, 1 - 0.16 * w);
             });
 
             // После пятого удара — вспышка и сквозь неё сцена
