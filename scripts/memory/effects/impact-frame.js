@@ -919,11 +919,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
             playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), folder: game.settings.get(MODULE_ID, 'impactSoundFolder'), ...options });
         };
-        // Пятый удар — контузия: всё глухо, звон в ушах, пока идут волны
-        const onHit = (final, index, pan) => {
-            onCue(final ? 'punchFinal' : 'punch', { index, pan });
-            if (final) setTimeout(() => onCue('muffle', { duration: 0.95 * slow }), 60 * slow);
-        };
+        const onHit = (final, index, pan) => onCue(final ? 'punchFinal' : 'punch', { index, pan });
         // Музыка и звуки сцены — тише на время удара
         const unduck = game.settings.get(MODULE_ID, 'soundsEnabled') ? duckScene() : () => {};
         try {
