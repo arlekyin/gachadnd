@@ -360,13 +360,12 @@ function lightSet(ctx, unit) {
  * @param {boolean} options.calm  Без вспышек: без столба света и без инверсии.
  * @param {number} options.slow   Замедление.
  * @param {() => () => void} options.hideMarks  Прячет значки токенов, возвращает восстановление.
- * @param {() => void} options.onContact  Звук касания.
  * @param {() => Promise} options.between  Кулаки: камера ждёт, пока они отыграют.
- * @param {() => void} options.onBurst  Звук начала полёта.
- * @param {() => void} options.onLand   Звук приземления.
+ * @param {(name: string, options?: object) => void} options.onCue  Звук момента (impact-sound.js):
+ *        approach, inhale, lunge, contact, fly, land, ok; duration — в секундах.
  * @returns {Promise<boolean>}  false — показать в сцене нельзя.
  */
-export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1, hideMarks = () => () => {}, onContact = () => {}, between = async () => {}, onBurst = () => {}, onLand = () => {} }) {
+export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1, hideMarks = () => () => {}, between = async () => {}, onCue = () => {} }) {
     const stage = canvas?.stage, renderer = canvas?.app?.renderer;
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
     if (!stage || !renderer || !globalThis.PIXI || !target || !knock) return Promise.resolve(false);
@@ -556,6 +555,9 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     const shake = { x: 0, y: 0, at: -1e9, power: 0 };
     const kick = (when, power) => { const angle = Math.random() * Math.PI * 2; Object.assign(shake, { x: Math.cos(angle), y: Math.sin(angle), at: when, power }); };
     let contacted = false, launched = false, landed = false, fistsDone = false;
+    // Звуки моментов до касания — один раз; длительность — с учётом замедления
+    const cued = new Set();
+    const cue = (name, when, t, options = {}) => { if (t >= when && !cued.has(name)) { cued.add(name); onCue(name, options); } };
 
     return new Promise(resolve => {
         let t0 = performance.now();
@@ -586,9 +588,14 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                         requestAnimationFrame(frame);
                     });
                 }
-                if (t >= s2 && !contacted) { contacted = true; onContact(); kick(s2, SHAKE * 0.7); }
-                if (t >= sf && fistsDone && !launched) { launched = true; onBurst(); kick(sf, SHAKE * 0.6); }
-                if (t >= sland && launched && !landed) { landed = true; onLand(); kick(sHit, SHAKE * 0.55); }
+                cue('approach', 0, t, { duration: sa / 1000 * slow });
+                // Вдох обрывается вместе с концом вдоха: дальше — свист рывка и тишина перед касанием
+                cue('inhale', sa, t, { duration: T.inhale / 1000 * slow });
+                cue('lunge', si, t);
+                if (t >= s2 && !contacted) { contacted = true; onCue('contact'); kick(s2, SHAKE * 0.7); }
+                if (t >= sf && fistsDone && !launched) { launched = true; onCue('fly', { duration: T.fly / 1000 * slow }); kick(sf, SHAKE * 0.6); }
+                if (t >= sland && launched && !landed) { landed = true; onCue('land'); kick(sHit, SHAKE * 0.55); }
+                if (t >= sOk) cue('ok', sOk, t);
                 const sk = (t - shake.at) / T.burst;
                 const jolt = sk >= 0 && sk < 1 ? shake.power * (1 - sk) ** 2 * Math.cos((t - shake.at) / 18 * Math.PI) : 0;
 
