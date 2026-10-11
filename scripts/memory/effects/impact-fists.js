@@ -1,16 +1,22 @@
 /**
  * Gacha Roguelike dnd5e — Импакт-кадр «Кулаки» (Сайтама)
  *
- * После применения урона экран темнеет, и в экран один за другим летят пять кулаков. Каждый
- * удар — звук и инверсия кадра: белые кулаки на чёрном становятся чёрными на светлом. Пятый
- * кулак — по центру и крупнее всех: от него разбегаются трещины, кадр заливает белая вспышка,
- * и сквозь неё возвращается сцена. Всё рисуется векторами в разрешении экрана поверх живой сцены.
- * «Без вспышек» убирает инверсии и белую вспышку: остаются кулаки, звук и толчки.
+ * После применения урона экран темнеет, и в экран один за другим летят пять кулаков: по дуге,
+ * с вращением и следами, на попадании пружинят и потом медленно наезжают дальше. Каждый удар —
+ * звук, тряска экрана, светящиеся трещины и клубы пыли от кулака и негатив кадра: инвертируется
+ * всё, и кулаки, и сцена под ними. Пятый кулак — по центру и крупнее всех: после него кадр
+ * заливает белая вспышка, и сквозь неё возвращается сцена. Всё рисуется векторами в разрешении
+ * экрана поверх живой сцены. «Без вспышек» убирает негатив и белую вспышку.
  */
 
 // Хронометраж, мс: затемнение, полёт кулака к экрану, удержание удара; после пятого —
 // трещины, вспышка и возвращение сцены
-const T = { dark: 220, fly: 140, hold: 80, firstFly: 190, cracks: 170, flash: 200, fade: 380 };
+// crack — трещины удара разбегаются; shake — тряска от удара; puff — клубы пыли; pop — пружина кулака
+const T = { dark: 220, fly: 170, hold: 90, firstFly: 230, cracks: 170, flash: 200, fade: 380, crack: 140, shake: 300, puff: 600, pop: 280 };
+// Тряска от удара, доля меньшей стороны экрана: обычного и пятого
+const SHAKE = { hit: 0.028, final: 0.05 };
+// Цвета обычного кадра: тёплый белый и тёмный; негатив делает их холодными, как в аниме
+const COLOR = { fist: '#f7ece8', old: '#a99f9b', ink: '#1c1212', crack: '#ffe4dc', glow: 'rgba(255,150,140,0.9)', puff: '255,236,230' };
 // Куда прилетают кулаки: доли экрана, размер — доля меньшей стороны экрана, поворот
 const FISTS = [
     { x: 0.3, y: 0.36, size: 0.55, rot: -0.22 },
@@ -26,6 +32,10 @@ function seeded(seed) {
 }
 
 const easeIn = t => t * t * t;
+const easeOut = t => 1 - (1 - t) ** 3;
+const clamp01 = t => Math.min(1, Math.max(0, t));
+// Затухающее колебание около нуля: x — время в долях, 0 → 1
+const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4 * x) * Math.cos(x * Math.PI * 4);
 
 // ==========================================
 // КУЛАК
@@ -130,9 +140,12 @@ function cracks(cx, cy, reach, seed) {
     return segments;
 }
 
-function drawCracks(ctx, segments, progress, color) {
+function drawCracks(ctx, segments, progress, color, glow = null, blur = 0) {
+    ctx.save();
     ctx.strokeStyle = color;
     ctx.lineCap = 'round';
+    // Свет из трещин: размытое свечение вокруг линий
+    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = blur; }
     for (const s of segments) {
         if (s.at > progress) continue;
         ctx.lineWidth = s.width;
@@ -140,6 +153,21 @@ function drawCracks(ctx, segments, progress, color) {
         ctx.moveTo(s.x0, s.y0);
         ctx.lineTo(s.x1, s.y1);
         ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// Клубы пыли от удара: мягкие пятна, разлетаются от кулака и тают
+function drawPuffs(ctx, puffs, cx, cy, k, color) {
+    if (k <= 0 || k >= 1) return;
+    for (const p of puffs) {
+        const d = p.dist * easeOut(k), r = p.size * (0.6 + 0.6 * k);
+        const x = cx + Math.cos(p.a) * d, y = cy + Math.sin(p.a) * d;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, `rgba(${color},${0.85 * (1 - k)})`);
+        g.addColorStop(1, `rgba(${color},0)`);
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
     }
 }
 
@@ -189,9 +217,32 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
         const ctx = cv.getContext('2d');
         const W = cv.width, H = cv.height, unit = Math.min(W, H);
         const shapes = FISTS.map((_, i) => fistShape(31 + i * 17));
-        const crackSet = cracks(W / 2, H * FISTS[4].y, unit * 0.75, 77);
         const rnd = seeded(101);
         const rays = Array.from({ length: 90 }, () => ({ a: rnd() * Math.PI * 2, w: 0.002 + rnd() ** 2 * 0.012 }));
+        // Полёт каждого кулака: откуда (рядом с центром), изгиб дуги, начальный поворот;
+        // трещины и пыль удара — вокруг места попадания
+        const flights = FISTS.map((f, i) => {
+            const size = unit * f.size, x = W * f.x, y = H * f.y;
+            const from = { x: W * (0.5 + (rnd() - 0.5) * 0.12), y: H * (0.5 + (rnd() - 0.5) * 0.12) };
+            const bend = (rnd() < 0.5 ? -1 : 1) * (0.12 + rnd() * 0.12) * unit;
+            const dx = x - from.x, dy = y - from.y, len = Math.hypot(dx, dy) || 1;
+            return {
+                size, x, y, from, rot0: f.rot + (rnd() < 0.5 ? -1 : 1) * (0.6 + rnd() * 0.5),
+                control: { x: (from.x + x) / 2 - dy / len * bend, y: (from.y + y) / 2 + dx / len * bend },
+                cracks: cracks(x, y, size * (i === 4 ? 0.8 : 1), 77 + i * 13),
+                puffs: Array.from({ length: 5 }, () => ({ a: rnd() * Math.PI * 2, dist: size * (0.55 + rnd() * 0.5), size: size * (0.06 + rnd() * 0.06) }))
+            };
+        });
+        // Где кулак при доле полёта k: по дуге, растёт с ускорением, доворачивается
+        const place = (fl, k) => {
+            const e = easeIn(k), u = 1 - e;
+            return {
+                x: u * u * fl.from.x + 2 * u * e * fl.control.x + e * e * fl.x,
+                y: u * u * fl.from.y + 2 * u * e * fl.control.y + e * e * fl.y,
+                size: fl.size * (0.06 + 0.94 * e),
+                rot: fl.rot0 + (FISTS[flights.indexOf(fl)].rot - fl.rot0) * easeOut(k)
+            };
+        };
 
         // Расписание: начало полёта и момент удара каждого кулака
         const schedule = [];
@@ -204,7 +255,15 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
         const lastHit = schedule[4].hit;
         const end = lastHit + T.cracks + T.flash + T.fade;
         const struck = new Set();
-        let shake = { x: 0, y: 0, until: 0 };
+        let shake = { a: 0, power: 0, at: -1e9 };
+        let negative = null;
+        const setNegative = on => {
+            if (on === negative) return;
+            negative = on;
+            // Негатив всего кадра: и рисунка, и сцены под ним
+            cv.style.filter = on ? 'invert(1)' : '';
+            cv.style.backdropFilter = on ? 'invert(1)' : '';
+        };
 
         const t0 = performance.now();
         const frame = now => {
@@ -212,50 +271,75 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
           try {
             const t = (now - t0) / slow;
             if (t >= end) { cv.remove(); return resolve(); }
-            // Удары: звук и толчок — один раз на кулак
+            // Удары: звук и тряска — один раз на кулак
             schedule.forEach((s, i) => {
                 if (t >= s.hit && !struck.has(i)) {
                     struck.add(i);
                     onHit(i === 4);
-                    const power = (i === 4 ? 30 : 16) * unit / 1000;
-                    shake = { x: (rnd() - 0.5) * power, y: (rnd() - 0.5) * power, until: s.hit + T.hold * 0.8 };
+                    shake = { a: rnd() * Math.PI * 2, power: unit * (i === 4 ? SHAKE.final : SHAKE.hit), at: s.hit };
                 }
             });
             const hitting = schedule.findIndex(s => t >= s.hit && t < s.hit + T.hold);
             const finale = t >= lastHit;
-            // Инверсия на удар: кулаки чёрные на светлом; «без вспышек» — без неё
-            const inverted = !calm && (hitting >= 0 || (finale && t < lastHit + T.cracks));
-            const fill = inverted ? '#0a0a0a' : '#f4f1ee', ink = inverted ? '#f4f1ee' : '#0a0a0a';
+            setNegative(!calm && (hitting >= 0 || (finale && t < lastHit + T.cracks)));
 
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, W, H);
             const fade = t > lastHit + T.cracks + T.flash ? 1 - (t - lastHit - T.cracks - T.flash) / T.fade : 1;
             ctx.globalAlpha = Math.max(0, fade);
-            // Фон: сцена темнеет; на ударе — светлый кадр
-            ctx.fillStyle = inverted ? '#e9e6e2' : `rgba(0,0,0,${0.9 * Math.min(1, t / T.dark)})`;
+            // Фон: сцена темнеет и такой остаётся; негатив делает её светлой
+            ctx.fillStyle = `rgba(0,0,0,${0.9 * Math.min(1, t / T.dark)})`;
             ctx.fillRect(0, 0, W, H);
-            if (t < shake.until) ctx.translate(shake.x, shake.y);
+            // Тряска: экран бросает туда-обратно, размах быстро гаснет
+            const sk = (t - shake.at) / T.shake;
+            if (sk >= 0 && sk < 1) {
+                const j = shake.power * (1 - sk) ** 2 * Math.cos(sk * Math.PI * 7);
+                ctx.translate(Math.cos(shake.a) * j, Math.sin(shake.a) * j);
+            }
 
-            // Кулаки: прилетевшие остаются, текущий летит к экрану — растёт с ускорением
+            const current = schedule.findLastIndex(q => t >= q.start);
             schedule.forEach((s, i) => {
                 if (t < s.start) return;
-                const f = FISTS[i], k = Math.min(1, (t - s.start) / (s.hit - s.start)), e = easeIn(k);
-                const x = W * (0.5 + (f.x - 0.5) * e), y = H * (0.5 + (f.y - 0.5) * e);
-                const size = unit * f.size * (0.06 + 0.94 * e) * (i === 4 && finale ? 1 + Math.min(1, (t - lastHit) / 300) * 0.08 : 1);
-                // Прилетевшие раньше в обычном кадре — серые: внимание на последнем
-                const old = i < schedule.findLastIndex(q => t >= q.start);
-                const body = old && !inverted ? '#9a9692' : fill;
-                drawFist(ctx, shapes[i], x, y, size, f.rot * e, body, ink);
+                const fl = flights[i], k = clamp01((t - s.start) / (s.hit - s.start)), after = t - s.hit;
+                const old = i < current;
+                // Трещины и свет удара — под кулаком; у прежних кулаков тусклее
+                if (after >= 0) {
+                    ctx.save();
+                    ctx.globalAlpha *= old ? 0.45 : 1;
+                    // Вспышка света из места удара
+                    const flash = 1 - clamp01(after / 260);
+                    if (flash > 0) {
+                        const g = ctx.createRadialGradient(fl.x, fl.y, 0, fl.x, fl.y, fl.size * 1.1);
+                        g.addColorStop(0, `rgba(255,220,210,${0.55 * flash})`);
+                        g.addColorStop(1, 'rgba(255,220,210,0)');
+                        ctx.fillStyle = g;
+                        ctx.fillRect(fl.x - fl.size * 1.2, fl.y - fl.size * 1.2, fl.size * 2.4, fl.size * 2.4);
+                    }
+                    drawCracks(ctx, fl.cracks, clamp01(after / T.crack), COLOR.crack, COLOR.glow, unit * 0.012 * (0.4 + flash));
+                    drawPuffs(ctx, fl.puffs, fl.x, fl.y, after / T.puff, COLOR.puff);
+                    ctx.restore();
+                }
+                // Следы полёта: тот же кулак чуть раньше, полупрозрачный
+                if (k < 1) {
+                    for (const [lag, alpha] of [[0.16, 0.22], [0.3, 0.1]]) {
+                        if (k - lag <= 0) continue;
+                        const g = place(fl, k - lag);
+                        ctx.save();
+                        ctx.globalAlpha *= alpha;
+                        drawFist(ctx, shapes[i], g.x, g.y, g.size, g.rot, COLOR.fist, COLOR.ink);
+                        ctx.restore();
+                    }
+                }
+                const p = place(fl, k);
+                // Попадание: кулак пружинит, потом медленно наезжает дальше — кадр не замирает
+                const pop = after >= 0 ? 1 + 0.12 * wobble(after / T.pop) + 0.04 * clamp01(after / 1200) : 1;
+                drawFist(ctx, shapes[i], p.x, p.y, p.size * pop, p.rot, old ? COLOR.old : COLOR.fist, COLOR.ink);
             });
 
-            // Пятый удар: трещины разбегаются, затем вспышка и сквозь неё — сцена
-            if (finale) {
-                const k = Math.min(1, (t - lastHit) / T.cracks);
-                drawCracks(ctx, crackSet, k, inverted ? '#0a0a0a' : '#f4f1ee');
-                if (!calm && t >= lastHit + T.cracks) {
-                    const p = (t - lastHit - T.cracks) / T.flash;
-                    drawFlash(ctx, W, H, Math.min(1, p * 1.6), rays);
-                }
+            // После пятого удара — вспышка и сквозь неё сцена
+            if (finale && !calm && t >= lastHit + T.cracks) {
+                const p = (t - lastHit - T.cracks) / T.flash;
+                drawFlash(ctx, W, H, Math.min(1, p * 1.6), rays);
             }
             requestAnimationFrame(frame);
           } catch (error) {
