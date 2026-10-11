@@ -6,7 +6,7 @@
  *  2. Вдох: воздух втягивается в Сайтаму, он замахивается назад, цель дрожит; камера медленно
  *     поворачивает по часовой и чуть отъезжает.
  *  3. Рывок: камера резко уходит против часовой и наезжает на цель, Сайтама бросается к ней.
- *  4. Касание — два мелькающих кадра на цели: столб света сверху, затем молнии из точки удара.
+ *  4. Касание — три мелькающих кадра на цели: столб света, молнии в тёмном конусе, молнии вокруг.
  *  5. Кулаки (impact-fists.js) — камера на это время замирает.
  *  6. За целью выстреливает разлёт, кадр инвертируется, цель отлетает по прямой от Сайтамы,
  *     сцена возвращается в цвет, камера — рывком на место.
@@ -16,12 +16,13 @@
 
 // Хронометраж, мс. Медленно — то, что надо рассмотреть, быстро — сами удары.
 // approach — подъезд; inhale — вдох (windup — его часть с замахом); lunge — рывок; turn — резкий
-// поворот камеры на рывке; light — кадры света и молний: связка, мелькает на 2–3 кадра экрана
-// (beam — столб света, остальное — молнии), без своей анимации;
+// поворот камеры на рывке; light — кадры света и молний: связка, каждый мелькает на 3–4 кадра
+// экрана, без своей анимации (beam — столб света, cone — молнии в тёмном конусе, остальное —
+// молнии во все стороны);
 // burst — тряска от разлёта; pop — выстрел разлёта; squash — качание токенов от удара; ghosts —
 // следы рывка; hold — разлёт на виду; invert — инверсия; fly — отлёт; back — возврат камеры
 const T = {
-    approach: 520, inhale: 1000, windup: 650, lunge: 200, turn: 160, light: 120, beam: 50,
+    approach: 520, inhale: 1000, windup: 650, lunge: 200, turn: 160, light: 170, beam: 50, cone: 60,
     burst: 250, pop: 45, squash: 450, ghosts: 450, hold: 220, invert: 140, fly: 300, back: 70
 };
 // Камера: на вдохе — поворот по часовой и отъезд; на рывке — против часовой и наезд на цель;
@@ -156,34 +157,59 @@ function burstGraphic(radius, reach) {
 // СВЕТ И МОЛНИИ
 // ==========================================
 
-// Молния: ломаная из точки удара вверх с ответвлениями; ширина сужается к концу
-function bolts(seed, unit) {
+// Молния: ломаная из точки удара с ответвлениями; ширина сужается к концу.
+// angles — направления стволов; jag — сила изломов
+function bolts(seed, unit, angles, { length = 0.8, width = 0.016, jag = 0.9, branch = 0.22 } = {}) {
     const rnd = seeded(seed), out = [];
-    // У каждой точки — путь от точки удара вдоль молнии: молния растёт по нему, ответвление
-    // начинается, когда ствол дорос до места ветвления
-    const grow = (x, y, angle, length, width, depth, dist) => {
-        const points = [[x, y, dist]];
-        const steps = 9 + Math.floor(rnd() * 5);
+    const grow = (x, y, angle, len, w, depth) => {
+        const points = [[x, y]];
+        const base = angle, steps = 10 + Math.floor(rnd() * 6);
         for (let i = 0; i < steps; i++) {
-            angle += (rnd() - 0.5) * 0.9;
-            const step = length / steps * (0.6 + rnd() * 0.8);
-            x += Math.cos(angle) * step; y += Math.sin(angle) * step; dist += step;
-            points.push([x, y, dist]);
-            if (depth < 2 && rnd() < 0.22) grow(x, y, angle + (rnd() < 0.5 ? -1 : 1) * (0.4 + rnd() * 0.6), length * 0.5, width * 0.6, depth + 1, dist);
+            // Излом вокруг общего направления ствола: молния петляет, но не разворачивается
+            angle = base + (rnd() - 0.5) * jag * 1.6;
+            const step = len / steps * (0.5 + rnd() * 1);
+            x += Math.cos(angle) * step; y += Math.sin(angle) * step;
+            points.push([x, y]);
+            if (depth < 2 && rnd() < branch) grow(x, y, base + (rnd() < 0.5 ? -1 : 1) * (0.35 + rnd() * 0.5), len * 0.45, w * 0.6, depth + 1);
         }
-        out.push({ points, width, depth });
+        out.push({ points, width: w, depth });
     };
-    for (let i = 0; i < 6; i++) grow(0, 0, -Math.PI / 2 + (i / 5 - 0.5) * 1.7 + (rnd() - 0.5) * 0.3, unit * (0.6 + rnd() * 0.35), unit * (0.014 + rnd() * 0.01), 0, 0);
-    const longest = Math.max(...out.flatMap(b => b.points.map(p => p[2])));
-    for (const b of out) for (const p of b.points) p[2] /= longest;
+    for (const angle of angles) grow(0, 0, angle + (rnd() - 0.5) * 0.15, unit * length * (0.75 + rnd() * 0.4), unit * width * (0.8 + rnd() * 0.5), 0);
     return out;
 }
 
+// Молнии одним путём: свечение — широкой полупрозрачной линией, сама молния — белой
+function drawBolts(ctx, P, set, glowAlpha, glowWidth) {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 3;
+    for (const b of set) {
+        const path = () => {
+            ctx.beginPath();
+            ctx.moveTo(P.x + b.points[0][0], P.y + b.points[0][1]);
+            for (let i = 1; i < b.points.length; i++) ctx.lineTo(P.x + b.points[i][0], P.y + b.points[i][1]);
+        };
+        // Свечение — два слоя: широкий бледный и узкий поярче, ореол без резкой границы
+        if (glowAlpha) {
+            for (const [a, w] of [[glowAlpha * 0.4, glowWidth], [glowAlpha, glowWidth * 0.5]]) {
+                ctx.strokeStyle = `rgba(255,255,255,${a})`;
+                ctx.lineWidth = b.width * w;
+                path(); ctx.stroke();
+            }
+        }
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = b.width;
+        path(); ctx.stroke();
+    }
+}
+
 /**
- * Кадр света и молний в пикселях экрана. P — точка удара.
- * f — время от касания: сначала столб света (белый конус сверху на чёрном, горизонтальные
- * блики, вспышка), затем негатив столба — тёмный конус на сером, из точки удара молнии
- * и брызги света. Оба кадра — неподвижные: они мелькают, а не играют.
+ * Кадры света и молний в пикселях экрана, P — точка удара, f — время от касания. Три неподвижных
+ * кадра, каждый мелькает:
+ *  1. столб света — белый конус сверху на чёрном, горизонтальные блики, вспышка в точке удара;
+ *  2. негатив столба — тёмный конус между серыми шершавыми стенками, в нём толстые рваные молнии
+ *     вверх, на линии удара — плоский всплеск света, тонкие кресты бликов;
+ *  3. молнии во все стороны из точки удара на чёрном, со свечением.
  */
 function drawLight(ctx, W, H, P, f, set, calm) {
     const unit = Math.min(W, H), half = Math.max(W, H) * 0.32;
@@ -205,14 +231,26 @@ function drawLight(ctx, W, H, P, f, set, calm) {
             ctx.fillRect(0, P.y + s.dy * unit - s.h / 2, W, s.h);
         }
     };
+    // Кресты бликов: тонкие вертикальные и горизонтальные лучи через яркие точки
+    const glints = a => {
+        for (const g of set.glints) {
+            const x = P.x + g.dx * unit, y = P.y + g.dy * unit, r = g.r * unit;
+            for (const [w, h] of [[unit * 0.0025, r], [r * 0.7, unit * 0.0025]]) {
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, Math.max(w, h));
+                grad.addColorStop(0, `rgba(255,255,255,${a})`);
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(x - w, y - h, w * 2, h * 2);
+            }
+        }
+    };
     if (f < T.beam && !calm) {
-        // Столб света
-            ctx.fillStyle = '#000';
+        // 1. Столб света
+        ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = '#fff';
         cone();
         ctx.fill();
-        // Тёмные прожилки по краям столба
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         for (const v of set.veins) {
             const side = v.side, x0 = P.x + side * half * v.at, y0 = -10 + (P.y + 10) * v.y;
@@ -226,56 +264,78 @@ function drawLight(ctx, W, H, P, f, set, calm) {
         glow(P.x, P.y, unit * 0.24, 1);
         return;
     }
-    // Негатив столба: серые стороны, тёмный конус, молнии и брызги света
-    const g = ctx.createRadialGradient(P.x, P.y, unit * 0.2, P.x, P.y, Math.hypot(W, H));
-    g.addColorStop(0, '#8a8a8a');
-    g.addColorStop(1, '#2a2a2a');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#050505';
-    cone();
-    ctx.fill();
-    ctx.fillRect(0, P.y, W, H - P.y);
-    const grow = 1, flicker = 1;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const b of set.bolts) {
-        const n = b.points.filter(p => p[2] <= grow).length;
-        if (n < 2) continue;
-        const path = () => {
-            ctx.beginPath();
-            ctx.moveTo(P.x + b.points[0][0], P.y + b.points[0][1]);
-            for (let i = 1; i < n; i++) ctx.lineTo(P.x + b.points[i][0], P.y + b.points[i][1]);
-        };
-        // Свечение — широкой полупрозрачной линией, сама молния — белой
-        ctx.strokeStyle = `rgba(255,255,255,${0.22 * flicker})`;
-        ctx.lineWidth = b.width * 4;
-        path(); ctx.stroke();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = b.width;
-        path(); ctx.stroke();
-    }
-    // Брызги света: колючее плоское пятно в точке удара
-    ctx.fillStyle = '#fff';
-    for (const s of set.splash) {
-        const len = s.len * unit * (0.4 + 0.6 * grow);
-        ctx.beginPath();
-        ctx.moveTo(P.x + Math.cos(s.a + 1.57) * s.w * unit, P.y + Math.sin(s.a + 1.57) * s.w * unit * 0.3);
-        ctx.lineTo(P.x + Math.cos(s.a) * len, P.y + Math.sin(s.a) * len * 0.22);
-        ctx.lineTo(P.x - Math.cos(s.a + 1.57) * s.w * unit, P.y - Math.sin(s.a + 1.57) * s.w * unit * 0.3);
+    if (f < T.beam + T.cone) {
+        // 2. Негатив столба: серые шершавые стенки, тёмный конус и низ, молнии в конусе
+        const g = ctx.createRadialGradient(P.x, P.y * 0.4, unit * 0.1, P.x, P.y * 0.4, Math.max(W, H) * 0.7);
+        g.addColorStop(0, '#9a9a9a');
+        g.addColorStop(1, '#3a3a3a');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, P.y);
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = set.grain;
+        ctx.fillRect(0, 0, W, P.y);
+        ctx.restore();
+        ctx.fillStyle = '#050505';
+        cone();
         ctx.fill();
+        ctx.fillRect(0, P.y, W, H - P.y);
+        drawBolts(ctx, P, set.coneBolts, 0.25, 3);
+        // Всплеск: плоское колючее пятно света на линии удара и столбик над ним
+        ctx.fillStyle = '#fff';
+        for (const s of set.splash) {
+            const len = s.len * unit * 1.4;
+            ctx.beginPath();
+            ctx.moveTo(P.x + Math.cos(s.a + 1.57) * s.w * unit, P.y + Math.sin(s.a + 1.57) * s.w * unit * 0.3);
+            ctx.lineTo(P.x + Math.cos(s.a) * len, P.y + Math.sin(s.a) * len * 0.18);
+            ctx.lineTo(P.x - Math.cos(s.a + 1.57) * s.w * unit, P.y - Math.sin(s.a + 1.57) * s.w * unit * 0.3);
+            ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.ellipse(P.x, P.y, unit * 0.2, unit * 0.035, 0, 0, Math.PI * 2);
+        ctx.fill();
+        glow(P.x, P.y - unit * 0.03, unit * 0.13, 1);
+        glints(0.8);
+        return;
     }
-    glow(P.x, P.y, unit * 0.16, flicker);
-    streaks(0.35 * flicker);
+    // 3. Молнии во все стороны на чёрном, со свечением
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    drawBolts(ctx, P, set.wideBolts, 0.35, 7);
+    glow(P.x, P.y, unit * 0.16, 1);
+    glints(0.6);
 }
 
-function lightSet(unit) {
+// Узор серых стенок: светлые и тёмные пятна, как шершавая бумага
+function grainPattern(ctx) {
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = 256;
+    const g = tile.getContext('2d');
+    const rnd = seeded(91);
+    for (let i = 0; i < 2600; i++) {
+        const light = rnd() < 0.5;
+        g.fillStyle = light ? `rgba(255,255,255,${0.05 + rnd() * 0.12})` : `rgba(0,0,0,${0.05 + rnd() * 0.14})`;
+        const r = 1 + rnd() ** 3 * 9;
+        g.beginPath();
+        g.arc(rnd() * 256, rnd() * 256, r, 0, Math.PI * 2);
+        g.fill();
+    }
+    return ctx.createPattern(tile, 'repeat');
+}
+
+function lightSet(ctx, unit) {
     const rnd = seeded(211);
+    // В конусе — стволы вверх, в его пределах; на третьем кадре — во все стороны
+    const up = Array.from({ length: 5 }, (_, i) => -Math.PI / 2 + (i / 4 - 0.5) * 0.8);
+    const around = Array.from({ length: 9 }, (_, i) => i / 9 * Math.PI * 2 + 0.3);
     return {
-        bolts: bolts(17, unit),
+        coneBolts: bolts(17, unit, up, { length: 1.0, width: 0.022, jag: 0.6, branch: 0.12 }),
+        wideBolts: bolts(29, unit, around, { length: 0.75, width: 0.016, jag: 0.9, branch: 0.2 }),
+        grain: grainPattern(ctx),
+        glints: Array.from({ length: 5 }, () => ({ dx: (rnd() - 0.5) * 0.9, dy: -rnd() * 0.5, r: 0.08 + rnd() * 0.15 })),
         streaks: Array.from({ length: 4 }, () => ({ dy: (rnd() - 0.65) * 0.6, h: unit * (0.003 + rnd() * 0.005), alpha: 0.4 + rnd() * 0.6 })),
         veins: Array.from({ length: 10 }, () => ({ side: rnd() < 0.5 ? -1 : 1, at: 0.6 + rnd() * 0.35, y: rnd() * 0.5, w: 0.01 + rnd() * 0.02, len: 0.1 + rnd() * 0.25 })),
-        splash: Array.from({ length: 70 }, () => ({ a: (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 1.2, len: 0.12 + rnd() ** 2 * 0.35, w: 0.004 + rnd() * 0.006 }))
+        splash: Array.from({ length: 90 }, () => ({ a: (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 1.0, len: 0.12 + rnd() ** 2 * 0.3, w: 0.004 + rnd() * 0.006 }))
     };
 }
 
@@ -417,7 +477,7 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     cv.style.display = 'none';
     document.body.append(cv);
     const ctx = cv.getContext('2d');
-    const lights = lightSet(Math.min(cv.width, cv.height));
+    const lights = lightSet(ctx, Math.min(cv.width, cv.height));
     // Струи воздуха: угол, фаза и длина у каждой своя
     const rndAir = seeded(5);
     const streams = Array.from({ length: AIR.count }, () => ({ a: rndAir() * Math.PI * 2, phase: rndAir(), len: 0.5 + rndAir() * 0.9, w: 0.6 + rndAir() * 1.2 }));
