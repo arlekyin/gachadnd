@@ -960,7 +960,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             else if (!canvas?.ready || canvas.scene?.id !== sceneId) { trace('у вас открыта другая сцена — только кулаки'); await fists(); }
             else if (!(await playSaitama({
                 casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, calm, slow,
-                hideMarks: hideTokenMarks, onContact: punch, between: () => fists(true), onBurst: playSound
+                hideMarks: hideTokenMarks, onContact: punch, between: () => fists(true), onBurst: playSound, onLand: punch
             }))) {
                 trace('токен цели не найден на сцене — только кулаки');
                 await fists();
