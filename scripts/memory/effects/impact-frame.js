@@ -30,7 +30,10 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 import { playFists, prepareFists } from "./impact-fists.js";
 import { knockback, playSaitama } from "./impact-knock.js";
-import { playCue, duckScene } from "./impact-sound.js";
+import "./impact-sound.js";
+import { playCue, duckScene } from "../../cutscene/audio.js";
+import { hideTokenMarks } from "../../cutscene/stage.js";
+import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -648,16 +651,6 @@ function silhouettes(tokenIds) {
     return layer;
 }
 
-// Значки состояний, полосы и имена токенов на время кадра скрыты: череп поверженного — не часть удара
-function hideTokenMarks() {
-    const hidden = [];
-    for (const token of canvas.tokens?.placeables ?? []) {
-        for (const part of [token.effects, token.bars, token.nameplate, token.tooltip, token.targetArrows, token.border]) {
-            if (part?.visible) { part.visible = false; hidden.push(part); }
-        }
-    }
-    return () => hidden.forEach(part => part.visible = true);
-}
 
 // Точка сцены → CSS-пиксели холста по текущей камере (сцена — корень, без поворота)
 const toView = p => {
@@ -883,13 +876,6 @@ function playSound() {
 
 let playing = false;
 
-// Убрать всё, что кадр мог оставить, если он оборвался: холсты, кинополосы, скрытые токены
-function cleanupImpact() {
-    document.querySelectorAll('.gd-impact, .gd-letterbox').forEach(el => el.remove());
-    for (const token of canvas?.tokens?.placeables ?? []) {
-        if (token.mesh?.gdAlpha !== undefined) { token.mesh.alpha = token.mesh.gdAlpha; delete token.mesh.gdAlpha; }
-    }
-}
 
 let playId = 0;
 
