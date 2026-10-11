@@ -17,6 +17,12 @@
  * поверх в разрешении экрана. Перенос токена делает клиент Мастера после показа.
  */
 
+import { seeded, lerp, clamp01, easeOut, easeInOut, springTo, wobble } from "../../cutscene/math.js";
+import { stageCamera, shaker } from "../../cutscene/camera.js";
+import { letterbox } from "../../cutscene/letterbox.js";
+import { stageFilter, grayFilter, tokenCopy, rotatedFrame, hideToken, showToken } from "../../cutscene/stage.js";
+import { overlay } from "../../cutscene/overlay.js";
+
 // Хронометраж, мс. Медленно — то, что надо рассмотреть, быстро — сами удары.
 // approach — подъезд; inhale — вдох (windup — его часть с замахом); lunge — рывок; turn — резкий
 // поворот камеры на рывке; light — кадры света и молний: связка, каждый мелькает на 3–4 кадра
@@ -49,20 +55,6 @@ const AIR = { count: 46, from: 4.5, period: 520 };
 const FLIGHT = { stretch: 0.45, spin: 1.25, trails: 5 };
 // Реплика Сайтамы после удара
 const OK_LINE = 'Ок.';
-
-function seeded(seed) {
-    let s = seed;
-    return () => (s = (s * 16807) % 2147483647) / 2147483647;
-}
-
-const easeOut = t => 1 - (1 - t) ** 3;
-const easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-const clamp01 = t => Math.min(1, Math.max(0, t));
-// Пружина: 0 → 1 с перелётом и затухающими колебаниями
-const springTo = t => t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(t * Math.PI * 2.6);
-// Затухающее колебание около нуля после толчка: x — время в долях, 0 → 1
-const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4.5 * x) * Math.cos(x * Math.PI * 5);
-const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
  * Куда отлетает цель: по прямой от нанёсшего удар на feet футов, до первой стены.
@@ -107,23 +99,6 @@ export function knockback(casterId, targetId, feet) {
         corner.y = Math.min(Math.max(corner.y, rect.y), rect.y + rect.height - h);
     }
     return { tokenId: targetId, casterId, x: corner.x, y: corner.y, reach, from: { x: b.x, y: b.y }, to: { x: corner.x + w / 2, y: corner.y + h / 2 } };
-}
-
-// Копия картинки токена в слое кадра: на месте токена, с его масштабом и поворотом
-function tokenCopy(token) {
-    const mesh = token?.mesh;
-    if (!mesh?.texture) return null;
-    const sprite = new PIXI.Sprite(mesh.texture);
-    sprite.anchor.set(mesh.anchor?.x ?? 0.5, mesh.anchor?.y ?? 0.5);
-    sprite.position.set(mesh.position.x, mesh.position.y);
-    sprite.scale.set(mesh.scale.x, mesh.scale.y);
-    sprite.rotation = mesh.rotation;
-    // Чёрно-белый с поднятым контрастом
-    const gray = new PIXI.ColorMatrixFilter();
-    gray.desaturate();
-    gray.contrast(0.5, true);
-    sprite.filters = [gray];
-    return sprite;
 }
 
 /**
@@ -436,9 +411,8 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
     if (!stage || !renderer || !globalThis.PIXI || !target || !knock) return Promise.resolve(false);
 
-    const saved = { x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y, rot: stage.rotation ?? 0 };
-    const view = canvas.app.view ?? canvas.app.canvas;
-    const rect = view.getBoundingClientRect();
+    const cam = stageCamera();
+    const { saved } = cam;
     const a = caster?.center ?? knock.from, b = knock.from;
     const size = canvas.dimensions.size;
     const radius = Math.max(target.w ?? 0, target.h ?? 0, size) / 2;
@@ -452,47 +426,17 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
 
     // Крупный план: в кадре Сайтама, его замах и цель; центр — между замахом и целью
     const span = { x: (windup.x + b.x) / 2, y: (windup.y + b.y) / 2 };
-    const half = ['x', 'y'].map(axis => Math.max(...[a, b, windup].map(p => Math.abs(p[axis] - span[axis]))) + radius * 1.5);
-    const maxScale = Math.min(saved.sx * MAX_ZOOM, globalThis.CONFIG?.Canvas?.maxZoom ?? 3);
-    const fit = Math.min(rect.width * FILL / (2 * half[0]), rect.height * FILL / (2 * half[1]));
-    const scale = Math.max(saved.sx, Math.min(maxScale, fit));
+    const scale = cam.fit([a, b, windup], span, { fill: FILL, margin: radius * 1.5, maxZoom: MAX_ZOOM });
     const focus = { x: lerp(span.x, b.x, 0.15), y: lerp(span.y, b.y, 0.15) };
-    // Положение сцены, при котором точка center — в центре экрана при масштабе s и повороте rot
-    const at = (s, center, rot = 0) => {
-        const dx = (center.x - stage.pivot.x) * s, dy = (center.y - stage.pivot.y) * s;
-        const cos = Math.cos(rot), sin = Math.sin(rot);
-        return { x: rect.width / 2 - (dx * cos - dy * sin), y: rect.height / 2 - (dx * sin + dy * cos) };
-    };
-    const viewCenter = { x: stage.pivot.x + (rect.width / 2 - saved.x) / saved.sx, y: stage.pivot.y + (rect.height / 2 - saved.y) / saved.sy };
     // Камера: k — от обычного вида (0) к крупному плану (1); zoom — множитель крупного плана;
-    // pull — сдвиг центра к цели; tilt — поворот
-    // follow — камера провожает цель к месту приземления
+    // pull — сдвиг центра к цели; tilt — поворот; follow — камера провожает цель к месту приземления
     const camera = (k, zoom, pull, tilt, dx = 0, dy = 0, follow = 0) => {
-        const s = lerp(saved.sx, scale * zoom, k), rot = tilt * k;
         const pulled = { x: lerp(focus.x, b.x, pull), y: lerp(focus.y, b.y, pull) };
-        const f = { x: lerp(pulled.x, knock.to.x, follow), y: lerp(pulled.y, knock.to.y, follow) };
-        const pos = at(s, { x: lerp(viewCenter.x, f.x, k), y: lerp(viewCenter.y, f.y, k) }, rot);
-        stage.scale.set(s, s * saved.sy / saved.sx);
-        stage.rotation = saved.rot + rot;
-        stage.position.set(pos.x + dx, pos.y + dy);
+        cam.place({ k, scale: scale * zoom, rot: tilt, dx, dy, center: { x: lerp(pulled.x, knock.to.x, follow), y: lerp(pulled.y, knock.to.y, follow) } });
     };
-    // Точка сцены → пиксели устройства на экране при текущей камере
-    const screenOf = p => {
-        const dx = (p.x - stage.pivot.x) * stage.scale.x, dy = (p.y - stage.pivot.y) * stage.scale.y;
-        const cos = Math.cos(stage.rotation), sin = Math.sin(stage.rotation);
-        return { x: (rect.left + stage.position.x + dx * cos - dy * sin) * devicePixelRatio, y: (rect.top + stage.position.y + dx * sin + dy * cos) * devicePixelRatio };
-    };
+    const screenOf = cam.screenOf;
 
-    // Кинополосы — поверх всего, не наклоняются с камерой
-    const bars = ['top', 'bottom'].map(side => {
-        const bar = document.createElement('div');
-        bar.className = `gd-letterbox gd-letterbox-${side}`;
-        bar.style.height = `${BARS * 100}vh`;
-        document.body.append(bar);
-        return bar;
-    });
-    const showBars = k => bars.forEach((bar, i) => bar.style.transform = `translateY(${(i ? 1 : -1) * (1 - k) * 100}%)`);
-    showBars(0);
+    const bars = letterbox(BARS);
 
     // Слой кадра поверх сцены: затемнение, вдох, разлёт, следы, копии токенов
     const layer = new PIXI.Container();
@@ -506,19 +450,8 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     burst.scale.set(0, 0);
     const casterCopy = caster ? tokenCopy(caster) : null, targetCopy = tokenCopy(target);
     // Рамки, повёрнутые по удару: сжатие и растяжение токенов идут вдоль удара
-    const wrap = copy => {
-        const frame = new PIXI.Container();
-        frame.rotation = dir;
-        if (copy) {
-            frame.position.set(copy.position.x, copy.position.y);
-            copy.position.set(0, 0);
-            copy.rotation -= dir;
-            frame.addChild(copy);
-        }
-        return frame;
-    };
-    const casterWrap = casterCopy ? wrap(casterCopy) : null;
-    const targetWrap = wrap(targetCopy);
+    const casterWrap = casterCopy ? rotatedFrame(casterCopy, dir) : null;
+    const targetWrap = rotatedFrame(targetCopy, dir);
     targetWrap.position.set(b.x, b.y);
     const ghosts = caster ? [0.25, 0.5, 0.75].map(f => {
         const ghost = tokenCopy(caster);
@@ -583,32 +516,17 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
         bubble.visible = false;
     }
     layer.addChild(dark, ground, air, burst, trail, ...ghosts.map(g => g.ghost), ...flightGhosts.map(g => g.ghost), ...[casterWrap, targetWrap].filter(Boolean), bubble);
-    for (const token of [caster, target]) if (token?.mesh) { token.mesh.gdAlpha ??= token.mesh.alpha; token.mesh.alpha = 0; }
+    hideToken(caster);
+    hideToken(target);
     const showMarks = hideMarks();
     stage.addChild(layer);
     // Сцена чёрно-белая с подъезда до отлёта
-    const gray = new PIXI.ColorMatrixFilter();
-    gray.desaturate();
-    gray.contrast(0.35, true);
+    const gray = grayFilter(0.35);
     gray.alpha = 0;
-    const savedFilters = { filters: stage.filters, area: stage.filterArea };
-    stage.filters = [...(savedFilters.filters ?? []), gray];
-    stage.filterArea = renderer.screen;
-    let grayOn = true;
-    const dropGray = () => {
-        if (!grayOn) return;
-        grayOn = false;
-        stage.filters = savedFilters.filters ?? null;
-        stage.filterArea = savedFilters.area ?? null;
-    };
+    const grayed = stageFilter(gray);
+    const dropGray = grayed.remove;
     // Свет и молнии — холст поверх сцены в пикселях устройства
-    const cv = document.createElement('canvas');
-    cv.className = 'gd-impact';
-    cv.width = Math.round(innerWidth * devicePixelRatio);
-    cv.height = Math.round(innerHeight * devicePixelRatio);
-    cv.style.display = 'none';
-    document.body.append(cv);
-    const ctx = cv.getContext('2d');
+    const { canvas: cv, ctx } = overlay({ hidden: true });
     const lights = lightSet(ctx, Math.min(cv.width, cv.height));
     // Струи воздуха: угол, фаза и длина у каждой своя
     const rndAir = seeded(5);
@@ -618,8 +536,8 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     // возврат камеры, реплика
     const sa = T.approach, si = sa + T.inhale, s2 = si + T.lunge, sL = s2 + T.lines, sp = sL + T.light;
     const sf = sp, sland = sf + T.fly, sHit = sland + T.hitstop, s6 = sHit + T.settle, sOk = s6 + T.back, end = sOk + T.ok;
-    const shake = { x: 0, y: 0, at: -1e9, power: 0 };
-    const kick = (when, power) => { const angle = Math.random() * Math.PI * 2; Object.assign(shake, { x: Math.cos(angle), y: Math.sin(angle), at: when, power }); };
+    const shake = shaker();
+    const kick = (when, power) => shake.kick(when, power);
     let contacted = false, launched = false, landed = false, fistsDone = false;
     // Звуки моментов до касания — один раз; длительность — с учётом замедления
     const cued = new Set();
@@ -628,12 +546,11 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     return new Promise(resolve => {
         let t0 = performance.now();
         const finish = () => {
-            camera(0, 1, 0, 0);
-            stage.rotation = saved.rot;
+            cam.restore();
             dropGray();
-            bars.forEach(bar => bar.remove());
+            bars.remove();
             cv.remove();
-            if (caster?.mesh?.gdAlpha !== undefined) { caster.mesh.alpha = caster.mesh.gdAlpha; delete caster.mesh.gdAlpha; }
+            showToken(caster);
             layer.destroy({ children: true });
             showMarks();
             resolve(true);
@@ -675,8 +592,7 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                 // Перед репликой — тишина: хвосты приземления обрываются
                 cue('hush', sOk - 420, t, { duration: 0.4 * slow });
                 if (t >= sOk) cue('ok', sOk, t, { pan: caster ? panOf(home) * 0.6 : 0 });
-                const sk = (t - shake.at) / T.burst;
-                const jolt = sk >= 0 && sk < 1 ? shake.power * (1 - sk) ** 2 * Math.cos((t - shake.at) / 18 * Math.PI) : 0;
+                const jolt = shake.offset(t, T.burst);
 
                 // Полёт: f — доля пути; стоп-кадр приземления — цель на месте, всё замерло
                 const f = t < sf ? 0 : easeOut(clamp01((t - sf) / T.fly));
@@ -698,8 +614,8 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                     pull = CAM.lungePull;
                     follow = 0.6 * f;
                 }
-                camera(k, zoom, pull, tilt, shake.x * jolt, shake.y * jolt, follow);
-                showBars(t < sa ? easeOut(t / sa) : t < s6 ? 1 : 1 - clamp01((t - s6) / T.back));
+                camera(k, zoom, pull, tilt, jolt.x, jolt.y, follow);
+                bars.show(t < sa ? easeOut(t / sa) : t < s6 ? 1 : 1 - clamp01((t - s6) / T.back));
                 // Ч/б — с подъезда; цвет возвращается во время полёта
                 gray.alpha = t < sf ? clamp01(t / sa) : 1 - f;
                 if (t >= sland) dropGray();
@@ -832,8 +748,7 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                     cv.style.display = '';
                     ctx.setTransform(1, 0, 0, 1, 0, 0);
                     ctx.clearRect(0, 0, cv.width, cv.height);
-                    const d = jolt * devicePixelRatio;
-                    ctx.translate(shake.x * d, shake.y * d);
+                    ctx.translate(jolt.x * devicePixelRatio, jolt.y * devicePixelRatio);
                     drawLight(ctx, cv.width, cv.height, screenOf(b), t - sL, lights, calm);
                 } else cv.style.display = 'none';
                 requestAnimationFrame(frame);

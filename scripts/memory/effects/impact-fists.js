@@ -9,6 +9,10 @@
  * экрана поверх живой сцены. «Без вспышек» убирает негатив и белую вспышку.
  */
 
+import { seeded, valueNoise, lerp, clamp01, smooth, easeIn, easeOut, wobble } from "../../cutscene/math.js";
+import { setNegative as applyNegative } from "../../cutscene/overlay.js";
+import { rippleFor } from "../../cutscene/ripple.js";
+
 // Хронометраж, мс: затемнение, полёт кулака к экрану, удержание удара; после пятого —
 // трещины, вспышка и возвращение сцены
 // crack — трещины удара разбегаются; shake — тряска от удара; puff — клубы пыли; pop — пружина кулака
@@ -22,7 +26,7 @@ const T = {
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
 const SHAKE = { hit: 0.028, final: 0.05 };
 // Цвета обычного кадра: тёплый белый и тёмный; негатив делает их холодными, как в аниме
-const COLOR = { fist: '#f7ece8', old: '#a99f9b', ink: '#1c1212', crack: '#ffe4dc', glow: 'rgba(255,140,130,0.35)', puff: '255,236,230' };
+const COLOR = { crack: '#ffe4dc', glow: 'rgba(255,140,130,0.35)', puff: '255,236,230' };
 // Куда прилетают кулаки: первые четыре — по углам экрана, пятый — в центре; поворот у каждого свой.
 // Размеры подобраны так, чтобы кулаки не перекрывали друг друга
 const FISTS = [
@@ -48,176 +52,6 @@ function layout(W, H) {
     const free = W - 2 * (pad + size + unit * CORNER.gap);
     const center = { x: W / 2, y: H * 0.52, size: Math.min(unit * 0.75, Math.max(unit * 0.4, free)) };
     return [...corners, center];
-}
-
-function seeded(seed) {
-    let s = seed;
-    return () => (s = (s * 16807) % 2147483647) / 2147483647;
-}
-
-const easeIn = t => t * t * t;
-const easeOut = t => 1 - (1 - t) ** 3;
-const clamp01 = t => Math.min(1, Math.max(0, t));
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = t => t * t * (3 - 2 * t);
-// Затухающее колебание около нуля: x — время в долях, 0 → 1
-const wobble = x => x >= 1 || x < 0 ? 0 : Math.exp(-4 * x) * Math.cos(x * Math.PI * 4);
-
-// ==========================================
-// КУЛАК
-// ==========================================
-
-/**
- * Кулак анфас, костяшками в экран: почти квадратный, сверху — мягкие бугры пальцев, внизу —
- * подвёрнутый большой палец. Координаты — в долях ширины кулака, центр в (0, 0).
- * У каждого кулака свои мелкие неровности.
- */
-function fistShape(seed) {
-    const rnd = seeded(seed);
-    const peaks = [-0.4, -0.46, -0.45, -0.39].map(y => y + (rnd() - 0.5) * 0.02);
-    return { peaks, valley: -0.33 + (rnd() - 0.5) * 0.015, tilt: (rnd() - 0.5) * 0.04 };
-}
-
-function fistPath(ctx, shape) {
-    const { peaks, valley, tilt } = shape;
-    ctx.beginPath();
-    ctx.moveTo(-0.5, -0.24);
-    // Бугры пальцев — невысокие: кулак сжат, пальцы прижаты
-    for (let i = 0; i < 4; i++) {
-        const x0 = -0.5 + i * 0.25, x1 = x0 + 0.25, y1 = i === 3 ? -0.24 + tilt : valley;
-        ctx.bezierCurveTo(x0 + 0.02, peaks[i], x1 - 0.02, peaks[i], x1, y1);
-    }
-    // Правый край почти прямой, низ — подвёрнутый большой палец, левый край чуть скруглён
-    ctx.bezierCurveTo(0.54, 0.0, 0.52, 0.28, 0.4, 0.38);
-    ctx.bezierCurveTo(0.2, 0.46, -0.25, 0.47, -0.42, 0.38);
-    ctx.bezierCurveTo(-0.56, 0.28, -0.54, -0.02, -0.5, -0.24);
-    ctx.closePath();
-}
-
-// Шум значений: плавные пятна — штриховка ложится клочьями, как печать на шершавой бумаге
-function valueNoise(seed, cells = 9) {
-    const rnd = seeded(seed), grid = Array.from({ length: (cells + 1) ** 2 }, () => rnd());
-    return (u, v) => {
-        const x = (u + 0.75) / 1.5 * cells, y = (v + 0.75) / 1.5 * cells;
-        const ix = Math.max(0, Math.min(cells - 1, Math.floor(x))), iy = Math.max(0, Math.min(cells - 1, Math.floor(y)));
-        const fx = x - ix, fy = y - iy, at = (a, b) => grid[(iy + b) * (cells + 1) + ix + a];
-        const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-        return (at(0, 0) * (1 - sx) + at(1, 0) * sx) * (1 - sy) + (at(0, 1) * (1 - sx) + at(1, 1) * sx) * sy;
-    };
-}
-
-/**
- * Рисунок кулака — один раз, заранее, как кадр аниме-импакта:
- *  - белое тело с неровным мягким краем, как мазок мела, и лёгкий объём (светлее сверху справа);
- *  - зернистая штриховка печати в тени — слева, снизу и у края, клочьями;
- *  - линии пальцев сухим углём: три штриха сверху вниз, сходящиеся в линию у основания пальцев.
- * Второй рисунок — размытое белое пятно той же формы: так кулак выглядит издалека, пока летит.
- * В кадре рисунки только масштабируются и поворачиваются — подробно, но дёшево.
- * @param {object} shape  Форма из fistShape.
- * @param {number} size   Ширина кулака в рисунке, пиксели.
- * @returns {{canvas: HTMLCanvasElement, blob: HTMLCanvasElement, size: number}}
- */
-function fistSprite(shape, size, seed) {
-    const S = Math.ceil(size * 1.5);
-    const make = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
-    const c = make(), x = c.getContext('2d');
-    const rnd = seeded(seed);
-    const toPx = (u, v) => [S / 2 + u * size, S / 2 + v * size];
-    x.setTransform(size, 0, 0, size, S / 2, S / 2);
-    const px = 1 / size;
-
-    // Контур — отдельным путём: штрихи и точки рисуются своими путями
-    const body = new Path2D();
-    fistPath({ beginPath() {}, moveTo: (...a) => body.moveTo(...a), bezierCurveTo: (...a) => body.bezierCurveTo(...a), closePath: () => body.closePath() }, shape);
-    // Точки края лучами из центра — для неровного края и расстояния до края
-    const edge = [];
-    for (let i = 0; i < 240; i++) {
-        const a = i / 240 * Math.PI * 2;
-        let r = 0.05;
-        while (r < 0.8 && x.isPointInPath(body, ...toPx(Math.cos(a) * r, Math.sin(a) * r + 0.02))) r += 0.003;
-        edge.push({ u: Math.cos(a) * r, v: Math.sin(a) * r + 0.02, a });
-    }
-    // Неровный край мелом: контур по точкам края с плавной случайной волной
-    const wave = valueNoise(seed + 5, 24);
-    const ragged = new Path2D();
-    edge.forEach((p, i) => {
-        const j = (wave(Math.cos(p.a) * 0.7, Math.sin(p.a) * 0.7) - 0.5) * 0.045 + (rnd() - 0.5) * 0.008;
-        const u = p.u + Math.cos(p.a) * j, v = p.v + Math.sin(p.a) * j;
-        i ? ragged.lineTo(u, v) : ragged.moveTo(u, v);
-    });
-    ragged.closePath();
-
-    // Тело: мягкий светящийся ореол и белая заливка
-    x.save();
-    x.filter = `blur(${Math.max(1, size * 0.012)}px)`;
-    x.fillStyle = 'rgba(255,250,248,0.9)';
-    x.fill(ragged);
-    x.restore();
-    x.fillStyle = '#fbf7f4';
-    x.fill(ragged);
-    // Объём: к низу и влево чуть серее
-    x.save();
-    x.clip(ragged);
-    const shade = x.createLinearGradient(0.35, -0.4, -0.45, 0.45);
-    shade.addColorStop(0, 'rgba(255,255,255,0)');
-    shade.addColorStop(0.55, 'rgba(200,190,186,0.12)');
-    shade.addColorStop(1, 'rgba(150,140,136,0.35)');
-    x.fillStyle = shade;
-    x.fillRect(-0.8, -0.8, 1.6, 1.6);
-
-    // Штриховка печати: мелкие тёмные точки и чёрточки, гуще в тени и у края, клочьями
-    const patch = valueNoise(seed + 11, 10);
-    const coarse = edge.filter((_, i) => i % 6 === 0);
-    for (let i = 0; i < 45000; i++) {
-        const u = (rnd() - 0.5) * 1.15, v = (rnd() - 0.5) * 1.0;
-        // Тень — слева и снизу; у края гуще только на теневой стороне: светлый край остаётся белым
-        const side = Math.max(0, -u * 0.9 + v * 0.8 + 0.05);
-        if (side < 0.05 && rnd() > 0.1) continue;
-        let near = 1;
-        for (const p of coarse) near = Math.min(near, Math.hypot(p.u - u, p.v - v));
-        const tone = (Math.max(0, 1 - near / 0.12) * 0.5 * Math.min(1, side * 2) + side * 0.7) * (0.3 + patch(u, v) * 1.2);
-        if (rnd() > tone * 0.5) continue;
-        const d = px * (0.7 + rnd() * 1.1);
-        x.fillStyle = `rgba(50,40,40,${0.35 + rnd() * 0.35})`;
-        // Чёрточки печати — горизонтальные, как в отсканированной манге
-        if (rnd() < 0.3) x.fillRect(u, v, d * (2 + rnd() * 3), d * 0.8);
-        else x.fillRect(u, v, d, d);
-    }
-    x.restore();
-
-    // Линии пальцев сухим углём: несколько дрожащих проходов, часть с разрывами
-    x.lineCap = 'round';
-    x.lineJoin = 'round';
-    const charcoal = (points, width) => {
-        for (let pass = 0; pass < 5; pass++) {
-            const j = () => (rnd() - 0.5) * 0.009;
-            x.strokeStyle = `rgba(30,20,20,${0.45 + rnd() * 0.3})`;
-            x.lineWidth = width * (0.35 + rnd() * 0.65);
-            x.setLineDash(pass > 2 ? [0.02 + rnd() * 0.05, 0.004 + rnd() * 0.012] : []);
-            x.beginPath();
-            x.moveTo(points[0][0] + j(), points[0][1] + j());
-            for (let i = 1; i < points.length; i++) x.lineTo(points[i][0] + j(), points[i][1] + j());
-            x.stroke();
-        }
-        x.setLineDash([]);
-    };
-    const w = 0.022;
-    // Три штриха между пальцами, чуть веером: сверху крючок, внизу короткий загиб вдоль основания
-    // пальца — штрихи не сливаются в одну линию
-    for (const [mx, lean, top, bottom, foot] of [[-0.23, -0.05, -0.24, 0.2, 0.09], [0.02, 0, -0.29, 0.18, 0.1], [0.26, 0.06, -0.26, 0.15, 0.07]]) {
-        charcoal([[mx - 0.025, top + 0.02], [mx, top], [mx + lean * 0.4, top + (bottom - top) * 0.45], [mx + lean, bottom], [mx + lean + foot, bottom + 0.012]], w);
-    }
-    // Сгиб большого пальца — короткий штрих снизу слева
-    charcoal([[-0.44, 0.0], [-0.43, 0.16], [-0.36, 0.25]], w * 0.75);
-
-    // Размытое пятно той же формы — кулак издалека
-    const blob = make(), bx = blob.getContext('2d');
-    bx.setTransform(size, 0, 0, size, S / 2, S / 2);
-    bx.filter = `blur(${Math.max(2, size * 0.05)}px)`;
-    bx.fillStyle = '#fbf7f4';
-    bx.fill(ragged);
-    bx.fill(ragged);
-    return { canvas: c, blob, size };
 }
 
 // ==========================================
@@ -365,6 +199,18 @@ function artSprite({ img, box }, size, seed) {
     return { canvas: c, blob, size };
 }
 
+// Без рисунка (файл не загрузился) — белое скруглённое пятно вместо кулака
+function plainSprite(size) {
+    const S = Math.ceil(size * 1.5), c = document.createElement('canvas');
+    c.width = c.height = S;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fbf7f4';
+    x.beginPath();
+    x.roundRect((S - size) / 2, (S - size * 0.8) / 2, size, size * 0.8, size * 0.2);
+    x.fill();
+    return { canvas: c, blob: c, size };
+}
+
 // Рисунки кулаков между показами: размер экрана обычно не меняется
 const spriteCache = new Map();
 
@@ -377,7 +223,7 @@ function fistSprites(W, H, drawn = null) {
 // Рисунок одного кулака — из запаса или заново
 function fistSprite_(W, H, drawn, i) {
     const size = Math.ceil(layout(W, H)[i].size * 1.2), key = `${drawn ? 'art' : 'gen'}:${i}:${size}`;
-    if (!spriteCache.has(key)) spriteCache.set(key, drawn ? artSprite(drawn, size, 31 + i * 17) : fistSprite(fistShape(31 + i * 17), size, 31 + i * 17));
+    if (!spriteCache.has(key)) spriteCache.set(key, drawn ? artSprite(drawn, size, 31 + i * 17) : plainSprite(size));
     return spriteCache.get(key);
 }
 
@@ -399,16 +245,6 @@ export async function prepareFists() {
     rippleFor(W, H);
 }
 
-// Шейдер волн: один на размер экрана — компилируется один раз
-let rippleCache = null;
-function rippleFor(W, H) {
-    if (rippleCache?.W !== W || rippleCache?.H !== H) {
-        let renderer = null;
-        try { renderer = rippleRenderer(W, H); } catch (error) { console.warn('gachadnd | волны', error); }
-        rippleCache = { W, H, renderer };
-    }
-    return rippleCache.renderer;
-}
 
 // Нарисовать заготовку кулака: центр (x, y), ширина size, поворот, растяжение вдоль осей кулака
 function drawSprite(ctx, sprite, x, y, size, rot, sx = 1, sy = 1, image = sprite.canvas) {
@@ -507,77 +343,6 @@ function drawFlash(ctx, W, H, power, rays) {
     core.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = core;
     ctx.fillRect(0, 0, W, H);
-}
-
-// ==========================================
-// ВОЛНЫ
-// ==========================================
-
-/**
- * Волны на воде — шейдером WebGL, одним проходом: каждый пиксель берётся из кадра со сдвигом
- * к точке удара или от неё по бегущей синусоиде расстояния — изображение колышется кругами.
- * За фронтом волны — спокойно, к концу волны гаснут; по фронту — тонкие светлые гребни.
- * На 2D-холсте то же самое стоило десятков полноэкранных отрисовок за кадр и тормозило.
- * @returns {{canvas: HTMLCanvasElement, draw: Function}|null}  null — WebGL недоступен.
- */
-function rippleRenderer(W, H) {
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const gl = canvas.getContext('webgl', { premultipliedAlpha: true, alpha: true });
-    if (!gl) return null;
-    const compile = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); return sh; };
-    const program = gl.createProgram();
-    gl.attachShader(program, compile(gl.VERTEX_SHADER, 'attribute vec2 p; varying vec2 uv; void main() { uv = p * 0.5 + 0.5; uv.y = 1.0 - uv.y; gl_Position = vec4(p, 0.0, 1.0); }'));
-    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, `
-        precision highp float;
-        varying vec2 uv;
-        uniform sampler2D image;
-        uniform vec2 size, center;
-        uniform float front, wave, calm;
-        void main() {
-            vec2 px = uv * size, d = px - center;
-            float r = length(d), s = 1.0;
-            if (r < front) {
-                float strength = 0.05 * calm * (0.25 + 0.75 * r / front);
-                s = 1.0 + strength * sin((r - front) / wave * 6.2831853);
-            }
-            vec4 color = texture2D(image, (center + d / s) / size);
-            for (int k = 0; k < 4; k++) {
-                float crest = front - float(k) * wave * 1.3;
-                float a = 0.35 * calm * (1.0 - float(k) / 4.0) * step(0.0, crest) * (1.0 - smoothstep(0.0, wave * 0.035, abs(r - crest)));
-                color = mix(color, vec4(1.0), a);
-            }
-            gl_FragColor = color;
-        }`));
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
-    gl.useProgram(program);
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(program, 'p');
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
-    const u = name => gl.getUniformLocation(program, name);
-    gl.uniform2f(u('size'), W, H);
-    gl.viewport(0, 0, W, H);
-    /** @param {number} age  Доля времени волн, 0 → 1. */
-    const draw = (image, cx, cy, age, unit) => {
-        const reach = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy));
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        gl.uniform2f(u('center'), cx, cy);
-        gl.uniform1f(u('front'), reach * (0.15 + 0.95 * easeOut(age)));
-        gl.uniform1f(u('wave'), unit * 0.11);
-        gl.uniform1f(u('calm'), (1 - age) ** 1.5);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    };
-    return { canvas, draw };
 }
 
 // ==========================================
@@ -681,10 +446,7 @@ function runFists({ calm = false, slow = 1, onHit = () => {}, quick = false, dra
             if (on === negative) return;
             negative = on;
             // Негатив всего кадра: и рисунка, и сцены под ним
-            for (const el of [cv, rippleGL?.canvas].filter(Boolean)) {
-                el.style.filter = on ? 'invert(1)' : '';
-                el.style.backdropFilter = on ? 'invert(1)' : '';
-            }
+            applyNegative([cv, rippleGL?.canvas], on);
         };
 
         const t0 = performance.now();
@@ -761,7 +523,7 @@ function runFists({ calm = false, slow = 1, onHit = () => {}, quick = false, dra
                 }
                 const p = place(fl, k);
                 // Попадание: кулак сплющивается и пружинит (шире и ниже, потом наоборот), потом медленно наезжает
-                const w = after >= 0 ? wobble(after / T.pop) : 0, creep = after >= 0 ? 1 + 0.04 * clamp01(after / 1200) : 1;
+                const w = after >= 0 ? wobble(after / T.pop, 4, 2) : 0, creep = after >= 0 ? 1 + 0.04 * clamp01(after / 1200) : 1;
                 // Пока летит, кулак сначала — размытое белое пятно, и только на подлёте проступает рисунок
                 const formed = smooth(clamp01((k - 0.45) / 0.45));
                 if (formed < 1) {
