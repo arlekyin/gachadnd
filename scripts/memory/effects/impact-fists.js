@@ -220,21 +220,106 @@ function fistSprite(shape, size, seed) {
     return { canvas: c, blob, size };
 }
 
+// ==========================================
+// КУЛАК ИЗ РИСУНКА (assets/impact/fist.svg)
+// ==========================================
+
+// Рисунок кулака: белое тело и тёмные линии, без фона. Загружается один раз
+const ART_URL = new URL('../../../assets/impact/fist.svg', import.meta.url).href;
+let art = null;
+
+/** Загрузить рисунок и найти его рамку (рисунок в файле не по центру). null — рисунка нет */
+function loadFistArt() {
+    art ??= new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            // Рамка рисунка — по непрозрачным пикселям
+            const probe = document.createElement('canvas');
+            probe.width = img.naturalWidth || 535; probe.height = img.naturalHeight || 423;
+            const px = probe.getContext('2d', { willReadFrequently: true });
+            px.drawImage(img, 0, 0, probe.width, probe.height);
+            const d = px.getImageData(0, 0, probe.width, probe.height).data;
+            let x0 = probe.width, y0 = probe.height, x1 = 0, y1 = 0;
+            for (let y = 0; y < probe.height; y++) for (let x = 0; x < probe.width; x++) {
+                if (d[(y * probe.width + x) * 4 + 3] < 20) continue;
+                if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+            }
+            resolve(x1 > x0 ? { img, box: { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, W: probe.width, H: probe.height } } : null);
+        };
+        img.onerror = () => { console.warn('gachadnd | рисунок кулака не загружен', ART_URL); resolve(null); };
+        img.src = ART_URL;
+    });
+    return art;
+}
+
+/**
+ * Кулак из рисунка — один раз на размер, поверх — эффекты:
+ *  - мягкий светящийся ореол по силуэту;
+ *  - зернистая штриховка печати в тени (слева и снизу), клочьями, только по телу;
+ *  - размытое белое пятно силуэта — кулак издалека, пока летит.
+ * @param {number} size  Ширина кулака, пиксели.
+ */
+function artSprite({ img, box }, size, seed) {
+    const k = size / box.w, w = Math.ceil(box.w * k), h = Math.ceil(box.h * k);
+    const S = Math.ceil(Math.max(w, h) * 1.5), ox = (S - w) / 2, oy = (S - h) / 2;
+    const make = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
+    // Сам рисунок в нужном размере: вектор — резкий при любом увеличении
+    const drawing = make();
+    drawing.getContext('2d').drawImage(img, box.x, box.y, box.w, box.h, ox, oy, w, h);
+    // Силуэт — белым
+    const silhouette = make(), sx = silhouette.getContext('2d');
+    sx.drawImage(drawing, 0, 0);
+    sx.globalCompositeOperation = 'source-in';
+    sx.fillStyle = '#fbf7f4';
+    sx.fillRect(0, 0, S, S);
+
+    const c = make(), x = c.getContext('2d');
+    x.filter = `blur(${Math.max(1, size * 0.014)}px)`;
+    x.drawImage(silhouette, 0, 0);
+    x.filter = 'none';
+    x.drawImage(drawing, 0, 0);
+    // Штриховка печати — на отдельном слое, обрезанном по силуэту
+    const grain = make(), gx = grain.getContext('2d');
+    const rnd = seeded(seed), patch = valueNoise(seed + 11, 10);
+    const count = Math.round(w * h * 0.06);
+    for (let i = 0; i < count; i++) {
+        const u = rnd(), v = rnd();
+        // Тень: слева и снизу, свет — сверху справа
+        const side = Math.max(0, (1 - u) * 0.8 + v * 0.9 - 0.75);
+        const tone = side * (0.3 + patch(u * 1.5 - 0.75, v * 1.5 - 0.75) * 1.3);
+        if (rnd() > tone * 0.6) continue;
+        const d = Math.max(1, size * 0.0025) * (0.8 + rnd());
+        gx.fillStyle = `rgba(45,35,35,${0.35 + rnd() * 0.35})`;
+        if (rnd() < 0.35) gx.fillRect(ox + u * w, oy + v * h, d * (2 + rnd() * 3), d * 0.8);
+        else gx.fillRect(ox + u * w, oy + v * h, d, d);
+    }
+    gx.globalCompositeOperation = 'destination-in';
+    gx.drawImage(silhouette, 0, 0);
+    x.drawImage(grain, 0, 0);
+
+    const blob = make(), bx = blob.getContext('2d');
+    bx.filter = `blur(${Math.max(2, size * 0.05)}px)`;
+    bx.drawImage(silhouette, 0, 0);
+    bx.drawImage(silhouette, 0, 0);
+    return { canvas: c, blob, size };
+}
+
 // Рисунки кулаков между показами: размер экрана обычно не меняется
 const spriteCache = new Map();
 
 // Рисунки всех пяти кулаков для экрана W×H — из запаса или заново
-function fistSprites(W, H) {
+// С рисунком из файла — он; без него — нарисованный кодом кулак
+function fistSprites(W, H, drawn = null) {
     return layout(W, H).map((spot, i) => {
-        const size = Math.ceil(spot.size * 1.2), key = `${i}:${size}`;
-        if (!spriteCache.has(key)) spriteCache.set(key, fistSprite(fistShape(31 + i * 17), size, 31 + i * 17));
+        const size = Math.ceil(spot.size * 1.2), key = `${drawn ? 'art' : 'gen'}:${i}:${size}`;
+        if (!spriteCache.has(key)) spriteCache.set(key, drawn ? artSprite(drawn, size, 31 + i * 17) : fistSprite(fistShape(31 + i * 17), size, 31 + i * 17));
         return spriteCache.get(key);
     });
 }
 
 /** Нарисовать кулаки заранее (≈0,3 с), чтобы показ начался без задержки: зовётся при взводе навыка */
 export function prepareFists() {
-    fistSprites(Math.round(innerWidth * devicePixelRatio), Math.round(innerHeight * devicePixelRatio));
+    return loadFistArt().then(drawn => fistSprites(Math.round(innerWidth * devicePixelRatio), Math.round(innerHeight * devicePixelRatio), drawn));
 }
 
 // Нарисовать заготовку кулака: центр (x, y), ширина size, поворот, растяжение вдоль осей кулака
@@ -389,7 +474,12 @@ function ripple(out, image, cx, cy, age, unit) {
  * @returns {Promise<void>}  Когда сцена вернулась.
  */
 // quick — кулаки сразу после кадров света и молний: экран уже тёмный, затемнение мгновенное
-export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = false } = {}) {
+export async function playFists(options = {}) {
+    const drawn = await loadFistArt();
+    return runFists({ ...options, drawn });
+}
+
+function runFists({ calm = false, slow = 1, onHit = () => {}, quick = false, drawn = null } = {}) {
     const dark = quick ? 40 : T.dark;
     return new Promise(resolve => {
         const cv = document.createElement('canvas');
@@ -409,7 +499,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
         // трещины и пыль удара — вокруг места попадания
         const spots = layout(W, H);
         // Рисунки кулаков — заранее, в размере попадания с запасом на пружину
-        const sprites = fistSprites(W, H);
+        const sprites = fistSprites(W, H, drawn);
         const flights = FISTS.map((f, i) => {
             const { size, x, y } = spots[i];
             // Вылетает издалека рядом со своим местом, чуть ближе к центру экрана
