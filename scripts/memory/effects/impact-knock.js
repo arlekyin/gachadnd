@@ -6,10 +6,11 @@
  *  2. Вдох: воздух втягивается в Сайтаму, он замахивается назад, цель дрожит; камера медленно
  *     поворачивает по часовой и чуть отъезжает.
  *  3. Рывок: камера резко уходит против часовой и наезжает на цель, Сайтама бросается к ней.
- *  4. Касание — три мелькающих кадра на цели: столб света, молнии в тёмном конусе, молнии вокруг.
+ *  4. Касание — мелькающие кадры: разлёт линий за целью на чёрном, столб света, молнии в тёмном
+ *     конусе, молнии вокруг.
  *  5. Кулаки (impact-fists.js) — камера на это время замирает.
- *  6. За целью выстреливает разлёт, кадр инвертируется, цель отлетает по прямой от Сайтамы,
- *     сцена возвращается в цвет, камера — рывком на место.
+ *  6. Кадр инвертируется, цель отлетает по прямой от Сайтамы, сцена возвращается в цвет,
+ *     камера — рывком на место.
  * Сцену и токены рисует движок (PIXI): они резкие при любом наезде; свет и молнии — вектор
  * поверх в разрешении экрана. Перенос токена делает клиент Мастера после показа.
  */
@@ -19,11 +20,12 @@
 // поворот камеры на рывке; light — кадры света и молний: связка, каждый мелькает на 3–4 кадра
 // экрана, без своей анимации (beam — столб света, cone — молнии в тёмном конусе, остальное —
 // молнии во все стороны);
-// burst — тряска от разлёта; pop — выстрел разлёта; squash — качание токенов от удара; ghosts —
-// следы рывка; hold — разлёт на виду; invert — инверсия; fly — отлёт; back — возврат камеры
+// lines — разлёт линий за целью: первый мелькающий кадр касания, появляется сразу целиком;
+// burst — тряска после кулаков; squash — качание токенов от удара; ghosts — следы рывка;
+// after — пауза после кулаков; invert — инверсия; fly — отлёт; back — возврат камеры
 const T = {
     approach: 520, inhale: 1000, windup: 650, lunge: 200, turn: 160, light: 170, beam: 50, cone: 60,
-    burst: 250, pop: 45, squash: 450, ghosts: 450, hold: 220, invert: 140, fly: 300, back: 70
+    lines: 70, burst: 250, squash: 450, ghosts: 450, after: 120, invert: 140, fly: 300, back: 70
 };
 // Камера: на вдохе — поворот по часовой и отъезд; на рывке — против часовой и наезд на цель;
 // от разлёта её бросает обратно, дальше плывёт. Углы — радианы, масштаб — множитель
@@ -483,8 +485,8 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     const streams = Array.from({ length: AIR.count }, () => ({ a: rndAir() * Math.PI * 2, phase: rndAir(), len: 0.5 + rndAir() * 0.9, w: 0.6 + rndAir() * 1.2 }));
 
     // Расписание: до кулаков — подъезд, вдох, рывок, свет; после — разлёт, инверсия, отлёт
-    const sa = T.approach, si = sa + T.inhale, s2 = si + T.lunge, sp = s2 + T.light;
-    const sb = sp, s3 = sb + T.burst, s4 = s3 + T.hold, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
+    const sa = T.approach, si = sa + T.inhale, s2 = si + T.lunge, sL = s2 + T.lines, sp = sL + T.light;
+    const sb = sp, s4 = sb + T.after, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
     const shake = { x: 0, y: 0, at: -1e9, power: 0 };
     const kick = (when, power) => { const angle = Math.random() * Math.PI * 2; Object.assign(shake, { x: Math.cos(angle), y: Math.sin(angle), at: when, power }); };
     let contacted = false, burstPlayed = false, fistsDone = false;
@@ -543,7 +545,7 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                 gray.alpha = clamp01(t / sa);
                 if (t >= s5) dropGray();
                 // Затемнение: на крупном плане — наполовину, с разлётом — полностью, при отлёте уходит
-                dark.alpha = t < sb ? 0.55 * clamp01(t / sa) : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
+                dark.alpha = t < s2 ? 0.55 * clamp01(t / sa) : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
                 const unit = 1 / stage.scale.x;
 
                 // Вдох: струи воздуха по спирали втягиваются в Сайтаму, к концу вдоха гуще
@@ -590,9 +592,8 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                 targetWrap.scale.set(1 - 0.3 * hit, 1 + 0.18 * hit);
 
                 // Разлёт за целью — после кулаков
-                const pop = (t - sb) / T.pop;
-                burst.scale.set(!fistsDone || t < sb ? 0 : pop < 1 ? 0.35 + 0.85 * easeOut(pop) : 1 + 0.2 * Math.max(0, 1 - (pop - 1) / 2));
-                burst.alpha = t < s5 ? 1 : Math.max(0, 1 - (t - s5) / (T.fly * 0.6));
+                // Разлёт за целью — первый кадр касания: сразу целиком, без роста
+                burst.scale.set(t >= s2 && t < sL ? 1 : 0);
                 layer.filters = !calm && t >= s4 && t < s5 ? [invert] : null;
                 if (t >= s5) {
                     const f = easeOut(clamp01((t - s5) / T.fly));
@@ -601,13 +602,13 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                 } else targetWrap.position.set(b.x + (Math.random() - 0.5) * 2 * tremble, b.y + (Math.random() - 0.5) * 2 * tremble);
 
                 // Свет и молнии — от касания до кулаков
-                if (t >= s2 && t < sp) {
+                if (t >= sL && t < sp) {
                     cv.style.display = '';
                     ctx.setTransform(1, 0, 0, 1, 0, 0);
                     ctx.clearRect(0, 0, cv.width, cv.height);
                     const d = jolt * devicePixelRatio;
                     ctx.translate(shake.x * d, shake.y * d);
-                    drawLight(ctx, cv.width, cv.height, screenOf(b), t - s2, lights, calm);
+                    drawLight(ctx, cv.width, cv.height, screenOf(b), t - sL, lights, calm);
                 } else cv.style.display = 'none';
                 requestAnimationFrame(frame);
             } catch (error) {
