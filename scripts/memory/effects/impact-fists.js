@@ -12,7 +12,12 @@
 // Хронометраж, мс: затемнение, полёт кулака к экрану, удержание удара; после пятого —
 // трещины, вспышка и возвращение сцены
 // crack — трещины удара разбегаются; shake — тряска от удара; puff — клубы пыли; pop — пружина кулака
-const T = { dark: 220, fly: 170, hold: 90, firstFly: 230, cracks: 170, flash: 200, fade: 380, crack: 140, shake: 300, puff: 600, pop: 280 };
+// Первые четыре удара — очередью: короткий полёт и удержание; перед пятым — пауза (pause),
+// и он летит дольше (finalFly)
+const T = {
+    dark: 220, firstFly: 180, fly: 115, hold: 55, pause: 280, finalFly: 210,
+    cracks: 170, flash: 200, fade: 380, crack: 120, shake: 240, puff: 600, pop: 280
+};
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
 const SHAKE = { hit: 0.028, final: 0.05 };
 // Цвета обычного кадра: тёплый белый и тёмный; негатив делает их холодными, как в аниме
@@ -270,7 +275,8 @@ export function playFists({ calm = false, slow = 1, onHit = () => {} } = {}) {
         const schedule = [];
         let clock = T.dark;
         FISTS.forEach((_, i) => {
-            const fly = i === 0 ? T.firstFly : T.fly;
+            if (i === 4) clock += T.pause;
+            const fly = i === 0 ? T.firstFly : i === 4 ? T.finalFly : T.fly;
             schedule.push({ start: clock, hit: clock + fly });
             clock += fly + T.hold;
         });
