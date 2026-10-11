@@ -197,6 +197,22 @@ function slam(ctx, bus, t0, { pitch = 1, body = 1.4, sub = 1.1, subLen = 1.1, ru
     }
 }
 
+// Треск стекла: короткий яркий треск, звенящие неровные призвуки (частоты не кратны — звенит,
+// а не звучит нотой) и тихое осыпание осколков следом
+function glass(ctx, bus, t0, { level = 0.35, pan = 0, shards = 14 } = {}) {
+    noise(ctx, bus, t0, { type: 'highpass', freq: [5000, 3000], q: 0.8, gain: [[0, level * 1.2], [0.05, 0.0001]], duration: 0.06, pan, send: 0.3 });
+    crackle(ctx, bus, t0, { count: 18, spread: 0.06, level: level * 0.9, freq: [3500, 9000], send: 0.3 });
+    for (let i = 0; i < 5; i++) {
+        const f = 2600 + Math.random() * 5200;
+        tone(ctx, bus, t0 + Math.random() * 0.015, { freq: [f, f * 0.985], gain: [[0, level * 0.22], [0.12 + Math.random() * 0.2, 0.0001]], duration: 0.34, pan: pan + (Math.random() - 0.5) * 0.6, send: 0.35 });
+    }
+    // Осколки: редкие тихие звоночки по сторонам в следующие 0,4 с
+    for (let i = 0; i < shards; i++) {
+        const f = 4000 + Math.random() * 6000, t = t0 + 0.05 + Math.random() ** 1.5 * 0.4;
+        tone(ctx, bus, t, { freq: [f, f * 0.99], gain: [[0, level * 0.1 * (0.4 + Math.random() * 0.6)], [0.04 + Math.random() * 0.06, 0.0001]], duration: 0.11, pan: (Math.random() - 0.5) * 1.6, send: 0.4 });
+    }
+}
+
 // ==========================================
 // ЗВУКИ МОМЕНТОВ
 // ==========================================
@@ -218,23 +234,35 @@ const RECIPES = {
         noise(ctx, bus, t0, { type: 'bandpass', freq: [700, 3500], q: 2, gain: [[0, 0.0001], [0.09, 0.8], [0.14, 0.0001]], duration: 0.16, pan: -0.3, send: 0.25 });
         noise(ctx, bus, t0 + 0.02, { type: 'bandpass', freq: [900, 4200], q: 2, gain: [[0, 0.0001], [0.08, 0.6], [0.12, 0.0001]], duration: 0.14, pan: 0.4, send: 0.25 });
     },
-    // Касание: тяжёлый удар, треск молний по всей панораме, звон в ушах
+    // Касание: самый тяжёлый удар — ниже и дольше обычного, с глухим толчком, мощным суббасом
+    // и вторым раскатом через 70 мс (эхо взрыва); треск молний по всей панораме, звон в ушах
     contact(ctx, bus, t0) {
-        slam(ctx, bus, t0, { body: 1.5, sub: 1.3, subLen: 1.4, rumble: 1.2, rumbleLen: 1.8, send: 0.6 });
+        slam(ctx, bus, t0, { pitch: 0.8, body: 1.8, sub: 1.5, subLen: 2.0, rumble: 1.3, rumbleLen: 2.6, send: 0.65 });
+        // Толчок: плотный низ середины, через перегруз
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [450, 140], q: 1.2, gain: [[0, 1.6], [0.25, 0.0001]], duration: 0.28, driven: true, send: 0.3 });
+        // Суббас, который чувствуется, а не слышится: синус падает с 80 до 32 Гц
+        tone(ctx, bus, t0, { freq: [80, 32], gain: [[0, 1.4], [0.06, 1.3], [2.0, 0.0001]], duration: 2.05, send: 0.05 });
+        // Эхо взрыва
+        for (const pan of [-0.7, 0.7]) noise(ctx, bus, t0 + 0.07, { type: 'lowpass', freq: [1500, 90], q: 0.6, gain: [[0, 0.0001], [0.03, 0.9], [1.6, 0.0001]], duration: 1.65, pan, send: 0.7 });
         crackle(ctx, bus, t0 + 0.04, { count: 80, spread: 0.5, level: 0.5, send: 0.45 });
         tone(ctx, bus, t0 + 0.05, { freq: [3600, 3550], gain: [[0, 0.0001], [0.08, 0.045], [1.4, 0.0001]], duration: 1.45, send: 0.3 });
     },
-    // Кулак: index сдвигает высоту и место в панораме — очередь не звучит одним звуком
+    // Кулак — удар в экран: плотный низ, толчок и треск стекла. index сдвигает высоту и место
+    // в панораме — очередь не звучит одним звуком
     punch(ctx, bus, t0, { index = 0 } = {}) {
         const k = [1, 0.92, 1.07, 0.97][index % 4] * (0.97 + Math.random() * 0.06);
         const pan = [-0.35, 0.35, 0.3, -0.3][index % 4];
         click(ctx, bus, t0, 0.9, 2800 * k, 0.2);
-        tone(ctx, bus, t0, { freq: [200 * k, 55 * k], gain: [[0, 1.3], [0.24, 0.0001]], duration: 0.26, driven: true, pan: pan * 0.5, send: 0.3 });
-        tone(ctx, bus, t0, { type: 'triangle', freq: [70 * k, 40], gain: [[0, 0.7], [0.35, 0.0001]], duration: 0.38, send: 0.05 });
-        noise(ctx, bus, t0, { type: 'lowpass', freq: [2600 * k, 300], q: 0.6, gain: [[0, 0.9], [0.22, 0.0001]], duration: 0.24, pan, send: 0.4 });
+        tone(ctx, bus, t0, { freq: [170 * k, 48 * k], gain: [[0, 1.5], [0.3, 0.0001]], duration: 0.32, driven: true, pan: pan * 0.5, send: 0.3 });
+        tone(ctx, bus, t0, { type: 'triangle', freq: [66 * k, 36], gain: [[0, 1.0], [0.5, 0.0001]], duration: 0.52, send: 0.05 });
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [380 * k, 120], q: 1.1, gain: [[0, 1.1], [0.16, 0.0001]], duration: 0.18, driven: true, pan: pan * 0.5, send: 0.2 });
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [2600 * k, 300], q: 0.6, gain: [[0, 0.8], [0.26, 0.0001]], duration: 0.28, pan, send: 0.4 });
+        glass(ctx, bus, t0 + 0.004, { level: 0.3, pan });
     },
+    // Пятый кулак: тяжёлый удар и стекло громче — экран трескается по-настоящему
     punchFinal(ctx, bus, t0) {
-        slam(ctx, bus, t0, { pitch: 0.9, body: 1.6, sub: 1.2, subLen: 1.2, rumble: 1.1, rumbleLen: 1.5, send: 0.55 });
+        slam(ctx, bus, t0, { pitch: 0.85, body: 1.7, sub: 1.3, subLen: 1.4, rumble: 1.1, rumbleLen: 1.7, send: 0.55 });
+        glass(ctx, bus, t0 + 0.004, { level: 0.45, shards: 22 });
     },
     // Полёт: свист уходит вниз по тону, из центра в сторону, и затихает — цель удаляется
     fly(ctx, bus, t0, { duration = 0.38 } = {}) {
