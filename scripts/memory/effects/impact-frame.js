@@ -955,12 +955,12 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             try { synthPunch(game.settings.get(MODULE_ID, 'soundsVolume')); } catch (error) { console.warn(`${MODULE_ID} | звук удара`, error); }
         };
         try {
-            const fists = () => playFists({ calm, slow, onHit });
+            const fists = (quick = false) => playFists({ calm, slow, onHit, quick });
             if (!knock) { trace('отлёта нет: не вычислена точка (см. выше) — только кулаки'); await fists(); }
             else if (!canvas?.ready || canvas.scene?.id !== sceneId) { trace('у вас открыта другая сцена — только кулаки'); await fists(); }
             else if (!(await playSaitama({
                 casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, calm, slow,
-                hideMarks: hideTokenMarks, onContact: punch, between: fists, onBurst: playSound
+                hideMarks: hideTokenMarks, onContact: punch, between: () => fists(true), onBurst: playSound
             }))) {
                 trace('токен цели не найден на сцене — только кулаки');
                 await fists();
