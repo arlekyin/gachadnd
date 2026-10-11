@@ -30,7 +30,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 import { playFists, prepareFists } from "./impact-fists.js";
 import { knockback, playSaitama } from "./impact-knock.js";
-import { playCue } from "./impact-sound.js";
+import { playCue, duckScene } from "./impact-sound.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -919,7 +919,13 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
             playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), folder: game.settings.get(MODULE_ID, 'impactSoundFolder'), ...options });
         };
-        const onHit = (final, index) => onCue(final ? 'punchFinal' : 'punch', { index });
+        // Пятый удар — контузия: всё глухо, звон в ушах, пока идут волны
+        const onHit = (final, index, pan) => {
+            onCue(final ? 'punchFinal' : 'punch', { index, pan });
+            if (final) setTimeout(() => onCue('muffle', { duration: 0.95 * slow }), 60 * slow);
+        };
+        // Музыка и звуки сцены — тише на время удара
+        const unduck = game.settings.get(MODULE_ID, 'soundsEnabled') ? duckScene() : () => {};
         try {
             const fists = (quick = false) => playFists({ calm, slow, onHit, quick });
             if (!knock) { trace('отлёта нет: не вычислена точка (см. выше) — только кулаки'); await fists(); }
@@ -935,6 +941,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             console.error(`${MODULE_ID} | импакт-кадр`, error);
             cleanupImpact();
         }
+        unduck();
         if (id === playId) playing = false;
         if (knock) dry ? setTimeout(cleanupImpact, 100) : moveKnocked(sceneId, knock);
         return;

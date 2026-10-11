@@ -588,7 +588,8 @@ function rippleRenderer(W, H) {
  * @param {object} options
  * @param {boolean} options.calm  Без инверсий и белой вспышки.
  * @param {number} options.slow   Замедление.
- * @param {(final: boolean, index: number) => void} options.onHit  Звук удара; final — пятый кулак.
+ * @param {(final: boolean, index: number, pan: number) => void} options.onHit  Звук удара; final — пятый
+ *        кулак; pan — место кулака на экране, −1 слева … 1 справа.
  * @returns {Promise<void>}  Когда сцена вернулась.
  */
 // quick — кулаки сразу после кадров света и молний: экран уже тёмный, затемнение мгновенное
@@ -696,7 +697,7 @@ function runFists({ calm = false, slow = 1, onHit = () => {}, quick = false, dra
             schedule.forEach((s, i) => {
                 if (t >= s.hit && !struck.has(i)) {
                     struck.add(i);
-                    onHit(i === 4, i);
+                    onHit(i === 4, i, (flights[i].x / W * 2 - 1) * 0.85);
                     shake = { a: rnd() * Math.PI * 2, power: unit * (i === 4 ? SHAKE.final : SHAKE.hit), at: s.hit };
                 }
             });
