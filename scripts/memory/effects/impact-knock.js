@@ -623,7 +623,7 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     let contacted = false, launched = false, landed = false, fistsDone = false;
     // Звуки моментов до касания — один раз; длительность — с учётом замедления
     const cued = new Set();
-    const cue = (name, when, t, options = {}) => { if (t >= when && !cued.has(name)) { cued.add(name); onCue(name, options); } };
+    const cue = (name, when, t, options = {}) => { if (t >= when && !cued.has(name)) { cued.add(name); onCue(name.replace(/\d+$/, ''), options); } };
 
     return new Promise(resolve => {
         let t0 = performance.now();
@@ -655,13 +655,26 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                     });
                 }
                 cue('approach', 0, t, { duration: sa / 1000 * slow });
+                cue('bars', 0, t);
+                // Промежуточные кадры касания: провал в тишину на белом, свист столба, треск молний
+                const sw = sL + T.star + T.blot, sb2 = sw + T.white;
+                if (!calm) {
+                    cue('dip', sw, t, { duration: T.white / 1000 * slow });
+                    cue('beam', sb2, t);
+                }
+                cue('zap', calm ? sL : sb2 + T.beam, t);
+                if (!calm) cue('zap2', sb2 + T.beam + T.cone, t);
                 // Вдох обрывается вместе с концом вдоха: дальше — свист рывка и тишина перед касанием
                 cue('inhale', sa, t, { duration: T.inhale / 1000 * slow });
                 cue('lunge', si, t);
                 if (t >= s2 && !contacted) { contacted = true; onCue('contact'); kick(s2, SHAKE * 0.7); }
-                if (t >= sf && fistsDone && !launched) { launched = true; onCue('fly', { duration: T.fly / 1000 * slow }); kick(sf, SHAKE * 0.6); }
-                if (t >= sland && launched && !landed) { landed = true; onCue('land'); kick(sHit, SHAKE * 0.55); }
-                if (t >= sOk) cue('ok', sOk, t);
+                // Полёт и приземление звучат с той стороны экрана, куда летит и где падает цель
+                const panOf = p => Math.max(-1, Math.min(1, (screenOf(p).x / cv.width * 2 - 1) * 0.9));
+                if (t >= sf && fistsDone && !launched) { launched = true; onCue('fly', { duration: T.fly / 1000 * slow, pan: panOf(knock.to) }); kick(sf, SHAKE * 0.6); }
+                if (t >= sland && launched && !landed) { landed = true; onCue('land', { pan: panOf(knock.to) }); kick(sHit, SHAKE * 0.55); }
+                // Перед репликой — тишина: хвосты приземления обрываются
+                cue('hush', sOk - 420, t, { duration: 0.4 * slow });
+                if (t >= sOk) cue('ok', sOk, t, { pan: caster ? panOf(home) * 0.6 : 0 });
                 const sk = (t - shake.at) / T.burst;
                 const jolt = sk >= 0 && sk < 1 ? shake.power * (1 - sk) ** 2 * Math.cos((t - shake.at) / 18 * Math.PI) : 0;
 

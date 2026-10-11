@@ -23,8 +23,14 @@ export const CUES = {
     punchFinal: 'пятый кулак: удар тяжелее и раскат',
     fly: 'полёт цели: удаляющийся свист с падающим тоном',
     land: 'приземление: удар о землю и осыпь',
-    ok: 'реплика «Ок.»: тихий хлопок пузыря'
+    ok: 'реплика «Ок.»: тихий хлопок пузыря',
+    bars: 'кинополосы выезжают: низкий короткий удар-заставка',
+    beam: 'столб света: высокий нарастающий свист',
+    zap: 'молнии: электрический треск со щелчками'
 };
+
+// Эффекты шины (только для синтеза): провал в тишину, контузия, тишина перед репликой
+export const FX = ['dip', 'muffle', 'hush'];
 
 // ==========================================
 // ЦЕПОЧКА: сухой звук, перегруз, ревербация, лимитер
@@ -93,7 +99,12 @@ export function createBus(ctx, destination, volume = 0.5) {
     limiter.ratio.value = 14;
     limiter.attack.value = 0.002;
     limiter.release.value = 0.2;
-    master.connect(limiter).connect(destination);
+    // Контузия: фильтр после всех звуков — в обычном состоянии открыт
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = 'lowpass';
+    muffle.frequency.value = 20000;
+    muffle.Q.value = 0.7;
+    master.connect(muffle).connect(limiter).connect(destination);
 
     const dry = ctx.createGain();
     dry.connect(master);
@@ -116,12 +127,16 @@ export function createBus(ctx, destination, volume = 0.5) {
     const crushOut = ctx.createGain();
     crushOut.gain.value = 0.55;
     crush.connect(crushOut).connect(master);
-    return { dry, drive, crush, verb, master };
+    return { dry, drive, crush, verb, master, muffle, post: limiter, volume };
 }
 
 // Слой → в шину: по месту в стереопанораме, сухо или через перегруз, с посылом в ревербацию
+// Место звука на экране: сдвиг панорамы всех слоёв текущего звука (−1 слева … 1 справа)
+let cuePan = 0;
+
 function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false, crushed = false }) {
     let tail = node;
+    pan = Math.max(-1, Math.min(1, pan + cuePan));
     if (pan && ctx.createStereoPanner) {
         const p = ctx.createStereoPanner();
         p.pan.value = pan;
@@ -140,10 +155,14 @@ function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false, crushed = 
 // КИРПИЧИ СИНТЕЗА
 // ==========================================
 
+// Разнообразие: каждый слой при каждом показе чуть иной по высоте и громкости
+const vary = (spread = 0.06) => 1 + (Math.random() - 0.5) * spread;
+
 // Огибающая громкости: точки [время от начала, уровень]; между ними — экспоненциально
 function envelope(param, t0, points) {
-    param.setValueAtTime(Math.max(0.0001, points[0][1]), t0 + points[0][0]);
-    for (const [dt, v] of points.slice(1)) param.exponentialRampToValueAtTime(Math.max(0.0001, v), t0 + dt);
+    const k = vary(0.18);
+    param.setValueAtTime(Math.max(0.0001, points[0][1] * k), t0 + points[0][0]);
+    for (const [dt, v] of points.slice(1)) param.exponentialRampToValueAtTime(Math.max(0.0001, v * k), t0 + dt);
 }
 
 // Шум через фильтр с меняющейся частотой: свисты, всасывание, гул, треск. Стерео: каналы
@@ -154,8 +173,9 @@ function noise(ctx, bus, t0, { type = 'bandpass', freq = [1000, 1000], q = 1, ga
     const filter = ctx.createBiquadFilter();
     filter.type = type;
     filter.Q.value = q;
-    filter.frequency.setValueAtTime(freq[0], t0);
-    filter.frequency.exponentialRampToValueAtTime(freq[1], t0 + duration);
+    const fk = vary(0.08);
+    filter.frequency.setValueAtTime(freq[0] * fk, t0);
+    filter.frequency.exponentialRampToValueAtTime(freq[1] * fk, t0 + duration);
     const g = ctx.createGain();
     envelope(g.gain, t0, gain);
     src.connect(filter).connect(g);
@@ -168,8 +188,9 @@ function noise(ctx, bus, t0, { type = 'bandpass', freq = [1000, 1000], q = 1, ga
 function tone(ctx, bus, t0, { type = 'sine', freq = [120, 40], gain = [[0, 1], [0.3, 0.0001]], duration = 0.35, ...mix }) {
     const osc = ctx.createOscillator();
     osc.type = type;
-    osc.frequency.setValueAtTime(freq[0], t0);
-    osc.frequency.exponentialRampToValueAtTime(freq[1], t0 + duration);
+    const fk = vary(0.05);
+    osc.frequency.setValueAtTime(freq[0] * fk, t0);
+    osc.frequency.exponentialRampToValueAtTime(freq[1] * fk, t0 + duration);
     const g = ctx.createGain();
     envelope(g.gain, t0, gain);
     osc.connect(g);
@@ -259,6 +280,22 @@ function flutter(ctx, bus, t0, { freq = [2000, 400], q = 1.8, rate = [34, 14], l
 // ==========================================
 
 const RECIPES = {
+    // Кинополосы: низкий короткий удар-заставка, как начало сцены в кино
+    bars(ctx, bus, t0) {
+        tone(ctx, bus, t0, { type: 'triangle', freq: [70, 34], gain: [[0, 1.1], [0.9, 0.0001]], duration: 0.95, send: 0.3 });
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [600, 90], q: 0.8, gain: [[0, 0.8], [0.7, 0.0001]], duration: 0.75, send: 0.5 });
+        click(ctx, bus, t0, 0.5, 1200, 0.3);
+    },
+    // Столб света: высокий свист, растёт за 50 мс
+    beam(ctx, bus, t0) {
+        noise(ctx, bus, t0, { type: 'bandpass', freq: [3000, 9000], q: 3, gain: [[0, 0.0001], [0.04, 0.7], [0.09, 0.0001]], duration: 0.1, send: 0.3 });
+        tone(ctx, bus, t0, { freq: [2400, 5200], gain: [[0, 0.0001], [0.04, 0.12], [0.08, 0.0001]], duration: 0.09, send: 0.25 });
+    },
+    // Молнии: электрический треск — щелчки и гудящий зуд
+    zap(ctx, bus, t0) {
+        crackle(ctx, bus, t0, { count: 45, spread: 0.1, level: 0.75, freq: [1500, 7000], send: 0.25 });
+        tone(ctx, bus, t0, { type: 'sawtooth', freq: [120, 90], gain: [[0, 0.25], [0.12, 0.0001]], duration: 0.13, crushed: true, send: 0.15 });
+    },
     approach(ctx, bus, t0, { duration = 0.52 } = {}) {
         for (const pan of [-0.6, 0.6]) noise(ctx, bus, t0, { type: 'lowpass', freq: [160, 700], q: 0.8, gain: [[0, 0.0001], [duration * 0.9, 0.3], [duration + 0.2, 0.0001]], duration: duration + 0.2, pan, send: 0.4 });
         tone(ctx, bus, t0, { type: 'triangle', freq: [42, 58], gain: [[0, 0.0001], [duration, 0.45], [duration + 0.25, 0.0001]], duration: duration + 0.25, send: 0.2 });
@@ -292,7 +329,8 @@ const RECIPES = {
     // в панораме — очередь не звучит одним звуком
     punch(ctx, bus, t0, { index = 0 } = {}) {
         const k = [1, 0.92, 1.07, 0.97][index % 4] * (0.97 + Math.random() * 0.06);
-        const pan = [-0.35, 0.35, 0.3, -0.3][index % 4];
+        // Место — от экрана (pan в playCue); здесь только лёгкий разброс слоёв
+        const pan = [-0.12, 0.12, 0.1, -0.1][index % 4];
         click(ctx, bus, t0, 0.9, 2800 * k, 0.2);
         tone(ctx, bus, t0, { freq: [170 * k, 48 * k], gain: [[0, 1.5], [0.3, 0.0001]], duration: 0.32, driven: true, pan: pan * 0.5, send: 0.3 });
         tone(ctx, bus, t0, { type: 'triangle', freq: [66 * k, 36], gain: [[0, 1.0], [0.5, 0.0001]], duration: 0.52, send: 0.05 });
@@ -344,26 +382,99 @@ export function renderCue(ctx, bus, name, t0, options = {}) {
 
 let live = null;
 
+function liveBus(volume) {
+    if (!live) {
+        const ctx = new AudioContext();
+        live = { ctx, bus: createBus(ctx, ctx.destination, volume) };
+    }
+    if (live.ctx.state === 'suspended') live.ctx.resume();
+    // Пока идёт провал или тишина — громкость ведёт их автоматизация
+    if (live.ctx.currentTime >= (live.fxUntil ?? 0)) live.bus.master.gain.value = volume;
+    return live;
+}
+
 /**
- * Звук момента: файл из папки звуков, если она указана, иначе синтез.
- * @param {string} name     Момент из CUES.
- * @param {object} options  { volume, folder, duration (с), index }.
+ * Эффект шины синтеза.
+ *  dip    — провал в тишину на duration (белый кадр);
+ *  muffle — контузия: всё глухо, как под водой, и звон в ушах; верха возвращаются за duration;
+ *  hush   — тишина перед репликой: хвосты обрываются, через duration звук возвращается.
  */
-export function playCue(name, { volume = 0.5, folder = '', ...options } = {}) {
+function busFx(name, { volume = 0.5, duration = 0.04 } = {}) {
+    const state = liveBus(volume), { ctx, bus } = state, t = ctx.currentTime, g = bus.master.gain;
+    if (name === 'dip' || name === 'hush') {
+        state.fxUntil = t + duration + 0.03;
+        const low = name === 'dip' ? 0.12 : 0.0001;
+        g.cancelScheduledValues(t);
+        g.setValueAtTime(volume, t);
+        g.linearRampToValueAtTime(volume * low, t + (name === 'dip' ? 0.006 : 0.12));
+        g.setValueAtTime(volume * low, t + duration);
+        g.linearRampToValueAtTime(volume, t + duration + 0.02);
+    } else if (name === 'muffle') {
+        const f = bus.muffle.frequency;
+        f.cancelScheduledValues(t);
+        f.setValueAtTime(20000, t);
+        f.exponentialRampToValueAtTime(380, t + 0.05);
+        f.setValueAtTime(380, t + duration * 0.45);
+        f.exponentialRampToValueAtTime(20000, t + duration);
+        // Звон в ушах — мимо фильтра, затихает вместе с контузией
+        const osc = ctx.createOscillator(), rg = ctx.createGain();
+        osc.frequency.value = 3400 * vary(0.08);
+        rg.gain.setValueAtTime(0.0001, t);
+        rg.gain.exponentialRampToValueAtTime(0.06 * volume, t + 0.06);
+        rg.gain.exponentialRampToValueAtTime(0.0001, t + duration * 1.2);
+        osc.connect(rg).connect(bus.post);
+        osc.start(t);
+        osc.stop(t + duration * 1.2 + 0.05);
+    }
+}
+
+/**
+ * Звук момента: файл из папки звуков, если она указана, иначе синтез. Эффекты шины (FX) —
+ * только для синтеза.
+ * @param {string} name     Момент из CUES или эффект из FX.
+ * @param {object} options  { volume, folder, duration (с), index, pan (−1…1 — место на экране) }.
+ */
+export function playCue(name, { volume = 0.5, folder = '', pan = 0, ...options } = {}) {
+    if (FX.includes(name)) {
+        if (!folder) try { busFx(name, { volume, ...options }); } catch (error) { console.warn(`gachadnd | звук ${name}`, error); }
+        return;
+    }
     if (!RECIPES[name]) return;
     if (folder) {
         const helper = foundry.audio?.AudioHelper ?? globalThis.AudioHelper;
         return helper?.play({ src: `${folder.replace(/\/$/, '')}/${name}.ogg`, volume, autoplay: true, loop: false }, false);
     }
     try {
-        if (!live) {
-            const ctx = new AudioContext();
-            live = { ctx, bus: createBus(ctx, ctx.destination, volume) };
-        }
-        if (live.ctx.state === 'suspended') live.ctx.resume();
-        live.bus.master.gain.value = volume;
-        renderCue(live.ctx, live.bus, name, live.ctx.currentTime + 0.005, options);
+        const { ctx, bus } = liveBus(volume);
+        cuePan = pan;
+        renderCue(ctx, bus, name, ctx.currentTime + 0.005, options);
     } catch (error) {
         console.warn(`gachadnd | звук ${name}`, error);
+    } finally {
+        cuePan = 0;
     }
+}
+
+/**
+ * Приглушить музыку и звуки сцены Foundry на время удара. Возвращает функцию, которая
+ * плавно возвращает громкость.
+ */
+export function duckScene(level = 0.15, fadeIn = 250, fadeOut = 900) {
+    const sounds = [];
+    try {
+        for (const playlist of game.playlists?.playing ?? []) {
+            for (const ps of playlist.sounds?.filter(s => s.playing) ?? []) if (ps.sound) sounds.push(ps.sound);
+        }
+        for (const ambient of globalThis.canvas?.sounds?.placeables ?? []) if (ambient.sound?.playing) sounds.push(ambient.sound);
+    } catch (error) { console.warn('gachadnd | приглушение звуков сцены', error); }
+    const ducked = sounds.map(sound => {
+        const volume = sound.volume;
+        try { sound.fade ? sound.fade(volume * level, { duration: fadeIn }) : (sound.volume = volume * level); } catch { /* звук уже остановлен */ }
+        return { sound, volume };
+    });
+    return () => {
+        for (const { sound, volume } of ducked) {
+            try { sound.fade ? sound.fade(volume, { duration: fadeOut }) : (sound.volume = volume); } catch { /* звук уже остановлен */ }
+        }
+    };
 }
