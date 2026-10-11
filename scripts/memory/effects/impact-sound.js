@@ -80,7 +80,8 @@ function driveCurve(amount = 2.2) {
 }
 
 /**
- * Шина звуков: dry — сухой звук, drive — через перегруз, verb — посыл в ревербацию.
+ * Шина звуков: dry — сухой звук, drive — через мягкий перегруз, crush — через жёсткий,
+ * verb — посыл в ревербацию.
  * Всё сходится в лимитер и уходит в destination.
  */
 export function createBus(ctx, destination, volume = 0.5) {
@@ -108,11 +109,18 @@ export function createBus(ctx, destination, volume = 0.5) {
     const wet = ctx.createGain();
     wet.gain.value = 0.9;
     verb.connect(convolver).connect(wet).connect(master);
-    return { dry, drive, verb, master };
+    // Жёсткий перегруз: почти срезанные пики — хруст, треск, грубость
+    const crush = ctx.createWaveShaper();
+    crush.curve = driveCurve(7);
+    crush.oversample = '2x';
+    const crushOut = ctx.createGain();
+    crushOut.gain.value = 0.55;
+    crush.connect(crushOut).connect(master);
+    return { dry, drive, crush, verb, master };
 }
 
 // Слой → в шину: по месту в стереопанораме, сухо или через перегруз, с посылом в ревербацию
-function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false }) {
+function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false, crushed = false }) {
     let tail = node;
     if (pan && ctx.createStereoPanner) {
         const p = ctx.createStereoPanner();
@@ -120,7 +128,7 @@ function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false }) {
         tail.connect(p);
         tail = p;
     }
-    tail.connect(driven ? bus.drive : bus.dry);
+    tail.connect(crushed ? bus.crush : driven ? bus.drive : bus.dry);
     if (send > 0) {
         const s = ctx.createGain();
         s.gain.value = send;
@@ -197,20 +205,53 @@ function slam(ctx, bus, t0, { pitch = 1, body = 1.4, sub = 1.1, subLen = 1.1, ru
     }
 }
 
-// Треск стекла: короткий яркий треск, звенящие неровные призвуки (частоты не кратны — звенит,
-// а не звучит нотой) и тихое осыпание осколков следом
-function glass(ctx, bus, t0, { level = 0.35, pan = 0, shards = 14 } = {}) {
-    noise(ctx, bus, t0, { type: 'highpass', freq: [5000, 3000], q: 0.8, gain: [[0, level * 1.2], [0.05, 0.0001]], duration: 0.06, pan, send: 0.3 });
-    crackle(ctx, bus, t0, { count: 18, spread: 0.06, level: level * 0.9, freq: [3500, 9000], send: 0.3 });
-    for (let i = 0; i < 5; i++) {
-        const f = 2600 + Math.random() * 5200;
-        tone(ctx, bus, t0 + Math.random() * 0.015, { freq: [f, f * 0.985], gain: [[0, level * 0.22], [0.12 + Math.random() * 0.2, 0.0001]], duration: 0.34, pan: pan + (Math.random() - 0.5) * 0.6, send: 0.35 });
+// Треск стекла в духе файтингов: не звон, а короткий сухой хлёсткий «кш-ш». Зажатый жёстким
+// перегрузом треск, плотная россыпь хруста за 0,1 с и металлический призвук (частотная модуляция
+// с некратным соотношением — «дзынь» без ноты), почти без хвоста
+function glass(ctx, bus, t0, { level = 0.35, pan = 0 } = {}) {
+    noise(ctx, bus, t0, { type: 'highpass', freq: [2200, 1800], q: 0.7, gain: [[0, level * 1.8], [0.035, level * 0.5], [0.09, 0.0001]], duration: 0.1, pan, crushed: true, send: 0.08 });
+    noise(ctx, bus, t0, { type: 'bandpass', freq: [6500, 4200], q: 1.2, gain: [[0, level * 1.1], [0.16, 0.0001]], duration: 0.17, pan: -pan, send: 0.12 });
+    crackle(ctx, bus, t0 + 0.004, { count: 26, spread: 0.11, level: level * 1.1, freq: [2500, 8000], send: 0.08 });
+    // Металлический призвук
+    for (const [carrier, ratio, length] of [[2300, 1.41, 0.14], [3700, 2.76, 0.1]]) {
+        const osc = ctx.createOscillator(), mod = ctx.createOscillator(), depth = ctx.createGain(), g = ctx.createGain();
+        osc.frequency.value = carrier * (0.95 + Math.random() * 0.1);
+        mod.frequency.value = osc.frequency.value * ratio;
+        depth.gain.value = osc.frequency.value * 1.6;
+        mod.connect(depth).connect(osc.frequency);
+        envelope(g.gain, t0, [[0, level * 0.35], [length, 0.0001]]);
+        osc.connect(g);
+        route(ctx, g, bus, { pan: pan * 0.5, send: 0.1 });
+        for (const o of [osc, mod]) { o.start(t0); o.stop(t0 + length + 0.05); }
     }
-    // Осколки: редкие тихие звоночки по сторонам в следующие 0,4 с
-    for (let i = 0; i < shards; i++) {
-        const f = 4000 + Math.random() * 6000, t = t0 + 0.05 + Math.random() ** 1.5 * 0.4;
-        tone(ctx, bus, t, { freq: [f, f * 0.99], gain: [[0, level * 0.1 * (0.4 + Math.random() * 0.6)], [0.04 + Math.random() * 0.06, 0.0001]], duration: 0.11, pan: (Math.random() - 0.5) * 1.6, send: 0.4 });
-    }
+}
+
+// Свист с дрожанием: шум, громкость которого рвёт быстрое колебание — так режет воздух
+// кувыркающееся тело
+function flutter(ctx, bus, t0, { freq = [2000, 400], q = 1.8, rate = [34, 14], level = 1, duration = 0.4, pan = 0, send = 0.3 } = {}) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(ctx);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = q;
+    filter.frequency.setValueAtTime(freq[0], t0);
+    filter.frequency.exponentialRampToValueAtTime(freq[1], t0 + duration);
+    const am = ctx.createGain();
+    am.gain.value = 0.5;
+    const lfo = ctx.createOscillator(), lfoDepth = ctx.createGain();
+    lfo.type = 'square';
+    lfo.frequency.setValueAtTime(rate[0], t0);
+    lfo.frequency.exponentialRampToValueAtTime(rate[1], t0 + duration);
+    lfoDepth.gain.value = 0.5;
+    lfo.connect(lfoDepth).connect(am.gain);
+    const g = ctx.createGain();
+    envelope(g.gain, t0, [[0, 0.0001], [0.03, level], [duration, level * 0.4], [duration + 0.12, 0.0001]]);
+    src.connect(filter).connect(am).connect(g);
+    route(ctx, g, bus, { pan, send });
+    src.start(t0, Math.random() * 2);
+    src.stop(t0 + duration + 0.15);
+    lfo.start(t0);
+    lfo.stop(t0 + duration + 0.15);
 }
 
 // ==========================================
@@ -262,17 +303,26 @@ const RECIPES = {
     // Пятый кулак: тяжёлый удар и стекло громче — экран трескается по-настоящему
     punchFinal(ctx, bus, t0) {
         slam(ctx, bus, t0, { pitch: 0.85, body: 1.7, sub: 1.3, subLen: 1.4, rumble: 1.1, rumbleLen: 1.7, send: 0.55 });
-        glass(ctx, bus, t0 + 0.004, { level: 0.45, shards: 22 });
+        glass(ctx, bus, t0 + 0.004, { level: 0.5 });
     },
-    // Полёт: свист уходит вниз по тону, из центра в сторону, и затихает — цель удаляется
+    // Полёт: рвущийся свист с дрожанием от кувырка, тон падает — цель удаляется; под ним ветер
+    // с хрипом через жёсткий перегруз
     fly(ctx, bus, t0, { duration = 0.38 } = {}) {
-        noise(ctx, bus, t0, { type: 'bandpass', freq: [2400, 500], q: 2.2, gain: [[0, 0.0001], [0.04, 1.5], [duration + 0.1, 0.0001]], duration: duration + 0.1, pan: 0.2, send: 0.45 });
-        noise(ctx, bus, t0, { type: 'lowpass', freq: [900, 200], q: 0.7, gain: [[0, 0.0001], [0.05, 0.7], [duration + 0.15, 0.0001]], duration: duration + 0.15, pan: -0.2, send: 0.4 });
+        flutter(ctx, bus, t0, { freq: [2600, 450], rate: [36, 12], level: 1.4, duration, pan: 0.25, send: 0.35 });
+        flutter(ctx, bus, t0 + 0.015, { freq: [1300, 260], q: 1.2, rate: [28, 10], level: 0.9, duration, pan: -0.25, send: 0.3 });
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [700, 160], q: 0.9, gain: [[0, 0.0001], [0.05, 0.6], [duration + 0.15, 0.0001]], duration: duration + 0.15, crushed: true, send: 0.15 });
     },
-    // Приземление: удар о землю и долгая осыпь камней по сторонам
+    // Приземление: грубо и сухо — не как остальные удары. Хрустящий перегруженный низ, глухой
+    // удар о землю, плотный гравий и шорох разлетающейся земли, ревербации почти нет
     land(ctx, bus, t0) {
-        slam(ctx, bus, t0, { pitch: 0.75, body: 1.3, sub: 1.0, subLen: 0.9, rumble: 0.9, rumbleLen: 0.9, send: 0.45 });
-        crackle(ctx, bus, t0 + 0.06, { count: 60, spread: 1.0, level: 0.32, freq: [700, 2800], send: 0.3 });
+        click(ctx, bus, t0, 1.1, 1500, 0.05);
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [900, 140], q: 1, gain: [[0, 1.8], [0.08, 1.0], [0.45, 0.0001]], duration: 0.5, crushed: true, send: 0.1 });
+        tone(ctx, bus, t0, { freq: [95, 30], gain: [[0, 1.6], [0.4, 0.0001]], duration: 0.45, driven: true, send: 0.05 });
+        tone(ctx, bus, t0, { type: 'triangle', freq: [48, 28], gain: [[0, 1.0], [0.7, 0.0001]], duration: 0.75, send: 0.02 });
+        // Гравий: плотная россыпь в средних частотах, рассыпается по сторонам
+        crackle(ctx, bus, t0 + 0.01, { count: 90, spread: 0.55, level: 0.55, freq: [300, 1600], send: 0.1 });
+        crackle(ctx, bus, t0 + 0.08, { count: 40, spread: 0.9, level: 0.25, freq: [1200, 3500], send: 0.12 });
+        for (const pan of [-0.6, 0.6]) noise(ctx, bus, t0 + 0.03, { type: 'bandpass', freq: [1800, 700], q: 0.7, gain: [[0, 0.0001], [0.04, 0.5], [0.6, 0.0001]], duration: 0.65, pan, send: 0.1 });
     },
     ok(ctx, bus, t0) {
         tone(ctx, bus, t0, { freq: [520, 880], gain: [[0, 0.0001], [0.012, 0.35], [0.09, 0.0001]], duration: 0.1, send: 0.15 });
