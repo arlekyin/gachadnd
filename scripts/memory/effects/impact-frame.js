@@ -102,6 +102,16 @@ export function registerImpactSettings() {
 // ВЗВОД И РЕЗУЛЬТАТ
 // ==========================================
 
+// Рисунки кулаков и шейдер волн — заранее: после загрузки мира, когда браузер свободен, и после
+// смены размера окна. Тогда первый удар не ждёт подготовки
+Hooks.once('ready', () => {
+    if (!game.settings.get(MODULE_ID, 'impactFrames')) return;
+    const warm = () => prepareFists().catch(error => console.warn(`${MODULE_ID} | рисунки кулаков`, error));
+    setTimeout(warm, 3000);
+    let resized = null;
+    window.addEventListener('resize', () => { clearTimeout(resized); resized = setTimeout(warm, 1500); });
+});
+
 // Взведённые ультимейты: { actorId, art, until }. Взвод рассылается всем — урон обычно применяет Мастер
 const armed = new Map();
 
@@ -125,7 +135,7 @@ onSocket('impactArm', message => arm(message));
 function arm({ actorId, art, style = null, tokenId, line = null }) {
     armed.set(actorId, { art, style, tokenId, line, until: Date.now() + ARM_MS });
     // Рисунки кулаков — пока бросают урон, а не в момент удара
-    if (style === 'fists') setTimeout(() => { prepareFists().catch(error => console.warn(`${MODULE_ID} | рисунки кулаков`, error)); }, 50);
+    if (style === 'fists') prepareFists().catch(error => console.warn(`${MODULE_ID} | рисунки кулаков`, error));
     trace(`взведён ${game.actors.get(actorId)?.name ?? actorId}${style ? ` (${style})` : ''}, ждёт урона ${ARM_MS / 60000} мин${tokenId ? '' : '; токена на сцене нет'}`);
 }
 
