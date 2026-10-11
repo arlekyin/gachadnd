@@ -371,16 +371,43 @@ const spriteCache = new Map();
 // Рисунки всех пяти кулаков для экрана W×H — из запаса или заново
 // С рисунком из файла — он; без него — нарисованный кодом кулак
 function fistSprites(W, H, drawn = null) {
-    return layout(W, H).map((spot, i) => {
-        const size = Math.ceil(spot.size * 1.2), key = `${drawn ? 'art' : 'gen'}:${i}:${size}`;
-        if (!spriteCache.has(key)) spriteCache.set(key, drawn ? artSprite(drawn, size, 31 + i * 17) : fistSprite(fistShape(31 + i * 17), size, 31 + i * 17));
-        return spriteCache.get(key);
-    });
+    return FISTS.map((_, i) => fistSprite_(W, H, drawn, i));
+}
+
+// Рисунок одного кулака — из запаса или заново
+function fistSprite_(W, H, drawn, i) {
+    const size = Math.ceil(layout(W, H)[i].size * 1.2), key = `${drawn ? 'art' : 'gen'}:${i}:${size}`;
+    if (!spriteCache.has(key)) spriteCache.set(key, drawn ? artSprite(drawn, size, 31 + i * 17) : fistSprite(fistShape(31 + i * 17), size, 31 + i * 17));
+    return spriteCache.get(key);
 }
 
 /** Нарисовать кулаки заранее (≈0,3 с), чтобы показ начался без задержки: зовётся при взводе навыка */
-export function prepareFists() {
-    return loadFistArt().then(drawn => fistSprites(Math.round(innerWidth * devicePixelRatio), Math.round(innerHeight * devicePixelRatio), drawn));
+/**
+ * Подготовить всё заранее: рисунки пяти кулаков под текущий экран и шейдер волн. Работа делится
+ * на куски с паузами между ними — экран не замирает. Повторный вызов для того же размера
+ * экрана ничего не делает.
+ */
+export async function prepareFists() {
+    const drawn = await loadFistArt();
+    const W = Math.round(innerWidth * devicePixelRatio), H = Math.round(innerHeight * devicePixelRatio);
+    const idle = () => new Promise(resolve => (globalThis.requestIdleCallback ?? (f => setTimeout(f, 30)))(() => resolve(), { timeout: 500 }));
+    for (let i = 0; i < FISTS.length; i++) {
+        await idle();
+        fistSprite_(W, H, drawn, i);
+    }
+    await idle();
+    rippleFor(W, H);
+}
+
+// Шейдер волн: один на размер экрана — компилируется один раз
+let rippleCache = null;
+function rippleFor(W, H) {
+    if (rippleCache?.W !== W || rippleCache?.H !== H) {
+        let renderer = null;
+        try { renderer = rippleRenderer(W, H); } catch (error) { console.warn('gachadnd | волны', error); }
+        rippleCache = { W, H, renderer };
+    }
+    return rippleCache.renderer;
 }
 
 // Нарисовать заготовку кулака: центр (x, y), ширина size, поворот, растяжение вдоль осей кулака
@@ -643,8 +670,7 @@ function runFists({ calm = false, slow = 1, onHit = () => {}, quick = false, dra
             drawCracks(bakedCtx, flights[i].cracks, 1, COLOR.crack, COLOR.glow, unit * 0.006);
         };
         // Волны — отдельным холстом WebGL поверх, на время волн; без WebGL волн нет
-        let rippleGL = null;
-        try { rippleGL = rippleRenderer(W, H); } catch (error) { console.warn('gachadnd | волны', error); }
+        const rippleGL = rippleFor(W, H);
         if (rippleGL) {
             rippleGL.canvas.className = 'gd-impact';
             rippleGL.canvas.style.display = 'none';
@@ -665,7 +691,7 @@ function runFists({ calm = false, slow = 1, onHit = () => {}, quick = false, dra
           // Ошибка в кадре не должна оставить экран закрытым, а показ — незавершённым
           try {
             const t = (now - t0) / slow;
-            if (t >= end) { cv.remove(); rippleGL?.canvas.remove(); return resolve(); }
+            if (t >= end) { cv.remove(); rippleGL?.canvas.remove(); if (rippleGL) rippleGL.canvas.style.filter = rippleGL.canvas.style.backdropFilter = ''; return resolve(); }
             // Удары: звук и тряска — один раз на кулак
             schedule.forEach((s, i) => {
                 if (t >= s.hit && !struck.has(i)) {
