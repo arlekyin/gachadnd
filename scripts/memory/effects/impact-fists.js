@@ -16,7 +16,7 @@
 // и он летит дольше (finalFly)
 const T = {
     dark: 220, firstFly: 180, fly: 115, hold: 75, pause: 280, finalFly: 160,
-    cracks: 170, flash: 200, fade: 380, crack: 120, shake: 240, puff: 600, pop: 280
+    cracks: 170, flash: 200, fade: 380, finalHold: 110, crack: 120, shake: 240, puff: 600, pop: 280
 };
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
 const SHAKE = { hit: 0.028, final: 0.05 };
@@ -354,7 +354,9 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
             clock += fly;
         });
         const lastHit = schedule[4].hit;
-        const end = lastHit + T.cracks + T.flash + T.fade;
+        // В ударе Сайтамы (quick) после пятого — короткий негатив, и сразу полёт цели; без сцены
+        // кулаки сами возвращают её — через вспышку
+        const end = quick ? lastHit + T.finalHold : lastHit + T.cracks + T.flash + T.fade;
         const struck = new Set();
         let shake = { a: 0, power: 0, at: -1e9 };
         let negative = null;
@@ -392,7 +394,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
             });
             const hitting = schedule.findIndex(s => t >= s.hit && t < s.hit + T.hold);
             const finale = t >= lastHit;
-            setNegative(!calm && (hitting >= 0 || (finale && t < lastHit + T.cracks)));
+            setNegative(!calm && (hitting >= 0 || (finale && (quick || t < lastHit + T.cracks))));
 
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, W, H);
@@ -456,7 +458,7 @@ export function playFists({ calm = false, slow = 1, onHit = () => {}, quick = fa
             });
 
             // После пятого удара — вспышка и сквозь неё сцена
-            if (finale && !calm && t >= lastHit + T.cracks) {
+            if (finale && !quick && !calm && t >= lastHit + T.cracks) {
                 const p = (t - lastHit - T.cracks) / T.flash;
                 drawFlash(ctx, W, H, Math.min(1, p * 1.6), rays);
             }

@@ -9,8 +9,10 @@
  *  4. Касание — мелькающие кадры: разлёт линий за целью на чёрном, столб света, молнии в тёмном
  *     конусе, молнии вокруг.
  *  5. Кулаки (impact-fists.js) — камера на это время замирает.
- *  6. Кадр инвертируется, цель отлетает по прямой от Сайтамы, сцена возвращается в цвет,
- *     камера — рывком на место.
+ *  6. Сразу после пятого кулака цель летит по прямой от Сайтамы: вытянута, кувыркается, за ней
+ *     следы, линии скорости и пыль по земле; камера провожает её, сцена возвращает цвет.
+ *  7. Приземление: стоп-кадр, ударная волна, пыль, трещины в земле, тряска; камера рывком
+ *     на место, кинополосы уходят. Сайтама скучающе говорит «Ок.».
  * Сцену и токены рисует движок (PIXI): они резкие при любом наезде; свет и молнии — вектор
  * поверх в разрешении экрана. Перенос токена делает клиент Мастера после показа.
  */
@@ -21,11 +23,13 @@
 // экрана, без своей анимации (beam — столб света, cone — молнии в тёмном конусе, остальное —
 // молнии во все стороны);
 // lines — разлёт линий за целью: первый мелькающий кадр касания, появляется сразу целиком;
-// burst — тряска после кулаков; squash — качание токенов от удара; ghosts — следы рывка;
-// after — пауза после кулаков; invert — инверсия; fly — отлёт; back — возврат камеры
+// burst — тряска; squash — качание токенов от удара; ghosts — следы рывка; fly — полёт цели;
+// hitstop — стоп-кадр приземления; wave — ударная волна; settle — сцена после приземления до
+// возврата камеры; back — возврат камеры; cracks — трещины в земле гаснут; ok — реплика Сайтамы
 const T = {
     approach: 520, inhale: 1000, windup: 650, lunge: 200, turn: 160, light: 170, beam: 50, cone: 60,
-    lines: 70, burst: 250, squash: 450, ghosts: 450, after: 120, invert: 140, fly: 300, back: 70
+    lines: 70, burst: 250, squash: 450, ghosts: 450, fly: 380, hitstop: 70, wave: 380, settle: 450,
+    back: 70, cracks: 1700, ok: 1200
 };
 // Камера: на вдохе — поворот по часовой и отъезд; на рывке — против часовой и наезд на цель;
 // от разлёта её бросает обратно, дальше плывёт. Углы — радианы, масштаб — множитель
@@ -40,6 +44,10 @@ const SHAKE = 34;
 const FILL = 0.75, MAX_ZOOM = 3;
 // Вдох: сколько струй воздуха и откуда — в радиусах токена Сайтамы
 const AIR = { count: 46, from: 4.5, period: 520 };
+// Полёт: вытяжение вдоль полёта, обороты кувырка, число следов
+const FLIGHT = { stretch: 0.45, spin: 1.25, trails: 5 };
+// Реплика Сайтамы после удара
+const OK_LINE = 'Ок.';
 
 function seeded(seed) {
     let s = seed;
@@ -354,10 +362,11 @@ function lightSet(ctx, unit) {
  * @param {() => () => void} options.hideMarks  Прячет значки токенов, возвращает восстановление.
  * @param {() => void} options.onContact  Звук касания.
  * @param {() => Promise} options.between  Кулаки: камера ждёт, пока они отыграют.
- * @param {() => void} options.onBurst  Звук разлёта.
+ * @param {() => void} options.onBurst  Звук начала полёта.
+ * @param {() => void} options.onLand   Звук приземления.
  * @returns {Promise<boolean>}  false — показать в сцене нельзя.
  */
-export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1, hideMarks = () => () => {}, onContact = () => {}, between = async () => {}, onBurst = () => {} }) {
+export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1, hideMarks = () => () => {}, onContact = () => {}, between = async () => {}, onBurst = () => {}, onLand = () => {} }) {
     const stage = canvas?.stage, renderer = canvas?.app?.renderer;
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
     if (!stage || !renderer || !globalThis.PIXI || !target || !knock) return Promise.resolve(false);
@@ -392,9 +401,11 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     const viewCenter = { x: stage.pivot.x + (rect.width / 2 - saved.x) / saved.sx, y: stage.pivot.y + (rect.height / 2 - saved.y) / saved.sy };
     // Камера: k — от обычного вида (0) к крупному плану (1); zoom — множитель крупного плана;
     // pull — сдвиг центра к цели; tilt — поворот
-    const camera = (k, zoom, pull, tilt, dx = 0, dy = 0) => {
+    // follow — камера провожает цель к месту приземления
+    const camera = (k, zoom, pull, tilt, dx = 0, dy = 0, follow = 0) => {
         const s = lerp(saved.sx, scale * zoom, k), rot = tilt * k;
-        const f = { x: lerp(focus.x, b.x, pull), y: lerp(focus.y, b.y, pull) };
+        const pulled = { x: lerp(focus.x, b.x, pull), y: lerp(focus.y, b.y, pull) };
+        const f = { x: lerp(pulled.x, knock.to.x, follow), y: lerp(pulled.y, knock.to.y, follow) };
         const pos = at(s, { x: lerp(viewCenter.x, f.x, k), y: lerp(viewCenter.y, f.y, k) }, rot);
         stage.scale.set(s, s * saved.sy / saved.sx);
         stage.rotation = saved.rot + rot;
@@ -450,10 +461,64 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
         ghost.alpha = 0;
         return { ghost, base: 0.2 + f * 0.3 };
     }) : [];
-    layer.addChild(dark, air, burst, ...ghosts.map(g => g.ghost), ...[casterWrap, targetWrap].filter(Boolean));
+    // Полёт и приземление: пыль по земле, трещины, ударная волна, линии скорости, следы цели
+    const ground = new PIXI.Graphics(), trail = new PIXI.Graphics();
+    const flightGhosts = Array.from({ length: FLIGHT.trails }, (_, i) => {
+        const ghost = tokenCopy(target);
+        if (!ghost) return null;
+        ghost.filters = null;
+        ghost.alpha = 0;
+        return { ghost, lag: 0.07 * (i + 1), base: 0.45 * (1 - i / FLIGHT.trails) };
+    }).filter(Boolean);
+    const baseSpin = targetCopy?.rotation ?? 0;
+    const travel = { x: knock.to.x - b.x, y: knock.to.y - b.y };
+    const travelLen = Math.hypot(travel.x, travel.y) || 1;
+    const fly = { x: travel.x / travelLen, y: travel.y / travelLen };
+    const rndFx = seeded(73);
+    const dust = Array.from({ length: 12 }, (_, i) => ({ at: (i + 0.5) / 12, side: (rndFx() - 0.5) * 1.4, size: 0.25 + rndFx() * 0.25, passed: null }));
+    const speedLines = Array.from({ length: 26 }, () => ({ off: (rndFx() - 0.5) * 2.2, back: 0.6 + rndFx() * 2.5, len: 1.5 + rndFx() * 4, w: 0.5 + rndFx() * 1.5 }));
+    const landPuffs = Array.from({ length: 10 }, () => ({ a: rndFx() * Math.PI * 2, dist: 1.2 + rndFx() * 1.4, size: 0.4 + rndFx() * 0.4 }));
+    const landCracks = (() => {
+        const out = [];
+        for (let i = 0; i < 9; i++) {
+            let a = i / 9 * Math.PI * 2 + rndFx() * 0.5, x = 0, y = 0, r = 0.8;
+            x = Math.cos(a) * r; y = Math.sin(a) * r;
+            const pts = [[x, y]];
+            const len = 1.5 + rndFx() * 1.6;
+            for (let k = 0; k < 6; k++) { a += (rndFx() - 0.5) * 0.8; x += Math.cos(a) * len / 6; y += Math.sin(a) * len / 6; pts.push([x, y]); }
+            out.push(pts);
+        }
+        return out;
+    })();
+    // Реплика: пузырь у Сайтамы
+    const bubble = new PIXI.Container();
+    {
+        // Размер текста — не меньше 30 пикселей экрана при обычном масштабе сцены
+        const fs = Math.max(size * 0.6, 30 / saved.sx);
+        const text = new PIXI.Text(OK_LINE, { fontFamily: 'Signika, Arial, sans-serif', fontSize: fs, fontWeight: '700', fill: 0x111111 });
+        text.anchor.set(0.5);
+        text.resolution = 3;
+        const w = text.width + fs * 0.9, h = text.height + fs * 0.5;
+        const g = new PIXI.Graphics();
+        g.lineStyle(fs * 0.08, 0x111111, 1);
+        g.beginFill(0xffffff);
+        g.drawRoundedRect(-w / 2, -h / 2, w, h, h * 0.45);
+        g.endFill();
+        // Хвостик к Сайтаме
+        g.beginFill(0xffffff);
+        g.moveTo(-w * 0.18, h / 2 - fs * 0.04);
+        g.lineTo(-w * 0.42, h / 2 + fs * 0.55);
+        g.lineTo(-w * 0.02, h / 2 - fs * 0.04);
+        g.endFill();
+        g.moveTo(-w * 0.18, h / 2);
+        g.lineTo(-w * 0.42, h / 2 + fs * 0.55);
+        g.lineTo(-w * 0.02, h / 2);
+        bubble.addChild(g, text);
+        bubble.position.set(home.x + casterRadius * 0.9 + w * 0.3, home.y - casterRadius - h * 0.6);
+        bubble.visible = false;
+    }
+    layer.addChild(dark, ground, air, burst, trail, ...ghosts.map(g => g.ghost), ...flightGhosts.map(g => g.ghost), ...[casterWrap, targetWrap].filter(Boolean), bubble);
     for (const token of [caster, target]) if (token?.mesh) { token.mesh.gdAlpha ??= token.mesh.alpha; token.mesh.alpha = 0; }
-    const invert = new PIXI.ColorMatrixFilter();
-    invert.negative();
     const showMarks = hideMarks();
     stage.addChild(layer);
     // Сцена чёрно-белая с подъезда до отлёта
@@ -484,12 +549,13 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
     const rndAir = seeded(5);
     const streams = Array.from({ length: AIR.count }, () => ({ a: rndAir() * Math.PI * 2, phase: rndAir(), len: 0.5 + rndAir() * 0.9, w: 0.6 + rndAir() * 1.2 }));
 
-    // Расписание: до кулаков — подъезд, вдох, рывок, свет; после — разлёт, инверсия, отлёт
+    // Расписание: до кулаков — подъезд, вдох, рывок, разлёт и свет; после — полёт, приземление,
+    // возврат камеры, реплика
     const sa = T.approach, si = sa + T.inhale, s2 = si + T.lunge, sL = s2 + T.lines, sp = sL + T.light;
-    const sb = sp, s4 = sb + T.after, s5 = s4 + (calm ? 0 : T.invert), s6 = s5 + T.fly, end = s6 + T.back;
+    const sf = sp, sland = sf + T.fly, sHit = sland + T.hitstop, s6 = sHit + T.settle, sOk = s6 + T.back, end = sOk + T.ok;
     const shake = { x: 0, y: 0, at: -1e9, power: 0 };
     const kick = (when, power) => { const angle = Math.random() * Math.PI * 2; Object.assign(shake, { x: Math.cos(angle), y: Math.sin(angle), at: when, power }); };
-    let contacted = false, burstPlayed = false, fistsDone = false;
+    let contacted = false, launched = false, landed = false, fistsDone = false;
 
     return new Promise(resolve => {
         let t0 = performance.now();
@@ -512,43 +578,49 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                 if (t >= sp && !fistsDone) {
                     fistsDone = true;
                     cv.style.display = 'none';
+                    // Под кулаками сцена чёрная: после пятого — сразу полёт
+                    dark.alpha = 1;
                     const paused = performance.now();
                     return Promise.resolve().then(between).catch(error => console.error('gachadnd | кулаки', error)).then(() => {
                         t0 += performance.now() - paused;
                         requestAnimationFrame(frame);
                     });
                 }
-                // Касание: звук и тряска; разлёт после кулаков: звук и тряска сильнее
                 if (t >= s2 && !contacted) { contacted = true; onContact(); kick(s2, SHAKE * 0.7); }
-                if (t >= sb && fistsDone && !burstPlayed) { burstPlayed = true; onBurst(); kick(sb, SHAKE); }
+                if (t >= sf && fistsDone && !launched) { launched = true; onBurst(); kick(sf, SHAKE * 0.6); }
+                if (t >= sland && launched && !landed) { landed = true; onLand(); kick(sHit, SHAKE * 0.55); }
                 const sk = (t - shake.at) / T.burst;
                 const jolt = sk >= 0 && sk < 1 ? shake.power * (1 - sk) ** 2 * Math.cos((t - shake.at) / 18 * Math.PI) : 0;
 
+                // Полёт: f — доля пути; стоп-кадр приземления — цель на месте, всё замерло
+                const f = t < sf ? 0 : easeOut(clamp01((t - sf) / T.fly));
+
                 // Камера
-                const k = t < sa ? easeInOut(t / sa) : t < s6 ? 1 : 1 - easeOut((t - s6) / T.back);
+                const k = t < sa ? easeInOut(t / sa) : t < s6 ? 1 : 1 - easeOut(clamp01((t - s6) / T.back));
                 const inhale = easeInOut(clamp01((t - sa) / T.inhale));
                 const turn = easeOut(clamp01((t - si) / T.turn));
-                let zoom, tilt, pull;
+                let zoom, tilt, pull, follow = 0;
                 if (t < si) {
                     zoom = lerp(1, CAM.inhaleZoom, inhale); tilt = CAM.inhaleTilt * inhale; pull = 0;
-                } else if (t < sb) {
+                } else if (t < sf) {
                     zoom = lerp(CAM.inhaleZoom, CAM.lungeZoom, turn) + 0.03 * clamp01((t - s2) / T.light);
                     tilt = lerp(CAM.inhaleTilt, CAM.lungeTilt, turn); pull = CAM.lungePull * turn;
                 } else {
-                    // Разлёт бросает камеру обратно по часовой, дальше она плывёт
-                    zoom = CAM.lungeZoom + 0.03;
-                    tilt = lerp(CAM.lungeTilt, CAM.blastTilt, springTo(clamp01((t - sb) / 200))) + CAM.drift * clamp01((t - sb) / (s6 - sb));
+                    // Полёт: камеру бросает обратно по часовой, она провожает цель и чуть отъезжает
+                    zoom = CAM.lungeZoom + 0.03 - 0.12 * f;
+                    tilt = lerp(CAM.lungeTilt, CAM.blastTilt, springTo(clamp01((t - sf) / 200))) + CAM.drift * f;
                     pull = CAM.lungePull;
+                    follow = 0.6 * f;
                 }
-                camera(k, zoom, pull, tilt, shake.x * jolt, shake.y * jolt);
+                camera(k, zoom, pull, tilt, shake.x * jolt, shake.y * jolt, follow);
                 showBars(t < sa ? easeOut(t / sa) : t < s6 ? 1 : 1 - clamp01((t - s6) / T.back));
-                gray.alpha = clamp01(t / sa);
-                if (t >= s5) dropGray();
-                // Затемнение: на крупном плане — наполовину, с разлётом — полностью, при отлёте уходит
-                dark.alpha = t < s2 ? 0.55 * clamp01(t / sa) : t < s5 ? 1 : Math.max(0, 1 - (t - s5) / T.fly);
+                // Ч/б — с подъезда; цвет возвращается во время полёта
+                gray.alpha = t < sf ? clamp01(t / sa) : 1 - f;
+                if (t >= sland) dropGray();
+                dark.alpha = t < s2 ? 0.55 * clamp01(t / sa) : t < sf ? 1 : Math.max(0, 1 - f * 1.4);
                 const unit = 1 / stage.scale.x;
 
-                // Вдох: струи воздуха по спирали втягиваются в Сайтаму, к концу вдоха гуще
+                // Вдох: струи воздуха по спирали втягиваются в Сайтаму
                 air.clear();
                 if (caster && t >= sa && t < si) {
                     const strength = Math.sin(Math.PI * clamp01((t - sa) / T.inhale)) ** 0.5;
@@ -566,42 +638,110 @@ export function playSaitama({ casterId, targetId, knock, calm = false, slow = 1,
                     }
                 }
 
-                // Сайтама: замах назад с пружиной на вдохе, рывок к цели, после отлёта — обратно.
-                // На замахе сжат вдоль удара и пульсирует, в рывке вытянут, от касания — качается
+                // Сайтама: замах на вдохе, рывок к цели, во время полёта цели — обратно на место
                 if (casterWrap) {
                     const wind = clamp01((t - sa) / T.windup);
                     const lunge = clamp01((t - si) / T.lunge);
                     const pos = t < si ? { x: lerp(home.x, windup.x, springTo(wind)), y: lerp(home.y, windup.y, springTo(wind)) }
                         : t < s2 ? { x: lerp(windup.x, contact.x, lunge ** 3), y: lerp(windup.y, contact.y, lunge ** 3) }
-                        : t < s5 ? contact
-                        : (f => ({ x: lerp(contact.x, home.x, f), y: lerp(contact.y, home.y, f) }))(easeOut(clamp01((t - s5) / T.fly)));
+                        : t < sf ? contact
+                        : { x: lerp(contact.x, home.x, f), y: lerp(contact.y, home.y, f) };
                     casterWrap.position.set(pos.x, pos.y);
                     const charge = t < si ? 0.18 * Math.min(1, wind * 1.4) * (1 + 0.15 * Math.sin(t / 55)) : 0;
                     const stretch = t >= si && t < s2 ? 0.35 * lunge : 0;
                     const recoil = t >= s2 ? -0.25 * wobble((t - s2) / T.squash) : 0;
                     const along = 1 - charge + stretch + recoil;
                     casterWrap.scale.set(along, 1 / Math.sqrt(Math.max(0.4, along)));
+                    if (t >= sf && casterCopy) casterCopy.filters = f < 0.6 ? casterCopy.filters : null;
                 }
                 ghosts.forEach(({ ghost, base }, i) => {
                     const passed = si + T.lunge * Math.cbrt((i + 1) / 4);
                     ghost.alpha = t < passed ? 0 : base * (t < s2 ? 1 : Math.max(0, 1 - (t - s2) / T.ghosts));
                 });
-                // Цель: дрожит до касания; от касания и от разлёта сплющивается и качается
-                const tremble = t < s2 ? TREMBLE * unit * clamp01((t - sa) / (si - sa)) : 0;
-                const hit = wobble((t - s2) / T.squash) + (fistsDone ? wobble((t - sb) / T.squash) : 0);
-                targetWrap.scale.set(1 - 0.3 * hit, 1 + 0.18 * hit);
 
-                // Разлёт за целью — после кулаков
                 // Разлёт за целью — первый кадр касания: сразу целиком, без роста
                 burst.scale.set(t >= s2 && t < sL ? 1 : 0);
-                layer.filters = !calm && t >= s4 && t < s5 ? [invert] : null;
-                if (t >= s5) {
-                    const f = easeOut(clamp01((t - s5) / T.fly));
-                    targetWrap.position.set(lerp(b.x, knock.to.x, f), lerp(b.y, knock.to.y, f));
-                    for (const copy of [casterCopy, targetCopy]) if (copy) copy.filters = f < 0.6 ? copy.filters : null;
-                } else targetWrap.position.set(b.x + (Math.random() - 0.5) * 2 * tremble, b.y + (Math.random() - 0.5) * 2 * tremble);
 
-                // Свет и молнии — от касания до кулаков
+                // Цель: дрожит до касания, от касания качается; потом полёт и приземление
+                const R = radius;
+                if (t < sf) {
+                    const tremble = t < s2 ? TREMBLE * unit * clamp01((t - sa) / (si - sa)) : 0;
+                    targetWrap.position.set(b.x + (Math.random() - 0.5) * 2 * tremble, b.y + (Math.random() - 0.5) * 2 * tremble);
+                    const hit = wobble((t - s2) / T.squash);
+                    targetWrap.scale.set(1 - 0.3 * hit, 1 + 0.18 * hit);
+                } else {
+                    const at = { x: b.x + travel.x * f, y: b.y + travel.y * f };
+                    targetWrap.position.set(at.x, at.y);
+                    // Вытянута вдоль полёта, к концу — обратно; от приземления — сплющивается и качается
+                    const st = FLIGHT.stretch * (1 - f) ** 2, land = wobble((t - sHit) / T.squash);
+                    targetWrap.scale.set((1 + st) * (1 - 0.3 * land), (1 + 0.18 * land) / Math.sqrt(1 + st));
+                    if (targetCopy) {
+                        targetCopy.rotation = baseSpin + FLIGHT.spin * Math.PI * 2 * f;
+                        targetCopy.filters = f < 0.6 ? targetCopy.filters : null;
+                    }
+                }
+                // Следы полёта: копии цели позади, гаснут по очереди
+                for (const g of flightGhosts) {
+                    const fg = t < sf ? 0 : easeOut(clamp01((t - sf) / T.fly - g.lag));
+                    g.ghost.position.set(b.x + travel.x * fg, b.y + travel.y * fg);
+                    g.ghost.rotation = baseSpin + FLIGHT.spin * Math.PI * 2 * fg;
+                    g.ghost.alpha = t < sf || t > sland + 120 ? 0 : g.base * (1 - clamp01((t - sland) / 120)) * (fg > 0 ? 1 : 0);
+                }
+                // Линии скорости: позади цели, вдоль полёта
+                trail.clear();
+                if (t >= sf && t < sland + 150) {
+                    const fade = t < sland ? 1 - f * 0.4 : 1 - (t - sland) / 150;
+                    const head = targetWrap.position, nx = -fly.y, ny = fly.x;
+                    for (const l of speedLines) {
+                        const x0 = head.x - fly.x * R * l.back + nx * R * l.off, y0 = head.y - fly.y * R * l.back + ny * R * l.off;
+                        trail.lineStyle(l.w * unit * 2, 0xffffff, 0.75 * fade);
+                        trail.moveTo(x0, y0);
+                        trail.lineTo(x0 - fly.x * R * l.len, y0 - fly.y * R * l.len);
+                    }
+                }
+                // Земля: пыль по пути, на приземлении — ударная волна, клубы и трещины
+                ground.clear();
+                for (const d of dust) {
+                    if (d.passed === null && t >= sf && f >= d.at) d.passed = t;
+                    if (d.passed === null) continue;
+                    const age = (t - d.passed) / 700;
+                    if (age >= 1) continue;
+                    const px = b.x + travel.x * d.at - fly.y * R * d.side, py = b.y + travel.y * d.at + fly.x * R * d.side;
+                    ground.beginFill(0xd9d0c4, 0.55 * (1 - age));
+                    ground.drawCircle(px, py, R * d.size * (1 + age * 1.5));
+                    ground.endFill();
+                }
+                if (t >= sHit) {
+                    const L = knock.to;
+                    const crackA = 1 - clamp01((t - sHit - T.cracks * 0.55) / (T.cracks * 0.45));
+                    ground.lineStyle(R * 0.06, 0x241e1a, 0.85 * crackA);
+                    for (const pts of landCracks) {
+                        ground.moveTo(L.x + pts[0][0] * R, L.y + pts[0][1] * R);
+                        for (const [x, y] of pts.slice(1)) ground.lineTo(L.x + x * R, L.y + y * R);
+                    }
+                    ground.lineStyle(0);
+                    const wave = (t - sHit) / T.wave;
+                    if (wave < 1) {
+                        ground.lineStyle(R * 0.18 * (1 - wave), 0xffffff, 0.9 * (1 - wave));
+                        ground.drawCircle(L.x, L.y, R * (1 + 3.2 * easeOut(wave)));
+                        ground.lineStyle(0);
+                    }
+                    const puff = (t - sHit) / 800;
+                    if (puff < 1) for (const p of landPuffs) {
+                        ground.beginFill(0xd9d0c4, 0.6 * (1 - puff));
+                        ground.drawCircle(L.x + Math.cos(p.a) * R * p.dist * (0.6 + 0.6 * easeOut(puff)), L.y + Math.sin(p.a) * R * p.dist * (0.6 + 0.6 * easeOut(puff)), R * p.size * (1 + puff));
+                        ground.endFill();
+                    }
+                }
+                // Реплика Сайтамы: выскакивает с пружиной, в конце гаснет
+                if (t >= sOk) {
+                    const age = t - sOk;
+                    bubble.visible = true;
+                    bubble.scale.set(Math.max(0.01, springTo(clamp01(age / 260))));
+                    bubble.alpha = 1 - clamp01((age - (T.ok - 220)) / 220);
+                }
+
+                // Свет и молнии — после разлёта и до кулаков
                 if (t >= sL && t < sp) {
                     cv.style.display = '';
                     ctx.setTransform(1, 0, 0, 1, 0, 0);
