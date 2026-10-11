@@ -15,7 +15,7 @@
 // Первые четыре удара — очередью: короткий полёт и удержание; перед пятым — пауза (pause),
 // и он летит дольше (finalFly)
 const T = {
-    dark: 220, firstFly: 180, fly: 115, hold: 55, pause: 280, finalFly: 210,
+    dark: 220, firstFly: 180, fly: 115, hold: 55, pause: 280, finalFly: 160,
     cracks: 170, flash: 200, fade: 380, crack: 120, shake: 240, puff: 600, pop: 280
 };
 // Тряска от удара, доля меньшей стороны экрана: обычного и пятого
