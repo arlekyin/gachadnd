@@ -94,7 +94,7 @@ export function createBus(ctx, destination, volume = 0.5) {
     const master = ctx.createGain();
     master.gain.value = volume;
     const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -8;
+    limiter.threshold.value = -7;
     limiter.knee.value = 6;
     limiter.ratio.value = 14;
     limiter.attack.value = 0.002;
@@ -104,7 +104,12 @@ export function createBus(ctx, destination, volume = 0.5) {
     muffle.type = 'lowpass';
     muffle.frequency.value = 20000;
     muffle.Q.value = 0.7;
-    master.connect(muffle).connect(limiter).connect(destination);
+    // Предохранитель после лимитера: мягко срезает выбросы атаки выше 0 дБ
+    const guard = ctx.createWaveShaper();
+    guard.curve = driveCurve(1.4);
+    const guardIn = ctx.createGain();
+    guardIn.gain.value = 0.9;
+    master.connect(muffle).connect(limiter).connect(guardIn).connect(guard).connect(destination);
 
     const dry = ctx.createGain();
     dry.connect(master);
@@ -127,14 +132,30 @@ export function createBus(ctx, destination, volume = 0.5) {
     const crushOut = ctx.createGain();
     crushOut.gain.value = 0.55;
     crush.connect(crushOut).connect(master);
-    return { dry, drive, crush, verb, master, muffle, post: limiter, volume };
+    // Глубокий бас: сам суббас и его гармоники. Ниже 80 Гц почти не слышно на динамиках ноутбука
+    // и телефона — перегруз даёт обертоны на 100–250 Гц, по ним слух «достраивает» основной тон
+    const sub = ctx.createGain();
+    const subDry = ctx.createGain();
+    subDry.gain.value = 0.75;
+    sub.connect(subDry).connect(master);
+    const subDrive = ctx.createWaveShaper();
+    subDrive.curve = driveCurve(5);
+    subDrive.oversample = '4x';
+    const subBand = ctx.createBiquadFilter();
+    subBand.type = 'bandpass';
+    subBand.frequency.value = 140;
+    subBand.Q.value = 0.6;
+    const subHarm = ctx.createGain();
+    subHarm.gain.value = 0.9;
+    sub.connect(subDrive).connect(subBand).connect(subHarm).connect(master);
+    return { dry, drive, crush, sub, verb, master, muffle, post: limiter, volume };
 }
 
 // Слой → в шину: по месту в стереопанораме, сухо или через перегруз, с посылом в ревербацию
 // Место звука на экране: сдвиг панорамы всех слоёв текущего звука (−1 слева … 1 справа)
 let cuePan = 0;
 
-function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false, crushed = false }) {
+function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false, crushed = false, deep = false }) {
     let tail = node;
     pan = Math.max(-1, Math.min(1, pan + cuePan));
     if (pan && ctx.createStereoPanner) {
@@ -143,7 +164,7 @@ function route(ctx, node, bus, { pan = 0, send = 0.2, driven = false, crushed = 
         tail.connect(p);
         tail = p;
     }
-    tail.connect(crushed ? bus.crush : driven ? bus.drive : bus.dry);
+    tail.connect(deep ? bus.sub : crushed ? bus.crush : driven ? bus.drive : bus.dry);
     if (send > 0) {
         const s = ctx.createGain();
         s.gain.value = send;
@@ -216,11 +237,18 @@ function crackle(ctx, bus, t0, { count = 40, spread = 0.4, level = 0.5, freq = [
     }
 }
 
+// Бум: удар-«кик» с быстрым падением тона и долгий суббас с падением до 28 Гц — оба через
+// басовую шину с гармониками. Это то, что чувствуется грудью в импакт-кадре
+function boom(ctx, bus, t0, { pitch = 1, level = 1.2, length = 1.2 } = {}) {
+    tone(ctx, bus, t0, { freq: [190 * pitch, 46 * pitch], gain: [[0, 1.5 * level], [0.13, 0.0001]], duration: 0.14, deep: true, send: 0.05 });
+    tone(ctx, bus, t0 + 0.004, { freq: [66 * pitch, 28], gain: [[0, 0.0001], [0.012, level], [length * 0.35, level * 0.6], [length, 0.0001]], duration: length + 0.05, deep: true, send: 0.08 });
+}
+
 // Тяжёлый удар: атака, тело с падающим тоном через перегруз, суббас, раскат по сторонам
 function slam(ctx, bus, t0, { pitch = 1, body = 1.4, sub = 1.1, subLen = 1.1, rumble = 1.1, rumbleLen = 1.5, send = 0.5 } = {}) {
     click(ctx, bus, t0, 1.3, 2800 * pitch);
     tone(ctx, bus, t0, { freq: [170 * pitch, 42 * pitch], gain: [[0, body], [0.5, 0.0001]], duration: 0.55, driven: true, send: send * 0.6 });
-    tone(ctx, bus, t0, { type: 'triangle', freq: [62 * pitch, 30], gain: [[0, sub], [subLen, 0.0001]], duration: subLen + 0.05, send: 0.1 });
+    boom(ctx, bus, t0, { pitch, level: sub, length: subLen });
     for (const pan of [-0.55, 0.55]) {
         noise(ctx, bus, t0, { type: 'lowpass', freq: [4200, 110], q: 0.5, gain: [[0, rumble * 0.7], [0.03, rumble * 0.8], [rumbleLen, 0.0001]], duration: rumbleLen + 0.05, pan, send });
     }
@@ -282,7 +310,7 @@ function flutter(ctx, bus, t0, { freq = [2000, 400], q = 1.8, rate = [34, 14], l
 const RECIPES = {
     // Кинополосы: низкий короткий удар-заставка, как начало сцены в кино
     bars(ctx, bus, t0) {
-        tone(ctx, bus, t0, { type: 'triangle', freq: [70, 34], gain: [[0, 1.1], [0.9, 0.0001]], duration: 0.95, send: 0.3 });
+        boom(ctx, bus, t0, { pitch: 0.8, level: 1.0, length: 1.0 });
         noise(ctx, bus, t0, { type: 'lowpass', freq: [600, 90], q: 0.8, gain: [[0, 0.8], [0.7, 0.0001]], duration: 0.75, send: 0.5 });
         click(ctx, bus, t0, 0.5, 1200, 0.3);
     },
@@ -318,8 +346,8 @@ const RECIPES = {
         slam(ctx, bus, t0, { pitch: 0.8, body: 1.8, sub: 1.5, subLen: 2.0, rumble: 1.3, rumbleLen: 2.6, send: 0.65 });
         // Толчок: плотный низ середины, через перегруз
         noise(ctx, bus, t0, { type: 'lowpass', freq: [450, 140], q: 1.2, gain: [[0, 1.6], [0.25, 0.0001]], duration: 0.28, driven: true, send: 0.3 });
-        // Суббас, который чувствуется, а не слышится: синус падает с 80 до 32 Гц
-        tone(ctx, bus, t0, { freq: [80, 32], gain: [[0, 1.4], [0.06, 1.3], [2.0, 0.0001]], duration: 2.05, send: 0.05 });
+        // Второй, долгий суббас — гул, который держится под молниями и кулаками
+        boom(ctx, bus, t0 + 0.01, { pitch: 0.85, level: 1.1, length: 2.2 });
         // Эхо взрыва
         for (const pan of [-0.7, 0.7]) noise(ctx, bus, t0 + 0.07, { type: 'lowpass', freq: [1500, 90], q: 0.6, gain: [[0, 0.0001], [0.03, 0.9], [1.6, 0.0001]], duration: 1.65, pan, send: 0.7 });
         crackle(ctx, bus, t0 + 0.04, { count: 80, spread: 0.5, level: 0.5, send: 0.45 });
@@ -333,7 +361,7 @@ const RECIPES = {
         const pan = [-0.12, 0.12, 0.1, -0.1][index % 4];
         click(ctx, bus, t0, 0.9, 2800 * k, 0.2);
         tone(ctx, bus, t0, { freq: [170 * k, 48 * k], gain: [[0, 1.5], [0.3, 0.0001]], duration: 0.32, driven: true, pan: pan * 0.5, send: 0.3 });
-        tone(ctx, bus, t0, { type: 'triangle', freq: [66 * k, 36], gain: [[0, 1.0], [0.5, 0.0001]], duration: 0.52, send: 0.05 });
+        boom(ctx, bus, t0, { pitch: k, level: 0.9, length: 0.5 });
         noise(ctx, bus, t0, { type: 'lowpass', freq: [380 * k, 120], q: 1.1, gain: [[0, 1.1], [0.16, 0.0001]], duration: 0.18, driven: true, pan: pan * 0.5, send: 0.2 });
         noise(ctx, bus, t0, { type: 'lowpass', freq: [2600 * k, 300], q: 0.6, gain: [[0, 0.8], [0.26, 0.0001]], duration: 0.28, pan, send: 0.4 });
         glass(ctx, bus, t0 + 0.004, { level: 0.3, pan });
@@ -356,7 +384,7 @@ const RECIPES = {
         click(ctx, bus, t0, 1.1, 1500, 0.05);
         noise(ctx, bus, t0, { type: 'lowpass', freq: [900, 140], q: 1, gain: [[0, 1.8], [0.08, 1.0], [0.45, 0.0001]], duration: 0.5, crushed: true, send: 0.1 });
         tone(ctx, bus, t0, { freq: [95, 30], gain: [[0, 1.6], [0.4, 0.0001]], duration: 0.45, driven: true, send: 0.05 });
-        tone(ctx, bus, t0, { type: 'triangle', freq: [48, 28], gain: [[0, 1.0], [0.7, 0.0001]], duration: 0.75, send: 0.02 });
+        boom(ctx, bus, t0, { pitch: 0.7, level: 1.1, length: 0.8 });
         // Гравий: плотная россыпь в средних частотах, рассыпается по сторонам
         crackle(ctx, bus, t0 + 0.01, { count: 90, spread: 0.55, level: 0.55, freq: [300, 1600], send: 0.1 });
         crackle(ctx, bus, t0 + 0.08, { count: 40, spread: 0.9, level: 0.25, freq: [1200, 3500], send: 0.12 });
