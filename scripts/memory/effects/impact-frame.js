@@ -34,6 +34,7 @@ import "./impact-sound.js";
 import { playCue, duckScene } from "../../cutscene/audio.js";
 import { hideTokenMarks, stageFilter } from "../../cutscene/stage.js";
 import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
+import { stowWindows } from "../../cutscene/windows.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -752,7 +753,7 @@ function playEngineSlash({ sceneId, point, tokens, line }) {
         figures.destroy({ children: true });
         showMarks();
         cv.remove();
-        playing = false;
+        stopPlaying();
     };
     const tick = now => {
         try {
@@ -873,7 +874,16 @@ function playSound() {
 // ==========================================
 
 let playing = false;
-
+let restoreWindows = () => {};
+// Пока идёт кадр, окна Foundry свёрнуты; кадр закончился — они возвращаются
+function startPlaying() {
+    playing = true;
+    restoreWindows = stowWindows();
+}
+function stopPlaying() {
+    playing = false;
+    restoreWindows();
+}
 
 let playId = 0;
 
@@ -885,7 +895,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
     }
     if (playing) return trace('предыдущий кадр ещё идёт — этот пропущен');
     if (!game.settings.get(MODULE_ID, 'impactFrames')) return trace('импакт-кадры выключены в настройках клиента');
-    playing = true;
+    startPlaying();
     // Сторож: кадр, который по какой-то причине не закончился, не должен заблокировать следующие
     const id = ++playId;
     const slowFactor = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
@@ -893,7 +903,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         if (!playing || id !== playId) return;
         trace('кадр не закончился вовремя — экран возвращён');
         cleanupImpact();
-        playing = false;
+        stopPlaying();
     }, WATCHDOG_MS * slowFactor);
     if (style === 'fists') {
         const calm = game.settings.get(MODULE_ID, 'impactCalm');
@@ -922,7 +932,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
             cleanupImpact();
         }
         unduck();
-        if (id === playId) playing = false;
+        if (id === playId) stopPlaying();
         if (knock) dry ? setTimeout(cleanupImpact, 100) : moveKnocked(sceneId, knock);
         return;
     }
@@ -945,7 +955,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         if (!pair && shot) pair = impactPair(shot, focus.fx, focus.fy, await figureLayer(tokens, shot));
         if (!pair) pair = await artPair(art);
     } catch (error) {
-        playing = false;
+        stopPlaying();
         return console.warn(`${MODULE_ID} | импакт-кадр не собран`, error);
     }
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
@@ -972,7 +982,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
     const ox = (Math.random() - 0.5) * 24, oy = (Math.random() - 0.5) * 24;
     const t0 = performance.now();
     const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
-    const finish = () => { cv.remove(); playing = false; };
+    const finish = () => { cv.remove(); stopPlaying(); };
     const tick = now => {
         try {
             const t = (now - t0) / slow;
