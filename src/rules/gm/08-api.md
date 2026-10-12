@@ -16,6 +16,7 @@
 | `game.gachadnd.setRest(true)` / `setRest(false)` | открыть или закрыть Привал без карты; при открытии у игроков открывается Алтарь Памяти |
 | `game.gachadnd.setAnchor(true)` / `setAnchor(false)` | открыть или закрыть Якорь (то же, что кнопка Якорь) |
 | `game.gachadnd.openGraveyard()` | Кладбище Предела: надгробия персонажей, чьи тела отряд оставил на узле |
+| `game.gachadnd.omen('3')` | предвестия Пожирателя у всех: `'3'`, `'2'`, `'1'` — ходов до прихода, `'here'` — пришёл, `'off'` — снять |
 | `game.gachadnd.openPortal()` | окно портала в Якорь у всех (отряд на Привале) |
 | `game.gachadnd.pulse()` | Пульс отряда: ступень сложности боёв, итог последнего боя, ПЗ отряда |
 | `game.gachadnd.scent()` | Запах отряда: `{ value, state, label, thresholds, members }` |

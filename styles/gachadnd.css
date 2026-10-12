@@ -2002,6 +2002,14 @@
 .gachadnd-map .gd-map-next b { margin-left: 6px; font-weight: 700; color: color-mix(in srgb, var(--node) 35%, #141210); }
 .gachadnd-map .gd-map-pulse { align-self: flex-start; font-size: 18px; color: color-mix(in srgb, var(--pulse) 45%, #141210); }
 .gachadnd-map .gd-map-scent { align-self: flex-start; font-weight: 700; color: color-mix(in srgb, var(--scent) 45%, #141210); }
+.gachadnd-map .gd-map-omen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 18px; color: #0d4f4b; }
+.gachadnd-map .gd-map-omen button {
+  width: auto; min-width: 34px; height: auto; margin: 0; padding: 0 8px; line-height: 1.4;
+  background: none; border: 2px solid #141210; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  color: #141210; font-family: inherit; font-size: 17px; cursor: pointer;
+}
+.gachadnd-map .gd-map-omen button:hover { background: rgba(0, 105, 100, 0.12); }
+.gachadnd-map .gd-map-omen button.active { background: #006964; border-color: #00413e; color: #d9fffd; }
 .gachadnd-map .gd-map-legend { display: flex; flex-wrap: wrap; gap: 14px; }
 .gachadnd-map .gd-map-legend span { display: flex; align-items: center; gap: 5px; }
 .gachadnd-map .gd-map-legend i { font-size: 17px; color: color-mix(in srgb, var(--node) 30%, var(--paper)); -webkit-text-stroke: 1.4px #141210; paint-order: stroke fill; }
@@ -2189,3 +2197,6 @@
 .gd-grave-remove { position: absolute; top: 6px; right: 8px; width: auto; height: auto; margin: 0; padding: 2px 4px; background: none; border: none; color: #6d717a; font-size: 11px; line-height: 1; cursor: pointer; }
 .gd-grave-remove:hover { color: #ff7a6a; }
 .gd-graves-empty { grid-column: 1 / -1; margin: 40px 0; text-align: center; font-family: 'GD Caveat', cursive; font-size: 20px; opacity: 0.6; }
+
+/* Предвестия Пожирателя в чате: холод */
+.gd-omen-chat { border-color: #006964; color: #0d4f4b; }

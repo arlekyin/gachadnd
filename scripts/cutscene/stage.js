@@ -5,17 +5,19 @@
 
 /** Фильтр поверх всей сцены (ч/б, негатив, разрез). @returns {{filter, remove: Function}} */
 export function stageFilter(filter) {
-    const stage = canvas.stage, saved = { filters: stage.filters, area: stage.filterArea };
-    stage.filters = [...(saved.filters ?? []), filter];
+    const stage = canvas.stage, savedArea = stage.filterArea;
+    stage.filters = [...(stage.filters ?? []), filter];
     stage.filterArea = canvas.app.renderer.screen;
     let on = true;
     return {
         filter,
+        // Снимается только свой фильтр: другие (предвестия Пожирателя) могли появиться или уйти за это время
         remove() {
             if (!on) return;
             on = false;
-            stage.filters = saved.filters ?? null;
-            stage.filterArea = saved.area ?? null;
+            const rest = (stage.filters ?? []).filter(f => f !== filter);
+            stage.filters = rest.length ? rest : null;
+            if (!rest.length) stage.filterArea = savedArea ?? null;
         }
     };
 }
