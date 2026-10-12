@@ -22,6 +22,7 @@ npx playwright install chromium
 | `node tools/stand/fists.mjs` | пять кулаков отдельно: время подготовки рисунков, моменты ударов | `fists_n_<мс>.png` |
 | `node tools/stand/saitama.mjs` | удар Сайтамы целиком на сцене PIXI: подъезд, вдох, рывок, свет, кулаки, отлёт, «Ок.» | `saitama_<мс>.png`, `saitama-cues.json` |
 | `node tools/stand/sound.mjs` | синтез звуков удара; с журналом Сайтамы — вся сцена с настоящими таймингами | `sound/<имя>.wav`, `sound/saitama_full.wav` |
+| `node tools/stand/omen.mjs` | предвестия Пожирателя: все стадии шейдера | `omen_<off\|3\|2\|1\|here>.png` |
 | `node tools/stand/slash.mjs` | разрез Ямато (Вергилий) от использования навыка до возврата сцены | `slash_<вариант>_<s\|1\|2\|end>.png` |
 
 Параметры:

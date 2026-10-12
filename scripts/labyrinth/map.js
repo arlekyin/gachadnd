@@ -12,6 +12,7 @@ import { pulseView, resetPulse } from "./pulse.js";
 import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 import { leaveBodies } from "./graveyard.js";
+import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
 
 const MAP_DATA = {
     NODE_START: 'start',
@@ -367,7 +368,8 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         position: { width: 700, height: 920 },
         actions: {
             node: GachaMapTerminal.#onNode,
-            generate: GachaMapTerminal.#onGenerate
+            generate: GachaMapTerminal.#onGenerate,
+            omen: (event, target) => setOmen(target.dataset.stage)
         }
     };
 
@@ -394,7 +396,8 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             isGM: game.user.isGM,
             hasMap: !!map?.nodes?.length,
             scent: game.user.isGM ? partyScent(undefined, floor) : null,
-            pulse: game.user.isGM ? pulseView() : null
+            pulse: game.user.isGM ? pulseView() : null,
+            omen: game.user.isGM ? Object.entries(OMEN_STAGES).map(([stage, { label }]) => ({ stage, label, active: stage === getOmen() })) : null
         };
         if (!context.hasMap) return context;
 
@@ -542,6 +545,12 @@ const refreshScent = item => {
     }, 150);
 };
 for (const hook of ['createItem', 'updateItem', 'deleteItem']) Hooks.on(hook, refreshScent);
+
+// Стадия предвестий сменилась — подсветка кнопок в подвале у Мастера
+Hooks.on('gachadnd.omenChanged', () => {
+    const app = foundry.applications.instances?.get(MAP_ID);
+    if (game.user.isGM && app?.rendered) app.render({ parts: ['footer'] });
+});
 
 // Карта изменилась (перемещение, новый этаж) — поле и строка состояния перерисовываются у всех
 Hooks.on('updateScene', (scene, changes) => {

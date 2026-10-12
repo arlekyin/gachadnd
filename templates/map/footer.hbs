@@ -14,6 +14,12 @@
     {{#if pulse}}
     <span class="gd-map-pulse" style="--pulse: {{pulse.color}}" title="{{pulse.detail}} · видит только Мастер"><i class="fas fa-heart-pulse"></i> Пульс: {{pulse.last}} · {{pulse.shift}} — Монстры {{pulse.mob}}, Элита {{pulse.elite}}</span>
     {{/if}}
+    {{#if omen}}
+    <div class="gd-map-omen" title="Предвестия Пожирателя у всех: ходов до прихода · видит только Мастер">
+        <i class="fas fa-snowflake"></i> Пожиратель:
+        {{#each omen}}<button type="button" data-action="omen" data-stage="{{stage}}" class="{{#if active}}active{{/if}}">{{label}}</button>{{/each}}
+    </div>
+    {{/if}}
     <div class="gd-map-legend">
         {{#each legend}}<span style="--node: {{color}}" title="{{label}}"><i class="fas {{icon}}"></i>{{count}}</span>{{/each}}
     </div>

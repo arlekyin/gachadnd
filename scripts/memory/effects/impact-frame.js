@@ -32,7 +32,7 @@ import { playFists, prepareFists } from "./impact-fists.js";
 import { knockback, playSaitama } from "./impact-knock.js";
 import "./impact-sound.js";
 import { playCue, duckScene } from "../../cutscene/audio.js";
-import { hideTokenMarks } from "../../cutscene/stage.js";
+import { hideTokenMarks, stageFilter } from "../../cutscene/stage.js";
 import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
 
 // Отлёт цели Сайтамы, футы
@@ -710,13 +710,12 @@ function playEngineSlash({ sceneId, point, tokens, line }) {
     const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
 
     const filter = new PIXI.Filter(undefined, SLASH_SHADER, { uPoint: [0, 0], uDir: [1, 0], uSplit: [0, 0], uMode: 0, uDim: 1 });
-    const saved = { filters: stage.filters, filterArea: stage.filterArea, x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y };
+    const saved = { x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y };
     const showMarks = hideTokenMarks();
     const figures = silhouettes(tokens);
     figures.visible = false;
     stage.addChild(figures);
-    stage.filters = [...(saved.filters ?? []), filter];
-    stage.filterArea = renderer.screen;
+    const slashFilter = stageFilter(filter);
 
     const cv = document.createElement('canvas');
     cv.className = 'gd-impact';
@@ -747,8 +746,7 @@ function playEngineSlash({ sceneId, point, tokens, line }) {
     let phase = null;
     const t0 = performance.now();
     const finish = () => {
-        stage.filters = saved.filters ?? null;
-        stage.filterArea = saved.filterArea ?? null;
+        slashFilter.remove();
         stage.scale.set(saved.sx, saved.sy);
         stage.position.set(saved.x, saved.y);
         figures.destroy({ children: true });
