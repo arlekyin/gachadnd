@@ -24,6 +24,7 @@ npx playwright install chromium
 | `node tools/stand/sound.mjs` | синтез звуков удара; с журналом Сайтамы — вся сцена с настоящими таймингами | `sound/<имя>.wav`, `sound/saitama_full.wav` |
 | `node tools/stand/omen.mjs` | предвестия Пожирателя: все стадии шейдера | `omen_<off\|3\|2\|1\|here>.png` |
 | `node tools/stand/breach.mjs` | катсцена прорыва Пожирателя | `breach_<мс>.png` |
+| `node tools/stand/loot.mjs` | выпадение кристаллов: красная сцена (`--rarity=purple` — вспышка краёв) | `loot_<редкость>_<мс>.png` |
 | `node tools/stand/slash.mjs` | разрез Ямато (Вергилий) от использования навыка до возврата сцены | `slash_<вариант>_<s\|1\|2\|end>.png` |
 
 Параметры:

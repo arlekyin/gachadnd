@@ -9,6 +9,7 @@ import { randomCrystal, randomCrystalWithTag, crystalImage } from "./crystals.js
 import { SYNERGIES } from "./synergy/synergy-tiers.js";
 import { HOOKS } from "./memory-api.js";
 import { startDraft } from "./draft.js";
+import { revealLoot } from "./effects/loot-reveal.js";
 
 // Веса редкости по этажам забега: чем глубже, тем больше редких
 const RARITY_WEIGHTS_BY_FLOOR = [
@@ -186,6 +187,9 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
         }
 
         if (rarityFilter === 'any') await game.settings.set(MODULE_ID, 'lootPity', { miss: pity.miss, red: pity.red });
+
+        // Выпадение у всех: фиолетовый — вспышка, красный — сцена; распределение — после неё
+        if (drops.length) await revealLoot(drops.map(d => d.rarity)).catch(error => console.warn(`${MODULE_ID} | выпадение`, error));
 
         const targets = canvas.tokens.controlled;
         const targetActor = targets.length === 1 ? targets[0].actor : null;
