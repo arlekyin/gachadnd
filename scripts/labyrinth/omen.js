@@ -95,7 +95,25 @@ void main() {
     float f2 = fbm(p * 4.1 - vec2(uTime * 0.02, -uTime * 0.03) + 7.3);
     float mist = smoothstep(0.35, 0.85, f1 * 0.6 + f2 * 0.5);
     float fog = uFog * clamp(smoothstep(0.35, 1.25, e) + 0.12, 0.0, 1.0) * mist;
-    color = mix(color, vec4(vec3(0.42, 0.55, 0.55) * (0.7 + 0.3 * f2), 1.0), fog * 0.85);
+    // Туман светится изнутри бирюзой — сильнее в густых местах
+    vec3 haze = mix(vec3(0.3, 0.48, 0.48), vec3(0.12, 0.72, 0.68), smoothstep(0.4, 0.9, f1));
+    color = mix(color, vec4(haze * (0.75 + 0.25 * f2), 1.0), fog * 0.8);
+    color.rgb += vec3(0.05, 0.55, 0.5) * fog * smoothstep(0.55, 0.95, f2) * 0.35;
+
+    // Бирюзовые искры: всплывают в тумане у краёв и мерцают
+    float sparks = 0.0;
+    for (int i = 0; i < 3; i++) {
+        float layer = float(i);
+        vec2 q = p * (9.0 + layer * 7.0) + vec2(sin(uTime * 0.4 + layer * 2.0) * 0.6, uTime * (0.35 + layer * 0.2));
+        vec2 cell = floor(q);
+        vec2 spot = vec2(hash(cell + layer), hash(cell + 3.1 + layer));
+        float on = step(0.72, hash(cell + 7.7));
+        float twinkle = 0.5 + 0.5 * sin(uTime * (3.0 + hash(cell) * 6.0) + hash(cell + 1.3) * 20.0);
+        float d = length(fract(q) - spot);
+        sparks += on * twinkle * (smoothstep(0.13 - layer * 0.03, 0.0, d) + 0.35 * smoothstep(0.3, 0.0, d));
+    }
+    float sparkMask = uFog * smoothstep(0.5, 1.15, e) * (0.4 + 0.6 * mist);
+    color.rgb += vec3(0.35, 1.0, 0.95) * sparks * sparkMask;
 
     gl_FragColor = color;
 }`;
