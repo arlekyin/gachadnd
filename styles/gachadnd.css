@@ -2200,3 +2200,17 @@
 
 /* Предвестия Пожирателя в чате: холод */
 .gd-omen-chat { border-color: #006964; color: #0d4f4b; }
+
+/* Выпадение: отблеск по карточке синего и редче кристалла при первом появлении */
+.gd-draft-crystal { position: relative; overflow: hidden; }
+.gd-draft-crystal.glint::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--rarity) 55%, white) 50%, transparent 70%);
+    mix-blend-mode: screen; transform: translateX(-120%);
+    animation: gd-glint 0.9s ease-out calc(0.25s + var(--delay, 0) * 0.08s) 1 forwards;
+}
+.gd-draft-crystal.glint { animation: gd-glint-rim 1.2s ease-out calc(0.25s + var(--delay, 0) * 0.08s) 1; }
+@keyframes gd-glint { to { transform: translateX(120%); } }
+@keyframes gd-glint-rim { 30% { box-shadow: 0 0 16px var(--rarity), inset 0 0 10px color-mix(in srgb, var(--rarity) 40%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .gd-draft-crystal.glint::after, .gd-draft-crystal.glint { animation: none; } }
+.gd-loot-edge { pointer-events: none; }

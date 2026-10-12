@@ -24,6 +24,10 @@ export function registerDraftSettings() {
     game.settings.register(MODULE_ID, 'draftOffset', { scope: 'world', config: false, type: Number, default: 0 });
 }
 
+// Карточки, которые этот клиент уже видел: отблеск синих и редче — только при первом появлении
+const seenKeys = new Set();
+const GLINT = ['blue', 'purple', 'red'];
+
 const getDraft = () => game.settings.get(MODULE_ID, 'draftState') ?? {};
 const draftParty = () => game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -157,8 +161,10 @@ export class DraftWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             }),
             pool: draft.pool.map(({ key, data }) => {
                 const flags = data.flags?.[MODULE_ID] ?? {};
+                const glint = GLINT.includes(flags.rarity) && !seenKeys.has(key);
+                seenKeys.add(key);
                 return {
-                    key, img: data.img, name: data.name.replace(/^Кристалл:\s*/, ''),
+                    key, img: data.img, name: data.name.replace(/^Кристалл:\s*/, ''), glint,
                     color: RARITY_COLORS[flags.rarity] ?? '#aaa', category: flags.category ?? '', tags: (flags.tags ?? []).join(', ')
                 };
             })
