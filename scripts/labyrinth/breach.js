@@ -26,7 +26,7 @@ const FACE = { x: 0.6, y: 0.45 };
 const WHISPER = 'ещё…';
 
 // Расписание, мс: наезд, шов, разрыв, удар, схлопывание
-const T = { focus: 700, seam: 800, tear: 900, burst: 220, close: 800 };
+const T = { focus: 700, seam: 800, tear: 900, burst: 220, close: 1100 };
 // Наезд камеры (множитель масштаба), высота шва и наибольшая ширина разрыва — доли высоты экрана
 const ZOOM = 1.6, SEAM = 0.6, GAP = 0.2;
 const TEAL = [2, 251, 242], DEEP = [0, 105, 100];
@@ -155,21 +155,74 @@ function loadArt() {
     });
 }
 
-/** Шов: ломаная сверху вниз с ответвлениями, координаты в долях высоты шва (−0,5…0,5) */
-function seamShape(rnd) {
-    const points = [];
-    for (let i = 0; i <= 24; i++) {
-        const s = i / 24 - 0.5;
-        points.push({ s, x: (rnd() - 0.5) * 0.05 + Math.sin(s * 9 + rnd()) * 0.012 });
+// ==========================================
+// ГЕОМЕТРИЯ РАЗРЫВА
+// ==========================================
+
+/**
+ * Ломаная молнии от a к b: середина каждого отрезка смещается поперёк, рекурсивно. decay < 1
+ * гасит мелкие изломы: крупные остаются, линия не рябит
+ */
+function bolt(a, b, depth, rough, rnd, decay = 1) {
+    if (depth <= 0) return [a, b];
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    const off = (rnd() - 0.5) * rough * len;
+    const mid = { x: (a.x + b.x) / 2 - dy / len * off, y: (a.y + b.y) / 2 + dx / len * off };
+    return [...bolt(a, mid, depth - 1, rough * decay, rnd, decay).slice(0, -1), ...bolt(mid, b, depth - 1, rough * decay, rnd, decay)];
+}
+
+/**
+ * Шов и рваные края разрыва в долях высоты шва (y от −0,5 до 0,5). Края у каждой стороны свои:
+ * зубцы ткани разной глубины. Ответвления — молнии с отростками, у каждого своя задержка роста.
+ */
+function tearShape(rnd) {
+    const seam = bolt({ x: 0, y: -0.5 }, { x: 0, y: 0.5 }, 6, 0.45, rnd, 0.6);
+    // Рваный край: плавная волна ширины и редкие глубокие зазубрины
+    const teeth = () => {
+        const raw = seam.map(() => 0.8 + rnd() * 0.4);
+        const smooth = raw.map((v, i) => (raw[Math.max(0, i - 1)] + v * 2 + raw[Math.min(raw.length - 1, i + 1)]) / 4);
+        return smooth.map(v => v * (rnd() < 0.1 ? 0.75 : rnd() < 0.08 ? 1.15 : 1));
+    };
+    const branches = [];
+    for (let i = 0; i < 9; i++) {
+        const at = Math.floor(6 + rnd() * (seam.length - 12));
+        const side = i % 2 ? 1 : -1;
+        const angle = side > 0 ? (rnd() - 0.5) * 1.3 : Math.PI + (rnd() - 0.5) * 1.3;
+        const len = 0.07 + rnd() * 0.16;
+        const root = seam[at];
+        const tip = { x: root.x + Math.cos(angle) * len, y: root.y + Math.sin(angle) * len * 0.8 };
+        const main = bolt({ x: 0, y: 0 }, { x: tip.x - root.x, y: tip.y - root.y }, 4, 0.55, rnd);
+        const forks = rnd() < 0.7 ? [main[Math.floor(main.length * (0.35 + rnd() * 0.3))]].map(f => {
+            const a = angle + (rnd() < 0.5 ? -1 : 1) * (0.5 + rnd() * 0.5), l = len * (0.35 + rnd() * 0.3);
+            return bolt(f, { x: f.x + Math.cos(a) * l, y: f.y + Math.sin(a) * l * 0.8 }, 3, 0.6, rnd);
+        }) : [];
+        branches.push({ at, side, lines: [main, ...forks], delay: rnd() * 0.45 });
     }
-    const branches = Array.from({ length: 5 }, () => {
-        const at = Math.floor(3 + rnd() * 19), side = rnd() < 0.5 ? -1 : 1;
-        return { at, side, len: 0.05 + rnd() * 0.07, bend: (rnd() - 0.5) * 0.06, delay: rnd() * 0.5 };
-    });
-    return { points, branches };
+    // Клочья ткани: где на кромке и куда полетят
+    const shards = Array.from({ length: 18 }, () => ({
+        at: Math.floor(4 + rnd() * (seam.length - 8)), side: rnd() < 0.5 ? -1 : 1,
+        speed: 0.25 + rnd() * 0.5, lift: (rnd() - 0.6) * 0.3, spin: (rnd() - 0.5) * 9, size: 0.008 + rnd() * 0.016,
+        delay: rnd() * 0.5, form: [rnd(), rnd(), rnd()]
+    }));
+    return { seam, left: teeth(), right: teeth(), branches, shards };
 }
 
 const rgba = ([r, g, b], a) => `rgba(${r}, ${g}, ${b}, ${a})`;
+
+// Клуб светящегося тумана — мягкое пятно, нарисованное один раз
+let puff = null;
+function puffSprite() {
+    if (puff) return puff;
+    puff = document.createElement('canvas');
+    puff.width = puff.height = 128;
+    const g = puff.getContext('2d'), grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(90, 230, 220, 0.32)');
+    grad.addColorStop(0.4, 'rgba(30, 140, 135, 0.16)');
+    grad.addColorStop(1, 'rgba(0, 50, 48, 0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    return puff;
+}
 
 /** Катсцена прорыва. @returns {Promise<boolean>} false — на этой сцене не показана */
 export async function playBreach({ sceneId, point }) {
@@ -180,13 +233,18 @@ export async function playBreach({ sceneId, point }) {
     const art = await loadArt();
     const cam = stageCamera();
     const bars = letterbox(0.1);
-    const { canvas: cv, ctx, W, H, remove } = overlay();
+    const { ctx, W, H, remove } = overlay();
     const shake = shaker(22);
-    const shape = seamShape(seeded(Math.round(point.x * 31 + point.y * 17) % 2147483646 + 1));
+    const rnd = seeded(Math.round(Math.abs(point.x * 31 + point.y * 17)) % 2147483646 + 1);
+    const shape = tearShape(rnd);
+    const sprite = puffSprite();
     const tilt = -0.12;
     const sF = T.focus, sS = sF + T.seam, sT = sS + T.tear, sB = sT + T.burst, end = sB + T.close;
     const cued = new Set();
     const once = (name, t, at, options) => { if (t >= at && !cued.has(name)) { cued.add(name); cue(name, options); } };
+    // Туман и искры живут в координатах разрыва: камера едет — они вместе с ним
+    const fog = [], sparks = [];
+    let lastT = 0, fogDebt = 0, sparkDebt = 0;
 
     return new Promise(resolve => {
         const finish = () => {
@@ -225,12 +283,14 @@ export async function playBreach({ sceneId, point }) {
                 }
 
                 // Камера: наезд к точке, после удара — обратно
-                const inK = easeOut(clamp01(t / T.focus)), outK = smooth(clamp01((t - sB - 200) / (T.close - 200)));
+                const inK = easeOut(clamp01(t / T.focus)), outK = smooth(clamp01((t - sB - 300) / (T.close - 300)));
                 const k = inK * (1 - outK);
                 const sh = shake.offset(t, 420);
                 cam?.place({ k, scale: cam.saved.sx * ZOOM, center: point, rot: -0.03 * k, dx: sh.x, dy: sh.y });
                 bars.show(k);
 
+                simulate(t, Math.max(0, Math.min(50, t - lastT)) / 1000);
+                lastT = t;
                 draw(t, k);
             } catch (error) {
                 console.error(`${MODULE_ID} | прорыв`, error);
@@ -239,86 +299,207 @@ export async function playBreach({ sceneId, point }) {
             requestAnimationFrame(frame);
         };
 
-        // Кадр: затемнение, шов, разрыв с Пожирателем, вспышка
+        // Раскрытие разрыва 0…1: растёт до удара, после — схлопывается
+        const openAt = t => t < sS ? 0 : t < sT ? easeIn(clamp01((t - sS) / T.tear)) : t < sB ? 1 : 1 - easeIn(clamp01((t - sB) / (T.close * 0.35)));
+        const len = H * SEAM;
+        // Полуширина разрыва в точке шва s (−0,5…0,5), пиксели
+        const halfWidth = (s, open, grow) => GAP * H * 0.8 * open * Math.pow(Math.max(0, Math.cos(s * Math.PI)), 0.8) * (0.5 + 0.5 * Math.min(1, grow * 1.2));
+
+        // Туман и искры: рождаются в разрыве, вылетают в стороны и вверх
+        const simulate = (t, dt) => {
+            const open = openAt(t);
+            const burst = t >= sT && !cued.has('burstFx');
+            const emitting = t >= sS && t < sB + T.close * 0.4;
+            if (burst) cued.add('burstFx');
+            const spawnFog = n => {
+                for (let i = 0; i < n && fog.length < 90; i++) {
+                    const side = rnd() < 0.5 ? -1 : 1, s = (rnd() - 0.5) * 0.8;
+                    fog.push({ x: side * rnd() * GAP * H * 0.3 * Math.max(open, 0.3), y: s * len, vx: side * (0.05 + rnd() * 0.12) * H, vy: (-0.04 - rnd() * 0.06) * H,
+                        size: (0.12 + rnd() * 0.12) * H, grow: (0.2 + rnd() * 0.2) * H, age: 0, life: 1.3 + rnd() * 1.3, spin: rnd() * 6 });
+                }
+            };
+            const spawnSparks = (n, power = 1) => {
+                for (let i = 0; i < n && sparks.length < 320; i++) {
+                    const side = rnd() < 0.5 ? -1 : 1, s = (rnd() - 0.5) * 0.9, a = (side > 0 ? 0 : Math.PI) + (rnd() - 0.5) * 2.2;
+                    const v = (0.15 + rnd() * 0.45) * H * power;
+                    sparks.push({ x: side * halfWidth(s, Math.max(open, 0.2), 1) * rnd(), y: s * len, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.1 * H,
+                        age: 0, life: 0.6 + rnd() * 1.1, size: 1.5 + rnd() * 2.5, twinkle: rnd() * 20 });
+                }
+            };
+            if (burst) { spawnFog(calm ? 12 : 26); spawnSparks(calm ? 50 : 160, 1.6); }
+            if (emitting) {
+                fogDebt += dt * 22 * Math.max(0.25, open);
+                sparkDebt += dt * (t < sT ? 70 : 35) * Math.max(0.3, open);
+                const nf = Math.floor(fogDebt), ns = Math.floor(sparkDebt);
+                fogDebt -= nf; sparkDebt -= ns;
+                spawnFog(nf); spawnSparks(ns);
+            } else if (t >= sF && t < sS) {
+                // Пока шов растёт — редкие искры из трещины
+                sparkDebt += dt * 25;
+                const ns = Math.floor(sparkDebt);
+                sparkDebt -= ns;
+                spawnSparks(ns, 0.6);
+            }
+            for (const f of fog) { f.age += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 1 - dt * 0.6; f.vy *= 1 - dt * 0.4; }
+            for (const p of sparks) { p.age += dt; p.px = p.x; p.py = p.y; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt * 1.8; p.vy = p.vy * (1 - dt * 1.8) - H * 0.12 * dt; }
+            for (const list of [fog, sparks]) for (let i = list.length - 1; i >= 0; i--) if (list[i].age >= list[i].life) list.splice(i, 1);
+        };
+
+        // Кадр: затемнение, туман, разрыв с Пожирателем, кромка, ответвления, клочья, искры, вспышка
         const draw = (t, k) => {
             ctx.clearRect(0, 0, W, H);
             ctx.fillStyle = `rgba(0, 12, 12, ${0.45 * k})`;
             ctx.fillRect(0, 0, W, H);
             const c = cam ? cam.screenOf(point) : { x: W / 2, y: H / 2 };
-            const len = H * SEAM;
-            // Рост шва от середины; раскрытие; схлопывание
             const grow = easeOut(clamp01((t - sF) / T.seam));
-            const open = t < sS ? 0 : t < sT ? easeIn(clamp01((t - sS) / T.tear)) : t < sB ? 1 : 1 - easeIn(clamp01((t - sB) / (T.close * 0.45)));
-            const fade = 1 - smooth(clamp01((t - sB - T.close * 0.4) / (T.close * 0.6)));
-            if (grow <= 0 || fade <= 0) return;
+            const open = openAt(t);
+            const fade = 1 - smooth(clamp01((t - sB - T.close * 0.35) / (T.close * 0.45)));
+            const flicker = 0.75 + 0.25 * Math.sin(t * 0.05) * Math.sin(t * 0.017);
+            const dpr = devicePixelRatio;
 
             ctx.save();
             ctx.translate(c.x, c.y);
             ctx.rotate(tilt);
-            const pts = shape.points.filter(p => Math.abs(p.s) <= grow / 2 + 1e-6).map(p => ({ x: p.x * len, y: p.s * len, s: p.s }));
-            // Ширина разрыва по высоте: в середине шире, к концам сходится
-            const width = s => GAP * H * open * Math.pow(Math.max(0, Math.cos(s * Math.PI)), 0.8) * (0.5 + 0.5 * Math.min(1, grow * 1.2));
-            const left = pts.map(p => ({ x: p.x - width(p.s), y: p.y })), right = pts.map(p => ({ x: p.x + width(p.s), y: p.y }));
-            const outline = () => {
-                ctx.beginPath();
-                left.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-                for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
-                ctx.closePath();
-            };
 
-            // Внутри разрыва — тьма и Пожиратель, проступающий из глубины
-            if (open > 0.01) {
-                ctx.save();
-                outline();
-                ctx.clip();
-                ctx.fillStyle = '#010606';
-                ctx.fillRect(-len, -len, len * 2, len * 2);
-                if (art) {
-                    ctx.rotate(-tilt);
-                    const size = H * 0.95, lift = (1 - open) * H * 0.06;
-                    ctx.globalAlpha = smooth(clamp01((t - sS - T.tear * 0.25) / (T.tear * 0.6))) * fade;
-                    ctx.drawImage(art, -size * FACE.x, -size * FACE.y + lift, size, size);
-                    ctx.globalCompositeOperation = 'color';
-                    ctx.fillStyle = rgba(DEEP, 0.55);
-                    ctx.fillRect(-size, -size, size * 2, size * 2);
-                    ctx.globalCompositeOperation = 'source-over';
-                    ctx.globalAlpha = 1;
+            // Светящийся туман — под разрывом и вокруг
+            ctx.globalCompositeOperation = 'lighter';
+            for (const f of fog) {
+                const a = Math.sin(Math.PI * clamp01(f.age / f.life)) * 0.45;
+                const size = f.size + f.grow * f.age;
+                ctx.globalAlpha = a;
+                ctx.drawImage(sprite, f.x - size / 2, f.y - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'source-over';
+
+            if (grow > 0 && fade > 0) {
+                const visible = shape.seam.map((p, i) => ({ ...p, i })).filter(p => Math.abs(p.y) <= grow / 2 + 1e-6);
+                const at = p => ({ x: p.x * len, y: p.y * len });
+                const left = visible.map(p => ({ x: p.x * len - halfWidth(p.y, open, grow) * shape.left[p.i], y: p.y * len }));
+                const right = visible.map(p => ({ x: p.x * len + halfWidth(p.y, open, grow) * shape.right[p.i], y: p.y * len }));
+                const outline = () => {
+                    ctx.beginPath();
+                    left.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+                    for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
+                    ctx.closePath();
+                };
+                const path = points => {
+                    ctx.beginPath();
+                    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+                };
+
+                // Внутри — тьма и Пожиратель, проступающий из глубины
+                if (open > 0.01) {
+                    ctx.save();
+                    outline();
+                    ctx.clip();
+                    ctx.fillStyle = '#010606';
+                    ctx.fillRect(-len, -len, len * 2, len * 2);
+                    if (art) {
+                        ctx.save();
+                        ctx.rotate(-tilt);
+                        const size = H * 0.95, lift = (1 - open) * H * 0.06;
+                        ctx.globalAlpha = smooth(clamp01((t - sS - T.tear * 0.25) / (T.tear * 0.6))) * fade;
+                        ctx.drawImage(art, -size * FACE.x, -size * FACE.y + lift, size, size);
+                        ctx.globalCompositeOperation = 'color';
+                        ctx.fillStyle = rgba(DEEP, 0.55);
+                        ctx.fillRect(-size, -size, size * 2, size * 2);
+                        ctx.restore();
+                    }
+                    // Свет от рваных краёв внутрь
+                    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, GAP * H * 0.9);
+                    glow.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                    glow.addColorStop(1, rgba(TEAL, 0.4 * open));
+                    ctx.fillStyle = glow;
+                    ctx.fillRect(-len, -len, len * 2, len * 2);
+                    ctx.restore();
                 }
-                // Свет от краёв внутрь
-                const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, GAP * H * 1.2);
-                glow.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                glow.addColorStop(1, rgba(TEAL, 0.35 * open));
-                ctx.fillStyle = glow;
-                ctx.fillRect(-len, -len, len * 2, len * 2);
-                ctx.restore();
+
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                // Кромка: от широкого бледного свечения к тонкой белой сердцевине
+                const edges = open > 0.01 ? [left, right] : [visible.map(at)];
+                for (const [w, a, col] of [[30, 0.05, TEAL], [14, 0.12, TEAL], [6, 0.35, TEAL], [2.2, 0.95, [210, 255, 252]]]) {
+                    ctx.strokeStyle = rgba(col, a * flicker * fade);
+                    ctx.lineWidth = w * dpr;
+                    for (const edge of edges) { path(edge); ctx.stroke(); }
+                }
+                // Разряды ползут по кромке
+                for (const [n, edge] of edges.entries()) {
+                    for (let j = 0; j < 5; j++) {
+                        const u = ((t * 0.00045 * (1 + j * 0.3) + j * 0.21 + n * 0.5) % 1) * (edge.length - 1);
+                        const i = Math.floor(u), f = u - i, a = edge[i], b = edge[Math.min(edge.length - 1, i + 1)];
+                        if (!a || !b) continue;
+                        const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+                        ctx.fillStyle = rgba([220, 255, 252], 0.9 * fade);
+                        ctx.beginPath();
+                        ctx.arc(x, y, (2 + 1.5 * Math.sin(t * 0.03 + j)) * dpr, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                // Ответвления-молнии: растут от кромки с задержкой, тоньше к концу
+                for (const b of shape.branches) {
+                    const root = shape.seam[b.at];
+                    if (Math.abs(root.y) > grow / 2) continue;
+                    const g = clamp01((grow - 0.25 - b.delay) / 0.45) * (1 - open * 0.5);
+                    if (g <= 0) continue;
+                    const ox = root.x * len + b.side * halfWidth(root.y, open, grow) * (b.side > 0 ? shape.right[b.at] : shape.left[b.at]), oy = root.y * len;
+                    for (const [li, line] of b.lines.entries()) {
+                        const n = Math.max(2, Math.ceil(line.length * g));
+                        const pts = line.slice(0, n).map(p => ({ x: ox + p.x * len, y: oy + p.y * len }));
+                        for (const [w, a] of [[8, 0.08], [3, 0.3], [1.2, 0.9]]) {
+                            ctx.strokeStyle = rgba(w > 2 ? TEAL : [210, 255, 252], a * fade * flicker);
+                            ctx.lineWidth = w * dpr * (li ? 0.6 : 1);
+                            path(pts);
+                            ctx.stroke();
+                        }
+                    }
+                }
+                ctx.globalCompositeOperation = 'source-over';
+
+                // Клочья ткани отрываются от краёв, когда разрыв раскрывается
+                for (const sh of shape.shards) {
+                    const life = clamp01((open - sh.delay) / 0.6);
+                    if (life <= 0 || life >= 1 || !visible.some(p => p.i === sh.at)) continue;
+                    const root = shape.seam[sh.at];
+                    const x = root.x * len + sh.side * (halfWidth(root.y, open, grow) + sh.speed * life * H * 0.25), y = root.y * len + sh.lift * life * H * 0.25;
+                    const r = sh.size * H;
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(sh.spin * life);
+                    ctx.globalAlpha = (1 - life) * fade;
+                    ctx.beginPath();
+                    ctx.moveTo(-r, -r * sh.form[0]);
+                    ctx.lineTo(r * sh.form[1], -r);
+                    ctx.lineTo(r * sh.form[2], r);
+                    ctx.closePath();
+                    ctx.fillStyle = '#071615';
+                    ctx.fill();
+                    ctx.strokeStyle = rgba(TEAL, 0.9);
+                    ctx.lineWidth = 1.2 * dpr;
+                    ctx.stroke();
+                    ctx.restore();
+                }
             }
 
-            // Кромка: несколько обводок от широкой бледной к тонкой яркой; мерцает
-            const flicker = 0.75 + 0.25 * Math.sin(t * 0.05) * Math.sin(t * 0.017);
+            // Искры: короткие светящиеся черточки, мерцают
             ctx.globalCompositeOperation = 'lighter';
-            ctx.lineJoin = 'round';
-            for (const [w, a] of [[26, 0.06], [12, 0.14], [5, 0.4], [2, 0.95]]) {
-                ctx.strokeStyle = rgba(w > 4 ? TEAL : [200, 255, 252], a * flicker * fade);
-                ctx.lineWidth = w * devicePixelRatio;
-                if (open > 0.01) { outline(); ctx.stroke(); }
-                else {
+            ctx.lineCap = 'round';
+            for (const p of sparks) {
+                const life = 1 - p.age / p.life;
+                const a = life * (0.6 + 0.4 * Math.sin(p.twinkle + t * 0.04));
+                // Хвост — по скорости: быстрые искры тянут длинный след
+                const tx = p.x - p.vx * 0.035, ty = p.y - p.vy * 0.035;
+                for (const [w, k, col] of [[3.2, 0.25, TEAL], [1, 1, [215, 255, 252]]]) {
+                    ctx.strokeStyle = rgba(col, a * k);
+                    ctx.lineWidth = p.size * w * dpr * 0.6;
                     ctx.beginPath();
-                    pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+                    ctx.moveTo(tx, ty);
+                    ctx.lineTo(p.x, p.y);
                     ctx.stroke();
                 }
-            }
-            // Ответвления трещины
-            for (const b of shape.branches) {
-                const p = shape.points[b.at];
-                const g = clamp01((grow - 0.3 - b.delay * 0.5) / 0.4) * (1 - open * 0.6);
-                if (g <= 0 || Math.abs(p.s) > grow / 2) continue;
-                const x0 = p.x * len + b.side * width(p.s), y0 = p.s * len;
-                ctx.strokeStyle = rgba(TEAL, 0.5 * fade);
-                ctx.lineWidth = 2 * devicePixelRatio;
-                ctx.beginPath();
-                ctx.moveTo(x0, y0);
-                ctx.lineTo(x0 + b.side * b.len * len * g, y0 + b.bend * len * g);
-                ctx.stroke();
             }
             ctx.globalCompositeOperation = 'source-over';
 
