@@ -113,7 +113,8 @@ const POOL = {
             let crystal = null;
             for (const rarity of tries) if ((crystal = await randomCrystalWithTag(rarity, choice))) break;
             if (crystal) await actor.createEmbeddedDocuments('Item', [crystal]);
-            return crystal?.name;
+            // Какой кристалл выпал, узнаётся только сейчас: его навык — для подсказки в карточке
+            return crystal ? { detail: crystal.name, skillId: crystal.flags[MODULE_ID].skill_id } : null;
         }
     },
     cleanseVoucher: {
@@ -228,8 +229,10 @@ function ownerIds(actor) {
 function cardContent(actor, title, options, claimed = null) {
     const rows = options.map((o, i) => {
         const chosen = claimed?.index === i;
+        // Навык известен заранее (фиолетовый кристалл) или после выбора (кристалл выбранного тега)
+        const skill = o.skillId ?? (chosen ? claimed.skillId : null);
         const tierLabel = TIERS[o.tier];
-        return `<button type="button" class="gd-reward ${chosen ? 'chosen' : ''}" data-gd-reward="${i}"${o.skillId ? ` data-gd-skill="${esc(o.skillId)}"` : ''} ${claimed ? 'aria-disabled="true"' : ''}>
+        return `<button type="button" class="gd-reward ${chosen ? 'chosen' : ''}" data-gd-reward="${i}"${skill ? ` data-gd-skill="${esc(skill)}"` : ''} ${claimed ? 'aria-disabled="true"' : ''}>
             <i class="fas ${o.icon}"></i><span>${esc(o.label)}${chosen && claimed.detail ? ` — ${esc(claimed.detail)}` : ''}</span><small>${tierLabel}</small></button>`;
     }).join('');
     return `<div class="gachadnd-event-reward">
@@ -306,7 +309,9 @@ onSocket('claimEventReward', async ({ payload }) => {
     // Заметку о выборе ставим до выдачи: повторное нажатие ничего не выдаст
     const claimed = { index, by: userId, detail: null };
     await message.update({ [`flags.${MODULE_ID}.eventReward.claimed`]: claimed });
-    claimed.detail = await POOL[option.key].apply(actor, option, choice) ?? null;
+    const result = await POOL[option.key].apply(actor, option, choice) ?? null;
+    if (result && typeof result === 'object') Object.assign(claimed, { detail: result.detail ?? null, skillId: result.skillId ?? null });
+    else claimed.detail = result;
     await message.update({ content: cardContent(actor, data.title, data.options, claimed), [`flags.${MODULE_ID}.eventReward.claimed`]: claimed });
 });
 
