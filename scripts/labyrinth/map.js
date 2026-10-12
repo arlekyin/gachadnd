@@ -11,6 +11,7 @@ import { PortalWindow } from "./portal.js";
 import { pulseView, resetPulse } from "./pulse.js";
 import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
+import { leaveBodies } from "./graveyard.js";
 
 const MAP_DATA = {
     NODE_START: 'start',
@@ -499,6 +500,9 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
                 return ui.notifications.warn('Отряд может двигаться только по связанным линиям вперёд!');
             }
         }
+
+        // Отряд уходит с узла: тела погибших забирают или оставляют Пределу
+        await leaveBodies();
 
         mapData.currentNodeId = nodeId;
         if (!mapData.visitedNodes.includes(nodeId)) mapData.visitedNodes.push(nodeId);

@@ -17,12 +17,14 @@ import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewar
 import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
 import { PortalWindow } from "./portal.js";
 import { registerPulseSettings, resetPulse, pulseReport } from "./pulse.js";
+import { registerGraveyardSettings, GraveyardWindow } from "./graveyard.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
     registerRiskSettings();
     registerAnchorSettings();
     registerPulseSettings();
+    registerGraveyardSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -42,7 +44,9 @@ Hooks.once('init', () => {
         // Портал в Предел на Привале: окно платы кристаллами у всех
         openPortal: () => PortalWindow.open(),
         // Пульс отряда: ступень сложности боёв и итог последнего боя
-        pulse: () => pulseReport()
+        pulse: () => pulseReport(),
+        // Кладбище Предела: надгробия персонажей, чьи тела отряд оставил на узле
+        openGraveyard: () => GraveyardWindow.open()
     });
 });
 

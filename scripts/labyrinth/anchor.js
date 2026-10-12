@@ -17,6 +17,7 @@ import { partyActors } from "./horsemen.js";
 import { getFloor } from "./economy.js";
 import { isCrystalItem } from "../memory/inventory.js";
 import { isMemorySkill, occupiesSlot, naturalSlotCap } from "../memory/synergy/synergy.js";
+import { GraveyardWindow } from "./graveyard.js";
 
 // ==========================================
 // ЗАПАХ
@@ -130,7 +131,9 @@ export function isAnchorOpen() {
 
 // В Лабиринте Алтарь открыт только в Якоре; подпись в Терминале — «Якорь»
 Hooks.on(HOOKS.queryRest, state => {
-    if (isAnchorOpen()) Object.assign(state, { atRest: true, site: 'anchor', label: 'Якорь' });
+    if (!isAnchorOpen()) return;
+    Object.assign(state, { atRest: true, site: 'anchor', label: 'Якорь' });
+    state.links.push({ label: 'Кладбище', icon: 'fas fa-cross', title: 'Надгробия тех, чьи тела забрал Предел', run: () => GraveyardWindow.open() });
 });
 
 /** Открыть или закрыть Якорь (только Мастер). При открытии у игроков открывается Алтарь */
