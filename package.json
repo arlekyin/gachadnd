@@ -6,7 +6,9 @@
     "build": "node build.mjs && fvtt package pack gacha-skills --in ./dist/packs/gacha-skills --out ./packs && fvtt package pack gacha-rules --in ./dist/packs/gacha-rules --out ./packs && fvtt package pack gacha-gm --in ./dist/packs/gacha-gm --out ./packs && fvtt package pack gacha-bestiary --in ./dist/packs/gacha-bestiary --out ./packs"
   },
   "devDependencies": {
-    "@foundryvtt/foundryvtt-cli": "^3.0.4"
+    "@foundryvtt/foundryvtt-cli": "^3.0.4",
+    "pixi.js": "7.4.2",
+    "playwright": "^1.56.1"
   },
   "dependencies": {
     "js-yaml": "^5.4.2"

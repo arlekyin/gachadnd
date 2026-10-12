@@ -237,17 +237,21 @@ function liveBus(volume) {
  *  hush   — тишина перед репликой: хвосты обрываются, через duration звук возвращается.
  */
 function busFx(name, { volume = 0.5, duration = 0.04 } = {}) {
-    const state = liveBus(volume), { ctx, bus } = state, t = ctx.currentTime, g = bus.master.gain;
-    if (name === 'dip' || name === 'hush') {
+    const state = liveBus(volume), { ctx, bus } = state, t = ctx.currentTime;
+    if (FX.includes(name)) {
         state.fxUntil = t + duration + 0.03;
-        const low = name === 'dip' ? 0.12 : 0.0001;
-        g.cancelScheduledValues(t);
-        g.setValueAtTime(volume, t);
-        g.linearRampToValueAtTime(volume * low, t + (name === 'dip' ? 0.006 : 0.12));
-        g.setValueAtTime(volume * low, t + duration);
-        g.linearRampToValueAtTime(volume, t + duration + 0.02);
-
+        fxRamp(bus.master.gain, name, t, { volume, duration });
     }
+}
+
+/** Огибающая эффекта шины на громкости master с момента t (стенд звука рисует ей ту же кривую) */
+export function fxRamp(g, name, t, { volume = 0.5, duration = 0.04 } = {}) {
+    const low = name === 'dip' ? 0.12 : 0.0001;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(volume, t);
+    g.linearRampToValueAtTime(volume * low, t + (name === 'dip' ? 0.006 : 0.12));
+    g.setValueAtTime(volume * low, t + duration);
+    g.linearRampToValueAtTime(volume, t + duration + 0.02);
 }
 
 /**

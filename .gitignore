@@ -26,3 +26,6 @@ scripts/memory/synergy/synergy-tiers.js
 # Симулятор: экспорт персонажей игроков и последний отчёт
 tools/sim/party/*.json
 tools/sim/last-run.txt
+
+# Стенды анимаций: снимки, журналы и звуки
+tools/stand/out/

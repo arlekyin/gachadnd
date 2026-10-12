@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css"></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="clock.js"></script>
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>
+// Конь бьёт Пожирателя: [картинка, x, y, размер, клеток]
+window.TOKENS = {
+    caster: ['/assets/bestiary/chess-knight.webp', 640, 330, 90, 2],
+    target: ['/assets/bestiary/devourer-token.webp', 560, 560, 150, 3]
+};
+</script>
+<script src="scene.js"></script>
+<script type="module">
+import { knockback, playSaitama } from '/scripts/memory/effects/impact-knock.js';
+import { playFists } from '/scripts/memory/effects/impact-fists.js';
+// Звуки моментов не играют, а пишутся: [имя, мс, параметры] — по ним стенд звука собирает всю сцену
+window.cues = [];
+const cue = (name, options = {}) => cues.push([name, clockNow(), options]);
+window.go = calm => {
+    const knock = knockback('caster', 'target', 30);
+    window.knock = knock;
+    start();
+    playSaitama({
+        casterId: 'caster', targetId: 'target', knock, calm, onCue: cue,
+        between: () => playFists({ calm, quick: true, onHit: (final, index, pan) => cue(final ? 'punchFinal' : 'punch', { index, pan }) })
+    }).then(result => { window.done = result; });
+};
+// Картинки токенов успевают загрузиться
+setTimeout(() => { window.ready = true; }, 800);
+</script></body></html>
