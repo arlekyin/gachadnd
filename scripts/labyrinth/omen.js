@@ -106,11 +106,12 @@ void main() {
         float layer = float(i);
         vec2 q = p * (9.0 + layer * 7.0) + vec2(sin(uTime * 0.4 + layer * 2.0) * 0.6, uTime * (0.35 + layer * 0.2));
         vec2 cell = floor(q);
-        vec2 spot = vec2(hash(cell + layer), hash(cell + 3.1 + layer));
+        // Искра не ближе 0,3 к краю своей ячейки: её свечение (до 0,28) не обрезается соседней
+        vec2 spot = 0.3 + 0.4 * vec2(hash(cell + layer), hash(cell + 3.1 + layer));
         float on = step(0.72, hash(cell + 7.7));
         float twinkle = 0.5 + 0.5 * sin(uTime * (3.0 + hash(cell) * 6.0) + hash(cell + 1.3) * 20.0);
         float d = length(fract(q) - spot);
-        sparks += on * twinkle * (smoothstep(0.13 - layer * 0.03, 0.0, d) + 0.35 * smoothstep(0.3, 0.0, d));
+        sparks += on * twinkle * (smoothstep(0.12 - layer * 0.03, 0.0, d) + 0.35 * smoothstep(0.28, 0.0, d));
     }
     float sparkMask = uFog * smoothstep(0.5, 1.15, e) * (0.4 + 0.6 * mist);
     color.rgb += vec3(0.35, 1.0, 0.95) * sparks * sparkMask;
