@@ -4,7 +4,7 @@ import { open, args } from './harness.mjs';
 
 const { calm, at } = args();
 const shots = at ? String(at).split(',').map(Number) : [400, 900, 1300, 1700, 2000, 2300, 2450, 2700, 3100];
-const end = Math.max(4100, ...shots);
+const end = Math.max(4300, ...shots);
 const stand = await open(`breach.html${calm ? '?calm' : ''}`);
 await stand.page.evaluate(() => step(0));
 await stand.page.evaluate(() => go());

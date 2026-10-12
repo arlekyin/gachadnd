@@ -13,6 +13,7 @@
 import { MODULE_ID } from "../core/constants.js";
 import { emit, onSocket } from "../core/socket.js";
 import { stageCamera, shaker } from "../cutscene/camera.js";
+import { stageFilter } from "../cutscene/stage.js";
 import { letterbox } from "../cutscene/letterbox.js";
 import { overlay } from "../cutscene/overlay.js";
 import { clamp01, smooth, easeOut, easeIn, seeded } from "../cutscene/math.js";
@@ -26,7 +27,9 @@ const FACE = { x: 0.6, y: 0.45 };
 const WHISPER = 'ещё…';
 
 // Расписание, мс: наезд, шов, разрыв, удар, схлопывание
-const T = { focus: 700, seam: 800, tear: 900, burst: 220, close: 1100 };
+// Закрытие: разрыв схлопывается за SNAP, дальше по сцене идёт рябь, как от камня в воде
+const T = { focus: 700, seam: 800, tear: 900, burst: 220, close: 1400 };
+const SNAP = 180;
 // Наезд камеры (множитель масштаба), высота шва и наибольшая ширина разрыва — доли высоты экрана
 const ZOOM = 1.6, SEAM = 0.6, GAP = 0.2;
 const TEAL = [2, 251, 242], DEEP = [0, 105, 100];
@@ -57,10 +60,13 @@ registerCues({
         slam(ctx, bus, t0, { pitch: 0.75, body: 1.6, sub: 1.3, subLen: 1.4, rumble: 1.2, rumbleLen: 1.8, send: 0.6 });
         glass(ctx, bus, t0 + 0.02, { level: 0.3 });
     },
-    // Разрыв схлопывается: глухой провал вниз
+    // Разрыв схлопывается: глухой всплеск, как камень в глубокую воду, и расходящийся гул
     breachClose(ctx, bus, t0) {
-        bass(ctx, bus, t0, 'drop', { pitch: 0.8, level: 0.8, length: 0.7 });
-        noise(ctx, bus, t0, { type: 'lowpass', freq: [1200, 120], q: 0.8, gain: [[0, 0.4], [0.5, 0.0001]], duration: 0.55, send: 0.6 });
+        const at = t0 + SNAP / 1000;
+        tone(ctx, bus, at, { freq: [220, 45], gain: [[0, 0.9], [0.35, 0.0001]], duration: 0.4, deep: true, send: 0.5 });
+        noise(ctx, bus, at, { type: 'bandpass', freq: [900, 250], q: 2.5, gain: [[0, 0.5], [0.25, 0.0001]], duration: 0.3, send: 0.7 });
+        bass(ctx, bus, at, 'drop', { pitch: 0.7, level: 0.7, length: 0.9 });
+        for (const pan of [-0.6, 0.6]) noise(ctx, bus, at + 0.05, { type: 'lowpass', freq: [500, 90], q: 0.8, gain: [[0, 0.25], [1.0, 0.0001]], duration: 1.05, pan, send: 0.8 });
     }
 });
 
@@ -155,6 +161,37 @@ function loadArt() {
     });
 }
 
+// Рябь по сцене: кольца бегут от точки, за фронтом гаснут; изображение колышется вдоль радиуса,
+// на гребнях — бирюзовый отсвет
+const RIPPLE_SHADER = `
+precision highp float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec4 inputSize;
+uniform vec4 outputFrame;
+uniform vec4 inputClamp;
+uniform vec2 uCenter;
+uniform float uFront;
+uniform float uWave;
+uniform float uAmp;
+uniform float uGlow;
+void main() {
+    vec2 screen = vTextureCoord * inputSize.xy + outputFrame.xy;
+    vec2 d = screen - uCenter;
+    float r = length(d);
+    vec2 dir = r > 0.001 ? d / r : vec2(0.0);
+    float shift = 0.0, crest = 0.0;
+    if (r < uFront) {
+        float phase = (r - uFront) / uWave;
+        float body = exp(phase * 0.55) * smoothstep(0.0, uWave * 0.6, r);
+        shift = uAmp * sin(phase * 6.2831853) * body;
+        crest = body * smoothstep(0.55, 1.0, cos(phase * 6.2831853));
+    }
+    vec4 color = texture2D(uSampler, clamp(vTextureCoord - dir * shift * inputSize.zw, inputClamp.xy, inputClamp.zw));
+    color.rgb += vec3(0.1, 0.85, 0.8) * crest * uGlow * color.a;
+    gl_FragColor = color;
+}`;
+
 // ==========================================
 // ГЕОМЕТРИЯ РАЗРЫВА
 // ==========================================
@@ -247,9 +284,11 @@ export async function playBreach({ sceneId, point }) {
     let lastT = 0, fogDebt = 0, sparkDebt = 0;
 
     return new Promise(resolve => {
+        let ripple = null;
         const finish = () => {
             if (!playing) return;
             clearTimeout(watchdog);
+            ripple?.remove();
             cam?.restore();
             bars.remove();
             remove();
@@ -283,11 +322,25 @@ export async function playBreach({ sceneId, point }) {
                 }
 
                 // Камера: наезд к точке, после удара — обратно
-                const inK = easeOut(clamp01(t / T.focus)), outK = smooth(clamp01((t - sB - 300) / (T.close - 300)));
+                const inK = easeOut(clamp01(t / T.focus)), outK = smooth(clamp01((t - sB - 350) / (T.close - 350)));
                 const k = inK * (1 - outK);
                 const sh = shake.offset(t, 420);
                 cam?.place({ k, scale: cam.saved.sx * ZOOM, center: point, rot: -0.03 * k, dx: sh.x, dy: sh.y });
                 bars.show(k);
+
+                // Камень в воду: от точки схлопывания по сцене бегут кольца
+                if (t >= sB + SNAP && globalThis.PIXI) {
+                    ripple ??= stageFilter(new PIXI.Filter(undefined, RIPPLE_SHADER, { uCenter: [0, 0], uFront: 0, uWave: 1, uAmp: 0, uGlow: 0 }));
+                    const age = clamp01((t - sB - SNAP) / (T.close - SNAP));
+                    const c = cam ? cam.screenOf(point) : { x: W / 2, y: H / 2 };
+                    const w = W / devicePixelRatio, h = H / devicePixelRatio;
+                    const u = ripple.filter.uniforms;
+                    u.uCenter = [c.x / devicePixelRatio, c.y / devicePixelRatio];
+                    u.uFront = Math.hypot(w, h) * 0.75 * easeOut(age);
+                    u.uWave = h * 0.075;
+                    u.uAmp = (calm ? 5 : 16) * (1 - age) ** 1.4;
+                    u.uGlow = (calm ? 0.15 : 0.45) * (1 - age) ** 1.2;
+                }
 
                 simulate(t, Math.max(0, Math.min(50, t - lastT)) / 1000);
                 lastT = t;
@@ -300,7 +353,7 @@ export async function playBreach({ sceneId, point }) {
         };
 
         // Раскрытие разрыва 0…1: растёт до удара, после — схлопывается
-        const openAt = t => t < sS ? 0 : t < sT ? easeIn(clamp01((t - sS) / T.tear)) : t < sB ? 1 : 1 - easeIn(clamp01((t - sB) / (T.close * 0.35)));
+        const openAt = t => t < sS ? 0 : t < sT ? easeIn(clamp01((t - sS) / T.tear)) : t < sB ? 1 : 1 - easeIn(clamp01((t - sB) / SNAP));
         const len = H * SEAM;
         // Полуширина разрыва в точке шва s (−0,5…0,5), пиксели
         const halfWidth = (s, open, grow) => GAP * H * 0.8 * open * Math.pow(Math.max(0, Math.cos(s * Math.PI)), 0.8) * (0.5 + 0.5 * Math.min(1, grow * 1.2));
@@ -309,7 +362,9 @@ export async function playBreach({ sceneId, point }) {
         const simulate = (t, dt) => {
             const open = openAt(t);
             const burst = t >= sT && !cued.has('burstFx');
-            const emitting = t >= sS && t < sB + T.close * 0.4;
+            const emitting = t >= sS && t < sB + SNAP;
+            const shut = t >= sB + SNAP && !cued.has('shutFx');
+            if (shut) cued.add('shutFx');
             if (burst) cued.add('burstFx');
             const spawnFog = n => {
                 for (let i = 0; i < n && fog.length < 90; i++) {
@@ -327,6 +382,11 @@ export async function playBreach({ sceneId, point }) {
                 }
             };
             if (burst) { spawnFog(calm ? 12 : 26); spawnSparks(calm ? 50 : 160, 1.6); }
+            // Схлопнулся: брызги искр кольцом из точки, как всплеск
+            if (shut) for (let i = 0; i < (calm ? 24 : 70) && sparks.length < 360; i++) {
+                const a = rnd() * Math.PI * 2, v = (0.35 + rnd() * 0.5) * H;
+                sparks.push({ x: 0, y: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.7, age: 0, life: 0.5 + rnd() * 0.7, size: 1.5 + rnd() * 2, twinkle: rnd() * 20 });
+            }
             if (emitting) {
                 fogDebt += dt * 22 * Math.max(0.25, open);
                 sparkDebt += dt * (t < sT ? 70 : 35) * Math.max(0.3, open);
@@ -353,7 +413,7 @@ export async function playBreach({ sceneId, point }) {
             const c = cam ? cam.screenOf(point) : { x: W / 2, y: H / 2 };
             const grow = easeOut(clamp01((t - sF) / T.seam));
             const open = openAt(t);
-            const fade = 1 - smooth(clamp01((t - sB - T.close * 0.35) / (T.close * 0.45)));
+            const fade = 1 - smooth(clamp01((t - sB - SNAP) / 450));
             const flicker = 0.75 + 0.25 * Math.sin(t * 0.05) * Math.sin(t * 0.017);
             const dpr = devicePixelRatio;
 
@@ -361,10 +421,12 @@ export async function playBreach({ sceneId, point }) {
             ctx.translate(c.x, c.y);
             ctx.rotate(tilt);
 
+            // Туман и искры гаснут к концу катсцены, а не пропадают разом
+            const linger = 1 - smooth(clamp01((t - end + 650) / 650));
             // Светящийся туман — под разрывом и вокруг
             ctx.globalCompositeOperation = 'lighter';
             for (const f of fog) {
-                const a = Math.sin(Math.PI * clamp01(f.age / f.life)) * 0.45;
+                const a = Math.sin(Math.PI * clamp01(f.age / f.life)) * 0.45 * linger;
                 const size = f.size + f.grow * f.age;
                 ctx.globalAlpha = a;
                 ctx.drawImage(sprite, f.x - size / 2, f.y - size / 2, size, size);
@@ -489,7 +551,7 @@ export async function playBreach({ sceneId, point }) {
             ctx.lineCap = 'round';
             for (const p of sparks) {
                 const life = 1 - p.age / p.life;
-                const a = life * (0.6 + 0.4 * Math.sin(p.twinkle + t * 0.04));
+                const a = life * (0.6 + 0.4 * Math.sin(p.twinkle + t * 0.04)) * linger;
                 // Хвост — по скорости: быстрые искры тянут длинный след
                 const tx = p.x - p.vx * 0.035, ty = p.y - p.vy * 0.035;
                 for (const [w, k, col] of [[3.2, 0.25, TEAL], [1, 1, [215, 255, 252]]]) {
@@ -512,6 +574,20 @@ export async function playBreach({ sceneId, point }) {
                 ctx.fillText(WHISPER, GAP * H * 0.9, -len * 0.18);
             }
             ctx.restore();
+
+            // Схлопнулся: точка света на месте разрыва гаснет
+            const spark = t >= sB + SNAP ? 1 - clamp01((t - sB - SNAP) / 350) : 0;
+            if (spark > 0) {
+                const c = cam ? cam.screenOf(point) : { x: W / 2, y: H / 2 }, r = H * 0.12 * (0.4 + 0.6 * spark);
+                const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+                g.addColorStop(0, rgba([220, 255, 252], 0.95 * spark));
+                g.addColorStop(0.3, rgba(TEAL, 0.5 * spark));
+                g.addColorStop(1, rgba(TEAL, 0));
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.fillStyle = g;
+                ctx.fillRect(c.x - r, c.y - r, r * 2, r * 2);
+                ctx.globalCompositeOperation = 'source-over';
+            }
 
             // Удар: вспышка бирюзой
             const flash = t >= sT ? 1 - clamp01((t - sT) / (T.burst + 250)) : 0;
