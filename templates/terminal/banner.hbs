@@ -2,4 +2,5 @@
     <i class="fas {{restIcon}}"></i> {{restLabel}} · Кости Хитов: <strong>{{hitDice}}</strong>
     <button type="button" class="gd-btn forge" data-action="openAltar"><i class="fas fa-fire-alt"></i> Алтарь Памяти</button>
     <button type="button" class="gd-btn" data-action="openStash"><i class="fas fa-box-archive"></i> Хранилище</button>
+    {{#each restLinks}}<button type="button" class="gd-btn" data-action="restLink" data-index="{{index}}" title="{{title}}"><i class="{{icon}}"></i> {{label}}</button>{{/each}}
 </div>

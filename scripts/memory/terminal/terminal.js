@@ -132,7 +132,8 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             openAltar: MemoryTerminal.#onOpenAltar,
             openStash: function () { StashWindow.open(this.actor); },
             editPersonal: MemoryTerminal.#onEditPersonal,
-            extension: MemoryTerminal.#onExtension
+            extension: MemoryTerminal.#onExtension,
+            restLink: MemoryTerminal.#onRestLink
         }
     };
 
@@ -157,6 +158,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
      */
     #idle = false;
     #extensions = [];
+    #restLinks = [];
     #onPointerDown = event => this.#setIdle(!this.element?.contains(event.target));
     #onVisibility = () => this.#setIdle(document.hidden || this.#idle);
 
@@ -216,6 +218,9 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         const atRest = !!site;
         const restLabel = site?.label ?? 'Привал';
         const restIcon = site?.site === 'anchor' ? 'fa-anchor' : 'fa-campground';
+        // Кнопки места отдыха от расширений (Кладбище в Якоре)
+        this.#restLinks = (site?.links ?? []).map(l => l.run);
+        const restLinks = (site?.links ?? []).map(({ label, icon, title }, index) => ({ index, label, icon, title }));
         const hitDice = actor.system.attributes?.hd?.value ?? 0;
 
         const synergyItems = actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item);
@@ -252,7 +257,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         };
         return {
             mind,
-            atRest, restLabel, restIcon, hitDice, glossary,
+            atRest, restLabel, restIcon, restLinks, hitDice, glossary,
             equippedCount: equipped.length,
             capacity: getMemoryCapacity(actor),
             cards: this.#cards(memory, selected, atRest),
@@ -450,6 +455,10 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     // Кнопка от подключённой системы: её действие и перерисовка
+    static async #onRestLink(event, target) {
+        await this.#restLinks[Number(target.dataset.index)]?.();
+    }
+
     static async #onExtension(event, target) {
         await this.#extensions[Number(target.dataset.index)]?.();
         this.#renderContent();

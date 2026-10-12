@@ -35,7 +35,8 @@ export function hasTakenHorseman(actor) {
 }
 
 export function partyActors() {
-    return game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner);
+    // Персонаж, чьё тело пожрал Предел, из отряда выбыл
+    return game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner && !a.getFlag(MODULE_ID, 'devoured'));
 }
 
 function isActiveGM() {

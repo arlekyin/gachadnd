@@ -1,0 +1,18 @@
+<div class="gd-graveyard">
+    <p class="gd-graveyard-lore">Здесь лежат те, чьи тела Лабиринт оставил себе. За оградой шепчут голодные души.</p>
+    <div class="gd-graves">
+        {{#each graves}}
+        <article class="gd-grave">
+            <img src="{{img}}" alt="">
+            <div class="gd-grave-text">
+                <strong class="gd-grave-name">{{name}}</strong>
+                <span class="gd-grave-class" title="{{classes}}">{{classes}}</span>
+                <span class="gd-grave-stats">Уровень <b>{{level}}</b> · Навыков <b>{{skills}}</b> · Этаж <b>{{floor}}</b></span>
+            </div>
+            {{#if ../gm}}<button type="button" class="gd-grave-remove" data-action="remove" data-id="{{id}}" title="Убрать надгробие"><i class="fas fa-trash"></i></button>{{/if}}
+        </article>
+        {{else}}
+        <p class="gd-graves-empty">Надгробий нет. Пока.</p>
+        {{/each}}
+    </div>
+</div>
