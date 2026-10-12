@@ -15,6 +15,7 @@ import { MODULE_ID } from "../core/constants.js";
 import { emit, onSocket } from "../core/socket.js";
 import { stageCamera, shaker } from "../cutscene/camera.js";
 import { stageFilter } from "../cutscene/stage.js";
+import { stowWindows } from "../cutscene/windows.js";
 import { letterbox } from "../cutscene/letterbox.js";
 import { overlay } from "../cutscene/overlay.js";
 import { clamp01, smooth, easeOut, easeIn, seeded } from "../cutscene/math.js";
@@ -294,6 +295,8 @@ export async function playBreach({ sceneId, point }) {
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
     const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
     const art = await loadArt();
+    // Окна Foundry сворачиваются на время катсцены
+    const restoreWindows = stowWindows();
     const cam = stageCamera();
     const bars = letterbox(0.1);
     const { ctx, W, H, remove } = overlay();
@@ -315,6 +318,7 @@ export async function playBreach({ sceneId, point }) {
             if (!playing) return;
             clearTimeout(watchdog);
             ripple?.remove();
+            restoreWindows();
             const risen = canvas.tokens?.placeables?.find(tk => tk.document?.flags?.[MODULE_ID]?.breach);
             if (risen) { showToken(risen, 1); revealed.add(risen.id); }
             cam?.restore();

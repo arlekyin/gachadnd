@@ -22,4 +22,5 @@ export * from "./stage.js";
 export * from "./overlay.js";
 export * from "./ripple.js";
 export * from "./audio.js";
+export * from "./windows.js";
 export * from "./instruments.js";
