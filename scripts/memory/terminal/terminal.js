@@ -577,3 +577,25 @@ Hooks.on('updateActor', actor => rerender(actor));
 
 // Привал открылся или закрылся: баннер и значки слияния
 Hooks.on(HOOKS.restChanged, () => rerender(null));
+
+// Шаблон области навыка ставится на сцене: dnd5e сворачивает лист персонажа и разворачивает его после
+// размещения или отмены. Открытый Терминал этого персонажа сворачивается и разворачивается вместе с листом
+Hooks.on('dnd5e.createActivityTemplate', (activity, templates) => {
+    const actor = activity?.actor;
+    const terminal = openTerminals().find(app => app.actor?.id === actor?.id && app.rendered && !app.minimized);
+    if (!terminal) return;
+    for (const template of templates ?? []) {
+        const sheet = template.actorSheet;
+        let stowed = false;
+        template.actorSheet = {
+            minimize() {
+                sheet?.minimize();
+                if (terminal.rendered && !terminal.minimized) { stowed = true; terminal.minimize(); }
+            },
+            async maximize() {
+                await sheet?.maximize();
+                if (stowed && terminal.rendered) { stowed = false; await terminal.maximize(); }
+            }
+        };
+    }
+});
