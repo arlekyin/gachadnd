@@ -19,6 +19,7 @@ import { PortalWindow } from "./portal.js";
 import { registerPulseSettings, resetPulse, pulseReport } from "./pulse.js";
 import { registerGraveyardSettings, GraveyardWindow } from "./graveyard.js";
 import { registerOmenSettings, setOmen } from "./omen.js";
+import { startBreach } from "./breach.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -50,7 +51,9 @@ Hooks.once('init', () => {
         // Кладбище Предела: надгробия персонажей, чьи тела отряд оставил на узле
         openGraveyard: () => GraveyardWindow.open(),
         // Предвестия Пожирателя у всех: '3', '2', '1' — ходов до прихода, 'here' — пришёл, 'off' — снять
-        omen: stage => setOmen(stage)
+        omen: stage => setOmen(stage),
+        // Прорыв Пожирателя: Мастер щёлкает точку, у всех катсцена, затем его токен в этой точке
+        breach: () => startBreach()
     });
 });
 
