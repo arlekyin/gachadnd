@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script type="module">
+import { CUES, renderCue, createBus } from '/scripts/memory/effects/impact-sound.js';
+import { FX, fxRamp } from '/scripts/cutscene/audio.js';
+
+const RATE = 44100, VOLUME = 0.5;
+
+// Буфер → 16-битный WAV и пиковый уровень
+function wav(buffer) {
+    const ch = buffer.numberOfChannels, len = buffer.length, sr = buffer.sampleRate;
+    const out = new DataView(new ArrayBuffer(44 + len * 2 * ch));
+    const text = (o, s) => [...s].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+    text(0, 'RIFF'); out.setUint32(4, 36 + len * 2 * ch, true); text(8, 'WAVEfmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true);
+    out.setUint16(22, ch, true); out.setUint32(24, sr, true); out.setUint32(28, sr * 2 * ch, true); out.setUint16(32, 2 * ch, true); out.setUint16(34, 16, true);
+    text(36, 'data'); out.setUint32(40, len * 2 * ch, true);
+    const data = [...Array(ch)].map((_, c) => buffer.getChannelData(c));
+    let peak = 0;
+    for (const d of data) for (const v of d) peak = Math.max(peak, Math.abs(v));
+    for (let i = 0, o = 44; i < len; i++) for (let c = 0; c < ch; c++, o += 2) out.setInt16(o, Math.max(-1, Math.min(1, data[c][i])) * 32767, true);
+    return { bytes: new Uint8Array(out.buffer), peak };
+}
+
+async function render(seconds, schedule) {
+    const ctx = new OfflineAudioContext(2, Math.ceil(RATE * seconds), RATE);
+    const bus = createBus(ctx, ctx.destination, VOLUME);
+    schedule(ctx, bus);
+    return wav(await ctx.startRendering());
+}
+
+const base64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
+
+/**
+ * Каждый звук отдельно (удар — четыре разных подряд) и, если передан журнал стенда Сайтамы
+ * [[имя, мс, параметры]], вся сцена по нему: эффекты шины (dip, hush) — той же огибающей, что в игре.
+ */
+window.renderAll = async (cues = null) => {
+    const files = {};
+    for (const name of Object.keys(CUES)) {
+        const r = await render(3, (ctx, bus) => {
+            if (name === 'punch') [0, 1, 2, 3].forEach(i => renderCue(ctx, bus, name, 0.05 + i * 0.4, { index: i }));
+            else renderCue(ctx, bus, name, 0.05);
+        });
+        files[name] = [base64(r.bytes), r.peak];
+    }
+    if (cues?.length) {
+        const length = cues.at(-1)[1] / 1000 + 2.5;
+        const r = await render(length, (ctx, bus) => {
+            for (const [name, ms, options] of cues) {
+                const t = ms / 1000;
+                if (FX.includes(name)) fxRamp(bus.master.gain, name, t, { volume: VOLUME, ...options });
+                else renderCue(ctx, bus, name, t, options);
+            }
+        });
+        files.saitama_full = [base64(r.bytes), r.peak];
+    }
+    return files;
+};
+window.ready = true;
+</script></body></html>

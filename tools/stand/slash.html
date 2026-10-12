@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css"></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>
+// Конь режет вниз через Пожирателя: [картинка, x, y, размер, клеток]
+window.TOKENS = {
+    caster: ['/assets/bestiary/chess-knight.webp', 600, 560, 90, 2],
+    target: ['/assets/bestiary/devourer-token.webp', 590, 900, 150, 3]
+};
+</script>
+<script src="scene.js"></script>
+<script type="module">
+import '/scripts/memory/effects/impact-frame.js';
+// Как в игре: навык с impact.style = slash использован (шаблон-линия), затем решающий урон по цели
+window.go = direction => {
+    const caster = { id: 'pc', getActiveTokens: () => [toks.caster] };
+    const item = { img: '', actor: caster, flags: { gachadnd: { impact: { style: 'slash' } } } };
+    const vertical = direction !== 0;
+    Hooks.call('dnd5e.postUseActivity', { item }, {}, { templates: [[{ x: vertical ? 600 : 80, y: vertical ? 560 : 880, direction, distance: 300 }]] });
+    Hooks.call('dnd5e.applyDamage', { name: 'Пожиратель', system: { attributes: { hp: { value: 0, max: 60 } } }, getActiveTokens: () => [toks.target] }, 40);
+};
+setTimeout(() => { window.ready = true; }, 800);
+</script></body></html>
