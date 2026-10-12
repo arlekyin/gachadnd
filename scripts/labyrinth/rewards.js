@@ -229,7 +229,7 @@ function cardContent(actor, title, options, claimed = null) {
     const rows = options.map((o, i) => {
         const chosen = claimed?.index === i;
         const tierLabel = TIERS[o.tier];
-        return `<button type="button" class="gd-reward ${chosen ? 'chosen' : ''}" data-gd-reward="${i}" ${claimed ? 'disabled' : ''}>
+        return `<button type="button" class="gd-reward ${chosen ? 'chosen' : ''}" data-gd-reward="${i}"${o.skillId ? ` data-gd-skill="${esc(o.skillId)}"` : ''} ${claimed ? 'aria-disabled="true"' : ''}>
             <i class="fas ${o.icon}"></i><span>${esc(o.label)}${chosen && claimed.detail ? ` — ${esc(claimed.detail)}` : ''}</span><small>${tierLabel}</small></button>`;
     }).join('');
     return `<div class="gachadnd-event-reward">

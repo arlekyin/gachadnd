@@ -8,6 +8,7 @@ import { MODULE_ID } from "./core/constants.js";
 import { MemoryTerminal } from "./memory/terminal/terminal.js";
 import { GachaLootTerminal, registerLootSettings } from "./memory/loot.js";
 import "./core/compendium.js";
+import "./memory/crystal-peek.js";
 import { registerGachaPeriods, recoverPeriodUses } from "./core/recovery.js";
 import { registerSoundSettings } from "./core/sounds.js";
 import { registerImpactSettings, impactTest } from "./memory/effects/impact-frame.js";

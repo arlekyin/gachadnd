@@ -250,7 +250,7 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
                 const customImg = crystalImage(d.rarity);
 
                 return `
-                    <div style="display: flex; align-items: center; gap: 12px; background: #111; padding: 8px; border: 1px solid ${color}; border-radius: 4px; margin-bottom: 8px;">
+                    <div data-gd-skill="${flags.skill_id ?? ''}" style="display: flex; align-items: center; gap: 12px; background: #111; padding: 8px; border: 1px solid ${color}; border-radius: 4px; margin-bottom: 8px;">
                         <img src="${customImg}" style="width: 40px; height: 40px; border-radius: 3px; border: 1px solid ${color};">
                         <div>
                             <div style="font-weight: bold; color: ${color}; font-size: 1.15em;">${d.crystal.name}</div>
