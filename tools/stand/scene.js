@@ -1,6 +1,6 @@
 // Сцена PIXI как в Foundry: карта 1134×1192 (пол с сеткой и пятнами лавы), камера 0.95 по центру, токены
 // с mesh и effects.
-// Перед подключением задать window.TOKENS = { id: [картинка, x, y, размер в px, клеток] }.
+// Перед подключением задать window.TOKENS = { id: [картинка, x, y, размер в px, клеток, флаги документа] }.
 (() => {
     // Пол карты: цветные пятна нужны, чтобы было видно обесцвечивание и инверсию кадра
     function floor() {
@@ -24,7 +24,7 @@
     stage.addChild(layer);
 
     // Токен: картинка (mesh) и метки поверх (effects) — модуль прячет их на время кадра
-    const token = (id, [src, x, y, size, cells]) => {
+    const token = (id, [src, x, y, size, cells, flags = {}]) => {
         const mesh = PIXI.Sprite.from(src);
         mesh.anchor.set(0.5);
         mesh.position.set(x, y);
@@ -35,7 +35,7 @@
         effects.beginFill(0xeeeeee).drawCircle(x, y, size * 0.35).endFill();
         effects.beginFill(0).drawCircle(x - size * 0.12, y, size * 0.08).drawCircle(x + size * 0.12, y, size * 0.08).endFill();
         stage.addChild(effects);
-        return { id, mesh, effects, center: { x, y }, visible: true, w: size, h: size, document: { width: cells, height: cells }, renderFlags: { set() {} } };
+        return { id, mesh, effects, center: { x, y }, visible: true, w: size, h: size, document: { width: cells, height: cells, flags }, renderFlags: { set() {} } };
     };
     const tokens = Object.fromEntries(Object.entries(window.TOKENS).map(([id, spec]) => [id, token(id, spec)]));
     window.toks = tokens;
