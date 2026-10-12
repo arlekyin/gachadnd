@@ -164,7 +164,7 @@ export class DraftWindow extends HandlebarsApplicationMixin(ApplicationV2) {
                 const glint = GLINT.includes(flags.rarity) && !seenKeys.has(key);
                 seenKeys.add(key);
                 return {
-                    key, img: data.img, name: data.name.replace(/^Кристалл:\s*/, ''), glint,
+                    key, img: data.img, name: data.name.replace(/^Кристалл:\s*/, ''), glint, skillId: flags.skill_id ?? '',
                     color: RARITY_COLORS[flags.rarity] ?? '#aaa', category: flags.category ?? '', tags: (flags.tags ?? []).join(', ')
                 };
             })

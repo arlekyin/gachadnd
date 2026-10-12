@@ -11,7 +11,7 @@
     </ol>
     <div class="gd-draft-pool">
         {{#each pool}}
-        <button type="button" class="gd-draft-crystal {{#if glint}}glint{{/if}}" style="--rarity: {{color}}; --delay: {{@index}}" data-action="pick" data-key="{{key}}" {{#unless ../mine}}disabled{{/unless}}>
+        <button type="button" class="gd-draft-crystal {{#if glint}}glint{{/if}} {{#unless ../mine}}locked{{/unless}}" style="--rarity: {{color}}; --delay: {{@index}}" {{#if ../mine}}data-action="pick"{{else}}aria-disabled="true"{{/if}} data-key="{{key}}" data-gd-skill="{{skillId}}">
             <img src="{{img}}" alt="">
             <span class="gd-draft-name">{{name}}</span>
             <span class="gd-draft-meta">{{category}}{{#if tags}} · {{tags}}{{/if}}</span>
