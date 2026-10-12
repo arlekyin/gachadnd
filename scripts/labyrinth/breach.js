@@ -3,8 +3,9 @@
  *
  * Мастер нажимает «Здесь» в предвестиях и щёлкает точку на сцене. У всех на этой сцене идёт катсцена:
  * камера наезжает на точку, ткань узла трескается швом, шов раскрывается, в разрыве — Пожиратель и
- * его «ещё…», удар, разрыв схлопывается. Затем Мастер ставит токен Пожирателя в эту точку, а
- * предвестие остаётся на стадии «Здесь»: бирюза, туман и размытие по краям.
+ * его «ещё…», удар, разрыв схлопывается рябью, как от камня в воде. Токен Пожирателя Мастер ставит
+ * в эту точку сразу, прозрачным: катсцена проявляет его из тумана после схлопывания. Предвестие
+ * остаётся на стадии «Здесь»: бирюза, светящийся туман с искрами и размытие по краям.
  *
  * Токен — от актёра мира с флагом creature: devourer (туда Мастер вписывает Глубину и Насыщение);
  * если его нет — актёр импортируется из компендиума «Бестиарий Лабиринта».
@@ -119,16 +120,22 @@ async function devourerActor() {
     return game.actors.importFromCompendium(pack, entry._id);
 }
 
-/** Токен Пожирателя серединой в точку, по сетке */
+/**
+ * Токен Пожирателя серединой в точку, по сетке — сразу, но прозрачным: флаг breach хранит его
+ * прозрачность. Катсцена у каждого проявляет его из тумана, в конце Мастер делает его видимым.
+ */
 async function placeDevourer(point) {
     const actor = await devourerActor();
-    if (!actor) return ui.notifications.warn('Актёр Пожирателя не найден ни в мире, ни в Бестиарии Лабиринта.');
+    if (!actor) { ui.notifications.warn('Актёр Пожирателя не найден ни в мире, ни в Бестиарии Лабиринта.'); return null; }
     const size = canvas.grid.size;
     const proto = actor.prototypeToken;
     const x = Math.round((point.x - (proto.width ?? 2) * size / 2) / size) * size;
     const y = Math.round((point.y - (proto.height ?? 2) * size / 2) / size) * size;
     const data = (await actor.getTokenDocument({ x, y })).toObject();
-    await canvas.scene.createEmbeddedDocuments('Token', [data]);
+    data.flags = foundry.utils.mergeObject(data.flags ?? {}, { [MODULE_ID]: { breach: { alpha: data.alpha ?? 1 } } });
+    data.alpha = 0;
+    const [token] = await canvas.scene.createEmbeddedDocuments('Token', [data]);
+    return token ?? null;
 }
 
 /** Прорыв: точка, катсцена у всех, токен. Только Мастер */
@@ -139,10 +146,29 @@ export async function startBreach() {
     if (!point) return;
     const data = { sceneId: canvas.scene.id, point };
     emit('devourerBreach', data);
+    // Токен ставится, пока идёт катсцена; проявляется он в ней
+    const placed = placeDevourer(point).catch(error => { console.error(`${MODULE_ID} | токен Пожирателя`, error); return null; });
     await setOmen('here');
     await playBreach(data);
-    await placeDevourer(point);
+    const token = await placed;
+    if (token) await token.update({ alpha: token.getFlag(MODULE_ID, 'breach')?.alpha ?? 1, [`flags.${MODULE_ID}.-=breach`]: null });
 }
+
+// Токен, который катсцена уже проявила, остаётся видимым, пока не придёт его обновление от Мастера:
+// перерисовка токена иначе вернула бы прозрачность из документа
+const revealed = new Set();
+const breachAlpha = token => token.document?.flags?.[MODULE_ID]?.breach?.alpha ?? 1;
+function showToken(token, k) {
+    const a = breachAlpha(token) * k;
+    token.alpha = a;
+    if (token.mesh) token.mesh.alpha = a;
+}
+Hooks.on('refreshToken', token => {
+    if (revealed.has(token.id) && token.document.flags?.[MODULE_ID]?.breach) showToken(token, 1);
+});
+Hooks.on('updateToken', doc => {
+    if (!doc.flags?.[MODULE_ID]?.breach) revealed.delete(doc.id);
+});
 onSocket('devourerBreach', data => playBreach(data));
 
 // ==========================================
@@ -289,6 +315,8 @@ export async function playBreach({ sceneId, point }) {
             if (!playing) return;
             clearTimeout(watchdog);
             ripple?.remove();
+            const risen = canvas.tokens?.placeables?.find(tk => tk.document?.flags?.[MODULE_ID]?.breach);
+            if (risen) { showToken(risen, 1); revealed.add(risen.id); }
             cam?.restore();
             bars.remove();
             remove();
@@ -340,6 +368,14 @@ export async function playBreach({ sceneId, point }) {
                     u.uWave = h * 0.075;
                     u.uAmp = (calm ? 5 : 16) * (1 - age) ** 1.4;
                     u.uGlow = (calm ? 0.15 : 0.45) * (1 - age) ** 1.2;
+                }
+
+                // Токен Пожирателя проявляется из тумана, когда разрыв схлопнулся
+                const risen = canvas.tokens?.placeables?.find(tk => tk.document?.flags?.[MODULE_ID]?.breach);
+                if (risen) {
+                    const rise = smooth(clamp01((t - sB - SNAP * 0.5) / 700));
+                    showToken(risen, rise);
+                    if (rise >= 1) revealed.add(risen.id);
                 }
 
                 simulate(t, Math.max(0, Math.min(50, t - lastT)) / 1000);
