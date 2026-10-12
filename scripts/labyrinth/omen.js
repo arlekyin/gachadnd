@@ -72,7 +72,10 @@ void main() {
     float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));
     vec3 teal = mix(vec3(0.0, 0.05, 0.05), vec3(0.0, 0.41, 0.39), smoothstep(0.0, 0.65, lum));
     teal = mix(teal, vec3(0.01, 0.98, 0.95), smoothstep(0.72, 1.0, lum) * 0.55);
-    color.rgb = mix(color.rgb, teal * color.a, uTint);
+    // Бирюза сильна у краёв и слабеет к центру: в центре мир только слегка зеленеет
+    float radial = smoothstep(0.2, 1.15, e);
+    vec3 greened = color.rgb * vec3(0.8, 1.0, 0.93) + vec3(0.0, 0.025, 0.02) * color.a;
+    color.rgb = mix(color.rgb, mix(greened, teal * color.a, radial), uTint);
 
     // Иней: неровная кромка от всех краёв внутрь, толще в углах; холод слегка гасит цвета
     float edgeDist = min(min(uv.x, 1.0 - uv.x) * aspect, min(uv.y, 1.0 - uv.y));
