@@ -13,6 +13,7 @@ import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 import { leaveBodies } from "./graveyard.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
+import { startBreach } from "./breach.js";
 
 const MAP_DATA = {
     NODE_START: 'start',
@@ -369,7 +370,8 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         actions: {
             node: GachaMapTerminal.#onNode,
             generate: GachaMapTerminal.#onGenerate,
-            omen: (event, target) => setOmen(target.dataset.stage)
+            // «Здесь» — прорыв: Мастер выбирает точку, у всех катсцена, затем токен
+            omen: (event, target) => target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)
         }
     };
 
