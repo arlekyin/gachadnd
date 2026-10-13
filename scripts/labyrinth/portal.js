@@ -217,6 +217,7 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static PARTS = { body: { template: 'modules/gachadnd/templates/portal/body.hbs', scrollable: ['.gd-portal-party'] } };
 
     #lit = 0;
+    #ready = false;
 
     // Мастер открывает окно платы у всех
     static open() {
@@ -262,8 +263,12 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         // Новые руны вспыхивают один раз: этот клиент помнит, сколько горело в прошлый раз
         const kindleFrom = Math.min(this.#lit, colors.length);
         this.#lit = colors.length;
+        // Замыкание круга проигрывается один раз — в перерисовку, когда плата набралась
+        const ready = total >= toll;
+        const closing = ready && !this.#ready;
+        this.#ready = ready;
         return {
-            atRest: !!found, toll, total, ready: total >= toll, missing: Math.max(0, toll - total), over: Math.max(0, total - toll),
+            atRest: !!found, toll, total, ready, closing, missing: Math.max(0, toll - total), over: Math.max(0, total - toll),
             isGM: game.user.isGM, party, ticks: TICKS, runes: circleRunes(toll, colors, kindleFrom)
         };
     }
