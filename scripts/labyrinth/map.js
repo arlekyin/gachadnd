@@ -3,6 +3,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene, sceneForNewMap, rememberFloorScene } from "./scene-travel.js";
 import { onNodeEntered } from "./horsemen.js";
 import { DoomAltar } from "./doom-altar.js";
 import { ShopWindow } from "./shop.js";
@@ -167,7 +168,7 @@ function generateMapGraph(length) {
 }
 
 // Отряд стоит на узле «Привал» текущей карты этажа
-export function isPartyAtRest(scene = canvas.scene) {
+export function isPartyAtRest(scene = mapScene()) {
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     const node = map?.nodes?.find(n => n.id === map.currentNodeId);
     return node?.type === 'rest';
@@ -384,7 +385,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
     }
 
     get map() {
-        return canvas.scene?.getFlag(MODULE_ID, 'floorMap') ?? null;
+        return mapScene()?.getFlag(MODULE_ID, 'floorMap') ?? null;
     }
 
     async _prepareContext() {
@@ -482,7 +483,12 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
         const floor = Math.max(1, parseInt(this.element.querySelector('[name="floor"]')?.value) || getFloor());
         await game.settings.set(MODULE_ID, 'runFloor', floor);
-        if (canvas.scene) await canvas.scene.setFlag(MODULE_ID, 'floorMap', generateMapGraph(length));
+        // Карта чертится на текущей сцене (на сцене Якоря — на сцене этажа), сцена запоминается
+        const scene = sceneForNewMap();
+        if (scene) {
+            await scene.setFlag(MODULE_ID, 'floorMap', generateMapGraph(length));
+            await rememberFloorScene(scene);
+        }
     }
 
     // Перемещение отряда: только Мастер, только по путям вперёд или на пройденный узел
@@ -512,7 +518,11 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         mapData.currentNodeId = nodeId;
         if (!mapData.visitedNodes.includes(nodeId)) mapData.visitedNodes.push(nodeId);
         // Флаг сцены расходится всем клиентам; их карты перерисуются хуком updateScene
-        if (canvas.scene) await canvas.scene.setFlag(MODULE_ID, 'floorMap', mapData);
+        const scene = mapScene();
+        if (scene) {
+            await scene.setFlag(MODULE_ID, 'floorMap', mapData);
+            await rememberFloorScene(scene);
+        }
 
         // Шаг по карте уводит из Якоря; серия Войны и штраф проклятой Войны; окна узлов
         await leaveAnchor();
@@ -556,7 +566,7 @@ Hooks.on('gachadnd.omenChanged', () => {
 
 // Карта изменилась (перемещение, новый этаж) — поле и строка состояния перерисовываются у всех
 Hooks.on('updateScene', (scene, changes) => {
-    if (scene.id !== canvas.scene?.id || !foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) return;
+    if (scene.id !== mapScene()?.id || !foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) return;
     const app = foundry.applications.instances?.get(MAP_ID);
     if (app?.rendered) app.render({ parts: ['header', 'board', 'footer'] });
 });

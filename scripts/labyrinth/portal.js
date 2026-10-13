@@ -10,6 +10,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene, anchorScene, preloadScene, arrival } from "./scene-travel.js";
 import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
 import { partyActors } from "./horsemen.js";
 import { getFloor } from "./economy.js";
@@ -86,7 +87,7 @@ export const portalToll = (floor = getFloor()) => 2 + floor;
 const payable = item => isCrystalItem(item) && (item.flags?.[MODULE_ID]?.rarity ?? 'gray') !== 'orange';
 const quantity = item => Math.max(0, Number(item.system?.quantity ?? 1));
 
-function currentRestNode(scene = canvas.scene) {
+function currentRestNode(scene = mapScene()) {
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     const node = map?.nodes?.find(n => n.id === map.currentNodeId);
     return node?.type === 'rest' ? { map, node } : null;
@@ -95,7 +96,7 @@ function currentRestNode(scene = canvas.scene) {
 async function savePortal(found, portal) {
     const copy = foundry.utils.deepClone(found.map);
     copy.nodes.find(n => n.id === found.node.id).portal = portal;
-    await canvas.scene.setFlag(MODULE_ID, 'floorMap', copy);
+    await mapScene().setFlag(MODULE_ID, 'floorMap', copy);
 }
 
 // Вклад в плату с поправкой на то, что кристаллы могли потратить после того, как их положили
@@ -150,8 +151,12 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
         }
         emit('closePortal');
         PortalWindow.close();
-        emit('portalOpening', { colors: colors.slice(0, Math.max(toll, 12)) });
-        await playPortalOpening(colors.slice(0, Math.max(toll, 12)));
+        // Сцена Якоря загружается у всех, пока круг раскручивается; переход — на пике вспышки
+        const anchor = anchorScene();
+        const sceneId = anchor && anchor.id !== canvas.scene?.id ? anchor.id : null;
+        if (sceneId) preloadScene(anchor);
+        emit('portalOpening', { colors: colors.slice(0, Math.max(toll, 12)), sceneId });
+        await playPortalOpening(colors.slice(0, Math.max(toll, 12)), sceneId);
         const burned = [];
         for (const [id, items] of Object.entries(portal.pledges)) {
             const actor = game.actors.get(id);
@@ -174,7 +179,7 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
             speaker: ChatMessage.getSpeaker({ alias: 'Разрыв' }),
             content: `<div class="gd-scent-chat"><i class="fas fa-hurricane"></i> Кристаллы гаснут один за другим — вероятность рвёт ткань узла. Портал в Предел открыт.<br><small>${burned.join(' · ')}</small></div>`
         });
-        if (!isAnchorOpen()) await setAnchor(true);
+        if (!isAnchorOpen()) await setAnchor(true, { travel: false });
     }
 }
 
@@ -185,7 +190,7 @@ onSocket('portalOp', message => {
     return queue;
 });
 onSocket('openPortal', () => PortalWindow.show());
-onSocket('portalOpening', ({ colors }) => playPortalOpening(colors));
+onSocket('portalOpening', ({ colors, sceneId }) => playPortalOpening(colors, sceneId));
 onSocket('closePortal', () => PortalWindow.close());
 
 const request = payload => requestGM('portalOp', payload);
@@ -300,7 +305,7 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
 
 // Плата изменилась — окно перерисовывается у всех; кристаллы персонажей — тоже
 Hooks.on('updateScene', (scene, changes) => {
-    if (scene.id !== canvas.scene?.id || !foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) return;
+    if (scene.id !== mapScene()?.id || !foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.floorMap`)) return;
     const app = foundry.applications.instances?.get(PORTAL_ID);
     if (app?.rendered) app.render();
 });
@@ -341,8 +346,11 @@ const cue = (name, options = {}) => {
 
 let opening = false;
 
-/** Сцена открытия портала: круг раскручивается, кристаллы сгорают искрами, белая вспышка */
-export function playPortalOpening(colors = []) {
+/**
+ * Сцена открытия портала: круг раскручивается, кристаллы сгорают искрами, белая вспышка. sceneId —
+ * сцена Якоря: на пике вспышки Мастер её активирует, и вспышка держится у каждого, пока она не дорисуется.
+ */
+export function playPortalOpening(colors = [], sceneId = null) {
     if (opening) return Promise.resolve(false);
     opening = true;
     const calm = game.settings.get(MODULE_ID, 'impactCalm');
@@ -361,7 +369,9 @@ export function playPortalOpening(colors = []) {
 
     return new Promise(resolve => {
         const t0 = performance.now();
-        let lastT = 0, angle = 0, watchdog = null;
+        let lastT = 0, angle = 0, watchdog = null, last = t0;
+        // Ожидание сцены Якоря: время катсцены стоит на полной вспышке
+        let paused = 0, travel = sceneId ? 'pending' : 'none';
         const finish = () => {
             if (!opening) return;
             clearTimeout(watchdog);
@@ -373,7 +383,7 @@ export function playPortalOpening(colors = []) {
         };
         const guard = () => {
             if (!opening) return;
-            if (performance.now() - t0 > (end + 4000) * slow) return finish();
+            if (performance.now() - t0 - paused > (end + 4000) * slow) return finish();
             watchdog = setTimeout(guard, 1000);
         };
         watchdog = setTimeout(guard, 1000);
@@ -381,7 +391,18 @@ export function playPortalOpening(colors = []) {
         const frame = now => {
             if (!opening) return;
             try {
-                const t = (now - t0) / slow, dt = Math.max(0, Math.min(50, t - lastT)) / 1000;
+                if (travel === 'waiting') paused += now - last;
+                last = now;
+                let t = (now - t0 - paused) / slow;
+                // Полная вспышка: переход на сцену Якоря, пока экран белый
+                if (t >= sO && travel === 'pending') {
+                    travel = 'waiting';
+                    t = sO;
+                    if (game.user.isGM) game.scenes.get(sceneId)?.activate();
+                    arrival(sceneId).then(() => { travel = 'done'; });
+                }
+                if (travel === 'waiting') t = sO;
+                const dt = Math.max(0, Math.min(50, t - lastT)) / 1000;
                 lastT = t;
                 if (t >= end) return finish();
                 once('portalSpin', t, sS, { duration: OPEN.spin / 1000 * slow });

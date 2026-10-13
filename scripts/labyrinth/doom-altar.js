@@ -11,6 +11,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene } from "./scene-travel.js";
 import { randomCrystal, buildCrystalData } from "../memory/crystals.js";
 import { HORSEMEN, partyActors, getHorseman, hasTakenHorseman } from "./horsemen.js";
 import { emit, onSocket } from "../core/socket.js";
@@ -39,7 +40,7 @@ function averageLevel() {
 }
 
 // Текущий узел карты, если это Погибель
-function currentDoomNode(scene = canvas.scene) {
+function currentDoomNode(scene = mapScene()) {
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     const node = map?.nodes?.find(n => n.id === map.currentNodeId);
     return node?.type === 'doom' ? { map, node } : null;
@@ -48,7 +49,7 @@ function currentDoomNode(scene = canvas.scene) {
 async function saveDoom(map, nodeId, doom) {
     const copy = foundry.utils.deepClone(map);
     copy.nodes.find(n => n.id === nodeId).doom = doom;
-    await canvas.scene.setFlag(MODULE_ID, 'floorMap', copy);
+    await mapScene().setFlag(MODULE_ID, 'floorMap', copy);
 }
 
 async function chat(content) {

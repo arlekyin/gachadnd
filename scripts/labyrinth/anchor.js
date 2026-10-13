@@ -11,6 +11,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene, anchorScene, travelTo } from "./scene-travel.js";
 import { HOOKS, notifyRestChanged } from "../memory/memory-api.js";
 import { announceRest } from "../memory/altar/memory-altar.js";
 import { partyActors } from "./horsemen.js";
@@ -136,14 +137,24 @@ Hooks.on(HOOKS.queryRest, state => {
     state.links.push({ label: 'Кладбище', icon: 'fas fa-cross', title: 'Надгробия тех, чьи тела забрал Предел', run: () => GraveyardWindow.open() });
 });
 
-/** Открыть или закрыть Якорь (только Мастер). При открытии у игроков открывается Алтарь */
-export async function setAnchor(open = true) {
+/**
+ * Открыть или закрыть Якорь (только Мастер). При открытии у игроков открывается Алтарь.
+ * Если выбрана сцена Якоря — отряд переносится на неё и обратно на сцену этажа под белой пеленой;
+ * travel: false — переход уже сделала катсцена портала.
+ */
+export async function setAnchor(open = true, { travel = true } = {}) {
     if (!game.user.isGM) return ui.notifications.warn('Открывать Якорь может только Мастер.');
     open = !!open;
     if (open === isAnchorOpen()) return;
+    const anchor = anchorScene();
+    if (open && travel && anchor) await travelTo(anchor);
+    if (!open && anchor && canvas.scene?.id === anchor.id) {
+        const floor = mapScene();
+        if (floor && floor.id !== anchor.id) await travelTo(floor);
+    }
     await game.settings.set(MODULE_ID, 'anchorOpen', open);
     if (!open) {
-        const map = canvas.scene?.getFlag(MODULE_ID, 'floorMap');
+        const map = mapScene()?.getFlag(MODULE_ID, 'floorMap');
         const here = { mob: 'Монстры', elite: 'Элита', event: 'Событие', risk: 'Риск', shop: 'Магазин', rest: 'Привал', doom: 'Погибель', boss: 'Босс', start: 'Вход' }[map?.nodes?.find(n => n.id === map.currentNodeId)?.type];
         return ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ alias: 'Якорь' }),

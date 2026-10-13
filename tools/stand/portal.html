@@ -9,6 +9,14 @@
 import { playPortalOpening } from '/scripts/labyrinth/portal.js';
 // Плата 7: фиолетовый, зелёный, синий, два серых
 const colors = ['#a335ee', '#a335ee', '#a335ee', '#1eff00', '#0070dd', '#0070dd', '#9d9d9d'];
-window.go = () => { start(); playPortalOpening(colors).then(r => { window.done = r; }); };
+// ?travel — переход на сцену Якоря: она «дорисовывается» через 600 мс времени катсцены после активации
+const travel = new URLSearchParams(location.search).has('travel');
+game.scenes = { preload() {}, get: id => ({ id, activate() { window.activated = clockNow(); window.readyAt = clockNow() + 600; canvas.ready = false; } }) };
+const step0 = window.step;
+window.step = t => {
+    if (window.readyAt && t >= window.readyAt) { window.readyAt = null; canvas.ready = true; canvas.scene = { id: 'A' }; window.arrived = t; Hooks.call('canvasReady', canvas); }
+    step0(t);
+};
+window.go = () => { start(); playPortalOpening(colors, travel ? 'A' : null).then(r => { window.done = r; window.doneAt = clockNow(); }); };
 setTimeout(() => { window.ready = true; }, 800);
 </script></body></html>

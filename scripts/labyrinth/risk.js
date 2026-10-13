@@ -14,6 +14,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene } from "./scene-travel.js";
 import { HOOKS } from "../memory/memory-api.js";
 import { randomCrystal, crystalForSkill } from "../memory/crystals.js";
 import { getFloor, rollGold, addGold } from "./economy.js";
@@ -78,7 +79,7 @@ export function registerRiskSettings() {
     });
 }
 
-function currentRiskNode(scene = canvas?.scene) {
+function currentRiskNode(scene = mapScene()) {
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     const node = map?.nodes?.find(n => n.id === map.currentNodeId);
     return node?.type === 'risk' ? { map, node } : null;
@@ -104,7 +105,7 @@ Hooks.on(HOOKS.preChangeSkill, () => {
 async function saveRisk(map, nodeId, risk) {
     const copy = foundry.utils.deepClone(map);
     copy.nodes.find(n => n.id === nodeId).risk = risk;
-    await canvas.scene.setFlag(MODULE_ID, 'floorMap', copy);
+    await mapScene().setFlag(MODULE_ID, 'floorMap', copy);
 }
 
 // Этаж — два уровня: Сложность растёт на 1 за этаж (12 на первом, 21 на десятом)
