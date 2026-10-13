@@ -18,7 +18,7 @@
  */
 
 import { MODULE_ID } from "../../core/constants.js";
-import { keepPhase } from "../../core/anim-phase.js";
+import { keepPhase, softenToggles } from "../../core/anim-phase.js";
 import { isMemorySkill, naturalSlotCap } from "../synergy/synergy.js";
 import { getSynergyDictionary } from "../synergy/synergy-data.js";
 import { randomCrystal, randomCrystalWithTag, currentSkillName } from "../crystals.js";
@@ -608,6 +608,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#dived = true;
         this.#bindCard();
         if (options.parts?.includes('stage')) {
+            this.#softenSigil();
             this.#ringShown = !!context.ring;
             // Связи кольца живут вместе со слоем ядра; после слияния по прядям навыка уходит вспышка
             this.#synapses?.stop();
@@ -634,6 +635,19 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             obstacles: this.element
         });
         this.#momentum = null;
+    }
+
+    // Круг ритуала перерисовывается целиком при каждой закладке кристалла: загоревшиеся и погасшие
+    // грани, гнёзда, руны и зубцы короны переходят плавно. Другой ритуал (другой круг) — без перехода
+    #sigilState = null;
+    #softenSigil() {
+        const stage = this.#part('stage');
+        const sigils = [...(stage?.querySelectorAll('svg.gd-sigil') ?? [])];
+        const kind = sigils.map(s => s.getAttribute('class')).join('|');
+        const elements = sigils.flatMap(s => [...s.querySelectorAll('*')].filter(el => el.getAttribute('class')));
+        const previous = this.#sigilState?.kind === kind ? this.#sigilState.lit : null;
+        const lit = softenToggles(elements, previous, el => el.classList.contains('gd-rune') ? 'on' : 'lit');
+        this.#sigilState = { kind, lit };
     }
 
     // Карточка живёт вне частей окна: перерисовка частей её не трогает. Наведение на огонёк или узел
