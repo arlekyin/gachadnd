@@ -18,6 +18,7 @@ import { isCrystalItem } from "../memory/inventory.js";
 import { crystalWeight, setAnchor, isAnchorOpen } from "./anchor.js";
 import { overlay } from "../cutscene/overlay.js";
 import { fogLayer } from "../cutscene/fog.js";
+import { keepPhase } from "../core/anim-phase.js";
 import { letterbox } from "../cutscene/letterbox.js";
 import { stowWindows } from "../cutscene/windows.js";
 import { clamp01, smooth, easeIn } from "../cutscene/math.js";
@@ -270,6 +271,8 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     // Левый щелчок кладёт кристалл в разрыв, правый — забирает
     _onRender(context, options) {
         super._onRender(context, options);
+        // Кольца рун и души продолжают с того же места: перерисовка не дёргает круг
+        keepPhase(this.element);
         this.element.querySelectorAll('[data-action="pledge"]').forEach(el => el.addEventListener('contextmenu', event => {
             event.preventDefault();
             PortalWindow.#pledge(el, -1);
