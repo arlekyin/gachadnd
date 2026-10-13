@@ -8,6 +8,7 @@
     };
     const hooks = {};
     window.Hooks = {
+        events: hooks,
         on: (name, fn) => (hooks[name] ??= []).push(fn),
         once: (name, fn) => (hooks[name] ??= []).push(fn),
         call: (name, ...args) => hooks[name]?.forEach(fn => fn(...args)),
@@ -21,6 +22,11 @@
         playlists: { playing: [] },
         actors: { get: () => null }
     };
-    window.foundry = { utils: { randomID: () => Math.random().toString(36).slice(2, 18) } };
+    // Окна модуля импортируются вместе с кодом сцен: классы-заглушки, чтобы модули загрузились
+    const Application = class { static DEFAULT_OPTIONS = {}; };
+    window.foundry = {
+        utils: { randomID: () => Math.random().toString(36).slice(2, 18), deepClone: v => structuredClone(v), mergeObject: (a, b) => Object.assign(a, b), hasProperty: () => false },
+        applications: { api: { ApplicationV2: Application, HandlebarsApplicationMixin: Base => class extends Base {}, DialogV2: {} }, instances: new Map() }
+    };
     window.ui = { notifications: { warn: console.warn, info: console.log, error: console.error } };
 })();

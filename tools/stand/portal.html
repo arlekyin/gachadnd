@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css"></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="clock.js"></script>
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>window.TOKENS = { caster: ['/assets/bestiary/chess-knight.webp', 640, 330, 90, 2] };</script>
+<script src="scene.js"></script>
+<script type="module">
+import { playPortalOpening } from '/scripts/labyrinth/portal.js';
+// Плата 7: фиолетовый, зелёный, синий, два серых
+const colors = ['#a335ee', '#a335ee', '#a335ee', '#1eff00', '#0070dd', '#0070dd', '#9d9d9d'];
+window.go = () => { start(); playPortalOpening(colors).then(r => { window.done = r; }); };
+setTimeout(() => { window.ready = true; }, 800);
+</script></body></html>
