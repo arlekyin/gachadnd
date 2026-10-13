@@ -2255,3 +2255,6 @@
 .gd-crystal-peek .gd-peek-head small { color: #9a9ca3; font-size: 11px; }
 .gd-crystal-peek .gd-peek-body p { margin: 0 0 6px; }
 .gd-crystal-peek .gd-peek-body p:last-child { margin-bottom: 0; }
+
+/* Туман Предела: маленький холст, растянутый с размытием — мягкие клубы */
+.gd-fog { filter: blur(14px); transform: scale(1.08); image-rendering: auto; }

@@ -1,5 +1,5 @@
 // Открытие портала в Предел: node tools/stand/portal.mjs [--calm] [--travel] [--at=400,1000]
-// --travel: переход на сцену Якоря, которая дорисовывается через 600 мс — вспышка должна её ждать.
+// --travel: переход на сцену Якоря, которая дорисовывается через 600 мс — туман должен её ждать.
 // Время идёт кадрами по 16 мс; снимки out/portal_<мс>.png. В конце — убраны ли слои.
 import { open, args } from './harness.mjs';
 
@@ -9,7 +9,7 @@ const stand = await open(`portal.html?${[calm && 'calm', travel && 'travel'].fil
 await stand.page.evaluate(() => step(0));
 await stand.page.evaluate(() => go());
 let t = 0;
-for (let next = 16; next <= (travel ? 3000 : 2200); next += 16) {
+for (let next = 16; next <= (travel ? 4000 : 3200); next += 16) {
     const shot = shots.find(s => s > t && s <= next);
     if (shot !== undefined) { await stand.page.evaluate(x => step(x), shot); await stand.shot(`portal_${calm ? 'c_' : ''}${shot}`); }
     await stand.page.evaluate(x => step(x), next);
