@@ -2048,7 +2048,6 @@
 .gachadnd-memory-altar .gd-sigil-socket { stroke-width: 1.2; opacity: 0.45; fill: rgba(0, 0, 0, 0.35); }
 .gachadnd-memory-altar .gd-sigil-socket.lit { opacity: 0.9; filter: drop-shadow(0 0 6px var(--glow)); }
 .gachadnd-memory-altar .gd-sigil-runes { will-change: transform; animation: gd-sigil-turn 120s linear infinite; }
-.gachadnd-memory-altar .gd-sigil-runes.gd-sigil-merge { animation-duration: 200s; animation-direction: reverse; }
 .gachadnd-memory-altar .gd-sigil-ray { stroke-width: 1; opacity: 0.18; stroke-dasharray: 4 7; }
 .gachadnd-memory-altar .gd-sigil-ray.lit { opacity: 0.75; animation: gd-sigil-scatter 1.4s linear infinite; }
 @keyframes gd-sigil-scatter { to { stroke-dashoffset: -22; } }
