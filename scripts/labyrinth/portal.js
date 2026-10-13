@@ -17,9 +17,10 @@ import { getFloor } from "./economy.js";
 import { isCrystalItem } from "../memory/inventory.js";
 import { crystalWeight, setAnchor, isAnchorOpen } from "./anchor.js";
 import { overlay } from "../cutscene/overlay.js";
+import { fogLayer } from "../cutscene/fog.js";
 import { letterbox } from "../cutscene/letterbox.js";
 import { stowWindows } from "../cutscene/windows.js";
-import { clamp01, smooth, easeIn, easeOut } from "../cutscene/math.js";
+import { clamp01, smooth, easeIn } from "../cutscene/math.js";
 import { registerCues, playCue, tone, noise } from "../cutscene/audio.js";
 import { bass, crackle, glass } from "../cutscene/instruments.js";
 
@@ -151,7 +152,7 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
         }
         emit('closePortal');
         PortalWindow.close();
-        // Сцена Якоря загружается у всех, пока круг раскручивается; переход — на пике вспышки
+        // Сцена Якоря загружается у всех, пока круг раскручивается; переход — когда туман закрыл экран
         const anchor = anchorScene();
         const sceneId = anchor && anchor.id !== canvas.scene?.id ? anchor.id : null;
         if (sceneId) preloadScene(anchor);
@@ -321,8 +322,8 @@ for (const hook of ['createItem', 'updateItem', 'deleteItem']) Hooks.on(hook, re
 // СЦЕНА ОТКРЫТИЯ
 // ==========================================
 
-// Мс: затемнение, раскрутка и сгорание кристаллов, белая вспышка, уход вспышки
-const OPEN = { dim: 250, spin: 1050, white: 140, out: 420 };
+// Мс: затемнение, раскрутка, туман Предела закрывает экран, туман отступает
+const OPEN = { dim: 250, spin: 1050, white: 600, out: 1000 };
 
 registerCues({
     // Раскрутка: нарастающий гул и хор звенящих тонов
@@ -347,8 +348,8 @@ const cue = (name, options = {}) => {
 let opening = false;
 
 /**
- * Сцена открытия портала: круг раскручивается, кристаллы сгорают искрами, белая вспышка. sceneId —
- * сцена Якоря: на пике вспышки Мастер её активирует, и вспышка держится у каждого, пока она не дорисуется.
+ * Сцена открытия портала: круг раскручивается, кристаллы сгорают искрами, туман Предела закрывает экран.
+ * sceneId — сцена Якоря: под туманом Мастер её активирует, и туман держится у каждого, пока она не дорисуется.
  */
 export function playPortalOpening(colors = [], sceneId = null) {
     if (opening) return Promise.resolve(false);
@@ -358,6 +359,9 @@ export function playPortalOpening(colors = [], sceneId = null) {
     const restoreWindows = stowWindows();
     const bars = letterbox(0.1);
     const { ctx, W, H, remove } = overlay();
+    // Туман Предела поверх круга: на пике он закрывает экран, под ним меняется сцена
+    const fog = fogLayer();
+    fog.render(0, 0);
     const n = Math.max(colors.length, 3);
     const glyphs = Array.from({ length: n }, (_, i) => new Path2D(runePath(i)));
     const ticks = new Path2D();
@@ -370,13 +374,14 @@ export function playPortalOpening(colors = [], sceneId = null) {
     return new Promise(resolve => {
         const t0 = performance.now();
         let lastT = 0, angle = 0, watchdog = null, last = t0;
-        // Ожидание сцены Якоря: время катсцены стоит на полной вспышке
+        // Ожидание сцены Якоря: время катсцены стоит, пока экран закрыт туманом
         let paused = 0, travel = sceneId ? 'pending' : 'none';
         const finish = () => {
             if (!opening) return;
             clearTimeout(watchdog);
             bars.remove();
             remove();
+            fog.remove();
             restoreWindows();
             opening = false;
             resolve(true);
@@ -394,7 +399,7 @@ export function playPortalOpening(colors = [], sceneId = null) {
                 if (travel === 'waiting') paused += now - last;
                 last = now;
                 let t = (now - t0 - paused) / slow;
-                // Полная вспышка: переход на сцену Якоря, пока экран белый
+                // Туман закрыл экран: переход на сцену Якоря
                 if (t >= sO && travel === 'pending') {
                     travel = 'waiting';
                     t = sO;
@@ -408,7 +413,7 @@ export function playPortalOpening(colors = [], sceneId = null) {
                 once('portalSpin', t, sS, { duration: OPEN.spin / 1000 * slow });
                 once('portalOpen', t, sW);
                 const k = clamp01((t - sS) / OPEN.spin);
-                // Скорость растёт к вспышке: от четверти оборота в секунду до трёх оборотов
+                // Скорость растёт к пику: от четверти оборота в секунду до трёх оборотов
                 angle += dt * Math.PI * 2 * (0.25 + 2.75 * easeIn(k)) * (calm ? 0.5 : 1);
                 draw(t, k, dt);
             } catch (error) {
@@ -490,17 +495,9 @@ export function playPortalOpening(colors = [], sceneId = null) {
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.globalAlpha = 1;
             }
-            // Белая вспышка: растёт из центра и уходит
-            if (t >= sW - 80) {
-                const grow = easeOut(clamp01((t - sW + 80) / (OPEN.white + 80)));
-                const out = 1 - smooth(clamp01((t - sO) / OPEN.out));
-                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.hypot(W, H) * 0.6 * grow + 1);
-                g.addColorStop(0, `rgba(245, 248, 255, ${(calm ? 0.55 : 1) * out})`);
-                g.addColorStop(0.7, `rgba(235, 240, 255, ${(calm ? 0.45 : 0.95) * out})`);
-                g.addColorStop(1, 'rgba(235, 240, 255, 0)');
-                ctx.fillStyle = g;
-                ctx.fillRect(0, 0, W, H);
-            }
+            // Туман Предела: наползает от краёв, пока круг на пике, закрывает экран и отступает
+            const cover = t < sO ? smooth(clamp01((t - sW + 350) / (OPEN.white + 350))) : 1 - smooth(clamp01((t - sO) / OPEN.out));
+            fog.render(cover, t / 1000);
         };
         requestAnimationFrame(frame);
     });

@@ -6,13 +6,13 @@
  * Риск по-прежнему читают её оттуда.
  *
  * Сцена Якоря — необязательная настройка. Не выбрана — Якорь остаётся состоянием без смены сцены.
- * Выбрана — портал переносит всех на неё под белой вспышкой, выход из Якоря возвращает на сцену
- * этажа. Сцена заранее загружается у всех, а вспышка держится у каждого, пока его сцена не дорисуется.
+ * Выбрана — портал переносит всех на неё сквозь туман Предела, выход из Якоря возвращает на сцену
+ * этажа. Сцена заранее загружается у всех, а туман Предела держится у каждого, пока его сцена не дорисуется.
  */
 
 import { MODULE_ID } from "../core/constants.js";
 import { emit, onSocket } from "../core/socket.js";
-import { overlay } from "../cutscene/overlay.js";
+import { fogLayer } from "../cutscene/fog.js";
 import { clamp01, smooth } from "../cutscene/math.js";
 
 export function registerSceneSettings() {
@@ -90,34 +90,35 @@ export function arrival(sceneId, timeout = 8000) {
 }
 
 /**
- * Переход на сцену под белой вспышкой (без катсцены — выход из Якоря). Мастер рассылает его всем:
- * у каждого экран белеет, Мастер активирует сцену, вспышка уходит, когда сцена дорисована.
+ * Переход на сцену под туманом Предела (без катсцены — кнопка Якоря, выход из Якоря). Мастер рассылает
+ * его всем: у каждого туман наползает от краёв и закрывает экран, Мастер активирует сцену, туман
+ * отступает, когда сцена дорисована.
  */
 export async function travelTo(scene) {
     if (!game.user.isGM || !scene || canvas.scene?.id === scene.id) return;
     preloadScene(scene);
     emit('sceneTravel', { sceneId: scene.id });
-    const shown = whiteVeil(scene.id);
-    await new Promise(r => setTimeout(r, VEIL.in + 40));
+    const shown = fogVeil(scene.id);
+    await new Promise(r => setTimeout(r, VEIL.in + 60));
     await scene.activate();
     await shown;
 }
-onSocket('sceneTravel', ({ sceneId }) => whiteVeil(sceneId));
+onSocket('sceneTravel', ({ sceneId }) => fogVeil(sceneId));
 
-const VEIL = { in: 320, out: 520 };
+const VEIL = { in: 900, out: 1100 };
 let veiled = false;
 
-/** Белая пелена: проступает, держится до прибытия на сцену, уходит */
-function whiteVeil(sceneId) {
+/** Туман: наползает, держится до прибытия на сцену, отступает */
+function fogVeil(sceneId) {
     if (veiled) return Promise.resolve(false);
     veiled = true;
-    const { ctx, W, H, remove } = overlay();
-    const paint = a => { ctx.clearRect(0, 0, W, H); ctx.fillStyle = `rgba(240, 244, 255, ${a})`; ctx.fillRect(0, 0, W, H); };
+    const fog = fogLayer();
+    const t0 = performance.now();
     const fade = (from, to, ms) => new Promise(resolve => {
-        const t0 = performance.now();
+        const start = performance.now();
         const step = now => {
-            const k = clamp01((now - t0) / ms);
-            paint(from + (to - from) * smooth(k));
+            const k = clamp01((now - start) / ms);
+            fog.render(from + (to - from) * smooth(k), (now - t0) / 1000);
             if (k < 1) requestAnimationFrame(step); else resolve();
         };
         requestAnimationFrame(step);
@@ -125,11 +126,15 @@ function whiteVeil(sceneId) {
     return (async () => {
         try {
             await fade(0, 1, VEIL.in);
-            await new Promise(r => setTimeout(r, 60));
+            // Пока сцена грузится, клубы продолжают ползти
+            let waiting = true;
+            const drift = now => { if (!waiting) return; fog.render(1, (now - t0) / 1000); requestAnimationFrame(drift); };
+            requestAnimationFrame(drift);
             await arrival(sceneId);
+            waiting = false;
             await fade(1, 0, VEIL.out);
         } finally {
-            remove();
+            fog.remove();
             veiled = false;
         }
         return true;
