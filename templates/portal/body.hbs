@@ -3,28 +3,33 @@
     <p class="gd-portal-empty">Портал открывается только на Привале.</p>
     {{else}}
     <div class="gd-circle">
-        <svg class="gd-circle-svg" viewBox="0 0 300 300" aria-hidden="true">
+        {{!-- Каждое кольцо — свой слой: браузер поворачивает его готовой картинкой, не перерисовывая свечение рун --}}
+        {{!-- Внешнее кольцо: мелкая вязь, медленно идёт против часовой --}}
+        <div class="gd-circle-layer gd-circle-outer">
+            <svg viewBox="0 0 300 300" aria-hidden="true">
+                <circle cx="150" cy="150" r="140" class="gd-circle-line"/>
+                <circle cx="150" cy="150" r="133" class="gd-circle-line faint"/>
+                {{#each ticks}}<path d="{{this}}" class="gd-circle-tick"/>{{/each}}
+            </svg>
+        </div>
+        {{!-- Кольцо платы: одна руна — одна единица веса; горит цветом кристалла, который её зажёг --}}
+        <div class="gd-circle-layer gd-circle-runes">
+            <svg viewBox="0 0 300 300" aria-hidden="true">
+                <circle cx="150" cy="150" r="124" class="gd-circle-line"/>
+                <circle cx="150" cy="150" r="98" class="gd-circle-line"/>
+                {{#each runes}}
+                <g class="gd-rune {{#if lit}}lit{{/if}} {{#if kindle}}kindle{{/if}}" style="--rune: {{color}}; --i: {{kindleIndex}}" transform="translate({{x}} {{y}}) rotate({{angle}}) scale(1.35)">
+                    <path class="glow" d="{{path}}"/><path d="{{path}}"/>
+                </g>
+                {{/each}}
+            </svg>
+        </div>
+        <svg class="gd-circle-layer gd-circle-svg" viewBox="0 0 300 300" aria-hidden="true">
             <defs>
                 <radialGradient id="gd-circle-void" cx="50%" cy="50%" r="50%">
                     <stop offset="0%" stop-color="#03050a"/><stop offset="70%" stop-color="#070b16"/><stop offset="100%" stop-color="#101a30"/>
                 </radialGradient>
             </defs>
-            {{!-- Внешнее кольцо: мелкая вязь, медленно идёт против часовой --}}
-            <g class="gd-circle-outer">
-                <circle cx="150" cy="150" r="140" class="gd-circle-line"/>
-                <circle cx="150" cy="150" r="133" class="gd-circle-line faint"/>
-                {{#each ticks}}<path d="{{this}}" class="gd-circle-tick"/>{{/each}}
-            </g>
-            {{!-- Кольцо платы: одна руна — одна единица веса; горит цветом кристалла, который её зажёг --}}
-            <g class="gd-circle-runes">
-                <circle cx="150" cy="150" r="124" class="gd-circle-line"/>
-                <circle cx="150" cy="150" r="98" class="gd-circle-line"/>
-                {{#each runes}}
-                <g class="gd-rune {{#if lit}}lit{{/if}} {{#if kindle}}kindle{{/if}}" style="--rune: {{color}}; --i: {{kindleIndex}}" transform="translate({{x}} {{y}}) rotate({{angle}}) scale(1.35)">
-                    <path d="{{path}}"/>
-                </g>
-                {{/each}}
-            </g>
             <circle cx="150" cy="150" r="92" fill="url(#gd-circle-void)" class="gd-circle-void"/>
         </svg>
         {{!-- В центре — тьма Предела: голодные души; набрана плата — проступает край луны --}}
