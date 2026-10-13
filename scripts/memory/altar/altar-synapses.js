@@ -27,6 +27,9 @@ const cubic = (p0, p1, p2, p3) => u => {
 };
 
 function rgb(color) {
+    // Цвет ритуала приходит и как #rrggbb, и как rgb(r, g, b) — так его отдаёт плавно меняющийся --glow
+    const parts = String(color).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+    if (parts) return parts.slice(1, 4).map(v => Math.round(Number(v)));
     const hex = String(color).trim().replace('#', '');
     const n = parseInt(hex.length === 3 ? hex.replace(/./g, c => c + c) : hex, 16) || 0xc9a75d;
     return [n >> 16, (n >> 8) & 255, n & 255];
@@ -545,7 +548,8 @@ export class ResonanceWeave {
         const place = el => ({ x: parseFloat(el.style.left) / 100 * width, y: parseFloat(el.style.top) / 100 * height });
         const tags = Object.fromEntries([...stage.querySelectorAll('.gd-wheel-tag')]
             .map(el => [el.dataset.tag, { ...place(el), w: el.offsetWidth, h: el.offsetHeight }]));
-        const glow = getComputedStyle(stage).getPropertyValue('--glow') || '#b066ff';
+        // Конечный цвет ритуала (у окна), а не промежуточный, пока он перетекает
+        const glow = stage.closest('.gachadnd-memory-altar')?.style.getPropertyValue('--glow') || getComputedStyle(stage).getPropertyValue('--glow') || '#b066ff';
         const ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
         this.host.call('setScene', { width, height, ratio, core: { ...place(core), r: core.offsetWidth / 2 }, tags, color: rgb(glow) });
     }
