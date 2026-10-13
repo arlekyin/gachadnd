@@ -263,6 +263,8 @@ function sigilSvg(o) {
 // Фаза покачивания огонька привязана к часам и ключу, а не к моменту отрисовки:
 // после перерисовки огонёк продолжает движение с той же точки, а не прыгает в начало
 const BOB_PERIOD = 6;
+// Смена ритуала — вдох и выдох, мс
+const BREATH_MS = 1050;
 function bobPhase(key) {
     let hash = 0;
     for (const ch of key) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
@@ -595,8 +597,16 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         await super._preRender(context, options);
         // Смена ритуала — смена мысли: старый круг запоминается, чтобы втянуться в ядро
         this.#ghost = null;
-        if (options.parts?.includes('stage') && this.#lastRitual && this.#lastRitual !== context.ritual.key) {
-            this.#ghost = this.#part('stage')?.querySelector('.gd-sigil-wrap')?.cloneNode(true) ?? null;
+        if (options.parts?.includes('stage') && this.#lastRitual && this.#lastRitual !== this.ritual) {
+            // Призрак втягивается из того вида, в котором круг сейчас: он мог ещё разворачиваться
+            const wrap = this.#part('stage')?.querySelector('.gd-sigil-wrap');
+            if (wrap) {
+                const cs = getComputedStyle(wrap);
+                const el = wrap.cloneNode(true);
+                el.classList.remove('gd-sigil-exhale');
+                el.style.animation = 'none';
+                this.#ghost = { el, from: { transform: cs.transform === 'none' ? 'scale(1)' : cs.transform, opacity: cs.opacity, filter: cs.filter } };
+            }
         }
         if (!options.parts?.includes('fog')) return;
         this.#momentum = this.#physics?.snapshot() ?? new Map();
@@ -647,25 +657,41 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     // разворачивается из него; цвет ритуала тем временем перетекает (переход --glow в CSS)
     #ghost = null;
     #lastRitual = null;
+    // Идущий вдох: когда начался и его призрак — перерисовка посреди вдоха продолжает его с того же места
+    #breath = null;
     #breathe(key) {
         const stage = this.#part('stage');
         const changed = this.#lastRitual && this.#lastRitual !== key;
         this.#lastRitual = key;
-        if (!changed || !stage || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+        if (!stage || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+        const now = performance.now();
+        if (changed) {
+            this.#breath?.ghost?.remove();
+            this.#breath = { start: now, ghost: null };
+            if (this.#ghost) {
+                const { el, from } = this.#ghost;
+                el.classList.add('gd-sigil-ghost');
+                this.#breath.ghost = el;
+                const breath = this.#breath;
+                const done = () => { breath.ghostDone = true; el.remove(); };
+                el.animate([from, { transform: 'scale(0.1) rotate(30deg)', opacity: 0, filter: 'blur(3px)' }], { duration: 450, easing: 'ease-in', fill: 'forwards' })
+                    .finished.then(done, done);
+            }
+            this.#ghost = null;
+        } else if (!this.#breath || now - this.#breath.start > BREATH_MS) return;
+        const elapsed = (now - this.#breath.start) / 1000;
         const wrap = stage.querySelector('.gd-sigil-wrap');
-        if (this.#ghost) {
-            const ghost = this.#ghost;
-            ghost.classList.add('gd-sigil-ghost');
-            stage.insertBefore(ghost, wrap ?? stage.firstChild);
-            keepPhase(ghost);
-            ghost.addEventListener('animationend', event => { if (event.target === ghost) ghost.remove(); });
-            setTimeout(() => ghost.remove(), 1200);
+        // Призрак переезжает в новую сцену вместе с анимацией (она не привязана к стилям)
+        if (this.#breath.ghost && !this.#breath.ghostDone) {
+            stage.insertBefore(this.#breath.ghost, wrap ?? stage.firstChild);
+            keepPhase(this.#breath.ghost);
         }
-        wrap?.classList.add('gd-sigil-exhale');
-        stage.classList.remove('breath');
-        void stage.offsetWidth;
+        if (wrap) {
+            wrap.classList.add('gd-sigil-exhale');
+            wrap.style.animationDelay = `${(0.38 - elapsed).toFixed(3)}s`;
+        }
+        stage.style.setProperty('--breath-delay', `${(-elapsed).toFixed(3)}s`);
         stage.classList.add('breath');
-        this.#ghost = null;
     }
 
     // Круг ритуала перерисовывается целиком при каждой закладке кристалла: загоревшиеся и погасшие

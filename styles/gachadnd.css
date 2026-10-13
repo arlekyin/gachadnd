@@ -2037,11 +2037,9 @@
 /* Круг ритуала Переплавки: кольца, руны, гексаграмма, гнёзда. Под облаком ядра; накал разогревает круг */
 .gachadnd-memory-altar .gd-sigil-wrap { position: absolute; z-index: 0; width: 0; height: 0; pointer-events: none; }
 /* Смена ритуала — вдох и выдох сознания: старый круг втягивается в ядро, новый разворачивается из него */
-.gachadnd-memory-altar .gd-sigil-ghost { animation: gd-sigil-inhale 0.45s ease-in forwards; }
-@keyframes gd-sigil-inhale { to { transform: scale(0.1) rotate(30deg); opacity: 0; filter: blur(3px); } }
 .gachadnd-memory-altar .gd-sigil-exhale { animation: gd-sigil-exhale 0.65s cubic-bezier(0.2, 0.8, 0.3, 1) 0.38s both; }
 @keyframes gd-sigil-exhale { from { transform: scale(0.1) rotate(-24deg); opacity: 0; filter: blur(3px); } }
-.gachadnd-memory-altar .gd-part-stage.breath .gd-mind-core { animation: gd-core-breath 1s ease-in-out; }
+.gachadnd-memory-altar .gd-part-stage.breath .gd-mind-core { animation: gd-core-breath 1s ease-in-out var(--breath-delay, 0s); }
 @keyframes gd-core-breath {
     0% { transform: translate(-50%, -50%) scale(1); }
     38% { transform: translate(-50%, -50%) scale(0.86); filter: brightness(0.85); }
