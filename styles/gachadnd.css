@@ -2038,12 +2038,14 @@
 .gachadnd-memory-altar .gd-sigil-wrap { position: absolute; z-index: 0; width: 0; height: 0; pointer-events: none; }
 /* Смена ритуала — вдох и выдох сознания: старый круг втягивается в ядро, новый разворачивается из него */
 .gachadnd-memory-altar .gd-sigil-exhale { animation: gd-sigil-exhale 0.65s cubic-bezier(0.2, 0.8, 0.3, 1) 0.38s both; }
-@keyframes gd-sigil-exhale { from { transform: scale(0.1) rotate(-24deg); opacity: 0; filter: blur(3px); } }
+@keyframes gd-sigil-exhale { from { transform: scale(0.1) rotate(-24deg); opacity: 0; } }
+.gachadnd-memory-altar .gd-sigil-runes-frame { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.gachadnd-memory-altar .gd-sigil-ghost, .gachadnd-memory-altar .gd-sigil-exhale { will-change: transform, opacity; }
 .gachadnd-memory-altar .gd-part-stage.breath .gd-mind-core { animation: gd-core-breath 1s ease-in-out var(--breath-delay, 0s); }
 @keyframes gd-core-breath {
     0% { transform: translate(-50%, -50%) scale(1); }
-    38% { transform: translate(-50%, -50%) scale(0.86); filter: brightness(0.85); }
-    52% { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.7); }
+    38% { transform: translate(-50%, -50%) scale(0.86); opacity: 0.8; }
+    52% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
     100% { transform: translate(-50%, -50%) scale(1); }
 }
 .gachadnd-memory-altar .gd-sigil { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); overflow: visible; }

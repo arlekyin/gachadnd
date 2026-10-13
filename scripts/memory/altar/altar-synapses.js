@@ -280,33 +280,48 @@ export class AltarSynapses {
      * @param {HTMLCanvasElement} canvas  холст в слое ядра
      * @param {HTMLElement} stage         слой с ядром и узлами
      */
-    constructor(canvas, stage) {
-        this.stage = stage;
-        this.host = new RendererHost('synapses', SynapsesRenderer);
-        this.host.call('attach', canvas, underlay(canvas));
+    // Экземпляр и его рабочий поток живут, пока открыто окно: слой ядра перерисовывается при каждой
+    // смене ритуала, и новый поток на каждую перерисовку (загрузка модуля, запуск) давал фризы
+    constructor() {
+        this.host = null;
+        this.stage = null;
         // Замер — при появлении и изменении размера, а не каждый кадр: чтение стилей в кадре
         // заставляло браузер пересчитывать всё окно с его анимациями, и импульсы дёргались
         this.resizeObserver = new ResizeObserver(() => this.#measure());
-        this.resizeObserver.observe(stage);
     }
 
-    start() {
+    /** Новый холст слоя ядра: рисование продолжается на нём тем же потоком */
+    attach(canvas, stage) {
+        this.stage = stage;
+        this.host ??= new RendererHost('synapses', SynapsesRenderer);
+        this.host.call('attach', canvas, underlay(canvas));
+        this.resizeObserver.disconnect();
+        this.resizeObserver.observe(stage);
         this.#measure();
         this.host.call('start');
     }
 
-    stop() {
+    /** У ритуала нет кольца: рисование стоит, поток остаётся */
+    pause() {
         this.resizeObserver.disconnect();
-        this.host.dispose();
+        this.host?.call('stop');
+    }
+
+    /** Окно закрыто */
+    dispose() {
+        this.resizeObserver.disconnect();
+        this.host?.dispose();
+        this.host = null;
     }
 
     flare(itemId) {
-        this.host.call('flare', itemId);
+        this.host?.call('flare', itemId);
     }
 
     // Узлы и ядро в координатах холста. Берутся из процентов разметки, а не из рамок: ядро и узлы
     // «дышат» анимацией масштаба, и рамки менялись бы каждый кадр
     #measure() {
+        if (!this.stage || !this.host) return;
         const width = this.stage.clientWidth, height = this.stage.clientHeight;
         const core = this.stage.querySelector('.gd-core');
         if (!core || !width) return;

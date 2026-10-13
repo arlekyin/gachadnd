@@ -200,8 +200,11 @@ function sigilSvg(o) {
     const parts = [];
     for (const r of o.rings ?? []) parts.push(`<ellipse class="gd-sigil-ring ${r.cls ?? ''}" cx="0" cy="0" rx="${f1(r.rx)}" ry="${f1(r.ry)}"/>`);
     // Кольцо рун вращается отдельным слоем: вращение элемента целиком анимирует видеокарта, а вращение
-    // группы внутри SVG перерисовывало бы весь круг на основном потоке каждый кадр
-    const runes = o.runes ? `<g class="gd-runes">${RUNES.map((d, n) => runeAt(d, n, RUNES.length, o.runes.rx, o.runes.ry, n < o.runes.lit)).join('')}</g>` : '';
+    // группы внутри SVG перерисовывало бы весь круг на основном потоке каждый кадр. Руны стоят на круге
+    // радиуса rx, а рамка сжимает слой до эллипса rx × ry: при вращении руны идут ровно по эллипсу
+    // (жёсткий поворот эллипса уводил бы их с кольца)
+    const runeR = o.runes?.rx ?? 0;
+    const runes = o.runes ? `<g class="gd-runes">${RUNES.map((d, n) => runeAt(d, n, RUNES.length, runeR, runeR, n < o.runes.lit)).join('')}</g>` : '';
     if (o.rays) {
         for (let n = 0; n < o.rays.count; n++) {
             const a = (n * 360 / o.rays.count - 90) * Math.PI / 180;
@@ -256,8 +259,10 @@ function sigilSvg(o) {
     });
     if (o.sockets) points.forEach(([x, y], i) => parts.push(`<circle class="gd-sigil-socket ${filled[i] ? 'lit' : ''}" cx="${f1(x)}" cy="${f1(y)}" r="${o.sockets}"/>`));
     if (o.center) parts.push(`<circle class="gd-sigil-socket center ${o.center.lit ? 'lit' : ''}" cx="0" cy="0" r="${o.center.r}"/>`);
-    const svg = (cls, body) => `<svg class="gd-sigil gd-sigil-${o.kind} ${cls}" viewBox="${f1(-w / 2)} ${f1(-h / 2)} ${f1(w)} ${f1(h)}" width="${f1(w)}" height="${f1(h)}" aria-hidden="true">${body}</svg>`;
-    return (runes ? svg('gd-sigil-runes', runes) : '') + svg('', parts.join(''));
+    const svg = (cls, body, sw = w, sh = h) => `<svg class="gd-sigil gd-sigil-${o.kind} ${cls}" viewBox="${f1(-sw / 2)} ${f1(-sh / 2)} ${f1(sw)} ${f1(sh)}" width="${f1(sw)}" height="${f1(sh)}" aria-hidden="true">${body}</svg>`;
+    const side = 2 * (runeR + 40);
+    const runeLayer = runes ? `<div class="gd-sigil-runes-frame" style="transform: scale(1, ${(o.runes.ry / runeR).toFixed(4)})">${svg('gd-sigil-runes', runes, side, side)}</div>` : '';
+    return runeLayer + svg('', parts.join(''));
 }
 
 // Фаза покачивания огонька привязана к часам и ключу, а не к моменту отрисовки:
@@ -605,7 +610,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
                 const el = wrap.cloneNode(true);
                 el.classList.remove('gd-sigil-exhale');
                 el.style.animation = 'none';
-                this.#ghost = { el, from: { transform: cs.transform === 'none' ? 'scale(1)' : cs.transform, opacity: cs.opacity, filter: cs.filter } };
+                this.#ghost = { el, from: { transform: cs.transform === 'none' ? 'scale(1)' : cs.transform, opacity: cs.opacity } };
             }
         }
         if (!options.parts?.includes('fog')) return;
@@ -627,11 +632,11 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             this.#softenSigil();
             this.#ringShown = !!context.ring;
             // Связи кольца живут вместе со слоем ядра; после слияния по прядям навыка уходит вспышка
-            this.#synapses?.stop();
             const canvas = this.#part('stage')?.querySelector('canvas.gd-synapses');
-            this.#synapses = canvas ? new AltarSynapses(canvas, this.#part('stage')) : null;
-            this.#synapses?.start();
-            if (this.#flareId) this.#synapses?.flare(this.#flareId);
+            this.#synapses ??= new AltarSynapses();
+            if (canvas) this.#synapses.attach(canvas, this.#part('stage'));
+            else this.#synapses.pause();
+            if (this.#flareId) this.#synapses.flare(this.#flareId);
             if (this.#flareId) this.#mind.boost(this.#flareId);
             const mindCanvas = this.#part('stage')?.querySelector('canvas.gd-mind-core');
             if (mindCanvas) this.#mind.attach(mindCanvas, this.#part('stage'), context.mind);
@@ -674,7 +679,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
                 this.#breath.ghost = el;
                 const breath = this.#breath;
                 const done = () => { breath.ghostDone = true; el.remove(); };
-                el.animate([from, { transform: 'scale(0.1) rotate(30deg)', opacity: 0, filter: 'blur(3px)' }], { duration: 450, easing: 'ease-in', fill: 'forwards' })
+                el.animate([{ transform: from.transform, opacity: from.opacity }, { transform: 'scale(0.1) rotate(30deg)', opacity: 0 }], { duration: 450, easing: 'ease-in', fill: 'forwards' })
                     .finished.then(done, done);
             }
             this.#ghost = null;
@@ -840,7 +845,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         super._onClose(options);
         this.#physics?.destroy();
         this.#physics = null;
-        this.#synapses?.stop();
+        this.#synapses?.dispose();
         this.#synapses = null;
         this.#weave.dispose();
         this.#mind.stop();
