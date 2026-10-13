@@ -593,6 +593,11 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     // Огоньки в полёте запоминают место и скорость, если туман сейчас перерисуется
     async _preRender(context, options) {
         await super._preRender(context, options);
+        // Смена ритуала — смена мысли: старый круг запоминается, чтобы втянуться в ядро
+        this.#ghost = null;
+        if (options.parts?.includes('stage') && this.#lastRitual && this.#lastRitual !== context.ritual.key) {
+            this.#ghost = this.#part('stage')?.querySelector('.gd-sigil-wrap')?.cloneNode(true) ?? null;
+        }
         if (!options.parts?.includes('fog')) return;
         this.#momentum = this.#physics?.snapshot() ?? new Map();
         for (const [key, { x, y }] of this.#momentum) this.#drift.set(key, { x, y });
@@ -608,6 +613,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#dived = true;
         this.#bindCard();
         if (options.parts?.includes('stage')) {
+            this.#breathe(context.ritual.key);
             this.#softenSigil();
             this.#ringShown = !!context.ring;
             // Связи кольца живут вместе со слоем ядра; после слияния по прядям навыка уходит вспышка
@@ -635,6 +641,31 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             obstacles: this.element
         });
         this.#momentum = null;
+    }
+
+    // Вдох и выдох: старый круг втягивается в ядро, ядро сжимается и вспыхивает, новый круг
+    // разворачивается из него; цвет ритуала тем временем перетекает (переход --glow в CSS)
+    #ghost = null;
+    #lastRitual = null;
+    #breathe(key) {
+        const stage = this.#part('stage');
+        const changed = this.#lastRitual && this.#lastRitual !== key;
+        this.#lastRitual = key;
+        if (!changed || !stage || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+        const wrap = stage.querySelector('.gd-sigil-wrap');
+        if (this.#ghost) {
+            const ghost = this.#ghost;
+            ghost.classList.add('gd-sigil-ghost');
+            stage.insertBefore(ghost, wrap ?? stage.firstChild);
+            keepPhase(ghost);
+            ghost.addEventListener('animationend', event => { if (event.target === ghost) ghost.remove(); });
+            setTimeout(() => ghost.remove(), 1200);
+        }
+        wrap?.classList.add('gd-sigil-exhale');
+        stage.classList.remove('breath');
+        void stage.offsetWidth;
+        stage.classList.add('breath');
+        this.#ghost = null;
     }
 
     // Круг ритуала перерисовывается целиком при каждой закладке кристалла: загоревшиеся и погасшие

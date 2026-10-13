@@ -2036,6 +2036,18 @@
 
 /* Круг ритуала Переплавки: кольца, руны, гексаграмма, гнёзда. Под облаком ядра; накал разогревает круг */
 .gachadnd-memory-altar .gd-sigil-wrap { position: absolute; z-index: 0; width: 0; height: 0; pointer-events: none; }
+/* Смена ритуала — вдох и выдох сознания: старый круг втягивается в ядро, новый разворачивается из него */
+.gachadnd-memory-altar .gd-sigil-ghost { animation: gd-sigil-inhale 0.45s ease-in forwards; }
+@keyframes gd-sigil-inhale { to { transform: scale(0.1) rotate(30deg); opacity: 0; filter: blur(3px); } }
+.gachadnd-memory-altar .gd-sigil-exhale { animation: gd-sigil-exhale 0.65s cubic-bezier(0.2, 0.8, 0.3, 1) 0.38s both; }
+@keyframes gd-sigil-exhale { from { transform: scale(0.1) rotate(-24deg); opacity: 0; filter: blur(3px); } }
+.gachadnd-memory-altar .gd-part-stage.breath .gd-mind-core { animation: gd-core-breath 1s ease-in-out; }
+@keyframes gd-core-breath {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    38% { transform: translate(-50%, -50%) scale(0.86); filter: brightness(0.85); }
+    52% { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.7); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
 .gachadnd-memory-altar .gd-sigil { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); overflow: visible; }
 .gachadnd-memory-altar .gd-sigil * { fill: none; stroke: var(--glow); vector-effect: non-scaling-stroke; }
 .gachadnd-memory-altar .gd-sigil-ring { stroke-width: 1.2; opacity: 0.35; }
@@ -2286,3 +2298,7 @@
 
 /* Туман Предела: маленький холст, растянутый с размытием — мягкие клубы */
 .gd-fog { filter: blur(14px); transform: scale(1.08); image-rendering: auto; }
+
+/* Цвет ритуала перетекает при смене ритуала: --glow — цвет, его можно плавно менять */
+@property --glow { syntax: '<color>'; inherits: true; initial-value: #ff7a3c; }
+.gachadnd-memory-altar { transition: --glow 0.9s ease-in-out; }
