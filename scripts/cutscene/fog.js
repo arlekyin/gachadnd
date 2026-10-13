@@ -34,6 +34,32 @@ function fbm(x, y) {
 }
 
 /**
+ * Нарисовать туман в данные картинки: покрытие cover (0…1), время seconds для дрейфа клубов.
+ * Туман приходит с краёв картинки к центру.
+ */
+export function paintFog(image, cover, seconds = 0) {
+    const { width: w, height: h, data: px } = image, aspect = w / h, t = seconds;
+    const reach = Math.hypot(0.5 * aspect, 0.5);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const u = x / w, v = y / h;
+            const edge = Math.min(1, Math.hypot((u - 0.5) * aspect, v - 0.5) / reach);
+            const n = fbm(u * 5 + t * 0.12, v * 5 - t * 0.05);
+            const m = fbm(u * 2.2 - t * 0.04 + 9.1, v * 2.2 + t * 0.03 + 3.7);
+            const a = Math.max(0, Math.min(1, cover * 1.9 - 0.95 + edge * 0.8 + (n - 0.5) * 0.9));
+            // Цвет: бирюзовая глубина, светлее в густых клубах, местами провалы в черноту
+            const lift = Math.max(0, n - 0.45) * 1.6, black = Math.max(0, Math.min(1, (m - 0.52) * 3.2));
+            const k = (1 - black) * (0.35 + lift);
+            const i = (y * w + x) * 4;
+            px[i] = 2 * k;
+            px[i + 1] = 105 * k + 6 * (1 - black);
+            px[i + 2] = 100 * k + 6 * (1 - black);
+            px[i + 3] = a * 255;
+        }
+    }
+}
+
+/**
  * Слой тумана во весь экран.
  * @returns {{render: (cover: number, seconds: number) => void, remove: Function}}
  *   cover — 0 нет тумана, 1 экран закрыт полностью; seconds — время для дрейфа клубов.
@@ -44,29 +70,10 @@ export function fogLayer() {
     canvas.className = 'gd-impact gd-fog';
     document.body.append(canvas);
     const ctx = canvas.getContext('2d');
-    const image = ctx.createImageData(GW, GH), px = image.data;
-    const aspect = GW / GH;
+    const image = ctx.createImageData(GW, GH);
     return {
         render(cover, seconds = 0) {
-            const t = seconds;
-            for (let y = 0; y < GH; y++) {
-                for (let x = 0; x < GW; x++) {
-                    const u = x / GW, v = y / GH;
-                    // Расстояние от центра: 0 в центре, 1 в углу — туман приходит с краёв
-                    const dx = (u - 0.5) * aspect, dy = v - 0.5, edge = Math.min(1, Math.hypot(dx, dy) / Math.hypot(0.5 * aspect, 0.5));
-                    const n = fbm(u * 5 + t * 0.12, v * 5 - t * 0.05);
-                    const m = fbm(u * 2.2 - t * 0.04 + 9.1, v * 2.2 + t * 0.03 + 3.7);
-                    const a = Math.max(0, Math.min(1, cover * 1.9 - 0.95 + edge * 0.8 + (n - 0.5) * 0.9));
-                    // Цвет: бирюзовая глубина, светлее в густых клубах, местами провалы в черноту
-                    const lift = Math.max(0, n - 0.45) * 1.6, black = Math.max(0, Math.min(1, (m - 0.52) * 3.2));
-                    const k = (1 - black) * (0.35 + lift);
-                    const i = (y * GW + x) * 4;
-                    px[i] = 2 * k;
-                    px[i + 1] = 105 * k + 6 * (1 - black);
-                    px[i + 2] = 100 * k + 6 * (1 - black);
-                    px[i + 3] = a * 255;
-                }
-            }
+            paintFog(image, cover, seconds);
             ctx.putImageData(image, 0, 0);
         },
         remove: () => canvas.remove()
