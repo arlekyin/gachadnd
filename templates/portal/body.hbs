@@ -1,4 +1,4 @@
-<div class="gd-portal {{#if ready}}ready{{/if}} {{#if closing}}closing{{/if}}">
+<div class="gd-portal {{#if ready}}ready{{/if}} {{#if closing}}closing{{/if}} {{#if breaking}}breaking{{/if}}">
     {{#unless atRest}}
     <p class="gd-portal-empty">Портал открывается только на Привале.</p>
     {{else}}
@@ -18,7 +18,7 @@
                 <circle cx="150" cy="150" r="124" class="gd-circle-line"/>
                 <circle cx="150" cy="150" r="98" class="gd-circle-line"/>
                 {{#each runes}}
-                <g class="gd-rune {{#if lit}}lit{{/if}} {{#if kindle}}kindle{{/if}}" style="--rune: {{color}}; --i: {{kindleIndex}}" transform="translate({{x}} {{y}}) rotate({{angle}}) scale(1.35)">
+                <g class="gd-rune {{#if lit}}lit{{/if}} {{#if kindle}}kindle{{/if}} {{#if fading}}fading{{/if}}" style="--rune: {{color}}; --i: {{kindleIndex}}" transform="translate({{x}} {{y}}) rotate({{angle}}) scale(1.35)">
                     <path class="glow" d="{{path}}"/><path d="{{path}}"/>
                 </g>
                 {{/each}}
@@ -32,10 +32,12 @@
             </defs>
             <circle cx="150" cy="150" r="92" fill="url(#gd-circle-void)" class="gd-circle-void"/>
             {{!-- Круг замкнут: тонкая линия обегает кольцо рун и остаётся --}}
-            {{#if ready}}<circle cx="150" cy="150" r="111" class="gd-circle-seam" pathLength="100" transform="rotate(-90 150 150)"/>{{/if}}
+            {{#if seam}}<circle cx="150" cy="150" r="111" class="gd-circle-seam" pathLength="100" transform="rotate(-90 150 150)"/>{{/if}}
         </svg>
         {{!-- В центре — тьма Предела: голодные души; набрана плата — проступает край луны --}}
         <div class="gd-circle-core">
+            {{!-- Туман Предела: наползает от края тьмы и густеет с платой (portal.js) --}}
+            <canvas class="gd-core-fog" width="72" height="72"></canvas>
             <i class="gd-soul s1"></i><i class="gd-soul s2"></i><i class="gd-soul s3"></i>
             <i class="gd-moon"></i>
             {{#if isGM}}

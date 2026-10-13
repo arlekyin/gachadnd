@@ -2099,9 +2099,23 @@
 @keyframes gd-seam-close { from { stroke-dashoffset: 100; opacity: 0.9; } to { stroke-dashoffset: 0; opacity: 0.55; } }
 .gd-portal.closing .gd-circle-line { animation: gd-ring-wake 2s ease-out both; }
 @keyframes gd-ring-wake { from { opacity: 0.45; } }
+/* Плату забрали: руна остывает прежним цветом, линия стягивается, луна и печать гаснут — плавно, один раз */
+.gd-rune.fading path { animation: gd-rune-fade 1s ease-in both; }
+.gd-rune.fading path.glow { animation-name: gd-rune-fade-glow; }
+@keyframes gd-rune-fade { from { stroke: color-mix(in srgb, var(--rune) 75%, white); } }
+@keyframes gd-rune-fade-glow { from { stroke: var(--rune); stroke-width: 5.5; opacity: 0.35; } }
+.gd-portal.breaking .gd-circle-seal { animation: gd-seal-sleep 1.2s ease-in both; }
+@keyframes gd-seal-sleep { from { border-color: #c6d3f2; color: #eef2fb; box-shadow: 0 0 10px rgba(160, 185, 255, 0.25), inset 0 0 10px rgba(160, 185, 255, 0.18); } }
+.gd-portal.breaking .gd-circle-seam { animation: gd-seam-break 1.2s ease-in both; }
+@keyframes gd-seam-break { from { stroke-dashoffset: 0; opacity: 0.55; } to { stroke-dashoffset: -100; opacity: 0; } }
+.gd-portal.breaking .gd-moon { animation: gd-moon-set 1.4s ease-in both; }
+@keyframes gd-moon-set { from { opacity: 0.7; transform: none; } to { opacity: 0; transform: translate(10px, -10px) rotate(-6deg); } }
+.gd-portal.breaking .gd-circle-line { animation: gd-ring-sleep 1.4s ease-in both; }
+@keyframes gd-ring-sleep { from { opacity: 0.6; } }
 
 /* Центр: тьма Предела, души, луна, печать */
 .gd-circle-core { position: absolute; left: 50%; top: 50%; width: 184px; height: 184px; margin: -92px 0 0 -92px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; }
+.gd-core-fog { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); border-radius: 50%; filter: blur(6px); }
 .gd-soul { position: absolute; width: 60px; height: 90px; border-radius: 50%; background: radial-gradient(ellipse, rgba(170, 190, 230, 0.16), transparent 70%); filter: blur(4px); }
 .gd-soul.s1 { left: 18%; top: 20%; animation: gd-soul 9s ease-in-out infinite; }
 .gd-soul.s2 { right: 14%; top: 34%; animation: gd-soul 11s ease-in-out -4s infinite reverse; }
@@ -2145,7 +2159,7 @@
 .gd-offering-count { position: absolute; right: 3px; bottom: 1px; font-size: 10px; color: #dfe6f3; text-shadow: 0 0 3px #000; }
 .gd-offering-given { position: absolute; right: -5px; top: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--rarity); color: #05070d; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 8px var(--rarity); }
 .gd-portal-none { opacity: 0.5; font-size: 12px; }
-@media (prefers-reduced-motion: reduce) { .gd-circle-outer, .gd-circle-runes, .gd-soul, .gd-circle-seal, .gd-rune.kindle path, .gd-circle-seam, .gd-moon, .gd-circle-line { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .gd-circle-outer, .gd-circle-runes, .gd-soul, .gd-circle-seal, .gd-rune.kindle path, .gd-circle-seam, .gd-moon, .gd-circle-line { animation: none !important; } .gd-portal.breaking .gd-circle-seam { opacity: 0; } }
 
 /* ---------- Хранилище кристаллов у Алтаря ---------- */
 .gachadnd-stash .window-content { padding: 0; background: linear-gradient(180deg, #14161b, #0b0c0f); color: #e4e6ea; }

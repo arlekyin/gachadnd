@@ -17,7 +17,7 @@ import { getFloor } from "./economy.js";
 import { isCrystalItem } from "../memory/inventory.js";
 import { crystalWeight, setAnchor, isAnchorOpen } from "./anchor.js";
 import { overlay } from "../cutscene/overlay.js";
-import { fogLayer } from "../cutscene/fog.js";
+import { fogLayer, paintFog } from "../cutscene/fog.js";
 import { keepPhase } from "../core/anim-phase.js";
 import { letterbox } from "../cutscene/letterbox.js";
 import { stowWindows } from "../cutscene/windows.js";
@@ -70,14 +70,16 @@ const TICKS = (() => {
 })();
 
 /** Руны платы по кругу: цвета — по порядку вклада, одна единица веса — одна руна */
-function circleRunes(toll, colors, kindleFrom) {
+function circleRunes(toll, colors, kindleFrom, previous = []) {
     return Array.from({ length: toll }, (_, i) => {
         const a = -Math.PI / 2 + i / toll * Math.PI * 2;
         const lit = i < colors.length;
+        // Руна погасла с этой перерисовкой (кристалл забрали) — остывает своим прежним цветом
+        const fading = !lit && i < previous.length;
         return {
             x: (CENTER + Math.cos(a) * RUNE_RING).toFixed(1), y: (CENTER + Math.sin(a) * RUNE_RING).toFixed(1),
-            angle: (a * 180 / Math.PI + 90).toFixed(1), path: runePath(i), lit,
-            color: lit ? colors[i] : '#c9d4e6', kindle: lit && i >= kindleFrom, kindleIndex: Math.max(0, i - kindleFrom)
+            angle: (a * 180 / Math.PI + 90).toFixed(1), path: runePath(i), lit, fading,
+            color: lit ? colors[i] : fading ? previous[i] : '#c9d4e6', kindle: lit && i >= kindleFrom, kindleIndex: Math.max(0, i - kindleFrom)
         };
     });
 }
@@ -217,7 +219,40 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static PARTS = { body: { template: 'modules/gachadnd/templates/portal/body.hbs', scrollable: ['.gd-portal-party'] } };
 
     #lit = 0;
+    #colors = [];
     #ready = false;
+    // Туман в центре круга: плотность плавно идёт к цели — плата меняет её без рывка
+    #fogTarget = 0.22;
+    #fogCover = 0.22;
+    #fogFrame = null;
+    #fogImage = null;
+
+    #runFog() {
+        if (this.#fogFrame) return;
+        const t0 = performance.now();
+        let last = 0;
+        const tick = now => {
+            this.#fogFrame = requestAnimationFrame(tick);
+            // Туману хватает 20 кадров в секунду
+            if (now - last < 50) return;
+            const dt = Math.min(0.2, (now - (last || now)) / 1000);
+            last = now;
+            const canvas = this.element?.querySelector('canvas.gd-core-fog');
+            if (!canvas) return;
+            this.#fogCover += (this.#fogTarget - this.#fogCover) * Math.min(1, dt * 1.6);
+            const ctx = canvas.getContext('2d');
+            if (this.#fogImage?.width !== canvas.width) this.#fogImage = ctx.createImageData(canvas.width, canvas.height);
+            paintFog(this.#fogImage, this.#fogCover, (now - t0) / 1000);
+            ctx.putImageData(this.#fogImage, 0, 0);
+        };
+        this.#fogFrame = requestAnimationFrame(tick);
+    }
+
+    _onClose(options) {
+        super._onClose?.(options);
+        cancelAnimationFrame(this.#fogFrame);
+        this.#fogFrame = null;
+    }
 
     // Мастер открывает окно платы у всех
     static open() {
@@ -263,13 +298,18 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         // Новые руны вспыхивают один раз: этот клиент помнит, сколько горело в прошлый раз
         const kindleFrom = Math.min(this.#lit, colors.length);
         this.#lit = colors.length;
+        const previous = this.#colors;
+        this.#colors = colors;
         // Замыкание круга проигрывается один раз — в перерисовку, когда плата набралась
         const ready = total >= toll;
         const closing = ready && !this.#ready;
+        // Плату забрали из замкнутого круга — размыкание тоже проигрывается один раз
+        const breaking = !ready && this.#ready;
         this.#ready = ready;
+        this.#fogTarget = 0.22 + 0.5 * Math.min(1, total / toll);
         return {
-            atRest: !!found, toll, total, ready, closing, missing: Math.max(0, toll - total), over: Math.max(0, total - toll),
-            isGM: game.user.isGM, party, ticks: TICKS, runes: circleRunes(toll, colors, kindleFrom)
+            atRest: !!found, toll, total, ready, closing, breaking, seam: ready || breaking, missing: Math.max(0, toll - total), over: Math.max(0, total - toll),
+            isGM: game.user.isGM, party, ticks: TICKS, runes: circleRunes(toll, colors, kindleFrom, previous)
         };
     }
 
@@ -278,6 +318,7 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         super._onRender(context, options);
         // Кольца рун и души продолжают с того же места: перерисовка не дёргает круг
         keepPhase(this.element);
+        if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) this.#runFog();
         this.element.querySelectorAll('[data-action="pledge"]').forEach(el => el.addEventListener('contextmenu', event => {
             event.preventDefault();
             PortalWindow.#pledge(el, -1);
