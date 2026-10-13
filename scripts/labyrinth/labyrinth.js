@@ -20,6 +20,7 @@ import { registerPulseSettings, resetPulse, pulseReport } from "./pulse.js";
 import { registerGraveyardSettings, GraveyardWindow } from "./graveyard.js";
 import { registerOmenSettings, setOmen } from "./omen.js";
 import { startBreach } from "./breach.js";
+import { registerSceneSettings } from "./scene-travel.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -28,6 +29,7 @@ Hooks.once('init', () => {
     registerPulseSettings();
     registerGraveyardSettings();
     registerOmenSettings();
+    registerSceneSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;

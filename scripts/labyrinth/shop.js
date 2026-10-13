@@ -7,6 +7,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene } from "./scene-travel.js";
 import { randomCrystal, crystalForSkill } from "../memory/crystals.js";
 import { isMemorySkill } from "../memory/synergy/synergy.js";
 import {
@@ -31,7 +32,7 @@ function rollShopRarity() {
     return 'gray';
 }
 
-function currentShopNode(scene = canvas.scene) {
+function currentShopNode(scene = mapScene()) {
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     const node = map?.nodes?.find(n => n.id === map.currentNodeId);
     return node?.type === 'shop' ? { map, node } : null;
@@ -40,7 +41,7 @@ function currentShopNode(scene = canvas.scene) {
 async function saveShop(map, nodeId, shop) {
     const copy = foundry.utils.deepClone(map);
     copy.nodes.find(n => n.id === nodeId).shop = shop;
-    await canvas.scene.setFlag(MODULE_ID, 'floorMap', copy);
+    await mapScene().setFlag(MODULE_ID, 'floorMap', copy);
 }
 
 // ==========================================

@@ -9,7 +9,8 @@
     const hooks = {};
     window.Hooks = {
         events: hooks,
-        on: (name, fn) => (hooks[name] ??= []).push(fn),
+        on: (name, fn) => { (hooks[name] ??= []).push(fn); return fn; },
+        off: (name, fn) => { hooks[name] = (hooks[name] ?? []).filter(f => f !== fn); },
         once: (name, fn) => (hooks[name] ??= []).push(fn),
         call: (name, ...args) => hooks[name]?.forEach(fn => fn(...args)),
         callAll: (name, ...args) => hooks[name]?.forEach(fn => fn(...args))
