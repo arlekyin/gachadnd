@@ -225,21 +225,37 @@ function sigilSvg(o) {
     }
     if (o.braid) {
         // Плетение Резонанса: две нити, перевитые вдоль кольца; у выбранного тега — горят.
-        // На каждом перекрёстке одна нить уходит под другую — разрыв у пересечения
-        const { rx, ry, amp, waves, active } = o.braid;
+        // На каждом перекрёстке одна нить уходит под другую — разрыв у пересечения.
+        // Нити — по контуру на каждую, свечение — по контуру на каждый тег (горит у выбранного):
+        // сотни отрезков с фильтром у каждого давали фриз при открытии Резонанса
+        const { rx, ry, amp, waves, tags } = o.braid;
         const steps = 240;
+        const base = [], glow = tags.map(() => []);
         for (const sign of [1, -1]) {
+            const r = a => sign * amp * Math.sin(waves * a);
+            let line = '', joined = false;
+            const near = tags.map(() => false);
             for (let n = 0; n < steps; n++) {
                 const a0 = n / steps * 2 * Math.PI, a1 = (n + 1) / steps * 2 * Math.PI;
-                const r = a => sign * amp * Math.sin(waves * a);
                 const cross = Math.floor(waves * a0 / Math.PI + 0.5);
-                if (Math.abs(Math.sin(waves * a0)) < 0.2 && (cross % 2 === 0) === (sign > 0)) continue;
-                const p0 = ell(a0, rx + r(a0), ry + r(a0)), p1 = ell(a1, rx + r(a1), ry + r(a1));
-                let d = Math.abs(a0 - (active ?? -10)); d = Math.min(d, 2 * Math.PI - d);
-                const lit = active !== null && active !== undefined && d < 0.32;
-                parts.push(`<line class="gd-sigil-braid ${lit ? 'lit' : ''}" x1="${f1(p0[0])}" y1="${f1(p0[1])}" x2="${f1(p1[0])}" y2="${f1(p1[1])}"/>`);
+                if (Math.abs(Math.sin(waves * a0)) < 0.2 && (cross % 2 === 0) === (sign > 0)) {
+                    joined = false; near.fill(false);
+                    continue;
+                }
+                const p0 = ell(a0, rx + r(a0), ry + r(a0)).map(f1).join(','), p1 = ell(a1, rx + r(a1), ry + r(a1)).map(f1).join(',');
+                line += joined ? ` ${p1}` : `M${p0} L${p1}`;
+                joined = true;
+                tags.forEach((t, i) => {
+                    let d = Math.abs(a0 - t.angle); d = Math.min(d, 2 * Math.PI - d);
+                    if (d >= 0.32) return void (near[i] = false);
+                    glow[i].push(near[i] ? ` ${p1}` : `M${p0} L${p1}`);
+                    near[i] = true;
+                });
             }
+            base.push(line);
         }
+        parts.push(`<path class="gd-sigil-braid" d="${base.join(' ')}"/>`);
+        tags.forEach((t, i) => parts.push(`<path class="gd-sigil-braid-glow ${t.lit ? 'lit' : ''}" d="${glow[i].join('')}"/>`));
     }
     const n = points.length;
     if (o.star === 'hexagram' && n === 3) {
@@ -704,7 +720,8 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     #sigilState = null;
     #softenSigil() {
         const stage = this.#part('stage');
-        const sigils = [...(stage?.querySelectorAll('svg.gd-sigil') ?? [])];
+        // Призрак прошлого ритуала — не часть круга: с ним и без него круг один и тот же
+        const sigils = [...(stage?.querySelectorAll('svg.gd-sigil') ?? [])].filter(s => !s.closest('.gd-sigil-ghost'));
         const kind = sigils.map(s => s.getAttribute('class')).join('|');
         const elements = sigils.flatMap(s => [...s.querySelectorAll('*')].filter(el => el.getAttribute('class')));
         const previous = this.#sigilState?.kind === kind ? this.#sigilState.lit : null;
@@ -810,18 +827,17 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (this.ritual === 'resonate') {
             // Всё — снаружи колеса тегов: внутри нити оплетают выбранный тег. Кольцо — перевитые нити,
             // у выбранного тега они горят
-            const active = wheel.find(w => w.active);
             const wx = WHEEL.rx / 100 * W, wy = WHEEL.ry / 100 * H;
-            let angle = null;
-            if (active) {
-                const [x, y] = px(active.pos);
-                angle = Math.atan2(y / wy, x / wx);
+            const tags = wheel.map(w => {
+                const [x, y] = px(w.pos);
+                let angle = Math.atan2(y / wy, x / wx);
                 if (angle < 0) angle += 2 * Math.PI;
-            }
+                return { angle, lit: w.active };
+            });
             const rx = wx + 46, ry = wy + 46;
             return sigilSvg({
                 kind: 'resonate',
-                braid: { rx, ry, amp: 9, waves: Math.max(6, wheel.length), active: angle },
+                braid: { rx, ry, amp: 9, waves: Math.max(6, wheel.length), tags },
                 rings: [{ rx: rx + 30, ry: ry + 30 }],
                 runes: { rx: rx + 44, ry: ry + 44, lit: slot ? allRunes : 0 }
             });
