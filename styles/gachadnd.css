@@ -2091,8 +2091,14 @@
 }
 .gd-circle-void { stroke: color-mix(in srgb, var(--silver) 30%, transparent); stroke-width: 1; }
 /* Круг замкнут: кольца ярче; скорость не меняется — смена скорости сдвинула бы фазу вращения */
-.gd-portal.ready .gd-circle-line { opacity: 0.85; stroke: #e8eeff; }
-.gd-portal.ready .gd-circle-runes svg, .gd-portal.ready .gd-circle-outer svg { filter: drop-shadow(0 0 4px rgba(159, 182, 255, 0.8)); }
+/* Круг замкнут — спокойно: кольца чуть светлее, по кольцу рун тонкая линия замыкания. Когда плата
+   только набралась (closing), это проступает плавно, один раз */
+.gd-portal.ready .gd-circle-line { opacity: 0.6; }
+.gd-circle-seam { fill: none; stroke: #b9c8ec; stroke-width: 1.2; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; opacity: 0.55; }
+.gd-portal.closing .gd-circle-seam { animation: gd-seam-close 1.8s ease-in-out both; }
+@keyframes gd-seam-close { from { stroke-dashoffset: 100; opacity: 0.9; } to { stroke-dashoffset: 0; opacity: 0.55; } }
+.gd-portal.closing .gd-circle-line { animation: gd-ring-wake 2s ease-out both; }
+@keyframes gd-ring-wake { from { opacity: 0.45; } }
 
 /* Центр: тьма Предела, души, луна, печать */
 .gd-circle-core { position: absolute; left: 50%; top: 50%; width: 184px; height: 184px; margin: -92px 0 0 -92px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; }
@@ -2102,8 +2108,10 @@
 .gd-soul.s3 { left: 38%; bottom: 8%; animation: gd-soul 13s ease-in-out -7s infinite; }
 @keyframes gd-soul { 0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; } 50% { transform: translate(14px, -18px) scale(1.15); opacity: 1; } }
 /* Край луны: тень круга без заливки даёт серп */
-.gd-moon { position: absolute; right: 18px; top: 14px; width: 74px; height: 74px; border-radius: 50%; background: transparent; box-shadow: 12px -8px 0 0 #ece7d6; filter: drop-shadow(0 0 10px rgba(240, 235, 210, 0.7)); opacity: 0; transform: translate(16px, -16px) rotate(-10deg); transition: opacity 1.2s, transform 1.2s; }
-.gd-portal.ready .gd-moon { opacity: 0.9; transform: none; }
+.gd-moon { position: absolute; right: 18px; top: 14px; width: 74px; height: 74px; border-radius: 50%; background: transparent; box-shadow: 12px -8px 0 0 #d9d4c4; filter: drop-shadow(0 0 6px rgba(240, 235, 210, 0.35)); opacity: 0; }
+.gd-portal.ready .gd-moon { opacity: 0.7; }
+.gd-portal.closing .gd-moon { animation: gd-moon-rise 2.6s ease-out 0.6s both; }
+@keyframes gd-moon-rise { from { opacity: 0; transform: translate(14px, -14px) rotate(-10deg); } }
 .gd-circle-seal {
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 86px; height: 86px; margin: 0; padding: 0;
     border: 1px solid color-mix(in srgb, var(--silver) 50%, transparent); border-radius: 50%; background: rgba(8, 12, 24, 0.85);
@@ -2111,9 +2119,10 @@
 }
 .gd-circle-seal i { font-size: 22px; }
 .gd-circle-seal:disabled { cursor: default; opacity: 0.75; }
-.gd-portal.ready .gd-circle-seal { border-color: #e8eeff; color: #ffffff; box-shadow: 0 0 18px rgba(160, 185, 255, 0.6), inset 0 0 14px rgba(160, 185, 255, 0.35); animation: gd-seal 2.4s ease-in-out infinite; }
+.gd-portal.ready .gd-circle-seal { border-color: #c6d3f2; color: #eef2fb; box-shadow: 0 0 10px rgba(160, 185, 255, 0.25), inset 0 0 10px rgba(160, 185, 255, 0.18); }
+.gd-portal.closing .gd-circle-seal { animation: gd-seal-wake 1.8s ease-out 0.4s both; }
+@keyframes gd-seal-wake { from { border-color: rgba(201, 212, 230, 0.5); color: #c9d4e6; box-shadow: none; } }
 .gd-portal.ready .gd-circle-seal:hover { background: rgba(30, 40, 70, 0.9); }
-@keyframes gd-seal { 50% { box-shadow: 0 0 28px rgba(160, 185, 255, 0.85), inset 0 0 18px rgba(160, 185, 255, 0.5); } }
 .gd-circle-state { position: relative; font-size: 18px; letter-spacing: 0.08em; color: var(--silver); text-shadow: 0 0 8px rgba(160, 185, 255, 0.6); }
 .gd-portal-hint { margin: 8px 16px 4px; text-align: center; font-size: 12px; color: #93a0b8; }
 
@@ -2136,7 +2145,7 @@
 .gd-offering-count { position: absolute; right: 3px; bottom: 1px; font-size: 10px; color: #dfe6f3; text-shadow: 0 0 3px #000; }
 .gd-offering-given { position: absolute; right: -5px; top: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--rarity); color: #05070d; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 8px var(--rarity); }
 .gd-portal-none { opacity: 0.5; font-size: 12px; }
-@media (prefers-reduced-motion: reduce) { .gd-circle-outer, .gd-circle-runes, .gd-soul, .gd-circle-seal, .gd-rune.kindle path { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .gd-circle-outer, .gd-circle-runes, .gd-soul, .gd-circle-seal, .gd-rune.kindle path, .gd-circle-seam, .gd-moon, .gd-circle-line { animation: none !important; } }
 
 /* ---------- Хранилище кристаллов у Алтаря ---------- */
 .gachadnd-stash .window-content { padding: 0; background: linear-gradient(180deg, #14161b, #0b0c0f); color: #e4e6ea; }
