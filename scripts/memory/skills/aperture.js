@@ -1,13 +1,15 @@
 /**
  * Gacha Roguelike dnd5e — Портал (фиолетовый навык)
  *
- * Портальная пушка: использование — силуэт портала под курсором. Цвет — тот, что стоит дольше
- * (или которого ещё нет); колесо и R меняют цвет, клик ставит, правая кнопка и Esc отменяют.
- * Новый портал заменяет старый того же цвета. Порталы — плитки сцены, стоят до конца боя.
+ * Портальная пушка: использование — силуэт портала под курсором. Левая кнопка ставит синий,
+ * правая — оранжевый, Esc отменяет. Пока своих порталов на сцене нет, одно использование ставит
+ * оба: после первого — второй, другого цвета. Новый портал заменяет старый того же цвета.
+ * Порталы — плитки сцены, стоят до конца боя.
  *
  * Проход: любое существо, закончившее перемещение на клетке портала, выходит из другого портала
- * в следующую клетку по направлению своего движения (занята — в ближайшую свободную). Переносит
- * Мастер; перенос помечается в опциях обновления, чтобы выход не сработал как новый вход.
+ * в следующую клетку по направлению своего движения (занята — в ближайшую свободную) — сразу, как
+ * доехал. Переносит Мастер; перенос помечается в опциях обновления, чтобы выход не сработал как
+ * новый вход.
  * Встроенное поведение региона «Teleport Token» не используется: два региона, связанные друг
  * с другом, в Foundry v12 перекидывают токен по кругу.
  */
@@ -60,35 +62,51 @@ function placePortal(actor, range) {
     if (!caster) return;
     const scene = canvas.scene, size = canvas.grid.size;
     const own = portalsOf(scene, actor.id);
-    // Цвет: которого нет, иначе — тот, что стоит дольше
-    let color = !own.blue ? 'blue' : !own.orange ? 'orange'
-        : ((own.blue.flags[MODULE_ID].portal.at ?? 0) <= (own.orange.flags[MODULE_ID].portal.at ?? 0) ? 'blue' : 'orange');
-    let cell = cellOf({ x: caster.document.x, y: caster.document.y }, size), ok = false;
+    // Первое использование, пока ни одного своего портала нет: ставятся оба
+    let left = own.blue || own.orange ? 1 : 2;
+    // Цвет, который ещё нужно поставить (во второй постановке пары); null — любой на выбор
+    let only = null;
+    let cell = cellOf({ x: caster.document.x, y: caster.document.y }, size), okFor = { blue: false, orange: false };
     const preview = new PIXI.Graphics();
     preview.eventMode = 'none';
     canvas.controls.addChild(preview);
     const initialLayer = canvas.activeLayer;
     canvas.templates?.activate();
     const taken = occupied(scene, size);
-    const portalCells = new Set([...scene.tiles].filter(t => t.flags?.[MODULE_ID]?.portal).map(t => key(...cellOf(t, size))));
+    const portalAt = new Map([...scene.tiles].filter(t => t.flags?.[MODULE_ID]?.portal).map(t => [key(...cellOf(t, size)), t]));
+    const placed = {};
 
     const draw = () => {
         const center = { x: cell[0] * size + size / 2, y: cell[1] * size + size / 2 };
         const feet = Math.hypot(center.x - caster.center.x, center.y - caster.center.y) / size * canvas.dimensions.distance;
-        // Свой портал того же цвета можно переставить на его же клетку — он заменится
-        const same = own[color] && key(...cellOf(own[color], size)) === key(...cell);
-        ok = feet <= range && !taken.has(key(...cell)) && (!portalCells.has(key(...cell)) || same);
-        const tint = ok ? TINT[color] : 0xff4d4d;
+        const k = key(...cell);
+        const free = feet <= range && !taken.has(k) && !Object.values(placed).includes(k);
+        // На клетке портала можно поставить только свой портал того же цвета — он переставится
+        for (const color of ['blue', 'orange']) okFor[color] = free && (!portalAt.has(k) || portalAt.get(k) === own[color]) && (!only || only === color);
         preview.clear();
-        preview.lineStyle(4, tint, 0.95).beginFill(tint, 0.25).drawCircle(center.x, center.y, size * 0.42).endFill();
+        const r = size * 0.42;
+        if (only) {
+            const tint = okFor[only] ? TINT[only] : 0xff4d4d;
+            preview.lineStyle(4, tint, 0.95).beginFill(tint, 0.25).drawCircle(center.x, center.y, r).endFill();
+        } else {
+            // Левая половина — синий (левая кнопка), правая — оранжевый (правая кнопка)
+            for (const [color, a0, a1] of [['blue', Math.PI / 2, Math.PI * 1.5], ['orange', -Math.PI / 2, Math.PI / 2]]) {
+                const tint = okFor[color] ? TINT[color] : 0xff4d4d;
+                preview.lineStyle(4, tint, 0.95).beginFill(tint, 0.25).moveTo(center.x, center.y).arc(center.x, center.y, r, a0, a1).lineTo(center.x, center.y).endFill();
+            }
+        }
+        for (const [color, k2] of Object.entries(placed)) {
+            const [x, y] = k2.split(',').map(Number);
+            preview.lineStyle(4, TINT[color], 0.95).beginFill(TINT[color], 0.4).drawCircle(x * size + size / 2, y * size + size / 2, r).endFill();
+        }
     };
     draw();
 
     const finish = () => {
         canvas.stage.off('mousemove', onMove);
         canvas.stage.off('mouseup', onConfirm);
+        canvas.stage.off('rightup', onConfirm);
         canvas.app.view.oncontextmenu = null;
-        canvas.app.view.onwheel = null;
         document.removeEventListener('keydown', onKey, true);
         preview.destroy();
         initialLayer?.activate();
@@ -101,32 +119,47 @@ function placePortal(actor, range) {
         cell = next;
         draw();
     };
-    const swap = () => { color = color === 'blue' ? 'orange' : 'blue'; draw(); };
-    const onWheel = event => {
-        if (event.ctrlKey) event.preventDefault();
-        event.stopPropagation();
-        swap();
+    const send = () => {
+        for (const [color, k] of Object.entries(placed)) {
+            const [x, y] = k.split(',').map(Number);
+            requestGM('portalPlace', { actorId: actor.id, sceneId: scene.id, color, x: x * size, y: y * size });
+        }
     };
-    const cancel = () => { finish(); ui.notifications.info('Портал не поставлен.'); };
     const onKey = event => {
-        if (event.target?.closest?.('input, textarea, [contenteditable]')) return;
-        if (event.code === 'KeyR') { swap(); event.preventDefault(); event.stopPropagation(); }
-        if (event.code === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); }
-    };
-    const onConfirm = event => {
-        if (event.button === 2 || (event.data?.button ?? 0) === 2) return;
+        if (event.target?.closest?.('input, textarea, [contenteditable]') || event.code !== 'Escape') return;
+        event.preventDefault();
         event.stopPropagation();
-        if (!ok) return ui.notifications.warn(`Сюда нельзя: портал — в свободную клетку не дальше ${range} футов.`);
         finish();
-        requestGM('portalPlace', { actorId: actor.id, sceneId: scene.id, color, x: cell[0] * size, y: cell[1] * size });
+        // Первый портал пары уже выбран — он ставится и без второго
+        if (Object.keys(placed).length) send();
+        else ui.notifications.info('Портал не поставлен.');
+    };
+    // Левая кнопка — синий, правая — оранжевый (как у портальной пушки)
+    const onConfirm = event => {
+        const button = event.button ?? event.data?.button ?? 0;
+        if (button !== 0 && button !== 2) return;
+        event.stopPropagation();
+        const color = only ?? (button === 2 ? 'orange' : 'blue');
+        if (!okFor[color]) return ui.notifications.warn(`Сюда нельзя: портал — в свободную клетку не дальше ${range} футов.`);
+        placed[color] = key(...cell);
+        if (--left > 0) {
+            only = color === 'blue' ? 'orange' : 'blue';
+            draw();
+            return ui.notifications.info(`Теперь ${LABEL[only]} портал: клик — поставить, Esc — оставить один.`);
+        }
+        finish();
+        send();
     };
 
     canvas.stage.on('mousemove', onMove);
+    // Правую кнопку PIXI сообщает отдельным событием rightup
     canvas.stage.on('mouseup', onConfirm);
-    canvas.app.view.oncontextmenu = cancel;
-    canvas.app.view.onwheel = onWheel;
+    canvas.stage.on('rightup', onConfirm);
+    canvas.app.view.oncontextmenu = event => event.preventDefault();
     document.addEventListener('keydown', onKey, true);
-    ui.notifications.info(`Портал (${LABEL[color]}): колесо или R — сменить цвет, клик — поставить, правая кнопка или Esc — отмена.`);
+    ui.notifications.info(left === 2
+        ? 'Портал: левая кнопка — синий, правая — оранжевый; затем второй. Esc — отмена.'
+        : 'Портал: левая кнопка — синий, правая — оранжевый. Esc — отмена.');
 }
 
 onSocket('portalPlace', ({ payload }) => {
@@ -175,6 +208,20 @@ Hooks.on('updateToken', (token, changes, options) => {
     passThrough(scene, token, from, to, size).catch(error => console.error(`${MODULE_ID} | Портал`, error));
 });
 
+// Перенос — когда токен доехал до портала: обновление посреди анимации движения Foundry не
+// прерывает её, и токен оставался бы нарисованным в портале до следующего перемещения
+async function arrived(token, from, to) {
+    const start = performance.now();
+    const object = token.object;
+    const Animation = foundry.canvas?.animation?.CanvasAnimation ?? globalThis.CanvasAnimation;
+    const running = object?.movementAnimationPromise ?? (object?.animationName ? Animation?.getAnimation?.(object.animationName)?.promise : null);
+    if (running) await Promise.resolve(running).catch(() => {});
+    // У остальных токен едет примерно столько же: Foundry двигает токены со скоростью 6 клеток в секунду
+    const steps = from ? Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) : 0;
+    const rest = steps / 6 * 1000 + 150 - (performance.now() - start);
+    if (rest > 0) await new Promise(resolve => setTimeout(resolve, rest));
+}
+
 async function passThrough(scene, token, from, to, size) {
     const cells = footprint(token, ...to);
     for (const tile of scene.tiles) {
@@ -182,6 +229,10 @@ async function passThrough(scene, token, from, to, size) {
         if (!flag || !cells.includes(key(...cellOf(tile, size)))) continue;
         const exit = portalsOf(scene, flag.actorId)[flag.color === 'blue' ? 'orange' : 'blue'];
         if (!exit) return;
+        await arrived(token, from, to);
+        // Пока ехал, его могли сдвинуть дальше — тогда в портал он не вошёл
+        const now = cellOf(token, size);
+        if (now[0] !== to[0] || now[1] !== to[1]) return;
         const [ex, ey] = cellOf(exit, size);
         // Направление движения: шаг по каждой оси; не знаем, откуда шёл — выход в любую свободную клетку
         const dx = from ? Math.sign(to[0] - from[0]) : 0, dy = from ? Math.sign(to[1] - from[1]) : 0;
