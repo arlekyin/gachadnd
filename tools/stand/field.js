@@ -99,6 +99,9 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         const [value, max] = window.HP?.[id] ?? [20, 20];
         return { id, name, statuses: new Set(), flags: {}, system: { attributes: { hp: { value, max, effectiveMax: max, temp: 0 } } },
             testUserPermission: () => true,
+            getFlag(m, k) { return this.flags[m]?.[k]; },
+            async setFlag(m, k, v) { (this.flags[m] ??= {})[k] = structuredClone(v); },
+            async unsetFlag(m, k) { delete this.flags[m]?.[k]; },
             async update(data) { for (const [k, v] of Object.entries(data)) setPath(this, k, structuredClone(v)); },
             async applyDamage(damage) {
                 const amount = Array.isArray(damage) ? damage.reduce((sum, d) => sum + d.value, 0) : damage;

@@ -27,6 +27,7 @@ import "./memory/skills/fez.js";
 import "./memory/skills/cat.js";
 import "./memory/skills/freaky.js";
 import "./memory/skills/flashback.js";
+import "./memory/skills/qte.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
