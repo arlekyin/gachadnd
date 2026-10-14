@@ -7,7 +7,7 @@
  */
 
 import { MODULE_ID } from "../../core/constants.js";
-import { CARDS, HAND, stateOf, ensureState, canPlay, requestPlay } from "./gwent.js";
+import { CARDS, HAND, stateOf, ensureState, canPlay, requestPlay, isGwent } from "./gwent.js";
 import { pickCell } from "./pick.js";
 import { key, cellOf } from "./grid.js";
 
@@ -28,10 +28,16 @@ export class GwentPanel extends ApplicationV2 {
     }
 
     static async open(actor) {
-        const app = GwentPanel.instance(actor) ?? new GwentPanel(actor);
-        await app.render({ force: true });
-        app.bringToFront?.();
-        return app;
+        try {
+            const app = GwentPanel.instance(actor) ?? new GwentPanel(actor);
+            await app.render({ force: true });
+            app.bringToFront?.();
+            return app;
+        } catch (error) {
+            console.error(`${MODULE_ID} | Гвинт: панель не открылась`, error);
+            ui.notifications.error(`Гвинт: панель не открылась — ${error?.message ?? error}. Подробности в консоли (F12).`);
+            return null;
+        }
     }
 
     constructor(actor) {
@@ -149,6 +155,15 @@ async function chooseTarget(card, caster, state) {
     return null;
 }
 
+// Использование навыка — открыть панель (карты разыгрываются из неё); обычное использование отменяется
+Hooks.on('dnd5e.preUseActivity', (activity) => {
+    const item = activity?.item;
+    if (!isGwent(item) || !item.actor) return;
+    console.log(`${MODULE_ID} | Гвинт: открываю панель — ${item.actor.name}`);
+    GwentPanel.open(item.actor);
+    return false;
+});
+
 // Рука меняется (добор, розыгрыш) — панель перерисовывается
 Hooks.on('updateActor', (actor, changes) => {
     if (!foundry.utils.hasProperty(changes, `flags.${MODULE_ID}.gwent`)) return;
@@ -164,7 +179,7 @@ Hooks.on('updateCombat', (combat, changed) => {
     if (changed.round !== 1 || !combat.started) return;
     for (const combatant of combat.combatants) {
         const actor = combatant.actor;
-        if (!actor?.isOwner || !actor.items.some(i => i.flags?.[MODULE_ID]?.gwent && i.flags[MODULE_ID].is_active)) continue;
+        if (!actor?.isOwner || !actor.items.some(i => isGwent(i) && i.flags[MODULE_ID].is_active)) continue;
         if (game.user.isGM && actor.hasPlayerOwner) continue;
         GwentPanel.open(actor);
     }
