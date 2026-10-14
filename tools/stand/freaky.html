@@ -20,10 +20,11 @@ window.DISPOSITION = { caster: 1, ally: 1 };</script>
 <script src="scene.js"></script>
 <script type="module">
 // Сначала модуль навыка: он ловит canvasReady, который вызывает field()
+window.V13 = new URLSearchParams(location.search).has('v13');
 window.freaky = await import('/scripts/memory/skills/freaky.js');
 const { field } = await import('./field.js');
-// ПЗ (по актёрам; персонаж — A): персонаж при смерти, огр почти целый, гоблин мёртв (не участвует)
-window.HP = { A: [2, 20], goblin: [0, 7], ogre: [54, 60], ally: [15, 30], imp: [5, 10] };
+// ПЗ (по актёрам; персонаж — A): гоблин мёртв — не участвует; огр 2×2 — единственный своего размера
+window.HP = { goblin: [0, 7] };
 const { actor } = field({ freaky: true }, { uses: 1, range: 0 });
 // Бой: все токены сцены
 window.game.combat = { id: 'C', started: true, scene,
