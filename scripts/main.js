@@ -24,6 +24,8 @@ import { addTokenTools } from "./core/controls.js";
 import { openTetris, clearTetris } from "./memory/tetris/tetris.js";
 import { clearPortals, registerPortalSettings, portalReport } from "./memory/skills/aperture.js";
 import "./memory/skills/fez.js";
+import "./memory/skills/cat.js";
+import "./memory/skills/freaky.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
