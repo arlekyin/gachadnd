@@ -17,8 +17,8 @@ export const SHAPES = {
 export const COLORS = { I: '#3fd6e8', O: '#ffd43b', T: '#b265ff', S: '#5fdc5a', Z: '#ff4d5e', L: '#ff9a3c', J: '#4d7dff' };
 export const TYPES = Object.keys(SHAPES);
 
-/** Сколько блоков подряд по прямой сгорают линией */
-export const LINE = 5;
+/** Сколько врагов должно быть в группе, чтобы она сдетонировала (союзники только связывают) */
+export const ENEMIES_TO_BLAST = 2;
 
 /** Клетки сдвинуты к началу координат */
 export function normalize(cells) {
@@ -58,22 +58,23 @@ export function draw(bag = [], random = Math.random) {
 }
 
 /**
- * Линии: LINE и больше блоков подряд по строке или столбцу. Горят и горизонтальные, и вертикальные.
- * @param {Iterable<string>} keys  Клетки блоков, ключи «x,y» в клетках сетки.
- * @returns {Set<string>} клетки, которые сгорают
+ * Группа фигуры: клетки, связанные с новой фигурой по сторонам (без диагоналей), через блоки
+ * и клетки под существами. Как в Puyo Puyo: группа лопается целиком.
+ * @param {string[]} seed          Клетки новой фигуры, ключи «x,y» в клетках сетки.
+ * @param {Set<string>} blocks     Клетки всех блоков (включая новую фигуру).
+ * @param {Map<string, string>} creatures  Клетка → id существа, которое её занимает.
+ * @returns {{cells: Set<string>, creatures: Set<string>}}
  */
-export function findLines(keys) {
-    const set = new Set(keys);
-    const burn = new Set();
-    const cells = [...set].map(k => k.split(',').map(Number));
-    for (const [dx, dy] of [[1, 0], [0, 1]]) {
-        for (const [x, y] of cells) {
-            // Начало ряда: перед клеткой блока нет
-            if (set.has(`${x - dx},${y - dy}`)) continue;
-            const run = [];
-            for (let n = 0; set.has(`${x + dx * n},${y + dy * n}`); n++) run.push(`${x + dx * n},${y + dy * n}`);
-            if (run.length >= LINE) run.forEach(k => burn.add(k));
-        }
+export function findGroup(seed, blocks, creatures) {
+    const cells = new Set(), found = new Set();
+    const queue = [...seed];
+    while (queue.length) {
+        const k = queue.pop();
+        if (cells.has(k) || !(blocks.has(k) || creatures.has(k))) continue;
+        cells.add(k);
+        if (creatures.has(k)) found.add(creatures.get(k));
+        const [x, y] = k.split(',').map(Number);
+        queue.push(`${x + 1},${y}`, `${x - 1},${y}`, `${x},${y + 1}`, `${x},${y - 1}`);
     }
-    return burn;
+    return { cells, creatures: found };
 }

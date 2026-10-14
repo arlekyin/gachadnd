@@ -5,11 +5,12 @@
  * момент. Использование навыка — у игрока на сцене силуэт «Следующей»: колесо и R поворачивают,
  * клик обрушивает, правая кнопка и Esc отменяют (заряд возвращается).
  *
- * Обрушение выполняет Мастер:
+ * Фигуру нельзя положить на существо или на другой блок. Обрушение выполняет Мастер:
  *   - четыре клетки фигуры становятся блоками (плитки сцены цвета фигуры) до конца боя;
- *   - существо под блоком выталкивается в ближайшую свободную клетку;
- *   - пять и больше блоков подряд по строке или столбцу — линия: она сгорает, а существа рядом
- *     с ней (в пределах 5 футов) становятся целями игрока — спасбросок и урон по карточке навыка.
+ *   - группа — всё, что связано с новой фигурой по сторонам клеток (без диагоналей) через блоки
+ *     и существ. Если в ней не меньше двух врагов, она детонирует, как в Puyo Puyo: блоки группы
+ *     исчезают, враги в ней становятся целями игрока — спасбросок и урон по карточке навыка.
+ *     Союзники (то же отношение токена, что у персонажа) связывают группу, но не считаются и не задеваются.
  *
  * Труднопроходимость и полуукрытие блоков — по правилам за столом: в dnd5e для Foundry v12 нет
  * поведения региона «трудная местность», которое модуль мог бы включить.
@@ -17,7 +18,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
-import { COLORS, findLines, shapeCells } from "./tetris-pieces.js";
+import { COLORS, ENEMIES_TO_BLAST, findGroup, shapeCells } from "./tetris-pieces.js";
 import { TetrisPanel, queueOf, advanceQueue } from "./tetris-panel.js";
 
 export const BLOCK_SRC = `modules/${MODULE_ID}/assets/tetris/block.svg`;
@@ -72,20 +73,40 @@ Hooks.on('updateCombat', (combat, changed) => {
 const offsetOf = point => canvas.grid.getOffset(point);
 const topLeft = (i, j) => canvas.grid.getTopLeftPoint({ i, j });
 
-/** Токены, которые задевает хотя бы одна клетка (клетки — верхние левые углы в пикселях) */
-function tokensUnder(cells, tokens, size) {
-    return tokens.filter(token => {
-        const doc = token.document ?? token;
-        const w = doc.width * size, h = doc.height * size;
-        return cells.some(c => c.x < doc.x + w - 1 && c.x + size > doc.x + 1 && c.y < doc.y + h - 1 && c.y + size > doc.y + 1);
-    });
+const keyOf = (c, size) => `${Math.round(c.x / size)},${Math.round(c.y / size)}`;
+
+/**
+ * Поле для группы: клетки блоков, клетки под существами и кто из существ — враг персонажа.
+ * @param {object[]} tiles   Документы плиток сцены.
+ * @param {object[]} tokens  Документы токенов сцены.
+ * @param {number} disposition  Отношение токена персонажа: такие же — союзники.
+ */
+function fieldOf(tiles, tokens, size, disposition) {
+    const blocks = new Set(tiles.filter(t => t.flags?.[MODULE_ID]?.tetris).map(t => keyOf(t, size)));
+    const creatures = new Map(), enemies = new Set();
+    for (const token of tokens) {
+        const gx = Math.round(token.x / size), gy = Math.round(token.y / size);
+        for (let dx = 0; dx < (token.width || 1); dx++) for (let dy = 0; dy < (token.height || 1); dy++) creatures.set(`${gx + dx},${gy + dy}`, token.id);
+        if (token.disposition !== disposition) enemies.add(token.id);
+    }
+    return { blocks, creatures, enemies };
+}
+
+/** Что будет при обрушении: можно ли, какая группа, кто в ней враг, детонирует ли */
+function outcome(cells, field, size) {
+    const keys = cells.map(c => keyOf(c, size));
+    const free = keys.every(k => !field.blocks.has(k) && !field.creatures.has(k));
+    const blocks = new Set([...field.blocks, ...keys]);
+    const group = findGroup(keys, blocks, field.creatures);
+    const victims = [...group.creatures].filter(id => field.enemies.has(id));
+    return { free, keys, group, victims, blast: victims.length >= ENEMIES_TO_BLAST };
 }
 
 async function placeFigure(actor, item, range) {
     const caster = actor.getActiveTokens()[0];
     if (!caster) return;
     let type = (await queueOf(actor)).next;
-    let rot = 0, anchor = offsetOf(caster.center), inRange = true, current = [];
+    let rot = 0, anchor = offsetOf(caster.center), ok = true, current = [];
     const panel = await TetrisPanel.open(actor, { item, onSwap: queue => { type = queue.next; draw(); } });
     const preview = new PIXI.Graphics();
     preview.eventMode = 'none';
@@ -95,17 +116,29 @@ async function placeFigure(actor, item, range) {
     const size = canvas.grid.size;
     const feet = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) / size * canvas.dimensions.distance;
 
+    const disposition = caster.document.disposition;
+    let field = null;
     const draw = () => {
+        // Поле — видимые игроку токены и блоки сцены
+        field ??= fieldOf([...canvas.scene.tiles], canvas.tokens.placeables.filter(t => t.visible).map(t => t.document), size, disposition);
         current = shapeCells(type, rot).map(([x, y]) => topLeft(anchor.i + y, anchor.j + x));
         const center = { x: topLeft(anchor.i, anchor.j).x + size / 2, y: topLeft(anchor.i, anchor.j).y + size / 2 };
-        inRange = feet(caster.center, center) <= range;
-        const color = inRange ? Number.parseInt(COLORS[type].slice(1), 16) : 0xff4d4d;
+        const result = outcome(current, field, size);
+        ok = feet(caster.center, center) <= range && result.free;
+        const color = ok ? Number.parseInt(COLORS[type].slice(1), 16) : 0xff4d4d;
         preview.clear();
-        for (const c of current) preview.lineStyle(2, color, 0.95).beginFill(color, 0.3).drawRect(c.x + 2, c.y + 2, size - 4, size - 4).endFill();
-        // Задетые существа — обводкой: их вытолкнет
-        for (const token of tokensUnder(current, canvas.tokens.placeables.filter(t => t.visible), size)) {
-            preview.lineStyle(3, 0xffffff, 0.9).drawRect(token.document.x, token.document.y, token.document.width * size, token.document.height * size);
+        // Будущая детонация: вся группа подсвечена, враги в ней обведены
+        if (ok && result.blast) {
+            for (const k of result.group.cells) {
+                const [x, y] = k.split(',').map(Number);
+                preview.beginFill(0xffffff, 0.18).drawRect(x * size, y * size, size, size).endFill();
+            }
+            for (const token of canvas.tokens.placeables) {
+                if (!result.victims.includes(token.document.id)) continue;
+                preview.lineStyle(3, 0xffffff, 1).drawRect(token.document.x, token.document.y, token.document.width * size, token.document.height * size);
+            }
         }
+        for (const c of current) preview.lineStyle(2, color, 0.95).beginFill(color, 0.3).drawRect(c.x + 2, c.y + 2, size - 4, size - 4).endFill();
     };
     draw();
 
@@ -149,7 +182,7 @@ async function placeFigure(actor, item, range) {
     const onConfirm = async event => {
         if (event.button === 2 || (event.data?.button ?? 0) === 2) return;
         event.stopPropagation();
-        if (!inRange) return ui.notifications.warn(`Слишком далеко: центр фигуры — не дальше ${range} футов.`);
+        if (!ok) return ui.notifications.warn(`Сюда нельзя: центр фигуры — не дальше ${range} футов, клетки — свободны от существ и блоков.`);
         finish();
         requestGM('tetrisDrop', { actorId: actor.id, sceneId: canvas.scene.id, type, cells: current.map(c => ({ x: c.x, y: c.y })) });
         await advanceQueue(actor);
@@ -172,94 +205,51 @@ onSocket('tetrisDrop', ({ payload }) => {
     dropFigure(payload).catch(error => console.error(`${MODULE_ID} | Тетрис`, error));
 });
 
-const cellKey = (doc, size) => `${Math.round(doc.x / size)},${Math.round(doc.y / size)}`;
-
 async function dropFigure({ actorId, sceneId, type, cells, userId }) {
     const scene = game.scenes.get(sceneId);
     const actor = game.actors.get(actorId);
     if (!scene || !cells?.length) return;
     const size = scene.grid.size;
+    const caster = scene.tokens.find(t => t.actorId === actorId) ?? null;
+    const before = fieldOf([...scene.tiles], [...scene.tokens], size, caster?.disposition ?? 1);
+    const result = outcome(cells, before, size);
+    // Клетки заняли, пока летел запрос
+    if (!result.free) return ui.notifications.warn('Тетрис: клетки фигуры уже заняты — обрушение отменено.');
 
     await scene.createEmbeddedDocuments('Tile', cells.map(c => ({
         texture: { src: BLOCK_SRC, tint: COLORS[type] ?? '#ffffff' }, x: c.x, y: c.y, width: size, height: size,
         flags: { [MODULE_ID]: { tetris: actorId } }
     })));
 
-    // Задетые выталкиваются; занятые клетки — все блоки сцены и остальные токены
-    const blockTiles = () => scene.tiles.filter(t => t.flags?.[MODULE_ID]?.tetris);
-    const blocks = new Set(blockTiles().map(t => cellKey(t, size)));
-    const crushed = tokensUnder(cells, [...scene.tokens], size);
-    const taken = new Set();
-    const footprint = (gx, gy, token) => {
-        const out = [];
-        for (let dx = 0; dx < token.width; dx++) for (let dy = 0; dy < token.height; dy++) out.push(`${gx + dx},${gy + dy}`);
-        return out;
+    const names = ids => {
+        const text = ids.map(id => scene.tokens.get(id)?.name ?? '?').join(', ');
+        return foundry.utils.escapeHTML?.(text) ?? text;
     };
-    for (const token of scene.tokens) if (!crushed.includes(token)) footprint(Math.round(token.x / size), Math.round(token.y / size), token).forEach(k => taken.add(k));
-    const moved = [];
-    for (const token of crushed) {
-        const spot = freeSpot(token, size, blocks, taken, scene);
-        if (!spot) continue;
-        footprint(spot.gx, spot.gy, token).forEach(k => taken.add(k));
-        moved.push({ _id: token.id, x: spot.gx * size, y: spot.gy * size });
-    }
-    if (moved.length) await scene.updateEmbeddedDocuments('Token', moved);
-
-    // Линии: блоки сгорают, существа рядом с ними — цели
-    const burn = findLines(blocks);
-    let victims = [];
-    if (burn.size) {
-        const near = new Set();
-        for (const k of burn) {
-            const [x, y] = k.split(',').map(Number);
-            for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) near.add(`${x + dx},${y + dy}`);
-        }
-        const position = token => moved.find(m => m._id === token.id) ?? token;
-        victims = scene.tokens.filter(token => footprint(Math.round(position(token).x / size), Math.round(position(token).y / size), token).some(k => near.has(k)));
-        const flash = { sceneId, cells: [...burn].map(k => k.split(',').map(n => Number(n) * size)), size };
+    let content = '<strong>Тетрис</strong> — фигура обрушилась.';
+    if (result.blast) {
+        // Детонация: блоки группы исчезают, враги в ней — цели
+        // Вспыхивают блоки и враги группы; союзник в ней только связывал и не горит
+        const burning = [...result.group.cells].filter(k => !before.creatures.has(k) || before.enemies.has(before.creatures.get(k)));
+        const flash = { sceneId, cells: burning.map(k => k.split(',').map(n => Number(n) * size)), size };
         emit('tetrisFlash', flash);
         playFlash(flash);
-        await scene.deleteEmbeddedDocuments('Tile', blockTiles().filter(t => burn.has(cellKey(t, size))).map(t => t.id));
-        const ids = victims.map(t => t.id);
-        if (userId === game.user.id) game.user.updateTokenTargets?.(ids);
-        else emit('tetrisTargets', { userId, ids });
+        const groupBlocks = new Set([...result.group.cells].filter(k => !before.creatures.has(k)));
+        const ids = [...scene.tiles].filter(t => t.flags?.[MODULE_ID]?.tetris && groupBlocks.has(keyOf(t, size))).map(t => t.id);
+        if (ids.length) await scene.deleteEmbeddedDocuments('Tile', ids);
+        if (userId === game.user.id) game.user.updateTokenTargets?.(result.victims);
+        else emit('tetrisTargets', { userId, ids: result.victims });
+        content += `<br><strong>Детонация!</strong> Сгорело блоков: ${ids.length}. В группе: ${names(result.victims)} — цели спасброска Ловкости по карточке навыка.`;
+    } else if (result.victims.length) {
+        content += `<br>Сцеплен ${names(result.victims)} — нужен ещё хотя бы один враг в группе.`;
     }
-
-    const list = tokens => foundry.utils.escapeHTML?.(tokens.map(t => t.name).join(', ')) ?? tokens.map(t => t.name).join(', ');
-    const lines = [
-        `<strong>Тетрис</strong> — фигура обрушилась.`,
-        crushed.length ? `Вытолкнуло: ${list(crushed)}.` : '',
-        burn.size ? `<strong>Линия!</strong> Сгорело блоков: ${burn.size}. ${victims.length ? `Рядом: ${list(victims)} — цели спасброска Ловкости по карточке навыка.` : 'Рядом никого.'}` : ''
-    ].filter(Boolean);
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-tetris-card">${lines.join('<br>')}</div>` });
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-tetris-card">${content}</div>` });
 }
 
 onSocket('tetrisTargets', ({ userId, ids }) => {
     if (userId === game.user.id) game.user.updateTokenTargets?.(ids);
 });
 
-// Ближайшее место для токена вне блоков и других токенов: по кольцам вокруг его клетки
-function freeSpot(token, size, blocks, taken, scene) {
-    const gx = Math.round(token.x / size), gy = Math.round(token.y / size);
-    const maxX = Math.floor(scene.dimensions.width / size), maxY = Math.floor(scene.dimensions.height / size);
-    const fits = (x, y) => {
-        for (let dx = 0; dx < token.width; dx++) for (let dy = 0; dy < token.height; dy++) {
-            const k = `${x + dx},${y + dy}`;
-            if (x + dx < 0 || y + dy < 0 || x + dx >= maxX || y + dy >= maxY || blocks.has(k) || taken.has(k)) return false;
-        }
-        return true;
-    };
-    for (let r = 1; r <= 12; r++) {
-        const ring = [];
-        for (let x = gx - r; x <= gx + r; x++) for (let y = gy - r; y <= gy + r; y++) {
-            if (Math.max(Math.abs(x - gx), Math.abs(y - gy)) === r && fits(x, y)) ring.push({ gx: x, gy: y, d: Math.hypot(x - gx, y - gy) });
-        }
-        if (ring.length) return ring.sort((a, b) => a.d - b.d)[0];
-    }
-    return null;
-}
-
-// Вспышка сгоревшей линии у всех: белые клетки раздуваются и гаснут
+// Вспышка детонации у всех: белые клетки раздуваются и гаснут
 onSocket('tetrisFlash', data => playFlash(data));
 function playFlash({ sceneId, cells, size }) {
     if (!canvas?.ready || canvas.scene?.id !== sceneId) return;
