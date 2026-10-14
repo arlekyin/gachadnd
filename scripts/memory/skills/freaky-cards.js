@@ -18,22 +18,22 @@ const attack = value => ['mwak', 'rwak', 'msak', 'rsak'].map(k => ({ key: `syste
 
 export const CARDS = {
     // Бафы
-    invisible: { buff: true, name: 'Невидимость', img: `${ICON}/statuses/invisible.svg`, statuses: ['invisible'] },
-    dash: { buff: true, name: 'Рывок', img: `${ICON}/statuses/hovering.svg`, text: 'скорость ×2',
+    invisible: { buff: true, name: 'Невидимость', rules: 'Атаки по вам — с помехой, ваши атаки — с преимуществом. Вас нельзя увидеть без особых чувств.', img: `${ICON}/statuses/invisible.svg`, statuses: ['invisible'] },
+    dash: { buff: true, name: 'Рывок', rules: 'Скорость всех видов удваивается.', img: `${ICON}/statuses/hovering.svg`, text: 'скорость ×2',
         changes: ['walk', 'fly', 'swim', 'climb', 'burrow'].map(m => ({ key: `system.attributes.movement.${m}`, mode: MULTIPLY, value: '2' })) },
-    breath: { buff: true, name: 'Второе дыхание', img: `${ICON}/hit-points.svg`, text: 'временные ПЗ 2d8', temp: '2d8' },
-    nerve: { buff: true, name: 'Кураж', img: 'icons/svg/upgrade.svg', text: '+2 к атакам', changes: attack('+2') },
-    armor: { buff: true, name: 'Броня', img: `${ICON}/checked-shield.svg`, text: '+2 к КД', changes: [{ key: 'system.attributes.ac.bonus', mode: ADD, value: '+2' }] },
-    tough: { buff: true, name: 'Неуязвимость', img: `${ICON}/trait-damage-resistances.svg`, text: 'сопротивление всему урону',
+    breath: { buff: true, name: 'Второе дыхание', rules: 'Вы получаете 2d8 временных ПЗ (не складываются с другими временными ПЗ).', img: `${ICON}/hit-points.svg`, text: 'временные ПЗ 2d8', temp: '2d8' },
+    nerve: { buff: true, name: 'Кураж', rules: '+2 к броскам атаки.', img: 'icons/svg/upgrade.svg', text: '+2 к атакам', changes: attack('+2') },
+    armor: { buff: true, name: 'Броня', rules: '+2 к КД.', img: `${ICON}/checked-shield.svg`, text: '+2 к КД', changes: [{ key: 'system.attributes.ac.bonus', mode: ADD, value: '+2' }] },
+    tough: { buff: true, name: 'Неуязвимость', rules: 'Сопротивление всем видам урона: урон по вам вдвое меньше.', img: `${ICON}/trait-damage-resistances.svg`, text: 'сопротивление всему урону',
         changes: DAMAGE_TYPES.map(type => ({ key: 'system.traits.dr.value', mode: ADD, value: type })) },
     // Дебафы
-    trip: { buff: false, name: 'Подножка', img: `${ICON}/statuses/prone.svg`, statuses: ['prone'] },
-    sick: { buff: false, name: 'Тошнота', img: `${ICON}/statuses/poisoned.svg`, statuses: ['poisoned'] },
-    tangle: { buff: false, name: 'Запутался', img: `${ICON}/statuses/restrained.svg`, statuses: ['restrained'] },
-    dark: { buff: false, name: 'Тьма в глазах', img: `${ICON}/statuses/blinded.svg`, statuses: ['blinded'] },
-    legs: { buff: false, name: 'Ватные ноги', img: `${ICON}/statuses/grappled.svg`, text: 'скорость 0',
+    trip: { buff: false, name: 'Подножка', rules: 'Сбит с ног: двигаться можно только ползком (каждый фут стоит 2), встать — половина скорости. Ваши атаки — с помехой. Атаки по вам в пределах 5 футов — с преимуществом, издалека — с помехой.', img: `${ICON}/statuses/prone.svg`, statuses: ['prone'] },
+    sick: { buff: false, name: 'Тошнота', rules: 'Отравлен: помеха на броски атаки и проверки характеристик.', img: `${ICON}/statuses/poisoned.svg`, statuses: ['poisoned'] },
+    tangle: { buff: false, name: 'Запутался', rules: 'Опутан: скорость 0. Ваши атаки — с помехой, атаки по вам — с преимуществом. Помеха на спасброски Ловкости.', img: `${ICON}/statuses/restrained.svg`, statuses: ['restrained'] },
+    dark: { buff: false, name: 'Тьма в глазах', rules: 'Ослеплён: вы ничего не видите, проверки, требующие зрения, проваливаются. Ваши атаки — с помехой, атаки по вам — с преимуществом.', img: `${ICON}/statuses/blinded.svg`, statuses: ['blinded'] },
+    legs: { buff: false, name: 'Ватные ноги', rules: 'Скорость всех видов — 0.', img: `${ICON}/statuses/grappled.svg`, text: 'скорость 0',
         changes: ['walk', 'fly', 'swim', 'climb', 'burrow'].map(m => ({ key: `system.attributes.movement.${m}`, mode: OVERRIDE, value: '0' })) },
-    open: { buff: false, name: 'Раскрылся', img: 'icons/svg/downgrade.svg', text: '−2 к КД', changes: [{ key: 'system.attributes.ac.bonus', mode: ADD, value: '-2' }] }
+    open: { buff: false, name: 'Раскрылся', rules: '−2 к КД.', img: 'icons/svg/downgrade.svg', text: '−2 к КД', changes: [{ key: 'system.attributes.ac.bonus', mode: ADD, value: '-2' }] }
 };
 const BUFFS = Object.keys(CARDS).filter(k => CARDS[k].buff);
 const ALL = Object.keys(CARDS);
@@ -56,6 +56,7 @@ export async function applyCards(scene, combat, dealt) {
         await actor.createEmbeddedDocuments('ActiveEffect', [{
             name: `Чумовая пятница: ${config.name}`,
             img: config.img,
+            description: `<p>${config.rules}</p><p><em>Чумовая пятница: до конца следующего хода этого существа.</em></p>`,
             statuses: config.statuses ?? [],
             changes: config.changes ?? [],
             // Иконка на токене. Срок эффекту не задаётся: Foundry и dnd5e снимали бы его по своим часам

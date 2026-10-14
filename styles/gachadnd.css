@@ -2340,3 +2340,6 @@
 /* Чумовая пятница: карты в сводке чата */
 .gd-freaky-card .buff { color: #2f9e44; font-weight: 600; }
 .gd-freaky-card .debuff { color: #c92a2a; font-weight: 600; }
+.gd-freaky-cards { margin: 4px 0 0; padding-left: 16px; }
+.gd-freaky-cards li { margin-bottom: 4px; }
+.gd-freaky-cards small { color: #555; line-height: 1.3; }
