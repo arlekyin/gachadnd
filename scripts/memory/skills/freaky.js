@@ -1,43 +1,36 @@
 /**
  * Gacha Roguelike dnd5e — Чумовая пятница (красный навык)
  *
- * Все существа в бою случайно перемешивают между собой долю оставшихся ПЗ: у каждого — доля
- * кого-то другого от его собственного максимума. Существа на 0 ПЗ и мёртвые не участвуют,
- * временные ПЗ не тасуются. Персонаж участвует всегда.
+ * Все живые существа в бою случайно меняются местами — союзники, враги и сам персонаж. Меняются
+ * между собой существа одного размера (места остаются по сетке, никто не встаёт в другого);
+ * у единственного существа своего размера место не меняется. Существа на 0 ПЗ и мёртвые не
+ * участвуют.
  *
- * У всех над токенами всплывают полоски здоровья и, как напёрстки, разлетаются к новым
- * владельцам; Мастер меняет ПЗ, когда полоски долетели.
+ * У всех токены взлетают, как напёрстки, разлетаются дугами по новым местам и садятся; Мастер
+ * переставляет их в момент посадки (v13 — перемещением «displace»).
  */
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { clamp01, easeInOut } from "../../cutscene/math.js";
+import { placeToken } from "./pick.js";
 
-const FLY_MS = 1400;
+const FLY_MS = 1300;
 const isFreaky = item => !!item?.flags?.[MODULE_ID]?.freaky;
 
-const hpOf = actor => actor?.system?.attributes?.hp;
-const maxOf = hp => Math.max(1, hp?.effectiveMax ?? hp?.max ?? 1);
 const alive = actor => {
-    const hp = hpOf(actor);
+    const hp = actor?.system?.attributes?.hp;
     return !!hp && hp.value > 0 && !actor.statuses?.has?.('dead');
 };
 
-/** Участники: { tokenId, actor, ratio } — живые существа боя с токеном на сцене */
+/** Участники: токены живых существ боя */
 function participants(combat) {
-    const out = [];
-    for (const combatant of combat?.combatants ?? []) {
-        const actor = combatant.actor, token = combatant.token;
-        if (!token || !alive(actor) || combatant.defeated) continue;
-        const hp = hpOf(actor);
-        out.push({ tokenId: token.id, actor, ratio: hp.value / maxOf(hp) });
-    }
-    return out;
+    return (combat?.combatants ?? []).filter(c => c.token && !c.defeated && alive(c.actor)).map(c => c.token);
 }
 
 /**
- * Перестановка долей: случайная и не тождественная (если участников больше одного).
- * @returns {number[]} order[i] — чью долю получает участник i
+ * Случайная перестановка, не тождественная, если элементов больше одного.
+ * @returns {number[]} order[i] — чьё место получает элемент i
  */
 export function shuffle(n, random = Math.random) {
     const order = Array.from({ length: n }, (_, i) => i);
@@ -51,6 +44,25 @@ export function shuffle(n, random = Math.random) {
     return order;
 }
 
+/** Новые места: { id, x, y, from: {x, y} } — перестановка внутри каждого размера */
+export function plan(tokens, random = Math.random) {
+    const groups = new Map();
+    for (const token of tokens) {
+        const size = `${token.width || 1}×${token.height || 1}`;
+        if (!groups.has(size)) groups.set(size, []);
+        groups.get(size).push(token);
+    }
+    const moves = [];
+    for (const group of groups.values()) {
+        const order = shuffle(group.length, random);
+        group.forEach((token, i) => {
+            const spot = group[order[i]];
+            if (spot !== token) moves.push({ id: token.id, x: spot.x, y: spot.y, from: { x: token.x, y: token.y } });
+        });
+    }
+    return moves;
+}
+
 Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item, actor = item?.actor;
     if (!isFreaky(item) || !actor) return;
@@ -59,8 +71,8 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
         ui.notifications.warn('Чумовая пятница работает только в бою, в котором участвует персонаж.');
         return false;
     }
-    if (participants(combat).length < 2) {
-        ui.notifications.warn('В бою некому меняться здоровьем.');
+    if (!plan(participants(combat)).length) {
+        ui.notifications.warn('В бою некому меняться местами.');
         return false;
     }
 });
@@ -78,73 +90,80 @@ onSocket('freakyFriday', ({ payload }) => {
 
 async function freakyFriday({ combatId, actorId }) {
     const combat = game.combats.get(combatId);
-    const list = participants(combat);
-    if (list.length < 2) return;
-    const order = shuffle(list.length);
-    const flights = list.map((p, i) => ({ from: list[order[i]].tokenId, to: p.tokenId, ratio: list[order[i]].ratio }));
-    const flight = { sceneId: combat.scene?.id ?? canvas.scene?.id, flights };
-    emit('freakyFly', flight);
-    await playFly(flight);
-    const rows = [];
-    for (const [i, p] of list.entries()) {
-        const hp = hpOf(p.actor);
-        const ratio = list[order[i]].ratio;
-        const value = Math.max(1, Math.min(maxOf(hp), Math.round(ratio * maxOf(hp))));
-        rows.push(`${foundry.utils.escapeHTML?.(p.actor.name) ?? p.actor.name}: ${Math.round(p.ratio * 100)}% → ${Math.round(ratio * 100)}%`);
-        if (value !== hp.value) await p.actor.update({ 'system.attributes.hp.value': value });
-    }
-    const caster = game.actors.get(actorId);
+    const scene = combat?.scene ?? canvas.scene;
+    const moves = plan(participants(combat));
+    if (!scene || !moves.length) return;
+    const shuffleData = { sceneId: scene.id, moves };
+    emit('freakyShuffle', shuffleData);
+    const landed = playShuffle(shuffleData);
+    // Перестановка — в момент посадки: всё сразу, без анимации движения
+    await new Promise(resolve => setTimeout(resolve, FLY_MS));
+    await Promise.all(moves.map(m => {
+        const token = scene.tokens.get(m.id);
+        return token ? placeToken(token, m.x, m.y) : null;
+    }));
+    await landed;
+    const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean);
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor: caster }),
-        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — здоровье перемешалось:<br>${rows.join('<br>')}</div>`
+        speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) }),
+        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${foundry.utils.escapeHTML?.(names.join(', ')) ?? names.join(', ')}.</div>`
     });
 }
 
 // ==========================================
-// ПОЛЁТ ПОЛОСОК
+// ПОЛЁТ ТОКЕНОВ
 // ==========================================
 
-onSocket('freakyFly', data => playFly(data));
+onSocket('freakyShuffle', data => playShuffle(data));
 
-const barColor = ratio => {
-    const r = ratio < 0.5 ? 255 : Math.round(255 * (1 - ratio) * 2);
-    const g = ratio > 0.5 ? 220 : Math.round(220 * ratio * 2);
-    return (r << 16) | (g << 8) | 60;
-};
-
-/** Полоски здоровья взлетают над токенами, тасуются и садятся на новых владельцев */
-export function playFly({ sceneId, flights }) {
-    if (!canvas?.ready || canvas.scene?.id !== sceneId) return new Promise(resolve => setTimeout(resolve, FLY_MS));
+/**
+ * Токены взлетают, летят дугами к новым местам и садятся. На время полёта сам токен скрыт,
+ * вместо него летит его картинка; после посадки (когда Мастер переставил) токен снова виден.
+ */
+export function playShuffle({ sceneId, moves }) {
+    if (!canvas?.ready || canvas.scene?.id !== sceneId) return Promise.resolve();
     const size = canvas.grid.size;
-    const g = new PIXI.Graphics();
-    g.eventMode = 'none';
-    canvas.controls.addChild(g);
-    // Скрытые от этого клиента токены не показываются: их полоски не видны
-    const visible = id => {
-        const token = canvas.tokens.get(id);
-        return token && token.visible !== false ? token : null;
-    };
-    const top = token => ({ x: token.center.x, y: token.document.y - size * 0.35 });
-    const bars = flights.map((f, n) => ({ ...f, a: visible(f.from), b: visible(f.to), n })).filter(f => f.a && f.b);
+    const layer = new PIXI.Container();
+    layer.eventMode = 'none';
+    canvas.controls.addChild(layer);
+    const flights = [];
+    for (const [n, m] of moves.entries()) {
+        const token = canvas.tokens.get(m.id);
+        // Скрытые от этого клиента токены не летят: их не видно
+        if (!token || token.visible === false || !token.mesh?.texture) continue;
+        const doc = token.document;
+        const w = (doc.width || 1) * size, h = (doc.height || 1) * size;
+        const sprite = new PIXI.Sprite(token.mesh.texture);
+        sprite.anchor.set(0.5);
+        sprite.width = Math.abs(token.mesh.width) || w;
+        sprite.height = Math.abs(token.mesh.height) || h;
+        const scale = { x: sprite.scale.x, y: sprite.scale.y };
+        layer.addChild(sprite);
+        token.renderable = false;
+        flights.push({ token, sprite, scale, n, from: { x: m.from.x + w / 2, y: m.from.y + h / 2 }, to: { x: m.x + w / 2, y: m.y + h / 2 } });
+    }
     const start = performance.now();
     return new Promise(resolve => {
         const frame = now => {
             const t = clamp01((now - start) / FLY_MS);
-            g.clear();
-            for (const bar of bars) {
-                const from = top(bar.a), to = top(bar.b);
-                // Взлёт (0–0.2), полёт дугой (0.2–0.85), посадка (0.85–1)
-                const k = easeInOut(clamp01((t - 0.2) / 0.65));
-                const lift = Math.sin(clamp01(t / 0.2) * Math.PI / 2) * size * 0.6 * (1 - clamp01((t - 0.85) / 0.15));
-                const arc = Math.sin(k * Math.PI) * size * (1.2 + (bar.n % 3) * 0.4);
-                const x = from.x + (to.x - from.x) * k, y = from.y + (to.y - from.y) * k - lift - arc;
-                const w = size * 1.1, h = Math.max(8, size * 0.2);
-                g.lineStyle(2, 0x000000, 0.8).beginFill(0x1a1a1a, 0.9).drawRoundedRect(x - w / 2, y - h / 2, w, h, h / 2).endFill();
-                g.lineStyle(0).beginFill(barColor(bar.ratio), 1).drawRoundedRect(x - w / 2 + 1, y - h / 2 + 1, Math.max(0, (w - 2) * bar.ratio), h - 2, (h - 2) / 2).endFill();
+            for (const f of flights) {
+                // Взлёт (0–0.15), полёт дугой (0.15–0.85), посадка (0.85–1); дуги у всех разные
+                const k = easeInOut(clamp01((t - 0.15) / 0.7));
+                const up = Math.sin(clamp01(t / 0.15) * Math.PI / 2) * (1 - clamp01((t - 0.85) / 0.15));
+                const arc = Math.sin(k * Math.PI) * size * (1 + (f.n % 3) * 0.5) * (f.n % 2 ? 1 : -1);
+                const dx = f.to.x - f.from.x, dy = f.to.y - f.from.y, len = Math.hypot(dx, dy) || 1;
+                f.sprite.position.set(f.from.x + dx * k - dy / len * arc, f.from.y + dy * k + dx / len * arc - up * size * 0.3);
+                const grow = 1 + up * 0.25;
+                f.sprite.scale.set(f.scale.x * grow, f.scale.y * grow);
+                f.sprite.rotation = Math.sin(k * Math.PI) * 0.35 * (f.n % 2 ? 1 : -1);
             }
             if (t < 1) return requestAnimationFrame(frame);
-            g.destroy();
-            resolve();
+            // Мастер переставляет токены в момент посадки — картинка держится, пока они не встали
+            setTimeout(() => {
+                for (const f of flights) f.token.renderable = true;
+                layer.destroy({ children: true });
+                resolve();
+            }, 400);
         };
         requestAnimationFrame(frame);
     });
