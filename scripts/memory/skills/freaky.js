@@ -16,6 +16,7 @@ import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { clamp01, easeInOut } from "../../cutscene/math.js";
 import { placeToken } from "./pick.js";
 import { key, cellOf, footprint, nearestFree } from "./grid.js";
+import { CARDS, dealCards, applyCards, shuffleInitiative, broadcastCards } from "./freaky-cards.js";
 
 const FLY_MS = 1300;
 // Урон придавленному
@@ -150,10 +151,22 @@ async function freakyFriday({ combatId, actorId }) {
         const who = hurt.map(t => t.name).join(', ');
         crush = who ? `<br>Придавило: ${foundry.utils.escapeHTML?.(who) ?? who} — ${roll.total} дробящего урона (${CRUSH}).` : '';
     }
+    // Карты: каждому участнику, заклинателю — баф
+    const dealt = dealCards(participants(combat), actorId);
+    broadcastCards({ sceneId: scene.id, dealt });
+    await applyCards(scene, combat, dealt);
+    // Очередь: инициатива ещё не ходивших перемешивается
+    const order = shuffleInitiative(combat);
+    if (order.length) await combat.updateEmbeddedDocuments('Combatant', order.map(u => ({ _id: u.id, initiative: u.initiative })));
+    const esc = text => foundry.utils.escapeHTML?.(text) ?? text;
     const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
+    const cards = dealt.map(d => `${esc(scene.tokens.get(d.tokenId)?.name ?? '?')} — <span class="${CARDS[d.card].buff ? 'buff' : 'debuff'}">${CARDS[d.card].name}</span>${CARDS[d.card].text ? ` (${CARDS[d.card].text})` : ''}`).join('<br>');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) }),
-        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${foundry.utils.escapeHTML?.(names) ?? names}.${crush}</div>`
+        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${esc(names)}.${crush}`
+            + `<br><strong>Карты</strong> (до конца следующего хода):<br>${cards}`
+            + (order.length ? '<br><strong>Очередь перепуталась</strong> у тех, кто ещё не ходил.' : '')
+            + '</div>'
     });
 }
 

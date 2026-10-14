@@ -30,6 +30,29 @@ for (let round = 1; round <= 5; round++) {
     else await page.waitForTimeout(2300);
     const after = await spots();
     console.log(`   после ${round}:`, JSON.stringify(after));
+    if (round === 1) {
+        // Карты: по одной каждому живому участнику, заклинателю — баф; над токенами — названия
+        const cards = await page.evaluate(() => Object.fromEntries(scene.tokens.map(t => [t.id, t.actor.effects.filter(e => e.flags.gachadnd?.freakyCard).map(e => e.name)])));
+        console.log('   карты:', JSON.stringify(cards));
+        check(['caster', 'ogre', 'ally', 'imp'].every(id => cards[id].length === 1) && cards.goblin.length === 0, 'каждому живому — одна карта, мёртвому — нет');
+        const casterBuff = await page.evaluate(() => { const e = actor.effects.find(x => x.flags.gachadnd?.freakyCard); return freakyCards.CARDS[e.flags.gachadnd.freakyCard.card].buff; });
+        check(casterBuff, 'заклинателю — баф');
+        check((await page.evaluate(() => window.texts?.length)) === 4, 'над четырьмя токенами вспыхнули карты');
+        check(/Карты/.test(await page.evaluate(() => window.chat)), 'карты в сводке чата');
+        // Очередь: персонаж (ходит сейчас) — на месте, остальные живые — перемешаны
+        const inits = await page.evaluate(() => Object.fromEntries(game.combat.combatants.map(c => [c.tokenId, c.initiative])));
+        console.log('   инициатива:', JSON.stringify(inits));
+        check(inits.caster === 20 && inits.goblin === 18 && JSON.stringify([inits.ogre, inits.ally, inits.imp].sort()) === JSON.stringify([15, 12, 8].sort()), 'инициатива: текущий и мёртвый на месте, ещё не ходившие перемешаны');
+        // Срок карты союзника: её ход начался — взведена, кончился — снята
+        const allyTurn = await page.evaluate(() => game.combat.turns.findIndex(c => c.tokenId === 'ally'));
+        const step = turn => page.evaluate(turn => { game.combat.turn = turn; return Promise.all(Hooks.events.updateCombat.map(fn => fn(game.combat, { turn }))); }, turn);
+        await step(allyTurn);
+        const armed = await page.evaluate(() => scene.tokens.get('ally').actor.effects.filter(e => e.flags.gachadnd?.freakyCard).length);
+        await step((allyTurn + 1) % 5);
+        const left = await page.evaluate(() => scene.tokens.get('ally').actor.effects.filter(e => e.flags.gachadnd?.freakyCard).length);
+        check(armed === 1 && left === 0, 'карта союзника снята в конце его следующего хода');
+        await step(0);
+    }
     moved ||= Object.keys(after).some(id => id !== 'goblin' && after[id] !== before[id]);
     const bad = await overlap();
     check(!bad, `тасовка ${round}: никто ни в ком не стоит${bad ? ` (${bad})` : ''}`);

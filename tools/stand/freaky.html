@@ -22,13 +22,32 @@ window.DISPOSITION = { caster: 1, ally: 1 };</script>
 // Сначала модуль навыка: он ловит canvasReady, который вызывает field()
 window.V13 = new URLSearchParams(location.search).has('v13');
 window.freaky = await import('/scripts/memory/skills/freaky.js');
+window.freakyCards = await import('/scripts/memory/skills/freaky-cards.js');
 const { field } = await import('./field.js');
 // ПЗ (по актёрам; персонаж — A): гоблин мёртв — не участвует; огр 2×2 — единственный своего размера
 window.HP = { goblin: [0, 7] };
 const { actor } = field({ freaky: true }, { uses: 1, range: 0 });
-// Бой: все токены сцены
-window.game.combat = { id: 'C', started: true, scene,
-    combatants: scene.tokens.map(t => ({ actor: t.actor, token: t, defeated: false })) };
+// Бой: все токены сцены; инициатива по убыванию, ход — персонажа (первый)
+const inits = { caster: 20, goblin: 18, ogre: 15, ally: 12, imp: 8 };
+const combatants = scene.tokens.map(t => ({ id: `c-${t.id}`, tokenId: t.id, actor: t.actor, token: t, defeated: false, initiative: inits[t.id] }));
+window.game.combat = { id: 'C', started: true, scene, round: 1, turn: 0, combatants,
+    get turns() { return [...combatants].sort((a, b) => b.initiative - a.initiative); },
+    get combatant() { return this.turns[this.turn]; },
+    async updateEmbeddedDocuments(type, list) { for (const u of list) Object.assign(combatants.find(c => c.id === u._id), u); window.initUpdates = list; } };
 game.combats = { get: () => game.combat };
+// Активные эффекты на существах
+for (const actor of new Set(scene.tokens.map(t => t.actor))) {
+    actor.effects = [];
+    actor.createEmbeddedDocuments = async (type, list) => list.map(data => {
+        const effect = { ...structuredClone(data), id: foundry.utils.randomID(), flags: structuredClone(data.flags ?? {}) };
+        effect.update = async changes => { for (const [k, v] of Object.entries(changes)) foundry.utils.setProperty(effect, k, v); };
+        effect.delete = async () => { actor.effects = actor.effects.filter(e => e !== effect); };
+        actor.effects.push(effect);
+        return effect;
+    });
+    actor.deleteEmbeddedDocuments = async (type, ids) => { actor.effects = actor.effects.filter(e => !ids.includes(e.id)); };
+}
+window.CONST = { TEXT_ANCHOR_POINTS: { TOP: 2 } };
+canvas.interface = { createScrollingText: (point, text, options) => { window.texts = [...(window.texts ?? []), text]; } };
 window.ready = true;
 </script></body></html>
