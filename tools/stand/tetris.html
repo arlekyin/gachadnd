@@ -1,0 +1,110 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
+<style>
+  /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
+  .application { position: fixed; right: 30px; top: 470px; width: 470px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
+  button { font-family: inherit; color: inherit; }
+</style></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>window.TOKENS = {
+  caster: ['/assets/bestiary/chess-knight.webp', 275, 525, 45, 1],
+  goblin: ['/assets/bestiary/chess-bishop.webp', 575, 375, 45, 1],
+  ogre: ['/assets/bestiary/chess-rook.webp', 650, 300, 90, 2]
+};</script>
+<script src="scene.js"></script>
+<script type="module">
+// ApplicationV2 без шаблонов: _prepareContext → _renderHTML → _replaceHTML, окно в DOM
+class ApplicationV2 {
+    static DEFAULT_OPTIONS = {};
+    constructor(options = {}) { this.options = { ...this.constructor.DEFAULT_OPTIONS, ...options }; this.id = options.id; this.rendered = false; }
+    get title() { return this.options.window?.title ?? ''; }
+    async render() {
+        const context = await this._prepareContext({});
+        const html = await this._renderHTML(context, {});
+        if (!this.rendered) {
+            this.element = document.createElement('div');
+            this.element.className = `application ${(this.options.classes ?? []).join(' ')}`;
+            this.element.innerHTML = `<header class="window-header">${this.title}</header><section class="window-content"></section>`;
+            document.body.append(this.element);
+            foundry.applications.instances.set(this.id, this);
+        }
+        this._replaceHTML(html, this.element.querySelector('.window-content'), {});
+        this.rendered = true;
+        return this;
+    }
+    async _prepareContext() { return {}; }
+    async close() { this._onClose?.({}); this.element.remove(); this.rendered = false; foundry.applications.instances.delete(this.id); }
+}
+foundry.applications.api.ApplicationV2 = ApplicationV2;
+foundry.utils.escapeHTML = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const setPath = (obj, path, value) => { const keys = path.split('.'); let o = obj; keys.slice(0, -1).forEach(k => o = o[k] ??= {}); o[keys.at(-1)] = value; };
+const getPath = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
+// Сцена Foundry: плитки рисуются спрайтами, токены двигаются вместе с картинкой
+const size = 50;
+const scene = {
+    id: 'S', grid: { size }, dimensions: { width: 1134, height: 1192 }, flags: {}, tiles: [], sprites: {},
+    tokens: Object.values(toks).map(t => ({ id: t.id, name: t.id, x: t.center.x - t.w / 2, y: t.center.y - t.h / 2, width: t.document.width, height: t.document.height })),
+    getFlag(m, k) { return getPath(this.flags[m] ?? {}, k); },
+    async setFlag(m, k, v) { setPath(this.flags[m] ??= {}, k, structuredClone(v)); },
+    async unsetFlag(m, k) { const keys = k.split('.'); const o = getPath(this.flags[m] ?? {}, keys.slice(0, -1).join('.')) ?? this.flags[m]; if (keys.length === 1) delete this.flags[m][k]; else delete o?.[keys.at(-1)]; },
+    async createEmbeddedDocuments(type, list) {
+        return list.map(data => {
+            const doc = { ...structuredClone(data), id: foundry.utils.randomID() };
+            this.tiles.push(doc);
+            const sprite = PIXI.Sprite.from(data.texture.src.replace('modules/gachadnd/', '/'));
+            sprite.position.set(data.x, data.y); sprite.width = data.width; sprite.height = data.height;
+            canvas.stage.addChildAt(sprite, 2);
+            this.sprites[doc.id] = sprite;
+            return doc;
+        });
+    },
+    async deleteEmbeddedDocuments(type, ids) {
+        for (const id of ids) { this.sprites[id]?.destroy(); delete this.sprites[id]; }
+        this.tiles = this.tiles.filter(t => !ids.includes(t.id));
+    },
+    async updateEmbeddedDocuments(type, list) {
+        for (const u of list) {
+            const doc = this.tokens.find(t => t.id === u._id); Object.assign(doc, u);
+            const t = toks[u._id], cx = u.x + t.w / 2, cy = u.y + t.h / 2;
+            t.mesh.position.set(cx, cy); t.effects.position.set(cx - t.center.x, cy - t.center.y);
+            window.moved = [...(window.moved ?? []), u];
+        }
+    }
+};
+Object.values(toks).forEach(t => { const d = scene.tokens.find(x => x.id === t.id); t.document = d; });
+canvas.scene = scene;
+// Как в Foundry: сцена ловит указатель
+canvas.stage.eventMode = 'static'; canvas.stage.hitArea = new PIXI.Rectangle(-1e5, -1e5, 2e5, 2e5);
+canvas.grid = { size, isSquare: true, getOffset: ({ x, y }) => ({ i: Math.floor(y / size), j: Math.floor(x / size) }), getTopLeftPoint: ({ i, j }) => ({ x: j * size, y: i * size }) };
+canvas.controls = new PIXI.Container(); canvas.stage.addChild(canvas.controls);
+canvas.templates = { activate() {} }; canvas.activeLayer = { activate() {} };
+canvas.tokens.placeables.forEach(t => { t.visible = true; });
+game.scenes = { get: () => scene, [Symbol.iterator]: function* () { yield scene; } };
+game.user.updateTokenTargets = ids => { window.targets = ids; };
+window.ChatMessage = { create: async data => { window.chat = data.content; }, getSpeaker: () => ({}) };
+// Персонаж с Тетрисом
+const item = { flags: { gachadnd: { puzzle: true, is_active: true } }, system: { uses: { max: 3, spent: 0, get value() { return 3 - this.spent; } }, range: { value: 60 } },
+    async update(data) { if ('system.uses.spent' in data) this.system.uses.spent = data['system.uses.spent']; } };
+const actor = { id: 'A', name: 'Конь', isOwner: true, flags: {}, items: [item],
+    getActiveTokens: () => [toks.caster],
+    getFlag(m, k) { return getPath(this.flags[m] ?? {}, k); },
+    async update(data) { for (const [k, v] of Object.entries(data)) setPath(this, k, structuredClone(v)); } };
+item.actor = actor;
+game.actors = { get: () => actor };
+window.actor = actor; window.item = item;
+const mod = await import('/scripts/memory/tetris/tetris.js');
+window.tetris = mod;
+window.puzzleLib = await import('/scripts/memory/tetris/tetris-puzzle.js');
+window.useSkill = () => {
+    const activity = { item, range: { value: 60 } };
+    if (Hooks.events['dnd5e.preUseActivity'].some(fn => fn(activity) === false)) return false;
+    item.system.uses.spent++;
+    Hooks.events['dnd5e.postUseActivity'].forEach(fn => fn(activity));
+    return true;
+};
+// Ход ручной: обычный requestAnimationFrame
+(function tick() { canvas.app.render(); requestAnimationFrame(tick); })();
+window.ready = true;
+</script></body></html>

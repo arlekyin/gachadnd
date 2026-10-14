@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6ef0e4"/>
+      <stop offset="0.55" stop-color="#14928c"/>
+      <stop offset="1" stop-color="#06403f"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="0.4" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Кристаллический блок: скошенные грани, светлый верх, тёмный низ -->
+  <rect x="4" y="4" width="192" height="192" rx="10" fill="#031b1b"/>
+  <polygon points="10,10 190,10 162,38 38,38" fill="#9ff7ee"/>
+  <polygon points="10,10 38,38 38,162 10,190" fill="#52d3c8"/>
+  <polygon points="190,10 190,190 162,162 162,38" fill="#0b5e5a"/>
+  <polygon points="10,190 38,162 162,162 190,190" fill="#053533"/>
+  <rect x="38" y="38" width="124" height="124" fill="url(#face)"/>
+  <polygon points="38,38 120,38 38,120" fill="url(#shine)"/>
+  <path d="M60 140 L100 70 L140 140" fill="none" stroke="#c9fff9" stroke-opacity="0.35" stroke-width="5"/>
+  <rect x="4" y="4" width="192" height="192" rx="10" fill="none" stroke="#ffd43b" stroke-width="6"/>
+</svg>

@@ -21,6 +21,7 @@ import { registerMemorySettings } from "./memory/memory-api.js";
 import { registerTriggerSettings } from "./memory/synergy/triggers.js";
 import { registerAutomationMenu } from "./core/automation-settings.js";
 import { addTokenTools } from "./core/controls.js";
+import { openTetris, clearTetris } from "./memory/tetris/tetris.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
@@ -57,6 +58,9 @@ Hooks.once('init', () => {
         openStash: (actor) => StashWindow.open(actor),
         // Окно распределения добычи (если оно идёт)
         openDraft: () => DraftWindow.show(),
+        // Головоломка Тетриса персонажа; уборка всех его блоков со сцены (Мастер)
+        openTetris: (actor) => openTetris(actor || canvas.tokens?.controlled[0]?.actor || game.user?.character),
+        clearTetris: (scene) => clearTetris(scene),
         // Привал без карты: Мастер открывает и закрывает его вручную; при открытии у игроков открывается Алтарь
         setRest: async (open = true) => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ Открывать Привал может только Мастер.");
