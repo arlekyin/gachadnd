@@ -4,7 +4,9 @@
  * Активный эффект, который держится до конца хода существа и снимается модулем (у Мастера):
  *   - nextTurn — до конца его следующего хода: в начале первого хода после наложения (если эффект
  *     лёг в его же ход — хода следующего раунда) эффект «взводится», когда ход переходит дальше — снимается;
- *   - thisTurn — до конца текущего хода: снимается, как только ход переходит от него.
+ *   - thisTurn — до конца текущего хода: снимается, как только ход переходит от него;
+ *   - nextStart — до начала его следующего хода: снимается, когда начинается его ход (если эффект
+ *     лёг в его же ход — ход следующего раунда).
  * Срок эффекту не задаётся: Foundry и dnd5e снимали бы его по своим часам. Иконка на токене — showIcon.
  * В конце боя снимаются все такие эффекты.
  */
@@ -17,7 +19,7 @@ import { isActiveGM } from "../../core/socket.js";
  * @param {Actor} actor
  * @param {Combat} combat
  * @param {object} data       Данные активного эффекта (name, img, description, statuses, changes, flags).
- * @param {object} options    { until: 'nextTurn' | 'thisTurn', tokenId } — tokenId, чтобы найти участника боя.
+ * @param {object} options    { until: 'nextTurn' | 'thisTurn' | 'nextStart', tokenId } — tokenId, чтобы найти участника боя.
  */
 export async function addTurnEffect(actor, combat, data, { until = 'nextTurn', tokenId = null } = {}) {
     const combatant = combat?.combatants?.find(c => (tokenId && (c.tokenId === tokenId || c.token?.id === tokenId)) || c.actor?.id === actor.id) ?? null;
@@ -45,6 +47,10 @@ Hooks.on('updateCombat', async (combat, changed) => {
                 continue;
             }
             const next = !flag.wasCurrent || combat.round > flag.round;
+            if (flag.until === 'nextStart') {
+                if (current && next) await effect.delete();
+                continue;
+            }
             if (current && next && !flag.started) await effect.update({ [`flags.${MODULE_ID}.turnEffect.started`]: true });
             else if (!current && flag.started) await effect.delete();
         }
