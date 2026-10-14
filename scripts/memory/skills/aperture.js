@@ -272,8 +272,14 @@ Hooks.on('moveToken', (token, movement, operation, user) => {
     const size = scene?.grid?.size;
     if (!size) return;
     if (movement?.pending?.waypoints?.length) return trace(`${token.name}: движение ещё не закончено`);
-    const from = movement?.origin ? cellOf(movement.origin, size) : lastCell.get(token.id);
-    const to = cellOf(token, size);
+    // В момент moveToken документ ещё стоит в начале пути: конец пути — из самого движения.
+    // Направление — по последнему шагу пути, а не от начала (путь мог петлять)
+    const path = movement?.passed?.waypoints ?? [];
+    const end = movement?.destination ?? path.at(-1);
+    if (!end) return trace('  у движения нет конца пути');
+    const before = path.length > 1 ? path.at(-2) : movement?.origin;
+    const from = before ? cellOf(before, size) : lastCell.get(token.id);
+    const to = cellOf(end, size);
     trace(`${token.name}: ${from ?? '?'} → ${to} (v13)`);
     passThrough(scene, token, from, to, size).catch(error => console.error(`${MODULE_ID} | Портал`, error));
 });
@@ -309,9 +315,11 @@ async function passThrough(scene, token, from, to, size) {
         const t0 = performance.now();
         await arrived(token, from, to);
         trace(`  доехал за ${Math.round(performance.now() - t0)} мс`);
-        // Пока ехал, его могли сдвинуть дальше — тогда в портал он не вошёл
-        const now = cellOf(token, size);
-        if (now[0] !== to[0] || now[1] !== to[1]) return trace(`${token.name}: ушёл с портала до прибытия`);
+        // Документ встаёт в конец пути не сразу (v13) — подождать его там; оказался в другой
+        // клетке — его успели сдвинуть дальше, в портал он не вошёл
+        const there = () => { const c = cellOf(token, size); return c[0] === to[0] && c[1] === to[1]; };
+        for (let waited = 0; !there() && waited < 1500; waited += 50) await new Promise(resolve => setTimeout(resolve, 50));
+        if (!there()) return trace(`${token.name}: ушёл с портала до прибытия (сейчас ${cellOf(token, size)})`);
         const [ex, ey] = cellOf(exit, size);
         // Направление движения: шаг по каждой оси; не знаем, откуда шёл — выход в любую свободную клетку
         const dx = from ? Math.sign(to[0] - from[0]) : 0, dy = from ? Math.sign(to[1] - from[1]) : 0;
