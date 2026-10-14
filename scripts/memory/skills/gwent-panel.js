@@ -58,12 +58,12 @@ export class GwentPanel extends ApplicationV2 {
             state = ensureState(this.actor, combat);
             await this.actor.update({ [`flags.${MODULE_ID}.gwent`]: state });
         }
-        this.state = state;
+        this.cards = state;
         return {};
     }
 
     async _renderHTML() {
-        const state = this.state;
+        const state = this.cards;
         const blocked = canPlay(this.actor);
         if (!state) {
             return `<div class="gd-gwent"><p class="gd-gwent-empty">Колода тасуется в начале боя.</p></div>`;
@@ -95,13 +95,13 @@ export class GwentPanel extends ApplicationV2 {
         if (this.busy) return;
         const reason = canPlay(this.actor);
         if (reason) return ui.notifications.warn(reason);
-        const keyName = this.state.hand[index];
+        const keyName = this.cards.hand[index];
         const card = CARDS[keyName];
         const token = this.actor.getActiveTokens?.()[0];
         if (!card || !token) return ui.notifications.warn('Токена персонажа нет на сцене.');
         this.busy = true;
         try {
-            const target = await chooseTarget(card, token, this.state);
+            const target = await chooseTarget(card, token, this.cards);
             if (card.target && !target) return;
             requestPlay(this.actor, token, index, target);
         } finally {
