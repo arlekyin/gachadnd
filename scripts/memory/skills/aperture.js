@@ -22,6 +22,8 @@ const ART = { blue: `modules/${MODULE_ID}/assets/portal/blue.svg`, orange: `modu
 const TINT = { blue: 0x2f9bff, orange: 0xff8a1c };
 const LABEL = { blue: 'синий', orange: 'оранжевый' };
 const isPortalSkill = item => !!item?.flags?.[MODULE_ID]?.portal;
+// Журнал прохода в консоль: CONFIG.debug.gachadndPortal = true
+const trace = text => { if (globalThis.CONFIG?.debug?.gachadndPortal) console.log(`${MODULE_ID} | Портал: ${text}`); };
 
 /** Порталы персонажа на сцене: { blue: плитка, orange: плитка } */
 function portalsOf(scene, actorId) {
@@ -205,6 +207,7 @@ Hooks.on('updateToken', (token, changes, options) => {
     const to = cellOf(token, size);
     lastCell.set(token.id, to);
     if (options?.gachadndPortal || !isActiveGM()) return;
+    trace(`${token.name}: ${from ?? '?'} → ${to}`);
     passThrough(scene, token, from, to, size).catch(error => console.error(`${MODULE_ID} | Портал`, error));
 });
 
@@ -212,14 +215,18 @@ Hooks.on('updateToken', (token, changes, options) => {
 // прерывает её, и токен оставался бы нарисованным в портале до следующего перемещения
 async function arrived(token, from, to) {
     const start = performance.now();
-    const object = token.object;
-    const Animation = foundry.canvas?.animation?.CanvasAnimation ?? globalThis.CanvasAnimation;
-    const running = object?.movementAnimationPromise ?? (object?.animationName ? Animation?.getAnimation?.(object.animationName)?.promise : null);
-    if (running) await Promise.resolve(running).catch(() => {});
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, ms)));
     // У остальных токен едет примерно столько же: Foundry двигает токены со скоростью 6 клеток в секунду
     const steps = from ? Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) : 0;
-    const rest = steps / 6 * 1000 + 150 - (performance.now() - start);
-    if (rest > 0) await new Promise(resolve => setTimeout(resolve, rest));
+    const travel = steps / 6 * 1000 + 150;
+    const object = token.object;
+    const Animation = foundry.canvas?.animation?.CanvasAnimation ?? globalThis.CanvasAnimation;
+    const running = object?.movementAnimationPromise
+        ?? (object?.movementAnimationName ? Animation?.getAnimation?.(object.movementAnimationName)?.promise : null)
+        ?? (object?.animationName ? Animation?.getAnimation?.(object.animationName)?.promise : null);
+    // Своя анимация Мастера — ждать её, но не дольше пути с запасом: обещание может не завершиться
+    if (running) await Promise.race([Promise.resolve(running).catch(() => {}), sleep(travel + 1500)]);
+    await sleep(travel - (performance.now() - start));
 }
 
 async function passThrough(scene, token, from, to, size) {
@@ -228,20 +235,27 @@ async function passThrough(scene, token, from, to, size) {
         const flag = tile.flags?.[MODULE_ID]?.portal;
         if (!flag || !cells.includes(key(...cellOf(tile, size)))) continue;
         const exit = portalsOf(scene, flag.actorId)[flag.color === 'blue' ? 'orange' : 'blue'];
-        if (!exit) return;
+        if (!exit) return trace(`${token.name}: второй портал не открыт`);
         await arrived(token, from, to);
         // Пока ехал, его могли сдвинуть дальше — тогда в портал он не вошёл
         const now = cellOf(token, size);
-        if (now[0] !== to[0] || now[1] !== to[1]) return;
+        if (now[0] !== to[0] || now[1] !== to[1]) return trace(`${token.name}: ушёл с портала до прибытия`);
         const [ex, ey] = cellOf(exit, size);
         // Направление движения: шаг по каждой оси; не знаем, откуда шёл — выход в любую свободную клетку
         const dx = from ? Math.sign(to[0] - from[0]) : 0, dy = from ? Math.sign(to[1] - from[1]) : 0;
         const portals = new Set([...scene.tiles].filter(t => t.flags?.[MODULE_ID]?.portal).map(t => key(...cellOf(t, size))));
         const taken = new Set([...occupied(scene, size, { except: [token.id] }), ...portals]);
         const spot = nearestFree(scene, size, token, ex + dx, ey + dy, taken);
-        if (!spot) return;
+        if (!spot) return trace(`${token.name}: у выхода нет свободной клетки`);
         lastCell.set(token.id, spot);
-        await token.update({ x: spot[0] * size, y: spot[1] * size }, { gachadndPortal: true, animate: false });
+        trace(`${token.name}: ${to} → выход ${spot}`);
+        // Как телепорт в Monk's Active Tiles (v13–v14): остановить анимацию и переставить вставкой —
+        // такое обновление не считается перемещением, его не ограничивают стены и очередь движения
+        token.object?.stopAnimation?.();
+        await token.update({ x: spot[0] * size, y: spot[1] * size }, {
+            gachadndPortal: true, animate: false, animation: { duration: 0 }, isPaste: true,
+            constrainOptions: { ignoreWalls: true, ignoreCost: true }
+        });
         return;
     }
 }
