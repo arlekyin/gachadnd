@@ -100,7 +100,8 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         return { id, name, statuses: new Set(), flags: {}, system: { attributes: { hp: { value, max, effectiveMax: max, temp: 0 } } },
             testUserPermission: () => true,
             async update(data) { for (const [k, v] of Object.entries(data)) setPath(this, k, structuredClone(v)); },
-            async applyDamage(amount) {
+            async applyDamage(damage) {
+                const amount = Array.isArray(damage) ? damage.reduce((sum, d) => sum + d.value, 0) : damage;
                 if (Hooks.call('dnd5e.preApplyDamage', this, amount, {}, {}) === false) return this;
                 this.system.attributes.hp.value = Math.max(0, this.system.attributes.hp.value - amount);
                 window.damaged = [...(window.damaged ?? []), [this.id, amount]];
@@ -137,6 +138,7 @@ export function field(flags, { uses = null, range = 60 } = {}) {
     canvas.tokens.controlled = [];
     game.user.targets = new Set();
     game.users = { activeGM: game.users?.activeGM ?? { id: 'u' }, find: () => null, get: () => null };
+    window.Roll = class { constructor(formula) { this.formula = formula; } async evaluate() { this.total = 7; return this; } };
     foundry.applications.api.DialogV2 = { wait: async () => window.DIALOG_ANSWER ?? null, confirm: async () => true };
     window.ChatMessage = { create: async data => { window.chat = data.content; window.chats = [...(window.chats ?? []), data.content]; }, getSpeaker: () => ({}) };
     canvas.scene = scene;
