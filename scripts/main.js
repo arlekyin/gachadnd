@@ -29,6 +29,8 @@ import "./memory/skills/freaky.js";
 import "./memory/skills/flashback.js";
 import "./memory/skills/qte.js";
 import "./memory/skills/gwent-panel.js";
+import "./memory/skills/aura-panel.js";
+import { registerAuraSettings } from "./memory/skills/aura-fx.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
@@ -45,6 +47,7 @@ Hooks.once('init', () => {
     registerTriggerSettings();
     registerAutomationMenu();
     registerPortalSettings();
+    registerAuraSettings();
 
     // Лабиринт дописывает в этот же объект свои функции
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
