@@ -8,8 +8,8 @@
  *
  * Проход: любое существо, закончившее перемещение на клетке портала, выходит из другого портала
  * в следующую клетку по направлению своего движения (занята — в ближайшую свободную) — сразу, как
- * доехал. Переносит Мастер; перенос помечается в опциях обновления, чтобы выход не сработал как
- * новый вход.
+ * доехал. В Foundry v13+ переносит тот, кто двигал токен (перемещение «displace»), в v12 — Мастер
+ * обновлением без анимации; перенос помечается, чтобы выход не сработал как новый вход.
  * Встроенное поведение региона «Teleport Token» не используется: два региона, связанные друг
  * с другом, в Foundry v12 перекидывают токен по кругу.
  */
@@ -206,8 +206,30 @@ Hooks.on('updateToken', (token, changes, options) => {
     const from = lastCell.get(token.id);
     const to = cellOf(token, size);
     lastCell.set(token.id, to);
-    if (options?.gachadndPortal || !isActiveGM()) return;
+    // v13+: проход ловит moveToken ниже — там видно, закончилось ли движение
+    if (options?.gachadndPortal || hasMovementApi(token) || !isActiveGM()) return;
     trace(`${token.name}: ${from ?? '?'} → ${to}`);
+    passThrough(scene, token, from, to, size).catch(error => console.error(`${MODULE_ID} | Портал`, error));
+});
+
+// Foundry v13+: у токенов свой механизм движения (TokenDocument#move). Перестановка простым
+// обновлением посреди движения встаёт в его очередь — поэтому перенос делает тот, кто двигал
+// токен, когда движение закончено, перемещением «displace» (телепорт без анимации и без стен)
+const hasMovementApi = token => typeof token?.move === 'function';
+
+Hooks.on('moveToken', (token, movement, operation, user) => {
+    if (operation?.gachadndPortal || (user?.id ?? user) !== game.user.id) return;
+    // Перенос сам — тоже перемещение «displace»: его не ловить (кроме поворота Fez — он может
+    // поставить существо прямо в портал)
+    const displaced = [...(movement?.passed?.waypoints ?? []), ...(movement?.pending?.waypoints ?? [])].some(w => w.action === 'displace');
+    if (displaced && !operation?.gachadndFez) return;
+    const scene = token.parent;
+    const size = scene?.grid?.size;
+    if (!size) return;
+    if (movement?.pending?.waypoints?.length) return trace(`${token.name}: движение ещё не закончено`);
+    const from = movement?.origin ? cellOf(movement.origin, size) : lastCell.get(token.id);
+    const to = cellOf(token, size);
+    trace(`${token.name}: ${from ?? '?'} → ${to} (v13)`);
     passThrough(scene, token, from, to, size).catch(error => console.error(`${MODULE_ID} | Портал`, error));
 });
 
@@ -249,13 +271,16 @@ async function passThrough(scene, token, from, to, size) {
         if (!spot) return trace(`${token.name}: у выхода нет свободной клетки`);
         lastCell.set(token.id, spot);
         trace(`${token.name}: ${to} → выход ${spot}`);
-        // Как телепорт в Monk's Active Tiles (v13–v14): остановить анимацию и переставить вставкой —
-        // такое обновление не считается перемещением, его не ограничивают стены и очередь движения
-        token.object?.stopAnimation?.();
-        await token.update({ x: spot[0] * size, y: spot[1] * size }, {
-            gachadndPortal: true, animate: false, animation: { duration: 0 }, isPaste: true,
-            constrainOptions: { ignoreWalls: true, ignoreCost: true }
-        });
+        const at = { x: spot[0] * size, y: spot[1] * size };
+        if (hasMovementApi(token)) {
+            await token.move({ ...at, action: 'displace' }, {
+                gachadndPortal: true, autoRotate: false, showRuler: false,
+                constrainOptions: { ignoreWalls: true, ignoreCost: true }
+            });
+        } else {
+            token.object?.stopAnimation?.();
+            await token.update(at, { gachadndPortal: true, animate: false });
+        }
         return;
     }
 }

@@ -102,6 +102,19 @@ Hooks.on('getSceneControlButtons', (controls) => {
             visible: true,
             button: true,
             onClick: () => game.gachadnd.openLootTerminal()
+        }, {
+            // Блоки Тетриса и порталы сами уходят в конце боя; вне боя — этой кнопкой
+            name: 'gachadnd-clear-field',
+            title: 'Убрать блоки Тетриса и порталы со сцены (Мастер)',
+            icon: 'fas fa-broom',
+            visible: true,
+            button: true,
+            onClick: async () => {
+                if (!canvas?.scene) return;
+                await clearTetris(canvas.scene);
+                await clearPortals(canvas.scene);
+                ui.notifications.info('Блоки Тетриса и порталы убраны со сцены.');
+            }
         }] : [])
     ]);
 });

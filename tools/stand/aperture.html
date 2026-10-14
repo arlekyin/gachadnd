@@ -20,6 +20,7 @@ window.DISPOSITION = { caster: 1, ally: 1 };</script>
 <script src="scene.js"></script>
 <script type="module">
 // Сначала модуль навыка: он ловит canvasReady, который вызывает field()
+window.V13 = new URLSearchParams(location.search).has('v13');
 window.aperture = await import('/scripts/memory/skills/aperture.js');
 const { field } = await import('./field.js');
 field({ portal: true });

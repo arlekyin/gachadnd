@@ -181,7 +181,14 @@ async function turnWorld({ sceneId, casterId, range, dir, ids }) {
     emit('fezSpin', spin);
     playSpin(spin);
     await new Promise(resolve => setTimeout(resolve, spinTime()));
-    if (moves.length) await scene.updateEmbeddedDocuments('Token', moves.map(m => ({ _id: m.id, x: m.x, y: m.y })), { animate: false });
+    if (moves.length && typeof scene.tokens.get(moves[0].id)?.move === 'function') {
+        // Foundry v13+: обычное обновление — это шаг по пути с учётом стен; поворот — телепорт «displace»
+        await Promise.all(moves.map(m => scene.tokens.get(m.id).move({ x: m.x, y: m.y, action: 'displace' }, {
+            gachadndFez: true, autoRotate: false, showRuler: false, constrainOptions: { ignoreWalls: true, ignoreCost: true }
+        })));
+    } else if (moves.length) {
+        await scene.updateEmbeddedDocuments('Token', moves.map(m => ({ _id: m.id, x: m.x, y: m.y })), { animate: false });
+    }
     const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ token: caster }),
