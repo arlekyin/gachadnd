@@ -84,6 +84,14 @@ export function field(flags, { uses = null, range = 60 } = {}) {
     for (const doc of scene.tokens) {
         doc.parent = scene;
         doc.update = (data, options) => scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, ...data }], options);
+        // window.V13 — механизм движения Foundry v13: move() и хук moveToken (движение закончено сразу)
+        if (window.V13) doc.move = async (waypoint, options = {}) => {
+            const origin = { x: doc.x, y: doc.y };
+            await scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, x: waypoint.x, y: waypoint.y }], options);
+            window.moves = [...(window.moves ?? []), { id: doc.id, ...waypoint }];
+            Hooks.call('moveToken', doc, { origin, passed: { waypoints: [{ x: waypoint.x, y: waypoint.y, action: waypoint.action ?? 'walk' }] }, pending: { waypoints: [] } }, options, { id: 'u' });
+            return true;
+        };
     }
     scene.grid.distance = 5;
     // Стены движения: пересечение отрезков

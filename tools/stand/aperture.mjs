@@ -1,16 +1,21 @@
-// Портал: node tools/stand/aperture.mjs
+// Портал: node tools/stand/aperture.mjs [--v13]
 // Синий и оранжевый порталы, проход по направлению движения, занятый выход, замена старого
 // портала, запрет на клетку с существом, уборка в конце боя. Снимки out/aperture_<этап>.png
 // Поле (клетки): персонаж 5,10; гоблин 11,7; огр 12–13,5–6; союзник 9,8; бес 15,8.
-import { open } from './harness.mjs';
+import { open, args } from './harness.mjs';
 
-const stand = await open('aperture.html', { width: 1500, height: 900 });
+// --v13 — механизм движения Foundry v13 (TokenDocument#move, хук moveToken)
+const { v13 } = args();
+const stand = await open(`aperture.html${v13 ? '?v13' : ''}`, { width: 1500, height: 900 });
+if (v13) console.log('  движение v13');
 const { page } = stand;
 const check = (ok, text) => console.log(ok ? '  ok ' : '  !! ', text);
 const cell = (j, i) => page.evaluate(([x, y]) => { const p = canvas.stage.toGlobal(new PIXI.Point(x, y)); return [p.x, p.y]; }, [j * 50 + 25, i * 50 + 25]);
 const portals = () => page.evaluate(() => Object.fromEntries(scene.tiles.filter(t => t.flags.gachadnd.portal).map(t => [t.flags.gachadnd.portal.color, `${t.x / 50},${t.y / 50}`])));
 const pos = id => page.evaluate(id => { const t = scene.tokens.get(id); return `${t.x / 50},${t.y / 50}`; }, id);
-const move = (id, gx, gy) => page.evaluate(([id, gx, gy]) => scene.updateEmbeddedDocuments('Token', [{ _id: id, x: gx * 50, y: gy * 50 }]), [id, gx, gy]);
+const move = (id, gx, gy) => page.evaluate(([id, gx, gy]) => window.V13
+    ? scene.tokens.get(id).move({ x: gx * 50, y: gy * 50 })
+    : scene.updateEmbeddedDocuments('Token', [{ _id: id, x: gx * 50, y: gy * 50 }]), [id, gx, gy]);
 // Клик по клетке: button 'left' — синий, 'right' — оранжевый; use — сначала использовать навык
 const shoot = async (j, i, { shot = null, button = 'left', use = true } = {}) => {
     if (use) await page.evaluate(() => useSkill());
@@ -39,6 +44,7 @@ await stand.shot('aperture_pair');
 await move('goblin', 7, 10);
 await page.waitForTimeout(1100);
 check(await pos('goblin') === '13,13', `гоблин вышел из оранжевого по ходу движения: ${await pos('goblin')}`);
+if (v13) check(await page.evaluate(() => window.moves?.some(m => m.id === 'goblin' && m.action === 'displace')), 'v13: перенос — перемещение displace');
 
 // 4. Бес 15,8 → в оранжевый 14,12 (влево-вниз): выход 6,11 из синего
 await move('imp', 14, 12);

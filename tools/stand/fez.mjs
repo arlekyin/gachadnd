@@ -1,11 +1,14 @@
-// Fez: node tools/stand/fez.mjs
+// Fez: node tools/stand/fez.mjs [--v13]
 // Призраки поворота, смена направления, стена не пускает, цепочка (e2 встаёт на место e1),
 // поворот карты и вспышка, перестановка у Мастера, отмена возвращает заряд.
 // Поле (клетки): персонаж 10,8; e1 12,8; e2 10,6; e3 8,9; e4 13,12; far 18,3; стена над e3.
 // Снимки out/fez_<этап>.png
-import { open } from './harness.mjs';
+import { open, args } from './harness.mjs';
 
-const stand = await open('fez.html', { width: 1500, height: 900 });
+// --v13 — механизм движения Foundry v13 (TokenDocument#move)
+const { v13 } = args();
+const stand = await open(`fez.html${v13 ? '?v13' : ''}`, { width: 1500, height: 900 });
+if (v13) console.log('  движение v13');
 const { page } = stand;
 const check = (ok, text) => console.log(ok ? '  ok ' : '  !! ', text);
 const pos = id => page.evaluate(id => { const t = scene.tokens.get(id); return `${t.x / 50},${t.y / 50}`; }, id);
@@ -40,6 +43,7 @@ check(after.e1 === '10,10' && after.e2 === '12,8', 'e1 и e2 повернули�
 check(after.e3 === '8,9', 'стена не пустила e3');
 check(after.e4 === '6,11', 'e4 на краю дальности повернулся');
 check(after.far === '18,3', 'далёкий не тронут');
+if (v13) check(await page.evaluate(() => window.moves?.length === 3 && window.moves.every(m => m.action === 'displace')), 'v13: поворот — перемещения displace');
 check(/Fez/.test(await page.evaluate(() => window.chat)), 'в чате — Fez');
 check(await page.evaluate(() => !document.querySelector('.gd-fez-flash')), 'вспышка убрана');
 await stand.shot('fez_after');
