@@ -1,7 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
 <style>
   /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
-  .application { position: fixed; right: 30px; top: 470px; width: 470px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application { position: fixed; right: 30px; top: 560px; width: 300px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
   .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
   button { font-family: inherit; color: inherit; }
 </style></head>
@@ -54,7 +54,7 @@ const scene = {
             const doc = { ...structuredClone(data), id: foundry.utils.randomID() };
             this.tiles.push(doc);
             const sprite = PIXI.Sprite.from(data.texture.src.replace('modules/gachadnd/', '/'));
-            sprite.position.set(data.x, data.y); sprite.width = data.width; sprite.height = data.height;
+            sprite.position.set(data.x, data.y); sprite.width = data.width; sprite.height = data.height; if (data.texture.tint) sprite.tint = Number.parseInt(data.texture.tint.slice(1), 16);
             canvas.stage.addChildAt(sprite, 2);
             this.sprites[doc.id] = sprite;
             return doc;
@@ -85,7 +85,7 @@ game.scenes = { get: () => scene, [Symbol.iterator]: function* () { yield scene;
 game.user.updateTokenTargets = ids => { window.targets = ids; };
 window.ChatMessage = { create: async data => { window.chat = data.content; }, getSpeaker: () => ({}) };
 // Персонаж с Тетрисом
-const item = { flags: { gachadnd: { puzzle: true, is_active: true } }, system: { uses: { max: 3, spent: 0, get value() { return 3 - this.spent; } }, range: { value: 60 } },
+const item = { flags: { gachadnd: { tetris: true, is_active: true } }, system: { uses: { max: 3, spent: 0, get value() { return 3 - this.spent; } }, range: { value: 60 } },
     async update(data) { if ('system.uses.spent' in data) this.system.uses.spent = data['system.uses.spent']; } };
 const actor = { id: 'A', name: 'Конь', isOwner: true, flags: {}, items: [item],
     getActiveTokens: () => [toks.caster],
@@ -96,7 +96,7 @@ game.actors = { get: () => actor };
 window.actor = actor; window.item = item;
 const mod = await import('/scripts/memory/tetris/tetris.js');
 window.tetris = mod;
-window.puzzleLib = await import('/scripts/memory/tetris/tetris-puzzle.js');
+window.pieces = await import('/scripts/memory/tetris/tetris-pieces.js');
 window.useSkill = () => {
     const activity = { item, range: { value: 60 } };
     if (Hooks.events['dnd5e.preUseActivity'].some(fn => fn(activity) === false)) return false;
