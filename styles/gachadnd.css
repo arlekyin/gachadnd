@@ -2372,3 +2372,23 @@
 @keyframes gd-qte-shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 .gd-qte-card.win strong { color: #2f9e44; }
 .gd-qte-card.fail strong { color: #c92a2a; }
+
+/* Гвинт: панель руки */
+.gachadnd-gwent .window-content { padding: 0; background: linear-gradient(160deg, #2a2118, #120e0a 75%); color: #ecdcc0; }
+.gd-gwent { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.gd-gwent-hand { display: flex; gap: 10px; justify-content: center; }
+.gd-gwent-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1 1 0; min-width: 0; max-width: 140px; min-height: 196px; margin: 0; padding: 10px 8px;
+  border: 2px solid #c9a75d; border-radius: 8px; background: linear-gradient(180deg, #3a2d1f, #1b140d); color: #ecdcc0; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 4px 10px rgba(0, 0, 0, 0.5); transition: transform 0.15s, box-shadow 0.15s;
+}
+.gd-gwent-card:hover { transform: translateY(-6px); box-shadow: 0 0 18px rgba(201, 167, 93, 0.55); }
+.gd-gwent-card.off { opacity: 0.5; cursor: not-allowed; }
+.gd-gwent-card.off:hover { transform: none; box-shadow: none; }
+.gd-gwent-art { display: flex; align-items: center; justify-content: center; width: 70px; height: 70px; border-radius: 50%; background: radial-gradient(circle, #5a4630, #24190f); border: 2px solid #c9a75d; font-size: 30px; color: #f3d9a4; }
+.gd-gwent-name { font: 700 14px/1.15 'Signika', sans-serif; text-align: center; color: #f6e4bd; }
+.gd-gwent-text { font-size: 11px; line-height: 1.3; text-align: center; color: #cdb995; }
+.gd-gwent-status { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; border-top: 1px solid rgba(201, 167, 93, 0.3); padding-top: 8px; font-size: 12px; color: #cdb995; }
+.gd-gwent-status p { flex-basis: 100%; margin: 0; }
+.gd-gwent-empty { margin: 8px 0; text-align: center; color: #cdb995; }
+.gd-gwent-card-msg small { opacity: 0.8; }

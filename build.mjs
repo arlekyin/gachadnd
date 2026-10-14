@@ -212,7 +212,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -338,7 +338,8 @@ function validateSkill(skill, folder) {
     // cat: true — Кот Шрёдингера (scripts/memory/skills/cat.js); freaky: true — Чумовая пятница (freaky.js)
     // flashback: true — Флешбэк (scripts/memory/skills/flashback.js)
     // qte: true — QTE (scripts/memory/skills/qte.js)
-    for (const field of ['portal', 'fez', 'cat', 'freaky', 'flashback', 'qte']) {
+    // gwent: true — «Сыграем... в гвинт?» (scripts/memory/skills/gwent.js)
+    for (const field of ['portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent']) {
         if (skill[field] === undefined) continue;
         if (skill[field] !== true) err(field, 'допустимо только true');
         if (!isActive) err(field, 'срабатывает при использовании — нужна activation');
@@ -734,6 +735,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.freaky ? { freaky: true } : {}),
                 ...(skill.flashback ? { flashback: true } : {}),
                 ...(skill.qte ? { qte: true } : {}),
+                ...(skill.gwent ? { gwent: true } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {}),
