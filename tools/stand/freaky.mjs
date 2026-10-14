@@ -43,6 +43,8 @@ for (let round = 1; round <= 5; round++) {
         check(casterBuff, 'заклинателю — баф');
         check((await page.evaluate(() => window.texts?.length)) === 4, 'над четырьмя токенами вспыхнули карты');
         check(/Карты/.test(await page.evaluate(() => window.chat)), 'карты в сводке чата');
+        check(await page.evaluate(() => scene.tokens.filter(t => t.actor.effects.length).every(t => t.actor.effects.every(e => !e.flags.gachadnd?.freakyCard || /<p>.+<\/p>/.test(e.description ?? '')))
+            && (window.chat.match(/<small>/g) ?? []).length === 4), 'у каждой карты — правило: в эффекте и в сводке чата');
         // Очередь: выставленная инициатива живых перемешана, мёртвого — нет; ход остался за персонажем
         const inits = await page.evaluate(() => Object.fromEntries(game.combat.combatants.map(c => [c.tokenId, c.initiative])));
         console.log('   инициатива:', JSON.stringify(inits));

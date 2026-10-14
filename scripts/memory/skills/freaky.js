@@ -172,11 +172,12 @@ async function freakyFriday({ combatId, actorId }) {
     }
     const esc = text => foundry.utils.escapeHTML?.(text) ?? text;
     const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
-    const cards = dealt.map(d => `${esc(scene.tokens.get(d.tokenId)?.name ?? '?')} — <span class="${CARDS[d.card].buff ? 'buff' : 'debuff'}">${CARDS[d.card].name}</span>${CARDS[d.card].text ? ` (${CARDS[d.card].text})` : ''}`).join('<br>');
+    // Каждая карта — с правилом: Мастеру и игрокам не нужно вспоминать, что значит состояние
+    const cards = dealt.map(d => `<li>${esc(scene.tokens.get(d.tokenId)?.name ?? '?')} — <span class="${CARDS[d.card].buff ? 'buff' : 'debuff'}">${CARDS[d.card].name}</span><br><small>${CARDS[d.card].rules}</small></li>`).join('');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) }),
         content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${esc(names)}.${crush}`
-            + `<br><strong>Карты</strong> (до конца следующего хода):<br>${cards}`
+            + `<br><strong>Карты</strong> (до конца следующего хода):<ul class="gd-freaky-cards">${cards}</ul>`
             + (order.length ? '<br><strong>Очередь перепуталась:</strong> инициатива перемешана.' : '')
             + '</div>'
     });
