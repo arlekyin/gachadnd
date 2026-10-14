@@ -1,32 +1,32 @@
 /**
  * Gacha Roguelike dnd5e — Тетрис (красный навык)
  *
- * Фигуру собирают в окне головоломки (tetris-window.js) в любое время. Использование навыка:
- *   - фигура не собрана — открывается окно, заряд не тратится;
- *   - собрана — после траты заряда у игрока на сцене появляется её силуэт: колесо и R поворачивают,
- *     клик ставит, правая кнопка и Esc отменяют (заряд возвращается).
- * Поставленную фигуру создаёт Мастер: каждая клетка — кристаллический блок (плитка сцены).
- * Существа под блоками выталкиваются в ближайшую свободную клетку и становятся целями игрока —
- * спасбросок и урон идут по карточке навыка, как у любого навыка со спасброском.
+ * В панели (tetris-panel.js) видны «Следующая» фигура и «Запас»; их можно поменять местами в любой
+ * момент. Использование навыка — у игрока на сцене силуэт «Следующей»: колесо и R поворачивают,
+ * клик обрушивает, правая кнопка и Esc отменяют (заряд возвращается).
  *
- * На поле у персонажа не больше двух фигур: третья осыпает самую старую. Блоки держатся до конца
- * боя. Труднопроходимость и полуукрытие блоков — по правилам за столом: в dnd5e для Foundry v12 нет
+ * Обрушение выполняет Мастер:
+ *   - четыре клетки фигуры становятся блоками (плитки сцены цвета фигуры) до конца боя;
+ *   - существо под блоком выталкивается в ближайшую свободную клетку;
+ *   - пять и больше блоков подряд по строке или столбцу — линия: она сгорает, а существа рядом
+ *     с ней (в пределах 5 футов) становятся целями игрока — спасбросок и урон по карточке навыка.
+ *
+ * Труднопроходимость и полуукрытие блоков — по правилам за столом: в dnd5e для Foundry v12 нет
  * поведения региона «трудная местность», которое модуль мог бы включить.
  */
 
 import { MODULE_ID } from "../../core/constants.js";
-import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
-import { figure, SIZE } from "./tetris-puzzle.js";
-import { TetrisWindow, solvedPuzzle, resetPuzzle } from "./tetris-window.js";
+import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
+import { COLORS, findLines, shapeCells } from "./tetris-pieces.js";
+import { TetrisPanel, queueOf, advanceQueue } from "./tetris-panel.js";
 
 export const BLOCK_SRC = `modules/${MODULE_ID}/assets/tetris/block.svg`;
-const MAX_FIGURES = 2;
-const isTetris = item => !!item?.flags?.[MODULE_ID]?.puzzle;
+const isTetris = item => !!item?.flags?.[MODULE_ID]?.tetris;
 
 export function openTetris(actor) {
     const skill = actor?.items.find(isTetris);
     if (!skill) return ui.notifications.warn('У персонажа нет навыка «Тетрис».');
-    return TetrisWindow.open(actor, { item: skill });
+    return TetrisPanel.open(actor, { item: skill });
 }
 
 // ==========================================
@@ -36,17 +36,11 @@ export function openTetris(actor) {
 Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isTetris(item) || !item.actor) return;
-    const actor = item.actor;
-    if (!solvedPuzzle(actor)) {
-        TetrisWindow.open(actor, { item });
-        ui.notifications.info('Фигура не собрана: соберите её в окне Тетриса, затем используйте навык.');
-        return false;
-    }
     if (!canvas?.ready || !canvas.grid?.isSquare) {
         ui.notifications.warn('Тетрис ставится только на сцену с квадратной сеткой.');
         return false;
     }
-    if (!actor.getActiveTokens?.()[0]) {
+    if (!item.actor.getActiveTokens?.()[0]) {
         ui.notifications.warn('Токена персонажа нет на сцене: фигуре не от кого отсчитывать дальность.');
         return false;
     }
@@ -59,7 +53,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
     placeFigure(item.actor, item, range);
 });
 
-// Окно сборки открывается само в начале боя у тех, кто управляет персонажем с Тетрисом
+// Панель открывается сама в начале боя у тех, кто управляет персонажем с Тетрисом
 Hooks.on('updateCombat', (combat, changed) => {
     if (changed.round !== 1 || !combat.started) return;
     for (const combatant of combat.combatants) {
@@ -75,26 +69,11 @@ Hooks.on('updateCombat', (combat, changed) => {
 // ПОСТАНОВКА НА СЦЕНЕ
 // ==========================================
 
-// Клетки фигуры относительно её центра (центр поля 5×5), с поворотом
-// Поворот — вокруг центра поля, а не вокруг угла: фигура не «прыгает» под курсором
-function shape(puzzle, rot) {
-    const half = (SIZE - 1) / 2;
-    let out = figure(puzzle).map(([x, y]) => [x - half, y - half]);
-    for (let i = 0; i < rot; i++) out = out.map(([x, y]) => [-y, x]);
-    return out;
-}
-
 const offsetOf = point => canvas.grid.getOffset(point);
 const topLeft = (i, j) => canvas.grid.getTopLeftPoint({ i, j });
 
-/** Клетки сцены (верхние левые углы), занятые фигурой с центром в клетке anchor */
-function worldCells(cells, anchor) {
-    return cells.map(([x, y]) => topLeft(anchor.i + y, anchor.j + x));
-}
-
-/** Токены, которые задевает хотя бы одна клетка */
-function tokensUnder(cells, tokens) {
-    const size = canvas.grid.size;
+/** Токены, которые задевает хотя бы одна клетка (клетки — верхние левые углы в пикселях) */
+function tokensUnder(cells, tokens, size) {
     return tokens.filter(token => {
         const doc = token.document ?? token;
         const w = doc.width * size, h = doc.height * size;
@@ -103,10 +82,11 @@ function tokensUnder(cells, tokens) {
 }
 
 async function placeFigure(actor, item, range) {
-    const puzzle = solvedPuzzle(actor);
     const caster = actor.getActiveTokens()[0];
-    if (!puzzle || !caster) return;
+    if (!caster) return;
+    let type = (await queueOf(actor)).next;
     let rot = 0, anchor = offsetOf(caster.center), inRange = true, current = [];
+    const panel = await TetrisPanel.open(actor, { item, onSwap: queue => { type = queue.next; draw(); } });
     const preview = new PIXI.Graphics();
     preview.eventMode = 'none';
     canvas.controls.addChild(preview);
@@ -116,19 +96,15 @@ async function placeFigure(actor, item, range) {
     const feet = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) / size * canvas.dimensions.distance;
 
     const draw = () => {
-        current = worldCells(shape(puzzle, rot), anchor);
+        current = shapeCells(type, rot).map(([x, y]) => topLeft(anchor.i + y, anchor.j + x));
         const center = { x: topLeft(anchor.i, anchor.j).x + size / 2, y: topLeft(anchor.i, anchor.j).y + size / 2 };
         inRange = feet(caster.center, center) <= range;
-        const crushed = new Set(tokensUnder(current, canvas.tokens.placeables.filter(t => t.visible)).map(t => t.document.id));
-        const color = inRange ? 0xffd43b : 0xff4d4d;
+        const color = inRange ? Number.parseInt(COLORS[type].slice(1), 16) : 0xff4d4d;
         preview.clear();
-        for (const c of current) {
-            preview.lineStyle(2, color, 0.95).beginFill(color, 0.28).drawRect(c.x + 2, c.y + 2, size - 4, size - 4).endFill();
-        }
-        // Задетые существа — обводкой: их вытолкнет, они станут целями
-        for (const token of canvas.tokens.placeables) {
-            if (!crushed.has(token.document.id)) continue;
-            preview.lineStyle(3, 0xff8a4c, 1).drawRect(token.document.x, token.document.y, token.document.width * size, token.document.height * size);
+        for (const c of current) preview.lineStyle(2, color, 0.95).beginFill(color, 0.3).drawRect(c.x + 2, c.y + 2, size - 4, size - 4).endFill();
+        // Задетые существа — обводкой: их вытолкнет
+        for (const token of tokensUnder(current, canvas.tokens.placeables.filter(t => t.visible), size)) {
+            preview.lineStyle(3, 0xffffff, 0.9).drawRect(token.document.x, token.document.y, token.document.width * size, token.document.height * size);
         }
     };
     draw();
@@ -139,6 +115,7 @@ async function placeFigure(actor, item, range) {
         canvas.app.view.oncontextmenu = null;
         canvas.app.view.onwheel = null;
         document.removeEventListener('keydown', onKey, true);
+        panel.onSwap = null;
         preview.destroy();
         initialLayer?.activate();
     };
@@ -161,6 +138,7 @@ async function placeFigure(actor, item, range) {
         // Заряд потрачен при использовании — отмена его возвращает
         const spent = Number(item.system.uses?.spent ?? 0);
         if (spent > 0) await item.update({ 'system.uses.spent': spent - 1 });
+        panel.render();
         ui.notifications.info('Тетрис отменён, заряд возвращён.');
     };
     const onKey = event => {
@@ -173,12 +151,8 @@ async function placeFigure(actor, item, range) {
         event.stopPropagation();
         if (!inRange) return ui.notifications.warn(`Слишком далеко: центр фигуры — не дальше ${range} футов.`);
         finish();
-        const cells = current.map(c => ({ x: c.x, y: c.y }));
-        const crushed = tokensUnder(cells, canvas.tokens.placeables).map(t => t.document.id);
-        // Задетые — цели: спасбросок и урон по карточке навыка идут по ним
-        game.user.updateTokenTargets?.(crushed);
-        requestGM('tetrisDrop', { actorId: actor.id, sceneId: canvas.scene.id, cells });
-        await resetPuzzle(actor);
+        requestGM('tetrisDrop', { actorId: actor.id, sceneId: canvas.scene.id, type, cells: current.map(c => ({ x: c.x, y: c.y })) });
+        await advanceQueue(actor);
     };
 
     canvas.stage.on('mousemove', onMove);
@@ -190,7 +164,7 @@ async function placeFigure(actor, item, range) {
 }
 
 // ==========================================
-// МАСТЕР: БЛОКИ, ВЫТАЛКИВАНИЕ, УБОРКА
+// МАСТЕР: БЛОКИ, ВЫТАЛКИВАНИЕ, ЛИНИИ
 // ==========================================
 
 onSocket('tetrisDrop', ({ payload }) => {
@@ -198,53 +172,71 @@ onSocket('tetrisDrop', ({ payload }) => {
     dropFigure(payload).catch(error => console.error(`${MODULE_ID} | Тетрис`, error));
 });
 
-async function dropFigure({ actorId, sceneId, cells }) {
+const cellKey = (doc, size) => `${Math.round(doc.x / size)},${Math.round(doc.y / size)}`;
+
+async function dropFigure({ actorId, sceneId, type, cells, userId }) {
     const scene = game.scenes.get(sceneId);
     const actor = game.actors.get(actorId);
     if (!scene || !cells?.length) return;
     const size = scene.grid.size;
-    const figures = foundry.utils.deepClone(scene.getFlag(MODULE_ID, 'tetris') ?? {});
 
-    // Третья фигура осыпает самую старую
-    const own = Object.entries(figures).filter(([, f]) => f.actorId === actorId).sort((a, b) => a[1].at - b[1].at);
-    while (own.length >= MAX_FIGURES) {
-        const [id] = own.shift();
-        await removeFigure(scene, id);
-        delete figures[id];
-    }
-
-    const figureId = foundry.utils.randomID();
-    const tiles = await scene.createEmbeddedDocuments('Tile', cells.map(c => ({
-        texture: { src: BLOCK_SRC }, x: c.x, y: c.y, width: size, height: size,
-        flags: { [MODULE_ID]: { tetris: figureId } }
+    await scene.createEmbeddedDocuments('Tile', cells.map(c => ({
+        texture: { src: BLOCK_SRC, tint: COLORS[type] ?? '#ffffff' }, x: c.x, y: c.y, width: size, height: size,
+        flags: { [MODULE_ID]: { tetris: actorId } }
     })));
-    await scene.setFlag(MODULE_ID, `tetris.${figureId}`, { actorId, at: Date.now(), tiles: tiles.map(t => t.id) });
 
-    // Все блоки сцены, включая старые фигуры: выталкивать в них нельзя
-    const blocks = new Set(scene.tiles.filter(t => t.flags?.[MODULE_ID]?.tetris).map(t => `${Math.round(t.x / size)},${Math.round(t.y / size)}`));
-    const crushed = scene.tokens.filter(token => cells.some(c => c.x < token.x + token.width * size - 1 && c.x + size > token.x + 1 && c.y < token.y + token.height * size - 1 && c.y + size > token.y + 1));
-    const moved = [];
+    // Задетые выталкиваются; занятые клетки — все блоки сцены и остальные токены
+    const blockTiles = () => scene.tiles.filter(t => t.flags?.[MODULE_ID]?.tetris);
+    const blocks = new Set(blockTiles().map(t => cellKey(t, size)));
+    const crushed = tokensUnder(cells, [...scene.tokens], size);
     const taken = new Set();
-    for (const token of scene.tokens) {
-        if (crushed.includes(token)) continue;
-        for (let dx = 0; dx < token.width; dx++) for (let dy = 0; dy < token.height; dy++) taken.add(`${Math.round(token.x / size) + dx},${Math.round(token.y / size) + dy}`);
-    }
+    const footprint = (gx, gy, token) => {
+        const out = [];
+        for (let dx = 0; dx < token.width; dx++) for (let dy = 0; dy < token.height; dy++) out.push(`${gx + dx},${gy + dy}`);
+        return out;
+    };
+    for (const token of scene.tokens) if (!crushed.includes(token)) footprint(Math.round(token.x / size), Math.round(token.y / size), token).forEach(k => taken.add(k));
+    const moved = [];
     for (const token of crushed) {
         const spot = freeSpot(token, size, blocks, taken, scene);
         if (!spot) continue;
-        for (let dx = 0; dx < token.width; dx++) for (let dy = 0; dy < token.height; dy++) taken.add(`${spot.gx + dx},${spot.gy + dy}`);
+        footprint(spot.gx, spot.gy, token).forEach(k => taken.add(k));
         moved.push({ _id: token.id, x: spot.gx * size, y: spot.gy * size });
     }
     if (moved.length) await scene.updateEmbeddedDocuments('Token', moved);
 
-    const names = crushed.map(t => t.name).join(', ');
-    await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-tetris-card"><strong>Тетрис</strong> — фигура обрушилась: ${cells.length} блоков.`
-            + (crushed.length ? `<br>Под блоками: ${foundry.utils.escapeHTML?.(names) ?? names}. Их вытолкнуло, они — цели спасброска Ловкости по карточке навыка.` : '<br>Никого не задело.')
-            + '</div>'
-    });
+    // Линии: блоки сгорают, существа рядом с ними — цели
+    const burn = findLines(blocks);
+    let victims = [];
+    if (burn.size) {
+        const near = new Set();
+        for (const k of burn) {
+            const [x, y] = k.split(',').map(Number);
+            for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) near.add(`${x + dx},${y + dy}`);
+        }
+        const position = token => moved.find(m => m._id === token.id) ?? token;
+        victims = scene.tokens.filter(token => footprint(Math.round(position(token).x / size), Math.round(position(token).y / size), token).some(k => near.has(k)));
+        const flash = { sceneId, cells: [...burn].map(k => k.split(',').map(n => Number(n) * size)), size };
+        emit('tetrisFlash', flash);
+        playFlash(flash);
+        await scene.deleteEmbeddedDocuments('Tile', blockTiles().filter(t => burn.has(cellKey(t, size))).map(t => t.id));
+        const ids = victims.map(t => t.id);
+        if (userId === game.user.id) game.user.updateTokenTargets?.(ids);
+        else emit('tetrisTargets', { userId, ids });
+    }
+
+    const list = tokens => foundry.utils.escapeHTML?.(tokens.map(t => t.name).join(', ')) ?? tokens.map(t => t.name).join(', ');
+    const lines = [
+        `<strong>Тетрис</strong> — фигура обрушилась.`,
+        crushed.length ? `Вытолкнуло: ${list(crushed)}.` : '',
+        burn.size ? `<strong>Линия!</strong> Сгорело блоков: ${burn.size}. ${victims.length ? `Рядом: ${list(victims)} — цели спасброска Ловкости по карточке навыка.` : 'Рядом никого.'}` : ''
+    ].filter(Boolean);
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-tetris-card">${lines.join('<br>')}</div>` });
 }
+
+onSocket('tetrisTargets', ({ userId, ids }) => {
+    if (userId === game.user.id) game.user.updateTokenTargets?.(ids);
+});
 
 // Ближайшее место для токена вне блоков и других токенов: по кольцам вокруг его клетки
 function freeSpot(token, size, blocks, taken, scene) {
@@ -267,19 +259,33 @@ function freeSpot(token, size, blocks, taken, scene) {
     return null;
 }
 
-async function removeFigure(scene, figureId) {
-    const ids = scene.tiles.filter(t => t.flags?.[MODULE_ID]?.tetris === figureId).map(t => t.id);
-    if (ids.length) await scene.deleteEmbeddedDocuments('Tile', ids);
-    await scene.unsetFlag(MODULE_ID, `tetris.${figureId}`);
+// Вспышка сгоревшей линии у всех: белые клетки раздуваются и гаснут
+onSocket('tetrisFlash', data => playFlash(data));
+function playFlash({ sceneId, cells, size }) {
+    if (!canvas?.ready || canvas.scene?.id !== sceneId) return;
+    const g = new PIXI.Graphics();
+    g.eventMode = 'none';
+    canvas.controls.addChild(g);
+    const start = performance.now(), ms = 650;
+    const frame = now => {
+        const k = Math.min(1, (now - start) / ms);
+        const grow = size * 0.25 * k, alpha = 1 - k * k;
+        g.clear();
+        for (const [x, y] of cells) {
+            g.beginFill(0xffffff, 0.85 * alpha).drawRect(x - grow, y - grow, size + grow * 2, size + grow * 2).endFill();
+        }
+        if (k < 1) requestAnimationFrame(frame);
+        else g.destroy();
+    };
+    requestAnimationFrame(frame);
 }
 
-/** Убрать все фигуры Тетриса со сцены (или со всех сцен) */
+/** Убрать все блоки Тетриса со сцены (или со всех сцен) */
 export async function clearTetris(scene = null) {
     if (!game.user.isGM) return;
     for (const s of scene ? [scene] : game.scenes) {
         const ids = s.tiles.filter(t => t.flags?.[MODULE_ID]?.tetris).map(t => t.id);
         if (ids.length) await s.deleteEmbeddedDocuments('Tile', ids);
-        if (s.getFlag(MODULE_ID, 'tetris')) await s.unsetFlag(MODULE_ID, 'tetris');
     }
 }
 

@@ -2305,52 +2305,31 @@
 @property --glow { syntax: '<color>'; inherits: true; initial-value: #ff7a3c; }
 .gachadnd-memory-altar { transition: --glow 0.9s ease-in-out; }
 
-/* Тетрис: головоломка сборки — в духе ремонта модулей Endfield: тёмная панель, жёлтые метки */
+/* Тетрис: панель «Следующая / Запас» — тёмная панель, жёлтые метки */
 .gachadnd-tetris .window-content { padding: 0; background: linear-gradient(160deg, #1b1e22, #0e1012 70%); color: #d9dde2; }
-.gd-tetris { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 12px; user-select: none; }
-.gd-tetris-main { display: flex; gap: 18px; align-items: flex-start; }
-.gd-tetris-board {
-  display: grid; grid-template-columns: 26px repeat(var(--n), 50px); grid-auto-rows: 50px; grid-template-rows: 26px;
-  gap: 4px; padding: 8px; border: 1px solid rgba(255, 212, 59, 0.28); border-radius: 4px;
-  background: repeating-linear-gradient(0deg, transparent 0 53px, rgba(255, 255, 255, 0.02) 53px 54px), #121417;
-  transition: box-shadow 0.4s, border-color 0.4s;
-}
-.gd-tetris-corner { width: 26px; height: 26px; }
-.gd-tetris-clue {
-  display: flex; align-items: center; justify-content: center; font: 600 15px/1 'Signika', sans-serif; color: #8d949c;
-  border-bottom: 2px solid #3a3f45; transition: color 0.2s, border-color 0.2s;
-}
-.gd-tetris-clue.row { border-bottom: none; border-right: 2px solid #3a3f45; }
-.gd-tetris-clue.ok { color: #ffd43b; border-color: #ffd43b; }
-.gd-tetris-clue.over { color: #ff5b5b; border-color: #ff5b5b; }
-.gd-tetris-cell {
-  border-radius: 3px; background: #1d2126; box-shadow: inset 0 0 0 1px #2c3137, inset 0 2px 6px rgba(0, 0, 0, 0.5);
-  transition: background 0.12s, box-shadow 0.12s;
-}
-.gd-tetris-cell.blocked { background: repeating-linear-gradient(45deg, #2a2d31 0 6px, #17191c 6px 12px); box-shadow: inset 0 0 0 1px #3a3f45; }
-.gd-tetris-cell.filled {
-  cursor: grab; background: linear-gradient(145deg, color-mix(in srgb, var(--piece) 92%, #fff), color-mix(in srgb, var(--piece) 70%, #000));
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--piece) 60%, #000), inset 3px 3px 0 rgba(255, 255, 255, 0.25);
-}
-.gd-tetris.holding .gd-tetris-cell.filled { cursor: default; }
-.gd-tetris-cell.ghost { background: rgba(155, 229, 100, 0.55); box-shadow: inset 0 0 0 2px #b8f28a, 0 0 8px rgba(155, 229, 100, 0.5); }
-.gd-tetris-cell.ghost-bad { background: rgba(255, 91, 91, 0.3); box-shadow: inset 0 0 0 2px #ff5b5b; }
-.gd-tetris-tray { display: flex; flex-direction: column; gap: 10px; align-items: center; min-width: 110px; padding-top: 30px; }
+.gd-tetris { display: flex; flex-direction: column; gap: 12px; padding: 14px 14px 10px; user-select: none; }
+.gd-tetris-queue { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.gd-tetris-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gd-tetris-slot > span { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #8d949c; }
+.gd-tetris-slot.next > span { color: #ffd43b; }
 .gd-tetris-piece {
-  display: grid; grid-template-columns: repeat(var(--w), 18px); grid-template-rows: repeat(var(--h), 18px); gap: 2px;
-  width: auto; height: auto; padding: 8px; margin: 0; line-height: 1; border: 1px solid #33383e; border-radius: 4px; background: #15181b; cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  --cell: 16px;
+  display: grid; grid-template-columns: repeat(var(--w), var(--cell)); grid-template-rows: repeat(var(--h), var(--cell)); gap: 2px;
+  align-content: center; justify-content: center; width: calc(var(--cell) * 4 + 30px); height: calc(var(--cell) * 4 + 30px);
+  border: 1px solid #33383e; border-radius: 4px; background: #121417; box-sizing: border-box;
 }
-.gd-tetris-piece:hover { border-color: #ffd43b; box-shadow: none; }
-.gd-tetris-piece.held { border-color: #ffd43b; transform: scale(1.08); background: #22262b; }
-.gd-tetris-piece i { border-radius: 2px; background: var(--piece); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 2px 2px 0 rgba(255, 255, 255, 0.25); }
-.gd-tetris-empty { color: #6d747c; font-size: 12px; text-align: center; }
-.gd-tetris-status { display: flex; gap: 12px; align-items: center; justify-content: space-between; border-top: 1px solid #2c3137; padding-top: 10px; }
-.gd-tetris-status p { margin: 0; font-size: 13px; color: #a9b0b8; }
-.gd-tetris-uses { flex: none; padding: 2px 8px; border: 1px solid #ffd43b; border-radius: 2px; color: #ffd43b; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
-.gd-tetris.solved .gd-tetris-board { border-color: #ffd43b; box-shadow: 0 0 0 1px #ffd43b, 0 0 22px rgba(255, 212, 59, 0.25); }
-.gd-tetris.solved .gd-tetris-status p { color: #ffd43b; }
-.gd-tetris.solved .gd-tetris-status p strong { color: #fff3bf; }
-.gd-tetris.just-solved .gd-tetris-board { animation: gd-tetris-solved 0.7s ease-out; }
-@keyframes gd-tetris-solved { 0% { box-shadow: 0 0 0 1px #ffd43b, 0 0 0 rgba(255, 212, 59, 0.8); } 40% { box-shadow: 0 0 0 1px #ffd43b, 0 0 40px rgba(255, 212, 59, 0.7); } }
-@media (prefers-reduced-motion: reduce) { .gd-tetris.just-solved .gd-tetris-board { animation: none; } }
+.gd-tetris-piece.big { --cell: 22px; border-color: rgba(255, 212, 59, 0.6); box-shadow: 0 0 14px rgba(255, 212, 59, 0.12); }
+.gd-tetris-piece.empty { background: repeating-linear-gradient(45deg, #17191c 0 6px, #121417 6px 12px); }
+.gd-tetris-piece i {
+  border-radius: 2px; background: linear-gradient(145deg, color-mix(in srgb, var(--piece) 85%, #fff), color-mix(in srgb, var(--piece) 75%, #000));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 2px 2px 0 rgba(255, 255, 255, 0.3);
+}
+.gd-tetris-swap {
+  flex: none; width: 34px; height: 34px; margin: 18px 0 0; padding: 0; line-height: 1; border: 1px solid #3a3f45; border-radius: 50%;
+  background: #15181b; color: #ffd43b; cursor: pointer; transition: border-color 0.15s, transform 0.2s;
+}
+.gd-tetris-swap:hover { border-color: #ffd43b; box-shadow: none; transform: rotate(180deg); }
+.gd-tetris-swap i { margin: 0; }
+.gd-tetris-status { display: flex; gap: 10px; align-items: center; justify-content: space-between; border-top: 1px solid #2c3137; padding-top: 8px; }
+.gd-tetris-status p { margin: 0; font-size: 12px; line-height: 1.35; color: #a9b0b8; }
+.gd-tetris-uses { flex: none; padding: 2px 8px; border: 1px solid #ffd43b; border-radius: 2px; color: #ffd43b; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }

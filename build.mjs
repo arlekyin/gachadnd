@@ -212,7 +212,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'puzzle'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -328,10 +328,10 @@ function validateSkill(skill, folder) {
     if (skill.impact !== undefined) {
         if (!isActive) err('impact', 'кадр показывается при использовании — нужна activation');
     }
-    // puzzle: true — Тетрис: использование ставит собранную в головоломке фигуру (scripts/memory/tetris)
-    if (skill.puzzle !== undefined) {
-        if (skill.puzzle !== true) err('puzzle', 'допустимо только true');
-        if (!isActive || !skill.uses) err('puzzle', 'фигура ставится использованием — нужны activation и uses');
+    // tetris: true — использование обрушивает «Следующую» фигуру из очереди (scripts/memory/tetris)
+    if (skill.tetris !== undefined) {
+        if (skill.tetris !== true) err('tetris', 'допустимо только true');
+        if (!isActive || !skill.uses) err('tetris', 'фигура ставится использованием — нужны activation и uses');
     }
 
     if (skill.ranks !== undefined && UNIQUE_RARITIES.includes(skill.rarity)) {
@@ -717,7 +717,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.drawback ? { drawback: skill.drawback } : {}),
                 ...(skill.impact ? { impact: skill.impact === true ? true : { ...(skill.impact.art ? { art: skill.impact.art } : {}), ...(skill.impact.style ? { style: skill.impact.style } : {}) } } : {}),
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
-                ...(skill.puzzle ? { puzzle: true } : {}),
+                ...(skill.tetris ? { tetris: true } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {}),
