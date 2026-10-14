@@ -212,7 +212,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -332,6 +332,13 @@ function validateSkill(skill, folder) {
     if (skill.tetris !== undefined) {
         if (skill.tetris !== true) err('tetris', 'допустимо только true');
         if (!isActive || !skill.uses) err('tetris', 'фигура ставится использованием — нужны activation и uses');
+    }
+    // portal: true — использование ставит синий или оранжевый портал (scripts/memory/skills/aperture.js);
+    // fez: true — использование поворачивает существ вокруг персонажа (scripts/memory/skills/fez.js)
+    for (const field of ['portal', 'fez']) {
+        if (skill[field] === undefined) continue;
+        if (skill[field] !== true) err(field, 'допустимо только true');
+        if (!isActive) err(field, 'срабатывает при использовании — нужна activation');
     }
 
     if (skill.ranks !== undefined && UNIQUE_RARITIES.includes(skill.rarity)) {
@@ -718,6 +725,8 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.impact ? { impact: skill.impact === true ? true : { ...(skill.impact.art ? { art: skill.impact.art } : {}), ...(skill.impact.style ? { style: skill.impact.style } : {}) } } : {}),
                 ...(skill.forced_loot ? { forced_loot: skill.forced_loot } : {}),
                 ...(skill.tetris ? { tetris: true } : {}),
+                ...(skill.portal ? { portal: true } : {}),
+                ...(skill.fez ? { fez: true } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {}),
