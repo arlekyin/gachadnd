@@ -10,6 +10,8 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         static DEFAULT_OPTIONS = {};
         constructor(options = {}) { this.options = { ...this.constructor.DEFAULT_OPTIONS, ...options }; this.id = options.id; this.rendered = false; }
         get title() { return this.options.window?.title ?? ''; }
+        // Как в Foundry: только геттер — присваивание в наследнике падает
+        get state() { return this.rendered ? 2 : 0; }
         async render() {
             const context = await this._prepareContext({});
             const html = await this._renderHTML(context, {});
