@@ -26,6 +26,7 @@ import { clearPortals, registerPortalSettings, portalReport } from "./memory/ski
 import "./memory/skills/fez.js";
 import "./memory/skills/cat.js";
 import "./memory/skills/freaky.js";
+import "./memory/skills/flashback.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
