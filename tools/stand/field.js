@@ -40,7 +40,7 @@ export function field(flags, { uses = null, range = 60 } = {}) {
     // Сцена Foundry: плитки рисуются спрайтами, токены двигаются вместе с картинкой
     const size = 50;
     const scene = {
-        id: 'S', grid: { size }, dimensions: { width: 1134, height: 1192 }, flags: {}, tiles: [], sprites: {},
+        id: 'S', grid: { size }, dimensions: { width: 1134, height: 1192 }, flags: {}, tiles: [], templates: [], sprites: {},
         // Токены стоят по сетке, как в Foundry
         tokens: Object.values(toks).map(t => ({ id: t.id, name: t.id, actorId: t.id === 'caster' ? 'A' : t.id, disposition: DISPOSITION[t.id] ?? -1,
             x: Math.round((t.center.x - t.w / 2) / size) * size, y: Math.round((t.center.y - t.h / 2) / size) * size, width: t.document.width, height: t.document.height })),
@@ -49,6 +49,16 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         async unsetFlag(m, k) { const keys = k.split('.'); const o = getPath(this.flags[m] ?? {}, keys.slice(0, -1).join('.')) ?? this.flags[m]; if (keys.length === 1) delete this.flags[m][k]; else delete o?.[keys.at(-1)]; },
         async createEmbeddedDocuments(type, list) {
             if (type === 'Token') return list.map(data => addToken({ ...structuredClone(data), id: foundry.utils.randomID() }));
+            if (type === 'MeasuredTemplate') return list.map(data => {
+                const doc = { ...structuredClone(data), id: foundry.utils.randomID() };
+                const g = new PIXI.Graphics();
+                const r = data.distance / 5 * size, color = Number.parseInt((data.fillColor ?? '#ffffff').slice(1), 16);
+                g.lineStyle(3, color, 0.9).beginFill(color, 0.25).drawCircle(data.x, data.y, r).endFill();
+                canvas.stage.addChild(g);
+                this.sprites[doc.id] = g;
+                this.templates.push(doc);
+                return doc;
+            });
             return list.map(data => {
                 const doc = { ...structuredClone(data), id: foundry.utils.randomID() };
                 this.tiles.push(doc);
@@ -73,6 +83,7 @@ export function field(flags, { uses = null, range = 60 } = {}) {
                 return;
             }
             for (const id of ids) { this.sprites[id]?.destroy(); delete this.sprites[id]; }
+            if (type === 'MeasuredTemplate') { this.templates = this.templates.filter(t => !ids.includes(t.id)); return; }
             this.tiles = this.tiles.filter(t => !ids.includes(t.id));
         },
         async updateEmbeddedDocuments(type, list, options = {}) {

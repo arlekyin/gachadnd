@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
+<style>
+  /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
+  .application { position: fixed; right: 30px; top: 560px; width: 300px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
+  button { font-family: inherit; color: inherit; }
+</style></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>window.TOKENS = {
+  caster: ['/assets/bestiary/chess-knight.webp', 275, 525, 45, 1],
+  goblin: ['/assets/bestiary/chess-bishop.webp', 575, 375, 45, 1],
+  ogre: ['/assets/bestiary/chess-rook.webp', 650, 300, 90, 2],
+  ally: ['/assets/bestiary/chess-knight.webp', 475, 425, 45, 1],
+  imp: ['/assets/bestiary/chess-bishop.webp', 775, 425, 45, 1]
+};
+// Отношение токенов: персонаж и союзник — дружественные, остальные — враги
+window.DISPOSITION = { caster: 1, ally: 1 };</script>
+<script src="scene.js"></script>
+<script type="module">
+// Сначала модуль навыка: он ловит canvasReady, который вызывает field()
+window.V13 = new URLSearchParams(location.search).has('v13');
+const { field } = await import('./field.js');
+window.HP = { goblin: [25, 25], ally: [20, 30], ogre: [60, 60], imp: [10, 10], A: [30, 30] };
+// Сначала поле: окно панели наследует ApplicationV2 поля
+const { actor } = field({ gwent: true }, { range: 30 });
+window.gwent = await import('/scripts/memory/skills/gwent.js');
+window.gwentPanel = await import('/scripts/memory/skills/gwent-panel.js');
+actor.system.attributes.prof = 3;
+// Бой: персонаж ходит первым
+const inits = { caster: 20, goblin: 18, ogre: 15, ally: 12, imp: 8 };
+const combatants = scene.tokens.map(t => ({ id: `c-${t.id}`, tokenId: t.id, actor: t.actor, token: t, defeated: false, initiative: inits[t.id] }));
+window.game.combat = { id: 'C', started: true, scene, round: 1, turn: 0, combatants,
+    get turns() { return [...combatants].sort((a, b) => b.initiative - a.initiative); },
+    get combatant() { return this.turns[this.turn]; } };
+game.combats = { get: () => game.combat };
+for (const a of new Set(scene.tokens.map(t => t.actor))) {
+    a.effects ??= [];
+    a.createEmbeddedDocuments = async (type, list) => list.map(data => {
+        const effect = { ...structuredClone(data), id: foundry.utils.randomID() };
+        effect.update = async changes => { for (const [k, v] of Object.entries(changes)) foundry.utils.setProperty(effect, k, v); };
+        effect.delete = async () => { a.effects = a.effects.filter(e => e !== effect); };
+        a.effects.push(effect);
+        return effect;
+    });
+    a.deleteEmbeddedDocuments = async (type, ids) => { a.effects = a.effects.filter(e => !ids.includes(e.id)); };
+}
+// Флаги персонажа и перерисовка панели, как от updateActor
+actor.update = async data => { for (const [k, v] of Object.entries(data)) foundry.utils.setProperty(actor, k, structuredClone(v)); Hooks.call('updateActor', actor, data); };
+foundry.utils.hasProperty = (o, path) => path.split('.').reduce((x, k) => x?.[k], o) !== undefined;
+foundry.utils.deepClone = v => structuredClone(v);
+// Ход: раунд и номер; вызывает updateCombat (добор у Мастера)
+window.turn = (round, turn) => { Object.assign(game.combat, { round, turn }); return Promise.all((Hooks.events.updateCombat ?? []).map(fn => fn(game.combat, { round, turn }))); };
+window.ready = true;
+</script></body></html>

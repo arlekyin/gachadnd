@@ -3,13 +3,14 @@
  *
  * Карты: каждому участнику тасовки — одна случайная из 12 (6 бафов, 6 дебафов); заклинателю —
  * только баф. Карта — активный эффект на существе: штатное состояние dnd5e или числовые изменения;
- * держится до конца следующего хода этого существа и снимается сама (у Мастера).
+ * держится до конца следующего хода этого существа (turn-effects.js).
  *
  * Очередь: выставленные значения инициативы живых участников боя перемешиваются между ними.
  */
 
 import { MODULE_ID } from "../../core/constants.js";
-import { emit, onSocket, isActiveGM } from "../../core/socket.js";
+import { emit, onSocket } from "../../core/socket.js";
+import { addTurnEffect } from "./turn-effects.js";
 
 const ICON = 'systems/dnd5e/icons/svg';
 const DAMAGE_TYPES = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
@@ -52,18 +53,15 @@ export async function applyCards(scene, combat, dealt) {
     for (const { tokenId, card } of dealt) {
         const token = scene.tokens.get(tokenId), actor = token?.actor, config = CARDS[card];
         if (!actor || !config) continue;
-        const combatant = combat?.combatants?.find(c => c.tokenId === tokenId || c.token?.id === tokenId);
-        await actor.createEmbeddedDocuments('ActiveEffect', [{
+        // До конца следующего хода существа — снимает модуль (turn-effects.js)
+        await addTurnEffect(actor, combat, {
             name: `Чумовая пятница: ${config.name}`,
             img: config.img,
             description: `<p>${config.rules}</p><p><em>Чумовая пятница: до конца следующего хода этого существа.</em></p>`,
             statuses: config.statuses ?? [],
             changes: config.changes ?? [],
-            // Иконка на токене. Срок эффекту не задаётся: Foundry и dnd5e снимали бы его по своим часам
-            // (раньше, чем кончится ход существа); снимает модуль. В v12 иконка есть только у состояний
-            showIcon: 2,
-            flags: { [MODULE_ID]: { freakyCard: { card, combatantId: combatant?.id ?? null, round: combat?.round ?? 0, wasCurrent: !!combatant && combat?.combatant?.id === combatant.id, started: false } } }
-        }]);
+            flags: { [MODULE_ID]: { freakyCard: { card } } }
+        }, { tokenId });
         if (config.temp) {
             const roll = await new Roll(config.temp).evaluate();
             const hp = actor.system.attributes.hp;
@@ -71,35 +69,6 @@ export async function applyCards(scene, combat, dealt) {
         }
     }
 }
-
-/**
- * Снять карты, срок которых вышел. Следующий ход существа — первый его ход после наложения карты
- * (если карта легла в его же ход — ход следующего раунда): в начале этого хода карта «взводится»,
- * когда ход переходит к другому — снимается. Перестановка инициативы ход не начинает.
- */
-Hooks.on('updateCombat', async (combat, changed) => {
-    if (!('turn' in changed || 'round' in changed) || !isActiveGM()) return;
-    for (const combatant of combat.combatants) {
-        const actor = combatant.actor;
-        for (const effect of actor?.effects ?? []) {
-            const flag = effect.flags?.[MODULE_ID]?.freakyCard;
-            if (!flag || (flag.combatantId && flag.combatantId !== combatant.id)) continue;
-            const current = combat.combatant?.id === combatant.id;
-            const next = !flag.wasCurrent || combat.round > flag.round;
-            if (current && next && !flag.started) await effect.update({ [`flags.${MODULE_ID}.freakyCard.started`]: true });
-            else if (!current && flag.started) await effect.delete();
-        }
-    }
-});
-
-/** Конец боя — все карты снимаются */
-Hooks.on('deleteCombat', async combat => {
-    if (!isActiveGM()) return;
-    for (const combatant of combat.combatants) {
-        const ids = (combatant.actor?.effects ?? []).filter(e => e.flags?.[MODULE_ID]?.freakyCard).map(e => e.id);
-        if (ids.length) await combatant.actor.deleteEmbeddedDocuments('ActiveEffect', ids);
-    }
-});
 
 // ==========================================
 // ПЕРЕПУТАННАЯ ОЧЕРЕДЬ
