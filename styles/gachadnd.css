@@ -2333,3 +2333,6 @@
 .gd-tetris-status { display: flex; gap: 10px; align-items: center; justify-content: space-between; border-top: 1px solid #2c3137; padding-top: 8px; }
 .gd-tetris-status p { margin: 0; font-size: 12px; line-height: 1.35; color: #a9b0b8; }
 .gd-tetris-uses { flex: none; padding: 2px 8px; border: 1px solid #ffd43b; border-radius: 2px; color: #ffd43b; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* Fez: вспышка, пока карта встаёт на место */
+.gd-fez-flash { position: fixed; inset: 0; z-index: 10000; background: #fff; opacity: 0; pointer-events: none; }

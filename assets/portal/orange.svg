@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- Портал: светящееся кольцо, внутри — воронка -->
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#ff8a1c" stop-opacity="0"/>
+      <stop offset="0.78" stop-color="#ff8a1c" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ff8a1c" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.95"/>
+      <stop offset="0.6" stop-color="#5c2a04" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ff8a1c" stop-opacity="0.6"/>
+    </radialGradient>
+  </defs>
+  <circle cx="100" cy="100" r="98" fill="url(#glow)"/>
+  <circle cx="100" cy="100" r="70" fill="url(#core)"/>
+  <path d="M100 48 A52 52 0 0 1 152 100" fill="none" stroke="#ffe0b8" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round"/>
+  <path d="M100 152 A52 52 0 0 1 48 100" fill="none" stroke="#ffe0b8" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round"/>
+  <path d="M100 66 A34 34 0 0 1 134 100" fill="none" stroke="#ffe0b8" stroke-opacity="0.35" stroke-width="4" stroke-linecap="round"/>
+  <path d="M100 134 A34 34 0 0 1 66 100" fill="none" stroke="#ffe0b8" stroke-opacity="0.35" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="100" cy="100" r="72" fill="none" stroke="#ffe0b8" stroke-width="7"/>
+  <circle cx="100" cy="100" r="72" fill="none" stroke="#ff8a1c" stroke-width="3"/>
+</svg>
