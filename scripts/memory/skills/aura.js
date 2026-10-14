@@ -1,16 +1,18 @@
 /**
  * Gacha Roguelike dnd5e — Счётчик ауры (красный навык)
  *
- * Включается бонусным действием на минуту (10 раундов) или до конца боя, как ярость. Аура — от 0 до 5.
+ * Включается бонусным действием и горит до конца боя. Аура — от −5 до 5; ниже нуля — долг по ауре.
  *
  * Набор: позёрство (трюк с ценой, объявленный до броска: удался — аура растёт, провалился — падает),
- * критическое попадание и добивание врага (+1), натуральная 1 (−1). Если с начала прошлого хода
- * персонаж не получил ауры, в начале хода аура −1; на 0 навык гаснет.
+ * критическое попадание и добивание врага (+1), натуральная 1 (−1), решение Мастера (±1, кнопка на
+ * HUD токена и в панели). Если с начала прошлого хода персонаж не получил ауры, в начале хода аура −1.
  *
  * Пороги: 2 — +1 к атакам и Запугиванию; 4 — враги в 10 футах совершают спасброски с помехой;
  * 5 — враг, начинающий ход в 15 футах, проходит спасбросок Мудрости или испуган до конца своего хода.
+ * Долг: −2 — −1 к атакам и проверкам Харизмы; −4 — свои спасброски с помехой; −5 — атаки по персонажу
+ * с преимуществом.
  * Финал «Не в этой арке»: урон по персонажу при ауре 3+ — владелец может потратить всю ауру, и урон
- * не проходит (навык гаснет).
+ * не проходит (аура — 0).
  *
  * Состояние — флаг персонажа aura { active, value, gained, combatId, round, last }; меняет его Мастер.
  * Объявленная поза — флаг auraPose { id, price, text, combatId, round, status }; его ставит владелец.
@@ -22,7 +24,7 @@ import { onRenderChatMessage } from "../../core/chat-hooks.js";
 import { addTurnEffect } from "./turn-effects.js";
 
 export const MAX = 5;
-export const ROUNDS = 10;
+export const MIN = -5;
 export const FINALE = 3;
 const PRESSURE_FT = 10;
 const FEAR_FT = 15;
@@ -32,6 +34,12 @@ export const TIERS = [
     { at: 2, name: 'Уверенность', text: '+1 к броскам атаки и к проверкам Запугивания.' },
     { at: 4, name: 'Давление', text: `Враги в ${PRESSURE_FT} футах от вас совершают спасброски с помехой.` },
     { at: 5, name: 'Главный герой', text: `Враг, начинающий ход в ${FEAR_FT} футах от вас, совершает спасбросок Мудрости (Сл 8 + бонус мастерства + модификатор Харизмы); провал — испуган до конца своего хода.` }
+];
+/** Долг по ауре: дебафы от −2 */
+export const DEBTS = [
+    { at: -2, name: 'Кринж', text: '−1 к броскам атаки и проверкам Харизмы.' },
+    { at: -4, name: 'Позор', text: 'Ваши спасброски — с помехой.' },
+    { at: -5, name: 'Массовка', text: 'Атаки по вам совершаются с преимуществом.' }
 ];
 
 export const PRICES = {
@@ -85,8 +93,9 @@ const hostile = (a, b) => {
 };
 /** Токены с аурой не ниже level на сцене */
 function auraTokens(level) {
-    return (canvas?.tokens?.placeables ?? []).filter(t => (auraOf(t.actor)?.value ?? 0) >= level);
+    return (canvas?.tokens?.placeables ?? []).filter(t => auraOf(t.actor) && auraOf(t.actor).value >= level);
 }
+const debtOf = actor => Math.min(0, auraOf(actor)?.value ?? 0);
 
 // ==========================================
 // МАСТЕР: ИЗМЕНЕНИЯ АУРЫ
@@ -101,7 +110,7 @@ async function gmStart(actor, combat) {
     await syncTier(actor, state.value);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-aura-card"><div class="gd-aura-title"><i class="fas fa-crown"></i> Счётчик ауры включён</div><p>Аура: 1 из ${MAX}. Каждый ход без ауры стоит −1; на 0 навык гаснет.</p></div>`
+        content: `<div class="gd-aura-card"><div class="gd-aura-title"><i class="fas fa-crown"></i> Счётчик ауры включён</div><p>Аура: 1 из ${MAX}. Горит до конца боя; каждый ход без ауры стоит −1, ниже нуля — долг по ауре.</p></div>`
     });
 }
 
@@ -117,31 +126,38 @@ async function gmEnd(actor, reason) {
     });
 }
 
-/** Мастер: аура +delta (с пределами); на 0 — гаснет */
+/** Мастер: аура +delta в пределах от −5 до 5 */
 export async function gmChange(actor, delta, reason) {
     const state = auraOf(actor);
     if (!state || !delta) return;
-    const value = Math.max(0, Math.min(MAX, state.value + delta));
+    const value = Math.max(MIN, Math.min(MAX, state.value + delta));
     const next = { ...state, value, last: stamp(delta, reason) };
     if (delta > 0) next.gained = true;
     await save(actor, next);
-    if (value <= 0) return gmEnd(actor, `${reason} — аура упала до нуля`);
     await syncTier(actor, value);
 }
 
-/** Порог 2: активный эффект «Уверенность» */
+const attackBonus = value => ['mwak', 'rwak', 'msak', 'rsak'].map(k => ({ key: `system.bonuses.${k}.attack`, mode: 2, value }));
+// Пассивные эффекты по ауре: Уверенность (2+) и Кринж (−2 и ниже)
+const PASSIVE = {
+    auraTier: { on: v => v >= TIERS[0].at, name: 'Аура: Уверенность', img: 'icons/svg/aura.svg', text: TIERS[0].text,
+        changes: () => [...attackBonus('+1'), { key: 'system.skills.itm.bonuses.check', mode: 2, value: '+1' }] },
+    auraDebt: { on: v => v <= DEBTS[0].at, name: 'Долг по ауре: Кринж', img: 'icons/svg/downgrade.svg', text: DEBTS[0].text,
+        changes: () => [...attackBonus('-1'), { key: 'system.abilities.cha.bonuses.check', mode: 2, value: '-1' }] }
+};
+
 async function syncTier(actor, value) {
-    const effects = [...(actor.effects ?? [])].filter(e => e.flags?.[MODULE_ID]?.auraTier);
-    if (value >= TIERS[0].at) {
-        if (effects.length) return;
-        const changes = ['mwak', 'rwak', 'msak', 'rsak'].map(k => ({ key: `system.bonuses.${k}.attack`, mode: 2, value: '+1' }));
-        changes.push({ key: 'system.skills.itm.bonuses.check', mode: 2, value: '+1' });
-        await actor.createEmbeddedDocuments('ActiveEffect', [{
-            name: 'Аура: Уверенность', img: 'icons/svg/aura.svg', showIcon: 2, changes,
-            description: TIERS[0].text, flags: { [MODULE_ID]: { auraTier: true } }
-        }]);
-    } else if (effects.length) {
-        await actor.deleteEmbeddedDocuments('ActiveEffect', effects.map(e => e.id));
+    for (const [flag, config] of Object.entries(PASSIVE)) {
+        const effects = [...(actor.effects ?? [])].filter(e => e.flags?.[MODULE_ID]?.[flag]);
+        if (config.on(value)) {
+            if (effects.length) continue;
+            await actor.createEmbeddedDocuments('ActiveEffect', [{
+                name: config.name, img: config.img, showIcon: 2, changes: config.changes(),
+                description: config.text, flags: { [MODULE_ID]: { [flag]: true } }
+            }]);
+        } else if (effects.length) {
+            await actor.deleteEmbeddedDocuments('ActiveEffect', effects.map(e => e.id));
+        }
     }
 }
 
@@ -164,11 +180,16 @@ onSocket('auraFinale', ({ payload }) => {
         speaker: ChatMessage.getSpeaker({ actor }),
         content: `<div class="gd-aura-card finale"><div class="gd-aura-title"><i class="fas fa-crown"></i> Не в этой арке</div><p>${esc(actor.name)} тратит всю ауру (${state.value}) — урон ${payload.amount} не прошёл.</p></div>`
     });
-    gmEnd(actor, 'Не в этой арке: аура потрачена').catch(error => console.error(`${MODULE_ID} | Аура`, error));
+    gmChange(actor, -state.value, 'Не в этой арке').catch(error => console.error(`${MODULE_ID} | Аура`, error));
 });
 
 export const requestStart = actor => requestGM('auraStart', ref(actor));
 export const requestChange = (actor, delta, reason) => requestGM('auraChange', { ...ref(actor), delta, reason });
+/** Решение Мастера: ±1 */
+export function adjust(actor, delta) {
+    if (!game.user.isGM || !auraOf(actor)) return;
+    return requestChange(actor, delta, 'Решение Мастера');
+}
 
 // ==========================================
 // ХОДЫ: УБЫВАНИЕ, СРОК, СТРАХ
@@ -181,7 +202,6 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const state = auraOf(actor);
     if (state) {
         if (state.combatId && state.combatId !== combat.id) await gmEnd(actor, 'Бой окончен');
-        else if (combat.round >= (state.round ?? 0) + ROUNDS) await gmEnd(actor, 'Минута прошла');
         else if (!state.gained) await gmChange(actor, -1, 'Ход без ауры');
         else await save(actor, { ...state, gained: false });
     }
@@ -315,13 +335,18 @@ Hooks.on('dnd5e.preRollD20TestV2', (config) => {
         }
     }
 
-    // Порог 4: враги рядом с аурой — спасброски с помехой
+    const disadvantage = () => { for (const roll of rolls) (roll.options ??= {}).disadvantage = true; config.disadvantage = true; };
     if (hooks.includes('savingThrow')) {
+        // Порог 4: враги рядом с аурой — спасброски с помехой
         const token = tokenOf(actor);
-        if (token && auraTokens(TIERS[1].at).some(hero => hero !== token && hostile(hero, token) && feetBetween(hero, token) <= PRESSURE_FT)) {
-            for (const roll of rolls) (roll.options ??= {}).disadvantage = true;
-            config.disadvantage = true;
-        }
+        if (token && auraTokens(TIERS[1].at).some(hero => hero !== token && hostile(hero, token) && feetBetween(hero, token) <= PRESSURE_FT)) disadvantage();
+        // Долг −4: свои спасброски с помехой
+        if (debtOf(actor) <= DEBTS[1].at) disadvantage();
+    }
+    // Долг −5: атаки по персонажу с преимуществом
+    if (hooks.includes('attack') && [...(game.user.targets ?? [])].some(t => debtOf(t.actor) <= DEBTS[2].at)) {
+        for (const roll of rolls) (roll.options ??= {}).advantage = true;
+        config.advantage = true;
     }
 });
 

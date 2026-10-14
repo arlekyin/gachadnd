@@ -1,8 +1,9 @@
 // Счётчик ауры: node tools/stand/aura.mjs [--v13]
 // Включение только в бою, позёрство (помеха, −5, КД −2, Ва-банк), итог по КД и Сл, итог Мастером,
 // убывание за ход без ауры, крит, натуральная 1, добивание, пороги 2/4/5 (эффект, помеха врагам
-// в 10 футах, страх в 15), тема и волны на 5, финал «Не в этой арке», конец на 0 и с концом боя.
-// Снимок out/aura_hero.png. Поле (клетки): персонаж 5,10; огр 8–9,9–10 (10 футов); гоблин 11,7 (25 футов).
+// в 10 футах, страх в 15), тема и волны на 5, финал «Не в этой арке», долг до −5 (Кринж, Позор,
+// Массовка), кнопки Мастера в панели и на HUD токена, конец с концом боя.
+// Снимки out/aura_hero.png, out/aura_debt.png. Поле (клетки): персонаж 5,10; огр 8–9,9–10 (10 футов); гоблин 11,7 (25 футов).
 import { open, args } from './harness.mjs';
 
 const { v13 } = args();
@@ -109,30 +110,62 @@ check(!(await effects('ogre')).includes('Испуган аурой'), 'стра�
 await turn(5, 0);
 check(!(await effects('caster')).includes('Позёрство: Ва-банк'), 'КД −2 снят в начале хода');
 
-// 12. Финал «Не в этой арке»: урон 10 не проходит, аура гаснет
+// 12. Финал «Не в этой арке»: урон 10 не проходит, аура — 0, но горит
 const hp = () => page.evaluate(() => actor.system.attributes.hp.value);
 const before = await hp();
 await page.evaluate(() => actor.applyDamage(10));
 await wait(300);
-check(await hp() === before && !(await aura()).active && !(await effects('caster')).includes('Аура: Уверенность'), 'финал: урон не прошёл, аура погасла');
+check(await hp() === before && (await aura()).active && await value() === 0 && !(await effects('caster')).includes('Аура: Уверенность'), 'финал: урон не прошёл, аура 0 и горит');
 check(await page.evaluate(() => window.gachadndAuraTheme === false), 'тема героя затихла');
 
-// 13. Снова: аура 1 — урон проходит без вопроса; ход без ауры — гаснет
-await page.evaluate(() => useSkill());
-await wait();
+// 13. Аура 0: урон проходит без вопроса; повторное использование — только панель
 await page.evaluate(() => actor.applyDamage(4));
 await wait();
-check(await hp() === before - 4, 'аура 1: урон проходит');
-await turn(5, 1); await turn(6, 0);
-check(await value() === 1, 'первый ход после включения — без убывания');
-await turn(6, 1); await turn(7, 0);
-check(await value() === 0 && !(await aura()).active, 'ход без ауры на 1 — аура погасла');
+check(await hp() === before - 4, 'аура 0: урон проходит');
+check(await page.evaluate(() => useSkill()) === false && await value() === 0, 'аура горит — использование открывает панель, не сбрасывает');
 
-// 14. Конец боя гасит ауру
-await page.evaluate(() => { actor.items[0].system.uses.spent = 0; useSkill(); });
+// 14. Долг: ход без ауры уводит в минус, Кринж на −2
+await turn(5, 1); await turn(6, 0);
+check(await value() === -1 && (await aura()).active, 'ход без ауры: −1, долг, аура не гаснет');
+await turn(6, 1); await turn(7, 0);
+check(await value() === -2 && (await effects('caster')).includes('Долг по ауре: Кринж'), 'долг 2: Кринж');
+
+// 15. Мастер: кнопки в панели и на HUD токена
+await page.evaluate(() => auraPanel.AuraPanel.instance(actor).render());
 await wait();
-const was = await value();
+await page.click('.gachadnd-aura [data-action="minus"]');
+await wait();
+check(await value() === -3, 'Мастер в панели: −1 — долг 3');
+await page.evaluate(() => {
+    const html = document.createElement('div'); html.id = 'hud'; html.innerHTML = '<div class="col right"></div>';
+    document.body.append(html);
+    Hooks.call('renderTokenHUD', { object: canvas.tokens.get('caster') }, html);
+});
+await page.dispatchEvent('#hud .gd-aura-hud', 'contextmenu');
+await wait();
+check(await value() === -4, 'Мастер на HUD: правый клик −1 — долг 4');
+// Позор: свои спасброски с помехой
+check((await roll('save', { total: 12, target: 10 })).disadvantage, 'долг 4: Позор — спасбросок с помехой');
+await page.dispatchEvent('#hud .gd-aura-hud', 'contextmenu'); await wait();
+await page.dispatchEvent('#hud .gd-aura-hud', 'contextmenu'); await wait();
+check(await value() === -5, 'долг не ниже −5');
+// Массовка: атаки по персонажу с преимуществом
+const attackOn = id => page.evaluate(id => {
+    game.user.targets = new Set([canvas.tokens.get(id)]);
+    const goblin = scene.tokens.get('goblin').actor;
+    const config = { subject: { actor: goblin, item: { actor: goblin } }, hookNames: ['attack', 'd20Test'], rolls: [{ options: {} }] };
+    Hooks.call('dnd5e.preRollD20TestV2', config);
+    game.user.targets = new Set();
+    return !!config.rolls[0].options.advantage;
+}, id);
+check(await attackOn('caster') && !(await attackOn('ally')), 'долг 5: Массовка — атаки по персонажу с преимуществом');
+await stand.shot('aura_debt');
+await page.dispatchEvent('#hud .gd-aura-hud', 'click');
+await wait();
+check(await value() === -4 && !(await attackOn('caster')), 'Мастер на HUD: левый клик +1 — Массовка снята');
+
+// 16. Конец боя гасит ауру
 await page.evaluate(() => Promise.all(Hooks.events.deleteCombat.map(fn => fn(game.combat))));
 await wait();
-check(was === 1 && !(await aura()).active, 'конец боя — аура погасла');
+check(!(await aura()).active && !(await effects('caster')).includes('Долг по ауре: Кринж'), 'конец боя — аура погасла, долг снят');
 await stand.close();
