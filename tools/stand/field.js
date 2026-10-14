@@ -179,7 +179,7 @@ export function field(flags, { uses = null, range = 60 } = {}) {
     for (const [x1, y1, x2, y2] of window.WALLS ?? []) wallLines.lineStyle(6, 0xdddddd, 1).moveTo(x1, y1).lineTo(x2, y2);
     canvas.stage.addChild(wallLines);
     // Персонаж с навыком
-    const item = { flags: { gachadnd: { ...flags, is_active: true } }, system: { uses: { max: uses ?? 0, spent: 0, get value() { return (uses ?? 0) - this.spent; } }, range: { value: range } },
+    const item = { name: 'Навык', getFlag(m, k) { return this.flags[m]?.[k]; }, flags: { gachadnd: { ...flags, is_active: true } }, system: { uses: { max: uses ?? 0, spent: 0, get value() { return (uses ?? 0) - this.spent; } }, range: { value: range } },
         async update(data) { if ('system.uses.spent' in data) this.system.uses.spent = data['system.uses.spent']; } };
     const actor = Object.assign(actors.A ??= actorOf('A', 'Конь'), { isOwner: true, items: [item],
         getActiveTokens: () => [toks.caster],

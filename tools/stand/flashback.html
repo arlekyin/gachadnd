@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
+<style>
+  /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
+  .application { position: fixed; right: 30px; top: 560px; width: 300px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
+  button { font-family: inherit; color: inherit; }
+</style></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>window.TOKENS = {
+  caster: ['/assets/bestiary/chess-knight.webp', 275, 525, 45, 1],
+  goblin: ['/assets/bestiary/chess-bishop.webp', 575, 375, 45, 1],
+  ogre: ['/assets/bestiary/chess-rook.webp', 650, 300, 90, 2],
+  ally: ['/assets/bestiary/chess-knight.webp', 475, 425, 45, 1],
+  imp: ['/assets/bestiary/chess-bishop.webp', 775, 425, 45, 1]
+};
+// Отношение токенов: персонаж и союзник — дружественные, остальные — враги
+window.DISPOSITION = { caster: 1, ally: 1 };</script>
+<script src="scene.js"></script>
+<script type="module">
+// Сначала модуль навыка: он ловит canvasReady, который вызывает field()
+window.flashbackModule = await import('/scripts/memory/skills/flashback.js');
+const { field } = await import('./field.js');
+const { actor } = field({ flashback: true }, { uses: 1 });
+// Кости Хитов: класс с d8, 3 из 4 доступны; Интеллект +3
+const cls = { id: 'cls', system: { hd: { denomination: 'd8', spent: 1, max: 4, get value() { return this.max - this.spent; } } } };
+actor.system.attributes.hd = { classes: new Set([cls]), get value() { return cls.system.hd.value; } };
+actor.system.abilities = { int: { mod: 3 }, str: { mod: 0 }, dex: { mod: 1 }, con: { mod: 1 }, wis: { mod: 0 }, cha: { mod: -1 } };
+actor.updateEmbeddedDocuments = async (type, updates) => { for (const u of updates) cls.system.hd.spent = u['system.hd.spent']; };
+foundry.applications.api.DialogV2.prompt = async () => window.DIALOG_ANSWER ?? null;
+window.Roll = class { constructor(formula, data) { this.formula = formula; this.data = data; } async evaluate() { this.total = 12 + (this.data?.mod ?? 0); return this; }
+    async toMessage(data) { window.rolls = [...(window.rolls ?? []), { formula: this.formula, total: this.total, flavor: data.flavor }]; } };
+window.cls = cls;
+window.ready = true;
+</script></body></html>
