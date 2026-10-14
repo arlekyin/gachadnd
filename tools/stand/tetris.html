@@ -11,8 +11,12 @@
 <script>window.TOKENS = {
   caster: ['/assets/bestiary/chess-knight.webp', 275, 525, 45, 1],
   goblin: ['/assets/bestiary/chess-bishop.webp', 575, 375, 45, 1],
-  ogre: ['/assets/bestiary/chess-rook.webp', 650, 300, 90, 2]
-};</script>
+  ogre: ['/assets/bestiary/chess-rook.webp', 650, 300, 90, 2],
+  ally: ['/assets/bestiary/chess-knight.webp', 475, 425, 45, 1],
+  imp: ['/assets/bestiary/chess-bishop.webp', 775, 425, 45, 1]
+};
+// Отношение токенов: персонаж и союзник — дружественные, остальные — враги
+window.DISPOSITION = { caster: 1, ally: 1 };</script>
 <script src="scene.js"></script>
 <script type="module">
 // ApplicationV2 без шаблонов: _prepareContext → _renderHTML → _replaceHTML, окно в DOM
@@ -45,7 +49,9 @@ const getPath = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
 const size = 50;
 const scene = {
     id: 'S', grid: { size }, dimensions: { width: 1134, height: 1192 }, flags: {}, tiles: [], sprites: {},
-    tokens: Object.values(toks).map(t => ({ id: t.id, name: t.id, x: t.center.x - t.w / 2, y: t.center.y - t.h / 2, width: t.document.width, height: t.document.height })),
+    // Токены стоят по сетке, как в Foundry
+    tokens: Object.values(toks).map(t => ({ id: t.id, name: t.id, actorId: t.id === 'caster' ? 'A' : t.id, disposition: DISPOSITION[t.id] ?? -1,
+        x: Math.round((t.center.x - t.w / 2) / size) * size, y: Math.round((t.center.y - t.h / 2) / size) * size, width: t.document.width, height: t.document.height })),
     getFlag(m, k) { return getPath(this.flags[m] ?? {}, k); },
     async setFlag(m, k, v) { setPath(this.flags[m] ??= {}, k, structuredClone(v)); },
     async unsetFlag(m, k) { const keys = k.split('.'); const o = getPath(this.flags[m] ?? {}, keys.slice(0, -1).join('.')) ?? this.flags[m]; if (keys.length === 1) delete this.flags[m][k]; else delete o?.[keys.at(-1)]; },
@@ -73,6 +79,7 @@ const scene = {
         }
     }
 };
+scene.tokens.get = id => scene.tokens.find(t => t.id === id);
 Object.values(toks).forEach(t => { const d = scene.tokens.find(x => x.id === t.id); t.document = d; });
 canvas.scene = scene;
 // Как в Foundry: сцена ловит указатель

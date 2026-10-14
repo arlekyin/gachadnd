@@ -8,7 +8,7 @@
  */
 
 import { MODULE_ID } from "../../core/constants.js";
-import { COLORS, LINE, draw, shapeCells } from "./tetris-pieces.js";
+import { COLORS, ENEMIES_TO_BLAST, draw, shapeCells } from "./tetris-pieces.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -108,7 +108,7 @@ export class TetrisPanel extends ApplicationV2 {
                 <div class="gd-tetris-slot hold"><span>Запас</span>${pieceHtml(hold)}</div>
             </div>
             <footer class="gd-tetris-status">
-                <p>Бонусным действием обрушьте «Следующую». ${LINE} блоков подряд по прямой сгорают.</p>
+                <p>Бонусным действием обрушьте «Следующую». Группа, где сцеплены ${ENEMIES_TO_BLAST} врага и больше, детонирует.</p>
                 ${left === null ? '' : `<span class="gd-tetris-uses" title="Обрушений до конца боя">${left > 0 ? `осталось ${left}` : 'до конца боя — всё'}</span>`}
             </footer>
         </div>`;
