@@ -37,6 +37,11 @@ export function registerPortalSettings() {
     });
 }
 
+// Строка при загрузке — по ней видно, что в браузере новый код модуля, и включён ли журнал
+Hooks.once('ready', () => {
+    console.log(`%c${MODULE_ID} | Портал: код прохода загружен (v13: moveToken, v12: updateToken); журнал ${debugOn() ? 'ВКЛЮЧЁН' : 'выключен — настройка «Журнал Портала»'}`, 'color: #2f9bff');
+});
+
 /** Сводка для отладки: версия, порталы на сцене, выделенные токены, слушатели хуков */
 export function portalReport() {
     const scene = canvas?.scene, size = scene?.grid?.size;
@@ -157,6 +162,7 @@ function placePortal(actor, range) {
     const send = () => {
         for (const [color, k] of Object.entries(placed)) {
             const [x, y] = k.split(',').map(Number);
+            trace(`выстрел: ${color} в клетку ${k}`);
             requestGM('portalPlace', { actorId: actor.id, sceneId: scene.id, color, x: x * size, y: y * size });
         }
     };
@@ -206,6 +212,7 @@ async function setPortal({ actorId, sceneId, color, x, y }) {
     const scene = game.scenes.get(sceneId);
     if (!scene || !ART[color]) return;
     const size = scene.grid.size;
+    trace(`Мастер ставит ${color} портал в ${x / size},${y / size}`);
     const old = portalsOf(scene, actorId)[color];
     if (old) await scene.deleteEmbeddedDocuments('Tile', [old.id]);
     await scene.createEmbeddedDocuments('Tile', [{
