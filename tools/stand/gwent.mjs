@@ -30,7 +30,19 @@ const effects = id => page.evaluate(id => scene.tokens.get(id).actor.effects.map
 await page.evaluate(() => turn(1, 0));
 let s = await state();
 check(s.hand.length === 3 && s.deck.length === 9 && s.discard.length === 0, `колода на бой: рука ${s.hand.length}, колода ${s.deck.length}`);
-await page.evaluate(() => gwentPanel.GwentPanel.open(actor));
+// Использование навыка открывает панель и отменяет обычное использование; навык без флага — по имени
+check(await page.evaluate(() => useSkill()) === false, 'использование навыка отменено');
+await page.waitForSelector('.gd-gwent-card');
+check(await page.evaluate(() => {
+    foundry.applications.instances.get('gachadnd-gwent-A').close?.();
+    foundry.applications.instances.delete?.('gachadnd-gwent-A');
+    const flags = item.flags.gachadnd, saved = flags.gwent;
+    delete flags.gwent;
+    flags.skill_name = 'Сыграем... в гвинт?';
+    const ok = useSkill() === false;
+    flags.gwent = saved;
+    return ok;
+}), 'навык без флага узнан по имени');
 await page.waitForSelector('.gd-gwent-card');
 await hand(['scorch', 'horn', 'frost']);
 await stand.shot('gwent_panel');

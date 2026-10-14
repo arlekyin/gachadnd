@@ -45,7 +45,13 @@ export const CARDS = {
         text: 'Ваши атаки до конца этого хода наносят +2d6 урона.' }
 };
 
-const isGwent = item => !!item?.flags?.[MODULE_ID]?.gwent;
+export const SKILL_NAME = 'Сыграем... в гвинт?';
+// Флаг из компендиума; навык, собранный без флага (старый компендиум), узнаётся по имени
+export const isGwent = item => {
+    const flags = item?.flags?.[MODULE_ID];
+    if (!flags || flags.is_crystal_item) return false;
+    return !!flags.gwent || (flags.skill_name ?? item.name) === SKILL_NAME;
+};
 export const gwentSkill = actor => actor?.items?.find(i => isGwent(i) && i.flags[MODULE_ID].is_active) ?? null;
 
 const shuffled = list => {
@@ -100,14 +106,6 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const state = ensureState(actor, combat);
     draw(state, Math.max(0, HAND - state.hand.length));
     await saveState(actor, state);
-});
-
-// Использование навыка — открыть панель (карты разыгрываются из неё)
-Hooks.on('dnd5e.preUseActivity', (activity) => {
-    const item = activity?.item;
-    if (!isGwent(item) || !item.actor) return;
-    import('./gwent-panel.js').then(({ GwentPanel }) => GwentPanel.open(item.actor));
-    return false;
 });
 
 // ==========================================
