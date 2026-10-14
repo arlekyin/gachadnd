@@ -1,10 +1,11 @@
 /**
  * Gacha Roguelike dnd5e — Чумовая пятница (красный навык)
  *
- * Все живые существа в бою случайно меняются местами — союзники, враги и сам персонаж. Меняются
- * между собой существа одного размера (места остаются по сетке, никто не встаёт в другого);
- * у единственного существа своего размера место не меняется. Существа на 0 ПЗ и мёртвые не
- * участвуют.
+ * Все живые существа в бою случайно меняются местами — союзники, враги и сам персонаж, любого
+ * размера: огр встаёт на место гоблина (верхним левым углом в его клетку). Кого огр
+ * накрыл, того придавило: оно выталкивается в ближайшую свободную клетку и получает дробящий
+ * урон. Крупные встают первыми — давит больший. Существа на 0 ПЗ и мёртвые не участвуют
+ * (но и их сдвигает, если на них встали).
  *
  * У всех токены взлетают, как напёрстки, разлетаются дугами по новым местам и садятся; Мастер
  * переставляет их в момент посадки (v13 — перемещением «displace»).
@@ -14,8 +15,11 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { clamp01, easeInOut } from "../../cutscene/math.js";
 import { placeToken } from "./pick.js";
+import { key, cellOf, footprint, nearestFree } from "./grid.js";
 
 const FLY_MS = 1300;
+// Урон придавленному
+const CRUSH = '2d6';
 const isFreaky = item => !!item?.flags?.[MODULE_ID]?.freaky;
 
 const alive = actor => {
@@ -44,23 +48,56 @@ export function shuffle(n, random = Math.random) {
     return order;
 }
 
-/** Новые места: { id, x, y, from: {x, y} } — перестановка внутри каждого размера */
-export function plan(tokens, random = Math.random) {
-    const groups = new Map();
-    for (const token of tokens) {
-        const size = `${token.width || 1}×${token.height || 1}`;
-        if (!groups.has(size)) groups.set(size, []);
-        groups.get(size).push(token);
+/**
+ * Новые места. Каждый встаёт верхним левым углом туда, где стоял тот, чьё место ему выпало.
+ * Крупные встают первыми; кого накрыли — тот придавлен и выталкивается в ближайшую свободную клетку.
+ * @param {object} scene
+ * @param {object[]} tokens  Участники (документы токенов).
+ * @returns {{moves: {id, x, y, from: {x, y}}[], crushed: string[]}}
+ */
+export function plan(scene, tokens, random = Math.random) {
+    const size = scene.grid.size;
+    const order = shuffle(tokens.length, random);
+    // Верхний левый угол — на угол чужого места: без округлений, места не «уползают» от тасовки к тасовке
+    const target = tokens.map((t, i) => cellOf(tokens[order[i]], size));
+    const ids = new Set(tokens.map(t => t.id));
+    const area = t => (t.width || 1) * (t.height || 1);
+    // Сначала крупные: давит больший
+    const queue = tokens.map((t, i) => i).sort((a, b) => area(tokens[b]) - area(tokens[a]));
+    const taken = new Set();
+    // Блоки Тетриса — тоже препятствие
+    for (const tile of scene.tiles ?? []) if (tile.flags?.[MODULE_ID]?.tetris) taken.add(key(...cellOf(tile, size)));
+    const placed = new Map(), crushed = [];
+    for (const i of queue) {
+        const t = tokens[i];
+        let [gx, gy] = target[i];
+        // У края сцены — внутрь
+        const w = Math.floor((scene.dimensions?.width ?? Infinity) / size), h = Math.floor((scene.dimensions?.height ?? Infinity) / size);
+        gx = Math.max(0, Math.min(gx, w - (t.width || 1))); gy = Math.max(0, Math.min(gy, h - (t.height || 1)));
+        if (!footprint(t, gx, gy).every(k => !taken.has(k))) {
+            crushed.push(t.id);
+            [gx, gy] = nearestFree(scene, size, t, gx, gy, taken, 12) ?? [gx, gy];
+        }
+        footprint(t, gx, gy).forEach(k => taken.add(k));
+        placed.set(t.id, [gx, gy]);
     }
+    // Не участники (мёртвые, вне боя), на которых встали, — сдвигаются
+    for (const t of scene.tokens) {
+        if (ids.has(t.id)) continue;
+        const [gx, gy] = cellOf(t, size);
+        if (footprint(t, gx, gy).every(k => !taken.has(k))) { footprint(t, gx, gy).forEach(k => taken.add(k)); continue; }
+        const spot = nearestFree(scene, size, t, gx, gy, taken, 12);
+        if (!spot) continue;
+        footprint(t, ...spot).forEach(k => taken.add(k));
+        placed.set(t.id, spot);
+    }
+    const all = [...tokens, ...scene.tokens.filter(t => !ids.has(t.id))];
     const moves = [];
-    for (const group of groups.values()) {
-        const order = shuffle(group.length, random);
-        group.forEach((token, i) => {
-            const spot = group[order[i]];
-            if (spot !== token) moves.push({ id: token.id, x: spot.x, y: spot.y, from: { x: token.x, y: token.y } });
-        });
+    for (const [id, [gx, gy]] of placed) {
+        const t = all.find(x => x.id === id);
+        if (t.x !== gx * size || t.y !== gy * size) moves.push({ id, x: gx * size, y: gy * size, from: { x: t.x, y: t.y } });
     }
-    return moves;
+    return { moves, crushed };
 }
 
 Hooks.on('dnd5e.preUseActivity', (activity) => {
@@ -71,7 +108,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
         ui.notifications.warn('Чумовая пятница работает только в бою, в котором участвует персонаж.');
         return false;
     }
-    if (!plan(participants(combat)).length) {
+    if (participants(combat).length < 2) {
         ui.notifications.warn('В бою некому меняться местами.');
         return false;
     }
@@ -91,8 +128,9 @@ onSocket('freakyFriday', ({ payload }) => {
 async function freakyFriday({ combatId, actorId }) {
     const combat = game.combats.get(combatId);
     const scene = combat?.scene ?? canvas.scene;
-    const moves = plan(participants(combat));
-    if (!scene || !moves.length) return;
+    if (!scene) return;
+    const { moves, crushed } = plan(scene, participants(combat));
+    if (!moves.length) return;
     const shuffleData = { sceneId: scene.id, moves };
     emit('freakyShuffle', shuffleData);
     const landed = playShuffle(shuffleData);
@@ -103,10 +141,19 @@ async function freakyFriday({ combatId, actorId }) {
         return token ? placeToken(token, m.x, m.y) : null;
     }));
     await landed;
-    const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean);
+    // Придавленные — дробящий урон (живым)
+    let crush = '';
+    if (crushed.length) {
+        const roll = await new Roll(CRUSH).evaluate();
+        const hurt = crushed.map(id => scene.tokens.get(id)).filter(t => t?.actor && alive(t.actor));
+        for (const token of hurt) await token.actor.applyDamage([{ value: roll.total, type: 'bludgeoning' }]);
+        const who = hurt.map(t => t.name).join(', ');
+        crush = who ? `<br>Придавило: ${foundry.utils.escapeHTML?.(who) ?? who} — ${roll.total} дробящего урона (${CRUSH}).` : '';
+    }
+    const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) }),
-        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${foundry.utils.escapeHTML?.(names.join(', ')) ?? names.join(', ')}.</div>`
+        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${foundry.utils.escapeHTML?.(names) ?? names}.${crush}</div>`
     });
 }
 
