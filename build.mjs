@@ -212,7 +212,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -334,8 +334,9 @@ function validateSkill(skill, folder) {
         if (!isActive || !skill.uses) err('tetris', 'фигура ставится использованием — нужны activation и uses');
     }
     // portal: true — использование ставит синий или оранжевый портал (scripts/memory/skills/aperture.js);
-    // fez: true — использование поворачивает существ вокруг персонажа (scripts/memory/skills/fez.js)
-    for (const field of ['portal', 'fez']) {
+    // fez: true — использование поворачивает существ вокруг персонажа (scripts/memory/skills/fez.js);
+    // cat: true — Кот Шрёдингера (scripts/memory/skills/cat.js); freaky: true — Чумовая пятница (freaky.js)
+    for (const field of ['portal', 'fez', 'cat', 'freaky']) {
         if (skill[field] === undefined) continue;
         if (skill[field] !== true) err(field, 'допустимо только true');
         if (!isActive) err(field, 'срабатывает при использовании — нужна activation');
@@ -727,6 +728,8 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.tetris ? { tetris: true } : {}),
                 ...(skill.portal ? { portal: true } : {}),
                 ...(skill.fez ? { fez: true } : {}),
+                ...(skill.cat ? { cat: true } : {}),
+                ...(skill.freaky ? { freaky: true } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {}),

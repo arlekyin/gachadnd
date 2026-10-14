@@ -28,8 +28,14 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         async close() { this._onClose?.({}); this.element.remove(); this.rendered = false; foundry.applications.instances.delete(this.id); }
     }
     foundry.applications.api.ApplicationV2 = ApplicationV2;
+    foundry.utils.setProperty = (obj, path, value) => { const keys = path.split('.'); let o = obj; keys.slice(0, -1).forEach(k => o = o[k] ??= {}); o[keys.at(-1)] = value; };
     foundry.utils.escapeHTML = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const setPath = (obj, path, value) => { const keys = path.split('.'); let o = obj; keys.slice(0, -1).forEach(k => o = o[k] ??= {}); o[keys.at(-1)] = value; };
+    // Путь с «-=ключ» удаляет ключ, как в обновлениях Foundry
+    const setPath = (obj, path, value) => {
+        const keys = path.split('.'); let o = obj; keys.slice(0, -1).forEach(k => o = o[k] ??= {});
+        const last = keys.at(-1);
+        if (last.startsWith('-=')) delete o[last.slice(2)]; else o[last] = value;
+    };
     const getPath = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
     // Сцена Foundry: плитки рисуются спрайтами, токены двигаются вместе с картинкой
     const size = 50;
@@ -42,6 +48,7 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         async setFlag(m, k, v) { setPath(this.flags[m] ??= {}, k, structuredClone(v)); },
         async unsetFlag(m, k) { const keys = k.split('.'); const o = getPath(this.flags[m] ?? {}, keys.slice(0, -1).join('.')) ?? this.flags[m]; if (keys.length === 1) delete this.flags[m][k]; else delete o?.[keys.at(-1)]; },
         async createEmbeddedDocuments(type, list) {
+            if (type === 'Token') return list.map(data => addToken({ ...structuredClone(data), id: foundry.utils.randomID() }));
             return list.map(data => {
                 const doc = { ...structuredClone(data), id: foundry.utils.randomID() };
                 this.tiles.push(doc);
@@ -53,23 +60,85 @@ export function field(flags, { uses = null, range = 60 } = {}) {
             });
         },
         async deleteEmbeddedDocuments(type, ids) {
+            if (type === 'Token') {
+                for (const id of ids) {
+                    const t = toks[id];
+                    t?.mesh.destroy(); t?.effects.destroy();
+                    delete toks[id];
+                    const i = this.tokens.findIndex(d => d.id === id);
+                    if (i >= 0) this.tokens.splice(i, 1);
+                }
+                canvas.tokens.placeables = Object.values(toks);
+                window.deleted = [...(window.deleted ?? []), ...ids];
+                return;
+            }
             for (const id of ids) { this.sprites[id]?.destroy(); delete this.sprites[id]; }
             this.tiles = this.tiles.filter(t => !ids.includes(t.id));
         },
         async updateEmbeddedDocuments(type, list, options = {}) {
             for (const u of list) {
-                const doc = this.tokens.find(t => t.id === u._id); Object.assign(doc, u);
-                const t = toks[u._id], cx = u.x + t.w / 2, cy = u.y + t.h / 2;
-                t.mesh.position.set(cx, cy); t.effects.position.set(cx - t.center.x, cy - t.center.y);
-                t.center = { x: cx, y: cy };
-                window.moved = [...(window.moved ?? []), u];
+                const doc = this.tokens.find(t => t.id === u._id);
+                for (const [k, v] of Object.entries(u)) if (k !== '_id') setPath(doc, k, v);
+                const t = toks[u._id];
+                if ('alpha' in u) { t.mesh.alpha = u.alpha; t.effects.alpha = u.alpha; }
+                if ('x' in u || 'y' in u) {
+                    const cx = doc.x + t.w / 2, cy = doc.y + t.h / 2;
+                    t.mesh.position.set(cx, cy); t.effects.position.set(cx - t.center0.x, cy - t.center0.y);
+                    t.center = { x: cx, y: cy };
+                    window.moved = [...(window.moved ?? []), u];
+                }
                 const { _id, ...changes } = u;
                 Hooks.call('updateToken', doc, changes, options, 'u');
             }
         }
     };
     scene.tokens.get = id => scene.tokens.find(t => t.id === id);
-    Object.values(toks).forEach(t => { const d = scene.tokens.find(x => x.id === t.id); t.document = d; });
+    Object.values(toks).forEach(t => { const d = scene.tokens.find(x => x.id === t.id); t.document = d; t.center0 = { ...t.center }; });
+    // Существа: ПЗ из window.HP = { id: [текущие, максимум] }, по умолчанию 20/20
+    const actorOf = (id, name) => {
+        const [value, max] = window.HP?.[id] ?? [20, 20];
+        return { id, name, statuses: new Set(), flags: {}, system: { attributes: { hp: { value, max, effectiveMax: max, temp: 0 } } },
+            testUserPermission: () => true,
+            async update(data) { for (const [k, v] of Object.entries(data)) setPath(this, k, structuredClone(v)); },
+            async applyDamage(amount) {
+                if (Hooks.call('dnd5e.preApplyDamage', this, amount, {}, {}) === false) return this;
+                this.system.attributes.hp.value = Math.max(0, this.system.attributes.hp.value - amount);
+                window.damaged = [...(window.damaged ?? []), [this.id, amount]];
+                return this;
+            } };
+    };
+    const actors = {};
+    // Документ токена: методы как у TokenDocument
+    const dress = doc => {
+        doc.parent = scene;
+        doc.alpha ??= 1;
+        doc.flags ??= {};
+        doc.actor = actors[doc.actorId] ??= actorOf(doc.actorId, doc.name);
+        doc.toObject = () => { const { parent, actor, update, move, toObject, ...rest } = doc; return structuredClone({ ...rest, _id: doc.id }); };
+        doc.update = (data, options) => scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, ...data }], options);
+        return doc;
+    };
+    // Новый токен (копия): картинка — как у исходного
+    const addToken = doc => {
+        dress(doc);
+        const src = Object.values(toks).find(t => t.document.actorId === doc.actorId);
+        const mesh = new PIXI.Sprite(src.mesh.texture); mesh.anchor.set(0.5); mesh.scale.copyFrom(src.mesh.scale);
+        const w = (doc.width || 1) * size, cx = doc.x + w / 2, cy = doc.y + w / 2;
+        mesh.position.set(cx, cy); mesh.alpha = doc.alpha;
+        src.mesh.parent.addChild(mesh);
+        const effects = new PIXI.Graphics(); effects.alpha = doc.alpha;
+        canvas.stage.addChild(effects);
+        toks[doc.id] = { id: doc.id, mesh, effects, center: { x: cx, y: cy }, center0: { x: cx, y: cy }, visible: true, w: src.w, h: src.h, document: doc, renderFlags: { set() {} } };
+        scene.tokens.push(doc);
+        canvas.tokens.placeables = Object.values(toks);
+        return doc;
+    };
+    canvas.tokens.get = id => toks[id];
+    canvas.tokens.controlled = [];
+    game.user.targets = new Set();
+    game.users = { activeGM: game.users?.activeGM ?? { id: 'u' }, find: () => null, get: () => null };
+    foundry.applications.api.DialogV2 = { wait: async () => window.DIALOG_ANSWER ?? null, confirm: async () => true };
+    window.ChatMessage = { create: async data => { window.chat = data.content; window.chats = [...(window.chats ?? []), data.content]; }, getSpeaker: () => ({}) };
     canvas.scene = scene;
     // Как в Foundry: сцена ловит указатель
     canvas.stage.eventMode = 'static'; canvas.stage.hitArea = new PIXI.Rectangle(-1e5, -1e5, 2e5, 2e5);
@@ -79,11 +148,9 @@ export function field(flags, { uses = null, range = 60 } = {}) {
     canvas.tokens.placeables.forEach(t => { t.visible = true; });
     game.scenes = { get: () => scene, [Symbol.iterator]: function* () { yield scene; } };
     game.user.updateTokenTargets = ids => { window.targets = ids; };
-    window.ChatMessage = { create: async data => { window.chat = data.content; }, getSpeaker: () => ({}) };
 
     for (const doc of scene.tokens) {
-        doc.parent = scene;
-        doc.update = (data, options) => scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, ...data }], options);
+        dress(doc);
         // window.V13 — механизм движения Foundry v13: move() и хук moveToken (движение закончено сразу)
         // Как в Foundry 13.351: moveToken приходит, пока документ ещё в начале пути, и встаёт
         // в конец позже (здесь — через 200 мс)
@@ -112,12 +179,13 @@ export function field(flags, { uses = null, range = 60 } = {}) {
     // Персонаж с навыком
     const item = { flags: { gachadnd: { ...flags, is_active: true } }, system: { uses: { max: uses ?? 0, spent: 0, get value() { return (uses ?? 0) - this.spent; } }, range: { value: range } },
         async update(data) { if ('system.uses.spent' in data) this.system.uses.spent = data['system.uses.spent']; } };
-    const actor = { id: 'A', name: 'Конь', isOwner: true, flags: {}, items: [item],
+    const actor = Object.assign(actors.A ??= actorOf('A', 'Конь'), { isOwner: true, items: [item],
         getActiveTokens: () => [toks.caster],
         getFlag(m, k) { return getPath(this.flags[m] ?? {}, k); },
-        async update(data) { for (const [k, v] of Object.entries(data)) setPath(this, k, structuredClone(v)); } };
+        async update(data) { for (const [k, v] of Object.entries(data)) setPath(this, k, structuredClone(v)); } });
     item.actor = actor;
-    game.actors = { get: () => actor };
+    game.actors = { get: id => actors[id] ?? actor };
+    window.actors = actors;
     window.actor = actor; window.item = item; window.scene = scene;
     window.useSkill = () => {
         const activity = { item, range: { value: range } };
