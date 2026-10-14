@@ -33,7 +33,8 @@ const combatants = scene.tokens.map(t => ({ id: `c-${t.id}`, tokenId: t.id, acto
 window.game.combat = { id: 'C', started: true, scene, round: 1, turn: 0, combatants,
     get turns() { return [...combatants].sort((a, b) => b.initiative - a.initiative); },
     get combatant() { return this.turns[this.turn]; },
-    async updateEmbeddedDocuments(type, list) { for (const u of list) Object.assign(combatants.find(c => c.id === u._id), u); window.initUpdates = list; } };
+    async updateEmbeddedDocuments(type, list) { for (const u of list) Object.assign(combatants.find(c => c.id === u._id), u); window.initUpdates = list; },
+    async update(data) { Object.assign(this, data); Hooks.call('updateCombat', this, data); } };
 game.combats = { get: () => game.combat };
 // Активные эффекты на существах
 for (const actor of new Set(scene.tokens.map(t => t.actor))) {

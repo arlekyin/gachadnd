@@ -13,12 +13,19 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
-import { clamp01, easeInOut } from "../../cutscene/math.js";
+import { clamp01, easeInOut, smooth } from "../../cutscene/math.js";
+import { stageCamera } from "../../cutscene/camera.js";
+import { stowWindows } from "../../cutscene/windows.js";
+import { registerCues, playCue, noise, tone } from "../../cutscene/audio.js";
+import { flutter } from "../../cutscene/instruments.js";
 import { placeToken } from "./pick.js";
 import { key, cellOf, footprint, nearestFree } from "./grid.js";
 import { CARDS, dealCards, applyCards, shuffleInitiative, broadcastCards } from "./freaky-cards.js";
 
-const FLY_MS = 1300;
+// Катсцена, мс: окна прячутся, фон темнеет и камера наезжает; полёт; пауза; всё возвращается
+const T = { focus: 550, fly: 1300, hold: 450, back: 550 };
+const FLY_MS = T.fly;
+const LAND_MS = T.focus + T.fly;
 // Урон придавленному
 const CRUSH = '2d6';
 const isFreaky = item => !!item?.flags?.[MODULE_ID]?.freaky;
@@ -132,16 +139,15 @@ async function freakyFriday({ combatId, actorId }) {
     if (!scene) return;
     const { moves, crushed } = plan(scene, participants(combat));
     if (!moves.length) return;
-    const shuffleData = { sceneId: scene.id, moves };
+    const shuffleData = { sceneId: scene.id, moves, crushed };
     emit('freakyShuffle', shuffleData);
     const landed = playShuffle(shuffleData);
     // Перестановка — в момент посадки: всё сразу, без анимации движения
-    await new Promise(resolve => setTimeout(resolve, FLY_MS));
+    await new Promise(resolve => setTimeout(resolve, LAND_MS));
     await Promise.all(moves.map(m => {
         const token = scene.tokens.get(m.id);
         return token ? placeToken(token, m.x, m.y) : null;
     }));
-    await landed;
     // Придавленные — дробящий урон (живым)
     let crush = '';
     if (crushed.length) {
@@ -155,9 +161,15 @@ async function freakyFriday({ combatId, actorId }) {
     const dealt = dealCards(participants(combat), actorId);
     broadcastCards({ sceneId: scene.id, dealt });
     await applyCards(scene, combat, dealt);
-    // Очередь: инициатива ещё не ходивших перемешивается
+    await landed;
+    // Очередь: выставленная инициатива живых участников перемешивается; текущий ход остаётся за тем, чей он
     const order = shuffleInitiative(combat);
-    if (order.length) await combat.updateEmbeddedDocuments('Combatant', order.map(u => ({ _id: u.id, initiative: u.initiative })));
+    if (order.length) {
+        const current = combat.combatant?.id;
+        await combat.updateEmbeddedDocuments('Combatant', order.map(u => ({ _id: u.id, initiative: u.initiative })));
+        const turn = combat.turns.findIndex(c => c.id === current);
+        if (turn >= 0 && turn !== combat.turn) await combat.update({ turn });
+    }
     const esc = text => foundry.utils.escapeHTML?.(text) ?? text;
     const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
     const cards = dealt.map(d => `${esc(scene.tokens.get(d.tokenId)?.name ?? '?')} — <span class="${CARDS[d.card].buff ? 'buff' : 'debuff'}">${CARDS[d.card].name}</span>${CARDS[d.card].text ? ` (${CARDS[d.card].text})` : ''}`).join('<br>');
@@ -165,7 +177,7 @@ async function freakyFriday({ combatId, actorId }) {
         speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) }),
         content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${esc(names)}.${crush}`
             + `<br><strong>Карты</strong> (до конца следующего хода):<br>${cards}`
-            + (order.length ? '<br><strong>Очередь перепуталась</strong> у тех, кто ещё не ходил.' : '')
+            + (order.length ? '<br><strong>Очередь перепуталась:</strong> инициатива перемешана.' : '')
             + '</div>'
     });
 }
@@ -176,16 +188,50 @@ async function freakyFriday({ combatId, actorId }) {
 
 onSocket('freakyShuffle', data => playShuffle(data));
 
+registerCues({
+    // Взлёт: мягкий вдох-свист
+    freakyLift(ctx, bus, t0) {
+        noise(ctx, bus, t0, { type: 'bandpass', freq: [500, 2400], q: 1.2, gain: [[0, 0.0001], [0.25, 0.35], [0.45, 0.0001]], duration: 0.5, send: 0.5 });
+    },
+    // Полёт: свист пролетающего токена
+    freakyWhoosh(ctx, bus, t0, { pan = 0 } = {}) {
+        flutter(ctx, bus, t0, { freq: [1800, 500], rate: [22, 10], level: 0.22, duration: 0.5, pan, send: 0.35 });
+    },
+    // Посадка: мягкий шлепок; придавил — глухой удар
+    freakyLand(ctx, bus, t0, { heavy = false } = {}) {
+        tone(ctx, bus, t0, { type: 'sine', freq: heavy ? [140, 45] : [260, 120], gain: [[0, heavy ? 0.7 : 0.35], [heavy ? 0.35 : 0.15, 0.0001]], duration: heavy ? 0.4 : 0.18, send: 0.2 });
+        noise(ctx, bus, t0, { type: 'lowpass', freq: [1800, 300], q: 0.7, gain: [[0, heavy ? 0.4 : 0.15], [0.12, 0.0001]], duration: 0.15, send: 0.2 });
+    }
+});
+
+const sound = (name, options = {}) => {
+    try {
+        if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
+        playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), ...options });
+    } catch (error) { /* без настроек звука — тихо */ }
+};
+const setting = (key, fallback) => { try { return game.settings.get(MODULE_ID, key); } catch (error) { return fallback; } };
+
 /**
- * Токены взлетают, летят дугами к новым местам и садятся. На время полёта сам токен скрыт,
- * вместо него летит его картинка; после посадки (когда Мастер переставил) токен снова виден.
+ * Катсцена тасовки у всех: окна прячутся, фон темнеет, камера наезжает на середину группы;
+ * токены взлетают, летят дугами к новым местам и садятся; затем всё возвращается. На время
+ * полёта сами токены скрыты — летят их картинки; Мастер переставляет токены в момент посадки.
  */
-export function playShuffle({ sceneId, moves }) {
-    if (!canvas?.ready || canvas.scene?.id !== sceneId) return Promise.resolve();
+export function playShuffle({ sceneId, moves, crushed = [] }) {
+    if (!canvas?.ready || canvas.scene?.id !== sceneId) return new Promise(resolve => setTimeout(resolve, LAND_MS + T.hold + T.back));
     const size = canvas.grid.size;
+    // Без кадров катсцен — только полёт; спокойный режим — без наезда камеры
+    const cinematic = setting('impactFrames', true) !== false;
+    const calm = !!setting('impactCalm', false);
+    const restoreWindows = cinematic ? stowWindows() : () => {};
+    const dim = new PIXI.Graphics();
+    dim.eventMode = 'none';
+    const rect = canvas.dimensions?.rect ?? canvas.dimensions?.sceneRect ?? { x: 0, y: 0, width: 1e4, height: 1e4 };
+    dim.beginFill(0x000000, 1).drawRect(rect.x - 1e4, rect.y - 1e4, rect.width + 2e4, rect.height + 2e4).endFill();
+    dim.alpha = 0;
     const layer = new PIXI.Container();
     layer.eventMode = 'none';
-    canvas.controls.addChild(layer);
+    canvas.controls.addChild(dim, layer);
     const flights = [];
     for (const [n, m] of moves.entries()) {
         const token = canvas.tokens.get(m.id);
@@ -198,32 +244,64 @@ export function playShuffle({ sceneId, moves }) {
         sprite.width = Math.abs(token.mesh.width) || w;
         sprite.height = Math.abs(token.mesh.height) || h;
         const scale = { x: sprite.scale.x, y: sprite.scale.y };
+        sprite.position.set(m.from.x + w / 2, m.from.y + h / 2);
         layer.addChild(sprite);
         token.renderable = false;
         flights.push({ token, sprite, scale, n, from: { x: m.from.x + w / 2, y: m.from.y + h / 2 }, to: { x: m.x + w / 2, y: m.y + h / 2 } });
     }
-    const start = performance.now();
+    // Камера: середина группы и масштаб, при котором видны все старые и новые места
+    const camera = cinematic && !calm ? stageCamera() : null;
+    let focus = null;
+    if (camera && flights.length) {
+        const points = flights.flatMap(f => [f.from, f.to]);
+        const xs = points.map(p => p.x), ys = points.map(p => p.y);
+        const center = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+        const half = { x: (Math.max(...xs) - Math.min(...xs)) / 2 + size * 1.5, y: (Math.max(...ys) - Math.min(...ys)) / 2 + size * 2.5 };
+        const fit = Math.min(camera.rect.width * 0.8 / (2 * half.x), camera.rect.height * 0.8 / (2 * half.y));
+        const max = Math.min(camera.saved.sx * 1.8, globalThis.CONFIG?.Canvas?.maxZoom ?? 3);
+        focus = { center, scale: Math.max(0.2, Math.min(max, fit)) };
+    }
+    const span = canvas.app?.view?.getBoundingClientRect?.() ?? { left: 0, width: innerWidth };
+    const panOf = p => {
+        const screen = camera?.screenOf?.(p);
+        return screen ? Math.max(-1, Math.min(1, ((screen.x / devicePixelRatio - span.left) / span.width) * 2 - 1)) : 0;
+    };
+    const start = performance.now(), end = LAND_MS + T.hold + T.back;
+    const cues = { lift: false, whoosh: new Set(), land: false };
     return new Promise(resolve => {
         const frame = now => {
-            const t = clamp01((now - start) / FLY_MS);
-            for (const f of flights) {
-                // Взлёт (0–0.15), полёт дугой (0.15–0.85), посадка (0.85–1); дуги у всех разные
-                const k = easeInOut(clamp01((t - 0.15) / 0.7));
+            const time = now - start;
+            // Фон и камера: наезд, держим, отъезд
+            const inK = smooth(clamp01(time / T.focus)), outK = smooth(clamp01((time - LAND_MS - T.hold) / T.back));
+            const k = inK * (1 - outK);
+            dim.alpha = 0.6 * k;
+            if (camera && focus) camera.place({ k, scale: focus.scale, center: focus.center });
+            // Полёт: взлёт (0–0.15), дуга (0.15–0.85), посадка (0.85–1); дуги у всех разные
+            const t = clamp01((time - T.focus) / T.fly);
+            if (time >= T.focus && !cues.lift) { cues.lift = true; sound('freakyLift'); }
+            for (const f of layer.parent ? flights : []) {
+                const fk = easeInOut(clamp01((t - 0.15) / 0.7));
+                if (fk > 0 && !cues.whoosh.has(f.n) && f.n < 6) { cues.whoosh.add(f.n); setTimeout(() => sound('freakyWhoosh', { pan: panOf(f.from) }), f.n * 60); }
                 const up = Math.sin(clamp01(t / 0.15) * Math.PI / 2) * (1 - clamp01((t - 0.85) / 0.15));
-                const arc = Math.sin(k * Math.PI) * size * (1 + (f.n % 3) * 0.5) * (f.n % 2 ? 1 : -1);
+                const arc = Math.sin(fk * Math.PI) * size * (1 + (f.n % 3) * 0.5) * (f.n % 2 ? 1 : -1);
                 const dx = f.to.x - f.from.x, dy = f.to.y - f.from.y, len = Math.hypot(dx, dy) || 1;
-                f.sprite.position.set(f.from.x + dx * k - dy / len * arc, f.from.y + dy * k + dx / len * arc - up * size * 0.3);
+                f.sprite.position.set(f.from.x + dx * fk - dy / len * arc, f.from.y + dy * fk + dx / len * arc - up * size * 0.3);
                 const grow = 1 + up * 0.25;
                 f.sprite.scale.set(f.scale.x * grow, f.scale.y * grow);
-                f.sprite.rotation = Math.sin(k * Math.PI) * 0.35 * (f.n % 2 ? 1 : -1);
+                f.sprite.rotation = Math.sin(fk * Math.PI) * 0.35 * (f.n % 2 ? 1 : -1);
             }
-            if (t < 1) return requestAnimationFrame(frame);
-            // Мастер переставляет токены в момент посадки — картинка держится, пока они не встали
-            setTimeout(() => {
+            if (t >= 1 && !cues.land) { cues.land = true; sound('freakyLand', { heavy: crushed.length > 0 }); }
+            // Мастер переставляет токены в момент посадки — картинки держатся, пока они не встали
+            if (time >= LAND_MS + 400 && layer.parent) {
                 for (const f of flights) f.token.renderable = true;
                 layer.destroy({ children: true });
-                resolve();
-            }, 400);
+            }
+            if (time < end) return requestAnimationFrame(frame);
+            if (layer.parent) { for (const f of flights) f.token.renderable = true; layer.destroy({ children: true }); }
+            dim.destroy();
+            camera?.restore();
+            restoreWindows();
+            resolve();
         };
         requestAnimationFrame(frame);
     });

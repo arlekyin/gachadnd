@@ -26,8 +26,12 @@ for (let round = 1; round <= 5; round++) {
     const before = await spots();
     await page.evaluate(() => { item.system.uses.spent = 0; window.damaged = []; });
     check(await page.evaluate(() => useSkill()) === true, `тасовка ${round}: навык использован`);
-    if (round === 1) { await page.waitForTimeout(550); await stand.shot('freaky_flight'); await page.waitForTimeout(1800); }
-    else await page.waitForTimeout(2300);
+    if (round === 1) {
+        // Снимок программным WebGL долгий — один, в середине полёта (наезд 550 мс + половина полёта)
+        await page.waitForTimeout(1100);
+        await stand.shot('freaky_flight');
+        await page.waitForTimeout(2600);
+    } else await page.waitForTimeout(3300);
     const after = await spots();
     console.log(`   после ${round}:`, JSON.stringify(after));
     if (round === 1) {
@@ -39,19 +43,32 @@ for (let round = 1; round <= 5; round++) {
         check(casterBuff, 'заклинателю — баф');
         check((await page.evaluate(() => window.texts?.length)) === 4, 'над четырьмя токенами вспыхнули карты');
         check(/Карты/.test(await page.evaluate(() => window.chat)), 'карты в сводке чата');
-        // Очередь: персонаж (ходит сейчас) — на месте, остальные живые — перемешаны
+        // Очередь: выставленная инициатива живых перемешана, мёртвого — нет; ход остался за персонажем
         const inits = await page.evaluate(() => Object.fromEntries(game.combat.combatants.map(c => [c.tokenId, c.initiative])));
         console.log('   инициатива:', JSON.stringify(inits));
-        check(inits.caster === 20 && inits.goblin === 18 && JSON.stringify([inits.ogre, inits.ally, inits.imp].sort()) === JSON.stringify([15, 12, 8].sort()), 'инициатива: текущий и мёртвый на месте, ещё не ходившие перемешаны');
-        // Срок карты союзника: её ход начался — взведена, кончился — снята
-        const allyTurn = await page.evaluate(() => game.combat.turns.findIndex(c => c.tokenId === 'ally'));
-        const step = turn => page.evaluate(turn => { game.combat.turn = turn; return Promise.all(Hooks.events.updateCombat.map(fn => fn(game.combat, { turn }))); }, turn);
-        await step(allyTurn);
-        const armed = await page.evaluate(() => scene.tokens.get('ally').actor.effects.filter(e => e.flags.gachadnd?.freakyCard).length);
-        await step((allyTurn + 1) % 5);
-        const left = await page.evaluate(() => scene.tokens.get('ally').actor.effects.filter(e => e.flags.gachadnd?.freakyCard).length);
-        check(armed === 1 && left === 0, 'карта союзника снята в конце его следующего хода');
-        await step(0);
+        check(inits.goblin === 18 && JSON.stringify([inits.caster, inits.ogre, inits.ally, inits.imp].sort()) === JSON.stringify([20, 15, 12, 8].sort()), 'инициатива живых перемешана, мёртвого — на месте');
+        check(await page.evaluate(() => game.combat.combatant.tokenId) === 'caster', 'ход остался за персонажем');
+        check(await page.evaluate(() => Math.abs(canvas.stage.scale.x - 0.95) < 1e-6 && canvas.stage.rotation === 0), 'камера вернулась на место');
+        // Сроки карт: ход за ходом два раунда; карта держится весь следующий ход существа
+        const has = id => page.evaluate(id => scene.tokens.get(id).actor.effects.some(e => e.flags.gachadnd?.freakyCard), id);
+        const step = (turn, round) => page.evaluate(([turn, round]) => { Object.assign(game.combat, { turn, round }); return Promise.all(Hooks.events.updateCombat.map(fn => fn(game.combat, { turn, round }))); }, [turn, round]);
+        const turnOf = id => page.evaluate(id => game.combat.turns.findIndex(c => c.tokenId === id), id);
+        const ally = await turnOf('ally'), caster = await turnOf('caster');
+        const log = [];
+        for (let round = 1; round <= 2; round++) for (let turn = round === 1 ? caster + 1 : 0; turn < 5; turn++) {
+            await step(turn, round);
+            log.push(`${round}.${turn}: союзник ${await has('ally') ? '+' : '−'}, персонаж ${await has('caster') ? '+' : '−'}`);
+            if (round === 2 && turn === caster) break;
+        }
+        console.log('   сроки:', log.join(' | '));
+        // Союзник: карта есть на его ходу (раунд 1) и снята на следующем; персонаж: держится до его хода в раунде 2 включительно
+        const at = (r, t) => log.find(l => l.startsWith(`${r}.${t}:`));
+        const allyRound = ally > caster ? 1 : 2;
+        check(/союзник \+/.test(at(allyRound, ally)) && (ally + 1 < 5 ? /союзник −/.test(at(allyRound, ally + 1)) : true), 'карта союзника — весь его следующий ход, после — снята');
+        check(/персонаж \+/.test(at(2, caster)), 'карта персонажа держится и на его ходу в следующем раунде');
+        await step(caster + 1 < 5 ? caster + 1 : 0, 2);
+        check(!(await has('caster')), 'карта персонажа снята после его следующего хода');
+        await step(caster, 1);
     }
     moved ||= Object.keys(after).some(id => id !== 'goblin' && after[id] !== before[id]);
     const bad = await overlap();

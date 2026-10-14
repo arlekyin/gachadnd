@@ -5,8 +5,7 @@
  * только баф. Карта — активный эффект на существе: штатное состояние dnd5e или числовые изменения;
  * держится до конца следующего хода этого существа и снимается сама (у Мастера).
  *
- * Очередь: значения инициативы тех, кто ещё не ходил в этом раунде, перемешиваются между ними —
- * кто уже походил, уже походил; текущий ход не сдвигается.
+ * Очередь: выставленные значения инициативы живых участников боя перемешиваются между ними.
  */
 
 import { MODULE_ID } from "../../core/constants.js";
@@ -59,9 +58,10 @@ export async function applyCards(scene, combat, dealt) {
             img: config.img,
             statuses: config.statuses ?? [],
             changes: config.changes ?? [],
-            // Срок — чтобы эффект считался временным и его иконка была на токене; снимает его модуль
-            duration: { rounds: 1, startRound: combat?.round ?? 0, startTurn: combat?.turn ?? 0, combat: combat?.id ?? null },
-            flags: { [MODULE_ID]: { freakyCard: { card, combatantId: combatant?.id ?? null, from: `${combat?.round}.${combat?.turn}`, started: false } } }
+            // Иконка на токене. Срок эффекту не задаётся: Foundry и dnd5e снимали бы его по своим часам
+            // (раньше, чем кончится ход существа); снимает модуль. В v12 иконка есть только у состояний
+            showIcon: 2,
+            flags: { [MODULE_ID]: { freakyCard: { card, combatantId: combatant?.id ?? null, round: combat?.round ?? 0, wasCurrent: !!combatant && combat?.combatant?.id === combatant.id, started: false } } }
         }]);
         if (config.temp) {
             const roll = await new Roll(config.temp).evaluate();
@@ -71,17 +71,21 @@ export async function applyCards(scene, combat, dealt) {
     }
 }
 
-/** Снять карты, срок которых вышел: в начале своего хода карта «взводится», с его концом — снимается */
+/**
+ * Снять карты, срок которых вышел. Следующий ход существа — первый его ход после наложения карты
+ * (если карта легла в его же ход — ход следующего раунда): в начале этого хода карта «взводится»,
+ * когда ход переходит к другому — снимается. Перестановка инициативы ход не начинает.
+ */
 Hooks.on('updateCombat', async (combat, changed) => {
     if (!('turn' in changed || 'round' in changed) || !isActiveGM()) return;
-    const now = `${combat.round}.${combat.turn}`;
     for (const combatant of combat.combatants) {
         const actor = combatant.actor;
         for (const effect of actor?.effects ?? []) {
             const flag = effect.flags?.[MODULE_ID]?.freakyCard;
             if (!flag || (flag.combatantId && flag.combatantId !== combatant.id)) continue;
             const current = combat.combatant?.id === combatant.id;
-            if (current && now !== flag.from && !flag.started) await effect.update({ [`flags.${MODULE_ID}.freakyCard.started`]: true });
+            const next = !flag.wasCurrent || combat.round > flag.round;
+            if (current && next && !flag.started) await effect.update({ [`flags.${MODULE_ID}.freakyCard.started`]: true });
             else if (!current && flag.started) await effect.delete();
         }
     }
@@ -101,18 +105,21 @@ Hooks.on('deleteCombat', async combat => {
 // ==========================================
 
 /**
- * Инициатива тех, кто ещё не ходил в этом раунде (после текущего хода), перемешивается между ними.
+ * Выставленная инициатива живых участников перемешивается между ними.
  * @returns {{id, initiative}[]} обновления участников боя
  */
 export function shuffleInitiative(combat, random = Math.random) {
-    const turns = combat?.turns ?? [];
-    const waiting = turns.slice((combat.turn ?? 0) + 1)
+    const waiting = [...(combat?.combatants ?? [])]
         .filter(c => c.initiative !== null && c.initiative !== undefined && !c.defeated && c.actor?.system?.attributes?.hp?.value > 0);
     if (waiting.length < 2) return [];
     const values = waiting.map(c => c.initiative);
-    for (let i = values.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [values[i], values[j]] = [values[j], values[i]];
+    // Не оставлять очередь как была, если в ней есть разные значения
+    for (let attempt = 0; attempt < 20; attempt++) {
+        for (let i = values.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [values[i], values[j]] = [values[j], values[i]];
+        }
+        if (values.some((v, i) => v !== waiting[i].initiative) || new Set(values).size < 2) break;
     }
     return waiting.map((c, i) => ({ id: c.id, initiative: values[i] })).filter((u, i) => u.initiative !== waiting[i].initiative);
 }
