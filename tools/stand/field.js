@@ -85,11 +85,15 @@ export function field(flags, { uses = null, range = 60 } = {}) {
         doc.parent = scene;
         doc.update = (data, options) => scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, ...data }], options);
         // window.V13 — механизм движения Foundry v13: move() и хук moveToken (движение закончено сразу)
+        // Как в Foundry 13.351: moveToken приходит, пока документ ещё в начале пути, и встаёт
+        // в конец позже (здесь — через 200 мс)
         if (window.V13) doc.move = async (waypoint, options = {}) => {
             const origin = { x: doc.x, y: doc.y };
-            await scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, x: waypoint.x, y: waypoint.y }], options);
+            const destination = { x: waypoint.x, y: waypoint.y };
             window.moves = [...(window.moves ?? []), { id: doc.id, ...waypoint }];
-            Hooks.call('moveToken', doc, { origin, passed: { waypoints: [{ x: waypoint.x, y: waypoint.y, action: waypoint.action ?? 'walk' }] }, pending: { waypoints: [] } }, options, { id: 'u' });
+            Hooks.call('moveToken', doc, { origin, destination, passed: { waypoints: [{ ...destination, action: waypoint.action ?? 'walk' }] }, pending: { waypoints: [] } }, options, { id: 'u' });
+            await new Promise(resolve => setTimeout(resolve, 200));
+            await scene.updateEmbeddedDocuments('Token', [{ _id: doc.id, ...destination }], options);
             return true;
         };
     }
