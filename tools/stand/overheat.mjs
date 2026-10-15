@@ -1,5 +1,5 @@
 // Перегрев: node tools/stand/overheat.mjs
-// Подзарядка (выбор цели, заёмные заряды), первое заёмное использование без броска, кость d6 по уровню,
+// Подзарядка (выбор цели, заёмные заряды), первое заёмное использование без броска, к100 по шансу уровня,
 // сгорание и выдержка, цикл зарядчиков сам себя сжигает, неудаляемый навык — блок, отдых, Оверклокинг
 // только по экипированному навыку без зарядов, свои заряды не греют.
 import { open } from './harness.mjs';
@@ -39,21 +39,21 @@ check(r.heat.extra === 1 && r.heat.borrowed === 0 && !(await run(() => chats.som
 
 // 4. Второе заёмное: уровень 1, кость 2 — выдержал
 await run(() => heat.recharge(actor.items.get('R'), 'all'));
-await run(() => { D6 = [2]; });
+await run(() => { D100 = [18]; });
 await use('R');
-check(await run(() => /Уровень 1: сгорает на 1–1 \(17%\)\. Выпало 2 — выдержал/.test(chats.at(-1))) && (await state('R')).heat.extra === 2, 'второе заёмное: уровень 1, выпало 2 — выдержал');
+check(await run(() => /Уровень 1: 17% — сгорает на 1–17\. Выпало 18 — выдержал/.test(chats.at(-1))) && (await state('R')).heat.extra === 2, 'второе заёмное: уровень 1 (17%), выпало 18 — выдержал');
 
 // 5. Третье заёмное: уровень 2, кость 2 — сгорел
 await run(() => heat.recharge(actor.items.get('R'), 'all'));
-check(await run(() => heat.riskText(heat.nextRisk(actor.items.get('R')))) === 'перегрев 2: сгорает на 1–2 (33%)', 'риск следующего: перегрев 2, 33%');
-await run(() => { D6 = [2]; });
+check(await run(() => heat.riskText(heat.nextRisk(actor.items.get('R')))) === 'перегрев 2: 33% (сгорает на 1–33 к100)', 'риск следующего: перегрев 2, 33%');
+await run(() => { D100 = [33]; });
 await use('R');
-check(!(await state('R')) && await run(() => /сгорел/.test(chats.at(-1))), 'третье заёмное: уровень 2, выпало 2 — навык сгорел');
+check(!(await state('R')) && await run(() => /сгорел/.test(chats.at(-1))), 'третье заёмное: уровень 2 (33%), выпало 33 — навык сгорел');
 
 // 6. Цикл зарядчиков: Перезарядка греется сама и сгорает
 await run(() => { skill('Q', 'Вторая перезарядка', 'purple', 1, { recharger: { restore: 'all', target: 'memory' } }); actor.items.get('Q').system.uses.spent = 1; });
 let rounds = 0;
-await run(() => { D6 = [6, 6, 6, 1]; });
+await run(() => { D100 = [99, 99, 99, 1]; });
 while (rounds < 8 && await state('P') && await state('Q')) {
     await run(() => { window.TARGET = 'P'; });
     await use('Q');
@@ -67,7 +67,7 @@ check(!(await state('P')) || !(await state('Q')), `цикл двух Перез�
 // 7. Неудаляемый навык не сгорает, а блокируется
 await run(() => { skill('U', 'Неудаляемый', 'red', 1, { undeletable: true }); });
 await use('U');
-for (let i = 0; i < 2; i++) { await run(() => heat.recharge(actor.items.get('U'), 'all')); await run(() => { D6 = [1]; }); await use('U'); }
+for (let i = 0; i < 2; i++) { await run(() => heat.recharge(actor.items.get('U'), 'all')); await run(() => { D100 = [1]; }); await use('U'); }
 check((await state('U'))?.heat.locked === true, 'неудаляемый навык при провале — заблокирован');
 await run(() => heat.recharge(actor.items.get('U'), 'all'));
 check(await run(() => actor.items.get('U').activity.use()) === null && await run(() => /заблокирован/.test(warnings.at(-1))), 'заблокированный навык не используется');

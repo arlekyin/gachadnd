@@ -4,7 +4,7 @@
  * Заряды, которые навыку вернул другой навык (поле recharger: Перезарядка, Оверклокинг), — заёмные.
  * Касается фиолетовых и красных навыков и самих зарядчиков. Первое использование заёмного заряда до
  * долгого отдыха — без последствий; каждое следующее — перегрев: навык срабатывает, затем открытая
- * кость d6, выпало не больше уровня перегрева — навык сгорает (неудаляемый — блокируется до долгого
+ * к100, выпало не больше шанса уровня перегрева — навык сгорает (неудаляемый — блокируется до долгого
  * отдыха). Долгий отдых снимает перегрев, короткий — сжигает незатраченный заём.
  *
  * Флаг навыка heat { borrowed, extra, locked }: borrowed — сколько заёмных зарядов ещё не потрачено,
@@ -17,7 +17,9 @@ import { isMemorySkill } from "./synergy/synergy.js";
 
 /** Сколько заёмных использований за долгий отдых проходят без броска */
 export const FREE = 1;
-const DIE = 6;
+/** Шанс сгорания по уровню перегрева, % (к100: сгорает при броске не выше шанса) */
+export const CHANCE = [0, 17, 33, 50, 67, 83, 100];
+const MAX_LEVEL = CHANCE.length - 1;
 
 const esc = text => foundry.utils.escapeHTML?.(String(text ?? '')) ?? String(text ?? '');
 export const rechargerOf = item => item?.flags?.[MODULE_ID]?.recharger ?? null;
@@ -37,13 +39,13 @@ export function heatOf(item) {
 }
 
 /** Уровень перегрева для заёмного использования номер n (с долгого отдыха) */
-export const levelFor = n => Math.min(DIE, Math.max(0, n - FREE));
+export const levelFor = n => Math.min(MAX_LEVEL, Math.max(0, n - FREE));
 /** Риск следующего заёмного использования: уровень и шанс в процентах */
 export function nextRisk(item) {
     const level = levelFor(heatOf(item).extra + 1);
-    return { level, chance: Math.round(level / DIE * 100) };
+    return { level, chance: CHANCE[level] };
 }
-export const riskText = ({ level, chance }) => level ? `перегрев ${level}: сгорает на 1–${level} (${chance}%)` : 'без перегрева';
+export const riskText = ({ level, chance }) => level ? `перегрев ${level}: ${chance}% (сгорает на 1–${chance} к100)` : 'без перегрева';
 
 // ==========================================
 // ПОДЗАРЯДКА
@@ -194,11 +196,12 @@ export async function overheat(item, levels) {
     const actor = item.actor;
     for (const level of levels) {
         if (!actor?.items.get(item.id)) return;
-        const roll = await new Roll(`1d${DIE}`).evaluate();
-        const burned = roll.total <= level;
+        const chance = CHANCE[level];
+        const roll = await new Roll('1d100').evaluate();
+        const burned = roll.total <= chance;
         const undeletable = !!item.flags[MODULE_ID].undeletable;
         const verdict = !burned ? 'выдержал' : undeletable ? 'перегорел — заблокирован до долгого отдыха' : 'сгорел';
-        const flavor = `<div class="gd-heat-card ${burned ? 'burn' : ''}"><div class="gd-heat-title"><i class="fas fa-temperature-high"></i> Перегрев: ${esc(item.name)}</div><p>Уровень ${level}: сгорает на 1–${level} (${Math.round(level / DIE * 100)}%). Выпало ${roll.total} — ${verdict}.</p></div>`;
+        const flavor = `<div class="gd-heat-card ${burned ? 'burn' : ''}"><div class="gd-heat-title"><i class="fas fa-temperature-high"></i> Перегрев: ${esc(item.name)}</div><p>Уровень ${level}: ${chance}% — сгорает на 1–${chance}. Выпало ${roll.total} — ${verdict}.</p></div>`;
         if (roll.toMessage) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor });
         else await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: flavor });
         if (!burned) continue;
