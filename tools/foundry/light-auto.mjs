@@ -39,27 +39,42 @@ check('Ультрафиолет: карточка в чате', (await chats()).
 await ev(async hero => {
     await game.actors.get(hero).createEmbeddedDocuments('Item', [{ name: 'GD-тест: меч', type: 'weapon', system: { type: { value: 'martialM', baseItem: 'longsword' }, damage: { base: { number: 1, denomination: 8, types: ['slashing'] } }, equipped: true, proficient: 1 } }]);
 }, hero);
-const strike = target => ev(async ({ hero, target }) => {
-    const a = game.actors.get(hero), t = game.actors.get(target);
-    const act = a.items.find(i => i.type === 'weapon').system.activities.find(x => x.type === 'attack');
-    gdt.dice(8, 8);
-    const rolls = await act.rollDamage({}, { configure: false }, {});
-    // Как кнопка применения урона в чате: описание урона из бросков
-    const damages = rolls.map(r => ({ value: r.total, type: r.options.type, properties: new Set(r.options.properties ?? []) }));
-    const hp0 = t.system.attributes.hp.value;
-    const preview = t.calculateDamage(damages, {});
-    await t.applyDamage(damages, {});
-    return { formula: rolls.map(r => r.formula).join(' + '), total: rolls.reduce((s, r) => s + r.total, 0), lost: hp0 - t.system.attributes.hp.value,
-        parts: preview ? preview.map(d => `${d.type}:${d.value}`).join(' ') : null };
-}, { hero, target });
+// Удар мечом с цели: бросок урона → карточка в чате → «Применить» в лотке dnd5e (настоящий клик)
+const strike = async target => {
+    const before = await ev(async ({ hero, target }) => {
+        await gdt.closeForeign(); ui.sidebar.expand?.(); ui.sidebar.changeTab?.('chat', 'primary');
+        canvas.tokens.setTargets([game.actors.get(target).getActiveTokens()[0].id]);
+        const act = game.actors.get(hero).items.find(i => i.type === 'weapon').system.activities.find(x => x.type === 'attack');
+        gdt.dice(8, 8);
+        const count = game.messages.size;
+        await act.rollDamage({}, { configure: false }, {});
+        await gdt.until(() => game.messages.size > count, 3000);
+        return { hp: game.actors.get(target).system.attributes.hp.value, id: game.messages.contents.at(-1).id };
+    }, { hero, target });
+    await wait(2500);
+    const sel = `#chat [data-message-id="${before.id}"]`;
+    const line = await page.$eval(`${sel} .gd-prism-line`, el => el.textContent.replace(/\s+/g, ' ').trim()).catch(() => null);
+    await ev(id => document.querySelector(`#chat [data-message-id="${id}"] damage-application`)?.setAttribute('open', ''), before.id);
+    await page.click(`${sel} damage-application .apply-damage`);
+    await wait(1500);
+    return ev(({ target, id, hp, line }) => {
+        const message = game.messages.get(id);
+        const result = gdt.chats().filter(c => /Призма —/.test(c)).at(-1)?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() ?? null;
+        return { card: message.rolls.map(r => `${r.options.type}:${r.total}`).join(' '), total: message.rolls.reduce((s, r) => s + r.total, 0),
+            line, lost: hp - game.actors.get(target).system.attributes.hp.value, result };
+    }, { target, ...before, line });
+};
 u = await use(page, hero, S['Призма']);
 await wait(500);
 check('Призма: взведена', !!(await ev(hero => game.actors.get(hero).getFlag('gachadnd', 'prism'), hero)));
 let r = await strike(A);
-check('Призма: 10 урона → 7 типов, сопротивление огню и иммунитет к яду — потеря 7', r.lost === 7, JSON.stringify(r));
+check('Призма: карточка урона в чате — семь строк по цветам, сумма 10', r.card === 'fire:4 acid:1 lightning:1 poison:1 cold:1 thunder:1 force:1' && r.total === 10, r.card);
+check('Призма: в карточке строка раскладки — исходный бросок и цвета', /Призма: 10 \(1d8 \+ 2\) → 4 огонь · 1 кислота/.test(r.line ?? ''), r.line);
+check('Призма: «Применить» в лотке dnd5e — потеря 7 (сопротивление огню, иммунитет к яду)', r.lost === 7, JSON.stringify(r));
+check('Призма: итог по цели в чате — огонь 4 → 2, яд 1 → 0, итого 7', /Огонь 4 → 2 \(сопротивление\)/i.test(r.result ?? '') && /Яд 1 → 0 \(иммунитет\)/i.test(r.result ?? '') && /Итого урона: 7/.test(r.result ?? ''), r.result);
 check('Призма: погасла после атаки', !(await ev(hero => game.actors.get(hero).getFlag('gachadnd', 'prism'), hero)));
 r = await strike(A);
-check('без Призмы: 10 рубящего — потеря 10', r.lost === 10, JSON.stringify(r));
+check('без Призмы: карточка — 10 рубящего, потеря 10', r.card === 'slashing:10' && r.lost === 10, JSON.stringify(r));
 
 // ---------- Скорость света: порядок Огнеупорный, Второй, Герой
 await combat(page, ids.scene, [A, B, hero]);

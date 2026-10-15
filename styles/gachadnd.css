@@ -2455,3 +2455,9 @@
 .gd-light-card .gd-light-buttons button { flex: 1; }
 /* Вспышка камеры */
 .gd-light-flash { position: fixed; inset: 0; background: #ffffff; pointer-events: none; z-index: 10000; opacity: 0; }
+/* Призма: раскладка урона по цветам */
+.gd-prism-line { margin: 4px 0; padding: 4px 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.05); font-size: 12px; line-height: 1.5; }
+.gd-prism-line > span, .gd-prism-parts span { color: var(--gd-prism); font-weight: 700; }
+.gd-prism-parts { list-style: none; margin: 4px 0; padding: 0; }
+.gd-prism-parts li { border-left: 4px solid var(--gd-prism); padding-left: 6px; margin: 2px 0; }
+.gd-prism-parts em { opacity: 0.75; }

@@ -39,6 +39,19 @@ const path = await ev(async scene => {
     return { points: p.points.map(q => `${Math.round(q.x)},${Math.round(q.y)}`).join(' → '), bounces: p.bounces, hits: r.hitsAlong(s, p.points, s.tokens.find(t => t.name.includes('Герой')).id).map(t => t.name.replace('GD-тест: ', '')) };
 }, ids.scene);
 check('Рикошет: луч на восток — стена, назад, стена, назад; два отражения', path.points === '550,550 → 1000,550 → 100,550 → 1000,550' && path.bounces === 2, `${path.points} (${path.bounces})`);
+const ranked = await ev(async ({ scene, hero, id }) => {
+    const r = await gdt.mod('memory/skills/light/ricochet.js');
+    const item = game.actors.get(hero).items.get(id);
+    const out = [r.bouncesOf(item)];
+    await item.setFlag('gachadnd', 'rank', 2);
+    out.push(r.bouncesOf(item));
+    out.push(r.trace(game.scenes.get(scene), { x: 550, y: 550 }, 0, 4800, r.bouncesOf(item)).bounces);
+    await item.setFlag('gachadnd', 'rank', 3);
+    out.push(r.bouncesOf(item));
+    await item.setFlag('gachadnd', 'rank', 1);
+    return out;
+}, { scene: ids.scene, hero, id: S['Рикошет'] });
+check('Рикошет: отражений по рангам 2 / 3 / 4, на ранге II луч отражается трижды', JSON.stringify(ranked) === '[2,3,3,4]', JSON.stringify(ranked));
 check('Рикошет: задеты Восток и Запад, не стрелок и не тот, кто в стороне', JSON.stringify(path.hits) === '["Восток","Запад"]', JSON.stringify(path.hits));
 
 // Прицел мышью: Esc — отмена без заряда

@@ -2,7 +2,7 @@
  * Gacha Roguelike dnd5e — Рикошет (синий навык света)
  *
  * Использование — прицел: из центра токена луч идёт к курсору, отражается от стен, которые
- * задерживают свет (открытые двери пропускают), не больше двух раз; длина — размер линии навыка
+ * задерживают свет (открытые двери пропускают): 2 раза, с каждым рангом — на 1 больше; длина — размер линии навыка
  * (120 футов). Траектория и задетые существа видны заранее. Клик — выстрел: задетые существа
  * становятся целями, и активность dnd5e используется заново (заряд, спасбросок Ловкости и урон —
  * штатные, шаблона нет). Правая кнопка или Esc — отмена, заряд не тратится.
@@ -15,6 +15,8 @@ import { emit, onSocket } from "../../../core/socket.js";
 import { isLight, tokenOf, feetToPx, lightCard, esc } from "./common.js";
 
 export const BOUNCES = 2;
+/** Отражений на ранге навыка: 2, 3, 4 */
+export const bouncesOf = item => BOUNCES + Math.max(0, (Number(item?.flags?.[MODULE_ID]?.rank) || 1) - 1);
 const DEFAULT_FT = 120;
 const COLOR = 0xfff1a8, GLOW = 0xffc93c;
 
@@ -128,7 +130,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
         return false;
     }
     // Сначала прицел, затем использование заново — заряд тратится только при выстреле
-    aim(caster, lengthOf(activity)).then(shot => {
+    aim(caster, lengthOf(activity), bouncesOf(item)).then(shot => {
         if (!shot) return;
         const targets = shot.hits.map(t => t.object).filter(Boolean);
         // Задетые — цели спасброска; v12 без setTargets — по одному
@@ -159,7 +161,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
  * Прицел: луч к курсору, отражения и задетые видны сразу.
  * @returns {Promise<{points, bounces, hits: TokenDocument[]}|null>}
  */
-export function aim(caster, length) {
+export function aim(caster, length, bounces = BOUNCES) {
     const scene = canvas.scene;
     const preview = new PIXI.Graphics();
     preview.eventMode = 'none';
@@ -171,7 +173,7 @@ export function aim(caster, length) {
 
     const paint = point => {
         const angle = Math.atan2(point.y - origin.y, point.x - origin.x);
-        const path = trace(scene, origin, angle, length);
+        const path = trace(scene, origin, angle, length, bounces);
         shot = { ...path, hits: hitsAlong(scene, path.points, caster.document.id) };
         preview.clear();
         drawBeam(preview, path.points, 0.55);
