@@ -3,7 +3,7 @@
  *
  * Всё создаётся с префиксом «GD-тест» и пересоздаётся при каждом запуске, поэтому проверки не зависят
  * от прошлых прогонов. Навыки кладутся тем же путём, что и в игре: addSkillToMemory из компендиума,
- * затем setSkillEquipped.
+ * затем setSkillEquipped и пересчёт синергий, как в Терминале.
  */
 
 export const PREFIX = 'GD-тест';
@@ -70,10 +70,14 @@ export async function install(page) {
 
 /**
  * Пересоздать сцену, героя и врагов. Возвращает id: { scene, hero, enemies: [...] }.
- * @param {object} opts  { enemies: [{ name, x, y, wis }] , hero: { x, y, cha } } — клетки сетки
+ * @param {object} opts  { enemies: [{ name, x, y, wis, ac, traits, disposition }], hero: { x, y, cha, ac, level } } — клетки
+ *   сетки; walls: [{ c: [x0, y0, x1, y1] в клетках, door }]; lights: [{ x, y, bright, dim }] в клетках и футах;
+ *   dark: true — на сцене ночь (глобальный свет не горит)
  */
 export async function scene(page, opts = {}) {
     return page.evaluate(async ({ PREFIX, opts }) => {
+        // Чужие хуки после использования навыка (Combat Booster пишет флаг персонажу) успевают до удаления
+        await new Promise(r => setTimeout(r, 1000));
         // Бои и документы прошлого прогона
         for (const c of game.combats.filter(c => c.scene?.name?.startsWith(PREFIX) || !c.scene)) await c.delete();
         // Хуки конца боя (аура гаснет) успевают обновить персонажей до удаления
@@ -87,8 +91,15 @@ export async function scene(page, opts = {}) {
         const scene = await Scene.create({
             name: `${PREFIX}: сцена`, width: 2000, height: 1400, padding: 0,
             grid: { type: 1, size: grid, distance: 5, units: 'ft' },
-            tokenVision: false, fog: { exploration: false }, environment: { globalLight: { enabled: true } }
+            tokenVision: false, fog: { exploration: false },
+            environment: opts.dark
+                ? { darknessLevel: 1, globalLight: { enabled: true, darkness: { min: 0, max: 0.5 } } }
+                : { darknessLevel: 0, globalLight: { enabled: true } }
         });
+        if (opts.walls?.length) await scene.createEmbeddedDocuments('Wall', opts.walls.map(w => ({ c: w.c.map(v => v * grid), door: w.door ?? 0 })));
+        if (opts.lights?.length) await scene.createEmbeddedDocuments('AmbientLight', opts.lights.map(l => ({
+            x: l.x * grid, y: l.y * grid, config: { bright: l.bright ?? 10, dim: l.dim ?? 20 }
+        })));
         const h = opts.hero ?? {};
         const hero = await Actor.create({
             name: `${PREFIX}: Герой`, type: 'character',
@@ -100,6 +111,10 @@ export async function scene(page, opts = {}) {
             prototypeToken: { actorLink: true, disposition: 1 },
             ownership: { default: 0 }
         });
+        // Уровень персонажа (и бонус мастерства) — через класс, как в игре
+        if (h.level) await hero.createEmbeddedDocuments('Item', [{
+            name: 'Воин', type: 'class', system: { identifier: 'fighter', levels: h.level, hd: { denomination: 'd10' } }
+        }]);
         const enemies = [];
         for (const [i, e] of (opts.enemies ?? [{}]).entries()) {
             enemies.push(await Actor.create({
@@ -107,9 +122,10 @@ export async function scene(page, opts = {}) {
                 system: {
                     abilities: { wis: { value: e.wis ?? 10 } },
                     attributes: { hp: { value: 30, max: 30 }, ac: { calc: 'flat', flat: e.ac ?? 12 } },
-                    details: { cr: 1 }
+                    details: { cr: 1 },
+                    ...(e.traits ? { traits: e.traits } : {})
                 },
-                prototypeToken: { actorLink: true, disposition: -1 }
+                prototypeToken: { actorLink: true, disposition: e.disposition ?? -1 }
             }));
         }
         const at = (actor, x, y) => ({ ...actor.prototypeToken.toObject(), actorId: actor.id, name: actor.name, x: x * grid, y: y * grid });
@@ -140,6 +156,51 @@ export async function skills(page, actorId, names, { equip = true } = {}) {
             if (equip) await syn.setSkillEquipped(item, true);
             ids[name] = item.id;
         }
+        // Как Терминал после экипировки (terminal.js): синергии пересчитываются явно
+        if (equip) await syn.updateActorSynergies(actor);
         return ids;
     }, { actorId, names, equip });
+}
+
+/**
+ * Использовать навык как кнопкой на листе: activity.use() без настроек. Окна по ходу закрываются:
+ * окно использования dnd5e — «Использовать», окно с выбором (select[name]) — значением из select,
+ * остальные DialogV2 — кнопкой ok. Возвращает, что вернул use(), и какие окна были.
+ */
+export async function use(page, actorId, itemId, { select = {}, timeout = 1500 } = {}) {
+    const windows = () => page.evaluate(() => gdt.windows());
+    const before = (await windows()).map(w => w.id);
+    const result = page.evaluate(async ({ actorId, itemId }) => {
+        const item = game.actors.get(actorId).items.get(itemId);
+        const r = await item.system.activities.contents[0].use();
+        return r === undefined ? 'undefined' : r === null ? 'null' : r === false ? 'false' : 'object';
+    }, { actorId, itemId });
+    const seen = [];
+    const end = Date.now() + timeout;
+    while (Date.now() < end) {
+        for (const w of (await windows()).filter(w => !before.includes(w.id) && !seen.some(s => s.id === w.id))) {
+            seen.push(w);
+            const sel = `#${w.id}`;
+            for (const [name, value] of Object.entries(select)) {
+                if (await page.$(`${sel} select[name="${name}"]`)) await page.selectOption(`${sel} select[name="${name}"]`, value);
+            }
+            if (await page.$(`${sel} button[data-action="use"]`)) await page.click(`${sel} button[data-action="use"]`);
+            else if (await page.$(`${sel} button[data-action="ok"]`)) await page.click(`${sel} button[data-action="ok"]`);
+        }
+        await page.waitForTimeout(150);
+    }
+    return { result: await result, windows: seen.map(w => `${w.cls}: ${w.title}`) };
+}
+
+/** Бой: участники по порядку инициативы (первый — самый высокий), бой начат */
+export async function combat(page, sceneId, actorIds) {
+    return page.evaluate(async ({ sceneId, actorIds }) => {
+        const s = game.scenes.get(sceneId);
+        const combat = await Combat.create({ scene: sceneId, active: true });
+        await combat.createEmbeddedDocuments('Combatant', actorIds.map((id, i) => ({
+            tokenId: s.tokens.find(t => t.actorId === id).id, sceneId, actorId: id, initiative: 20 - i * 5
+        })));
+        await combat.startCombat();
+        return combat.id;
+    }, { sceneId, actorIds });
 }

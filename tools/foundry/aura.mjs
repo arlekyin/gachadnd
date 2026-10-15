@@ -1,12 +1,11 @@
-// Счётчик ауры в настоящей Foundry: node tools/foundry/aura.mjs [--headed]
+// Счётчик ауры в настоящей Foundry: node tools/foundry/aura.mjs [--headed] [--slow[=мс]]
 // Включение только в бою, позы через панель и окно броска dnd5e (помеха и −5 переживают окно), КД −2
 // через system.attributes.ac.bonus, пороги 2/4/5 (помеха спасброскам врагов, автоматический спасбросок
 // Мудрости со Сл), корона на HUD токена, «Не в этой арке», долг, убывание, конец боя.
-import { connect, checker, args } from './harness.mjs';
+import { connect, checker } from './harness.mjs';
 import { install, scene, skills } from './fixtures.mjs';
 
-const opts = args();
-const f = await connect({ headless: !opts.headed });
+const f = await connect();
 const { page } = f;
 const { check, summary } = checker();
 const wait = ms => page.waitForTimeout(ms);

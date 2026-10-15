@@ -212,8 +212,11 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger', 'light'
 ];
+
+// light: <вид> — навыки света (scripts/memory/skills/light/<вид>.js)
+const LIGHT_KINDS = ['ultraviolet', 'speed', 'prism', 'battery', 'ricochet', 'lighthouse', 'disco', 'flash', 'spotlight'];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
 // значения тех же эффектов. Новых механик ранг не добавляет. Ранг наследует предыдущий ранг.
@@ -344,6 +347,11 @@ function validateSkill(skill, folder) {
         if (skill[field] === undefined) continue;
         if (skill[field] !== true) err(field, 'допустимо только true');
         if (!isActive) err(field, 'срабатывает при использовании — нужна activation');
+    }
+
+    if (skill.light !== undefined) {
+        if (!LIGHT_KINDS.includes(skill.light)) err('light', `допустимо: ${LIGHT_KINDS.join(', ')}`);
+        if (!isActive) err('light', 'срабатывает при использовании — нужна activation');
     }
 
     // recharger: { restore: all | N, target: memory | equipped_empty } — навык восстанавливает заряды другого
@@ -748,6 +756,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.qte ? { qte: true } : {}),
                 ...(skill.gwent ? { gwent: true } : {}),
                 ...(skill.aura ? { aura: true } : {}),
+                ...(skill.light ? { light: skill.light } : {}),
                 ...(skill.recharger ? { recharger: { restore: skill.recharger.restore, target: skill.recharger.target } } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),

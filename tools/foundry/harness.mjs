@@ -66,11 +66,11 @@ export async function shutdownWorld(page) {
  * Войти в мир и дождаться game.ready.
  * @returns {{ page, browser, shot, close, log }}
  */
-export async function connect({ width = 1600, height = 900, headless = true } = {}) {
+export async function connect({ width = 1600, height = 900, headless = !args().headed, slowMo = slowArg() } = {}) {
     await ensureWorld();
     fs.mkdirSync(OUT, { recursive: true });
 
-    const browser = await chromium.launch({ headless, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
+    const browser = await chromium.launch({ headless: headless && !slowMo, slowMo, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
     const page = await browser.newPage({ viewport: { width, height } });
     const log = [];
     page.on('pageerror', e => {
@@ -100,6 +100,12 @@ export async function connect({ width = 1600, height = 900, headless = true } = 
         shot: name => page.screenshot({ path: path.join(OUT, `${name}.png`) }),
         close: () => browser.close()
     };
+}
+
+/** --slow — пауза 400 мс перед каждым действием браузера, --slow=1000 — своя; с ней окно всегда видно */
+function slowArg() {
+    const slow = args().slow;
+    return slow === undefined ? 0 : slow === true ? 400 : Number(slow) || 0;
 }
 
 /** Простой набор проверок с итогом в консоли */

@@ -1,11 +1,10 @@
-// Перегрев в настоящей Foundry: node tools/foundry/overheat.mjs [--headed]
+// Перегрев в настоящей Foundry: node tools/foundry/overheat.mjs [--headed] [--slow[=мс]]
 // Трата заряда активностью dnd5e ловится в preUpdateItem, повторный activity.use() после выбора цели
 // у Перезарядки и Оверклокинга (цена 2d6 ПЗ), к100 по шансу уровня, сгорание и блок, сброс на отдыхе.
-import { connect, checker, args } from './harness.mjs';
+import { connect, checker } from './harness.mjs';
 import { install, scene, skills } from './fixtures.mjs';
 
-const opts = args();
-const f = await connect({ headless: !opts.headed });
+const f = await connect();
 const { page } = f;
 const { check, summary } = checker();
 const wait = ms => page.waitForTimeout(ms);

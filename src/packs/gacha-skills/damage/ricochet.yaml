@@ -1,0 +1,29 @@
+id: GSb2Z3yZ1mbuLRD1
+name: Рикошет
+rarity: blue
+tags:
+  - свет
+  - взрыв
+description: |-
+  Действием выпустите из руки луч света длиной 120 футов. Луч отражается от стен до двух раз — угол падения равен углу отражения; путь задаёте до броска. Каждое существо, которое пересекает луч, совершает спасбросок Ловкости: провал — {damage}, успех — половина. Существо получает урон один раз, даже если луч прошёл через него несколько раз.
+activation: action
+uses: 2
+recovery: short
+target:
+  type: line
+  value: 120
+save:
+  ability: dex
+damage:
+  - formula: 3d8
+    type: radiant
+ranks:
+  - text: Урон {damage}.
+    damage:
+      - formula: 4d8
+        type: radiant
+  - text: Урон {damage}.
+    damage:
+      - formula: 5d8
+        type: radiant
+light: ricochet

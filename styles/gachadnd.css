@@ -2444,3 +2444,14 @@
 .gd-heat-card.burn .gd-heat-title { color: #c92a2a; }
 .gd-heat-card p { margin: 4px 0; }
 .gd-heat-note { font-size: 12px; opacity: 0.8; }
+
+/* Навыки света: карточки в чате */
+.gd-light-card { border-left: 3px solid #f2c94c; padding: 2px 0 2px 8px; }
+.gd-light-card .gd-light-title { font-weight: 700; color: #b58900; }
+.gd-light-card p { margin: 4px 0; }
+.gd-light-card.prism .gd-light-title { background: linear-gradient(90deg, #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #3949ab, #8e24aa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gd-light-card.spotlight { border-left-color: #fff3c4; }
+.gd-light-card .gd-light-buttons { display: flex; gap: 6px; margin-top: 4px; }
+.gd-light-card .gd-light-buttons button { flex: 1; }
+/* Вспышка камеры */
+.gd-light-flash { position: fixed; inset: 0; background: #ffffff; pointer-events: none; z-index: 10000; opacity: 0; }
