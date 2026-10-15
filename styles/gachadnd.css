@@ -2434,3 +2434,13 @@
 .gd-aura-gm button { flex: 1; line-height: 24px; border: 1px solid #8a7330; border-radius: 4px; background: rgba(0, 0, 0, 0.35); color: #f3e6bf; cursor: pointer; }
 .gd-aura-hud { position: relative; }
 .gd-aura-hud span { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-weight: 700; color: #ffd34d; text-shadow: 0 0 3px #000; }
+
+/* Перегрев навыков */
+.gd-heat { color: #ffb86b; }
+.gd-heat.lvl-0 { color: #9fd3ff; }
+.gd-heat.lvl-3, .gd-heat.lvl-4 { color: #ff8a4c; }
+.gd-heat.lvl-5, .gd-heat.lvl-6, .gd-heat.locked { color: #ff4d4d; font-weight: 700; }
+.gd-heat-card .gd-heat-title { font-weight: 700; color: #c8641e; }
+.gd-heat-card.burn .gd-heat-title { color: #c92a2a; }
+.gd-heat-card p { margin: 4px 0; }
+.gd-heat-note { font-size: 12px; opacity: 0.8; }
