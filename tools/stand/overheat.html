@@ -6,9 +6,9 @@
 const hooks = (name, ...args) => Hooks.call(name, ...args);
 window.chats = [];
 window.ChatMessage = { create: async data => { chats.push(data.content); return data; }, getSpeaker: () => ({}) };
-// Кость перегрева: следующие значения d6 из window.D6
-window.D6 = [];
-window.Roll = class { constructor(formula) { this.formula = formula; } async evaluate() { this.total = D6.shift() ?? 6; return this; } async toMessage({ flavor }) { chats.push(flavor); } };
+// Кость перегрева: следующие значения к100 из window.D100
+window.D100 = [];
+window.Roll = class { constructor(formula) { this.formula = formula; } async evaluate() { this.total = D100.shift() ?? 100; return this; } async toMessage({ flavor }) { chats.push(flavor); } };
 foundry.utils.getProperty = (o, path) => path.split('.').reduce((x, k) => x?.[k], o);
 foundry.utils.setProperty = (o, path, v) => { const k = path.split('.'); let x = o; k.slice(0, -1).forEach(p => x = x[p] ??= {}); x[k.at(-1)] = v; };
 foundry.utils.escapeHTML = s => String(s);
