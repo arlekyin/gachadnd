@@ -14,6 +14,7 @@ import { canRankUp, forgeSkill, findDuplicateCrystal, FORGE_COST, getMemoryCapac
 import { collectGlossary } from "../../core/glossary.js";
 import { playTerminalSound } from "../../core/sounds.js";
 import { NeuralBackground } from "./neural.js";
+import { heatable, heatOf, levelFor, nextRisk, riskText } from "../overheat.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -77,7 +78,19 @@ function statsRows(item) {
         const periodLabel = period ? (CONFIG.DND5E.limitedUsePeriods?.[period]?.label ?? uses.period) : '';
         rows.push(['Заряды', `<input type="text" class="gd-uses-input" data-item-id="${item.id}" data-max="${uses.max}" value="${uses.value}"> / ${uses.max}${periodLabel ? ` · ${esc(periodLabel)}` : ''}`, true]);
     }
+    const heat = heatRow(item);
+    if (heat) rows.push(['Перегрев', heat, true]);
     return rows.map(([label, value, raw]) => ({ label, html: raw ? value : esc(value) }));
+}
+
+/** Перегрев навыка: заёмные заряды, уровень и риск следующего заёмного использования */
+function heatRow(item) {
+    if (!heatable(item)) return '';
+    const heat = heatOf(item);
+    if (heat.locked) return '<span class="gd-heat locked">заблокирован до долгого отдыха</span>';
+    if (!heat.borrowed && !heat.extra) return '';
+    const level = levelFor(heat.extra);
+    return `<span class="gd-heat lvl-${Math.min(level, 6)}">${level ? `уровень ${level}` : 'остыл'} · заёмных зарядов ${heat.borrowed} · дальше — ${esc(riskText(nextRisk(item)))}</span>`;
 }
 
 function hasActivities(item) {

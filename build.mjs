@@ -212,7 +212,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger'
 ];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
@@ -344,6 +344,16 @@ function validateSkill(skill, folder) {
         if (skill[field] === undefined) continue;
         if (skill[field] !== true) err(field, 'допустимо только true');
         if (!isActive) err(field, 'срабатывает при использовании — нужна activation');
+    }
+
+    // recharger: { restore: all | N, target: memory | equipped_empty } — навык восстанавливает заряды другого
+    // навыка (scripts/memory/overheat.js): цель выбирается при использовании; подзарядка греет цель
+    if (skill.recharger !== undefined) {
+        const { restore, target, ...rest } = skill.recharger ?? {};
+        Object.keys(rest).forEach(k => err(`recharger.${k}`, 'неизвестное поле (допустимы: restore, target)'));
+        if (!(restore === 'all' || (Number.isInteger(restore) && restore > 0))) err('recharger.restore', 'all или целое число > 0');
+        if (!['memory', 'equipped_empty'].includes(target)) err('recharger.target', 'memory или equipped_empty');
+        if (!isActive || !skill.uses) err('recharger', 'цель выбирается использованием — нужны activation и uses');
     }
 
     if (skill.ranks !== undefined && UNIQUE_RARITIES.includes(skill.rarity)) {
@@ -738,6 +748,7 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.qte ? { qte: true } : {}),
                 ...(skill.gwent ? { gwent: true } : {}),
                 ...(skill.aura ? { aura: true } : {}),
+                ...(skill.recharger ? { recharger: { restore: skill.recharger.restore, target: skill.recharger.target } } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),
                 ...(skill.tagEmitter ? { tagEmitter: true } : {}),

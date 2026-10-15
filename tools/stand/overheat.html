@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<script src="foundry-mock.js"></script>
+<script type="module">
+// Персонаж с навыками Памяти: обновления и удаление вызывают хуки, как в Foundry
+const hooks = (name, ...args) => Hooks.call(name, ...args);
+window.chats = [];
+window.ChatMessage = { create: async data => { chats.push(data.content); return data; }, getSpeaker: () => ({}) };
+// Кость перегрева: следующие значения d6 из window.D6
+window.D6 = [];
+window.Roll = class { constructor(formula) { this.formula = formula; } async evaluate() { this.total = D6.shift() ?? 6; return this; } async toMessage({ flavor }) { chats.push(flavor); } };
+foundry.utils.getProperty = (o, path) => path.split('.').reduce((x, k) => x?.[k], o);
+foundry.utils.setProperty = (o, path, v) => { const k = path.split('.'); let x = o; k.slice(0, -1).forEach(p => x = x[p] ??= {}); x[k.at(-1)] = v; };
+foundry.utils.escapeHTML = s => String(s);
+foundry.applications.api.DialogV2 = { prompt: async () => window.TARGET ?? null };
+window.warnings = [];
+ui.notifications.warn = text => warnings.push(text);
+const actor = window.actor = { id: 'A', name: 'Конь', isOwner: true, items: [] };
+actor.items.get = id => actor.items.find(i => i.id === id);
+actor.updateEmbeddedDocuments = async (type, list, options) => { for (const u of list) { const { _id, ...rest } = u; await actor.items.get(_id).update(rest, options); } };
+// Как mergeObject Foundry: плоские ключи и вложенные объекты сливаются
+const apply = (target, changes) => {
+    for (const [k, v] of Object.entries(changes)) {
+        if (!k.includes('.') && v && typeof v === 'object' && !Array.isArray(v) && target[k] && typeof target[k] === 'object') apply(target[k], v);
+        else foundry.utils.setProperty(target, k, structuredClone(v));
+    }
+};
+foundry.utils.mergeObject = (a, b) => { apply(a, b); return a; };
+window.skill = (id, name, rarity, max, extra = {}) => {
+    const item = { id, name, type: 'feat', actor, system: { uses: { max, spent: 0 } },
+        flags: { gachadnd: { skill_name: name, rarity, is_active: true, ...extra } } };
+    item.update = async (changes, options = {}) => {
+        if (Hooks.call('preUpdateItem', item, changes, options, 'u') === false) return;
+        apply(item, changes);
+        Hooks.callAll('updateItem', item, changes, options, 'u');
+    };
+    item.delete = async () => { actor.items.splice(actor.items.indexOf(item), 1); window.deleted = [...(window.deleted ?? []), id]; };
+    // Активность dnd5e: preUse, трата заряда, postUse
+    item.activity = { item, use: async () => {
+        if (Hooks.call('dnd5e.preUseActivity', item.activity, {}, {}, {}) === false) return null;
+        await item.update({ 'system.uses.spent': item.system.uses.spent + 1 });
+        Hooks.callAll('dnd5e.postUseActivity', item.activity, {}, {});
+        return true;
+    } };
+    actor.items.push(item);
+    return item;
+};
+window.rest = long => Promise.all((Hooks.events['dnd5e.restCompleted'] ?? []).map(fn => fn(actor, { longRest: long }, {})));
+window.heat = await import('/scripts/memory/overheat.js');
+window.ready = true;
+</script></body></html>
