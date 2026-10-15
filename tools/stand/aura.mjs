@@ -15,16 +15,18 @@ const value = async () => (await aura())?.active ? (await aura()).value : 0;
 const effects = id => page.evaluate(id => scene.tokens.get(id).actor.effects.map(e => e.name), id);
 const wait = (ms = 150) => page.waitForTimeout(ms);
 const turn = async (r, t) => { await page.evaluate(([r, t]) => turn(r, t), [r, t]); await wait(); };
-// Бросок к20 персонажа: preRoll, затем итог
-const roll = (kind, { total = 10, target = null, crit = false, fumble = false } = {}) => page.evaluate(([kind, total, target, crit, fumble]) => {
+// Бросок к20 персонажа: preRoll, затем итог. Имена и хуки — как в dnd5e 5.2.5: у спасброска и проверки
+// характеристики hookNames с заглавной ('SavingThrow', 'AbilityCheck') и хук итога без V2, у атаки — оба
+const HOOK_NAMES = { attack: 'attack', save: 'SavingThrow', check: 'AbilityCheck' };
+const ROLL_HOOKS = { attack: ['dnd5e.rollAttack', 'dnd5e.rollAttackV2'], save: ['dnd5e.rollSavingThrow'], check: ['dnd5e.rollAbilityCheck'] };
+const roll = (kind, { total = 10, target = null, crit = false, fumble = false } = {}) => page.evaluate(([kind, total, target, crit, fumble, HOOK_NAMES, ROLL_HOOKS]) => {
     const activity = { actor, item: { actor } };
-    const config = { subject: kind === 'attack' ? activity : actor, hookNames: [kind === 'attack' ? 'attack' : kind === 'save' ? 'savingThrow' : 'abilityCheck', 'd20Test'], rolls: [{ parts: ['@mod'], options: {} }] };
+    const config = { subject: kind === 'attack' ? activity : actor, hookNames: [HOOK_NAMES[kind], 'd20Test'], rolls: [{ parts: ['@mod'], options: {} }] };
     Hooks.call('dnd5e.preRollD20TestV2', config);
     const r = { options: { ...config.rolls[0].options, ...(target !== null ? { target } : {}) }, total, isCritical: crit, isFumble: fumble };
-    const hook = { attack: 'dnd5e.rollAttackV2', save: 'dnd5e.rollSavingThrowV2', check: 'dnd5e.rollAbilityCheckV2' }[kind];
-    Hooks.callAll(hook, [r], { subject: kind === 'attack' ? activity : actor });
+    for (const hook of ROLL_HOOKS[kind]) Hooks.callAll(hook, [r], { subject: kind === 'attack' ? activity : actor });
     return { disadvantage: !!config.rolls[0].options.disadvantage, parts: config.rolls[0].parts };
-}, [kind, total, target, crit, fumble]);
+}, [kind, total, target, crit, fumble, HOOK_NAMES, ROLL_HOOKS]);
 const pose = async (price, text = 'Не оборачиваясь') => {
     await page.evaluate(([price, text]) => { window.POSE = { price, text }; }, [price, text]);
     await page.click('.gachadnd-aura [data-action="pose"]');
@@ -91,7 +93,7 @@ await stand.shot('aura_hero');
 
 // 9. Давление: огр в 10 футах — спасбросок с помехой, гоблин в 25 — без
 const enemySave = id => page.evaluate(id => {
-    const config = { subject: scene.tokens.get(id).actor, hookNames: ['savingThrow', 'd20Test'], rolls: [{ options: {} }] };
+    const config = { subject: scene.tokens.get(id).actor, hookNames: ['SavingThrow', 'd20Test'], rolls: [{ options: {} }] };
     Hooks.call('dnd5e.preRollD20TestV2', config);
     return !!config.rolls[0].options.disadvantage;
 }, id);

@@ -308,8 +308,10 @@ const spent = new Set();
 
 Hooks.on('dnd5e.preRollD20TestV2', (config) => {
     const actor = subjectActor(config?.subject);
-    const hooks = config?.hookNames ?? [];
-    if (!actor || hooks.includes('initiativeDialog')) return;
+    // dnd5e 5.x пишет имена по-разному: 'attack', 'skill', но 'SavingThrow', 'AbilityCheck'
+    const hookNames = (config?.hookNames ?? []).map(name => String(name).toLowerCase());
+    const has = name => hookNames.includes(name.toLowerCase());
+    if (!actor || has('initiativeDialog')) return;
     const rolls = config.rolls ??= [{}];
 
     // Поза: цена на этот бросок
@@ -336,7 +338,7 @@ Hooks.on('dnd5e.preRollD20TestV2', (config) => {
     }
 
     const disadvantage = () => { for (const roll of rolls) (roll.options ??= {}).disadvantage = true; config.disadvantage = true; };
-    if (hooks.includes('savingThrow')) {
+    if (has('savingThrow')) {
         // Порог 4: враги рядом с аурой — спасброски с помехой
         const token = tokenOf(actor);
         if (token && auraTokens(TIERS[1].at).some(hero => hero !== token && hostile(hero, token) && feetBetween(hero, token) <= PRESSURE_FT)) disadvantage();
@@ -344,7 +346,7 @@ Hooks.on('dnd5e.preRollD20TestV2', (config) => {
         if (debtOf(actor) <= DEBTS[1].at) disadvantage();
     }
     // Долг −5: атаки по персонажу с преимуществом
-    if (hooks.includes('attack') && [...(game.user.targets ?? [])].some(t => debtOf(t.actor) <= DEBTS[2].at)) {
+    if (has('attack') && [...(game.user.targets ?? [])].some(t => debtOf(t.actor) <= DEBTS[2].at)) {
         for (const roll of rolls) (roll.options ??= {}).advantage = true;
         config.advantage = true;
     }
@@ -406,11 +408,20 @@ function onRoll(rolls, data, kind) {
     else if (roll.isFumble) requestChange(actor, -1, 'Натуральная 1');
 }
 
-Hooks.on('dnd5e.rollAttackV2', (rolls, data) => onRoll(rolls, data, 'attack'));
-Hooks.on('dnd5e.rollAbilityCheckV2', (rolls, data) => onRoll(rolls, data, 'check'));
-Hooks.on('dnd5e.rollSkillV2', (rolls, data) => onRoll(rolls, data, 'check'));
-Hooks.on('dnd5e.rollToolCheckV2', (rolls, data) => onRoll(rolls, data, 'check'));
-Hooks.on('dnd5e.rollSavingThrowV2', (rolls, data) => onRoll(rolls, data, 'save'));
+// dnd5e 5.2: у атаки, навыка и инструмента — хук и его V2, у спасброска и проверки характеристики —
+// только без V2. Слушаются оба имени; один бросок учитывается один раз
+const counted = new WeakSet();
+const ROLL_HOOKS = { Attack: 'attack', AbilityCheck: 'check', Skill: 'check', ToolCheck: 'check', SavingThrow: 'save' };
+for (const [name, kind] of Object.entries(ROLL_HOOKS)) {
+    const handler = (rolls, data) => {
+        const roll = rolls?.[0];
+        if (!roll || counted.has(roll)) return;
+        counted.add(roll);
+        onRoll(rolls, data, kind);
+    };
+    Hooks.on(`dnd5e.roll${name}`, handler);
+    Hooks.on(`dnd5e.roll${name}V2`, handler);
+}
 
 // Итог позы, когда сложность неизвестна: кнопки на карточке — у Мастера
 onRenderChatMessage((message, html) => {

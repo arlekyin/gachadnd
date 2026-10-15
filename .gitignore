@@ -29,3 +29,6 @@ tools/sim/last-run.txt
 
 # Стенды анимаций: снимки, журналы и звуки
 tools/stand/out/
+
+# Проверки в Foundry: снимки
+tools/foundry/out/
