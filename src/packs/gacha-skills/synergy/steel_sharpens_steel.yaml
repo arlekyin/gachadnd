@@ -1,15 +1,17 @@
 id: uN8IyFXPDySCWvIS
 name: Сталь точит сталь
 rarity: green
-category: СИНЕРГИЯ
 tags:
   - сталь
-description: За каждый ваш экипированный навык с тегом [сталь] сверх первого, ваши атаки наносят +1 урона. (Редактируйте бонус в Активных Эффектах вручную при изменении билда).
-activation: none
-changes:
-  - key: system.bonuses.mwak.damage
-    mode: add
-    value: '+0'
-  - key: system.bonuses.rwak.damage
-    mode: add
-    value: '+0'
+description: За каждый ваш экипированный навык с тегом «сталь» сверх первого ваши атаки оружием наносят +1 урона. Бонус пересчитывается автоматически.
+memory_scaling:
+  count: equipped_tag:сталь
+  offset: 1
+  text: +{n} к урону атак оружием.
+  changes:
+    - key: system.bonuses.mwak.damage
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rwak.damage
+      mode: add
+      value: '+{n}'

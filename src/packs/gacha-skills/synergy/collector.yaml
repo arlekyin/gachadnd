@@ -1,21 +1,23 @@
 id: rZyBq4yB2CuQfBJT
 name: Коллекционер
 rarity: blue
-category: СИНЕРГИЯ
 tags:
   - аномалия
-description: За каждые 3 уникальных тега среди ваших экипированных кристаллов вы получаете бонус +1 к броскам атаки. (Следите за пулом тегов и корректируйте бонус эффекта вручную).
-activation: none
-changes:
-  - key: system.bonuses.mwak.attack
-    mode: add
-    value: '+1'
-  - key: system.bonuses.rwak.attack
-    mode: add
-    value: '+1'
-  - key: system.bonuses.msak.attack
-    mode: add
-    value: '+1'
-  - key: system.bonuses.rsak.attack
-    mode: add
-    value: '+1'
+description: За каждые 3 уникальных тега среди ваших экипированных навыков вы получаете +1 к броскам атаки. Бонус пересчитывается автоматически.
+memory_scaling:
+  count: equipped_tags
+  every: 3
+  text: +{n} к броскам атаки.
+  changes:
+    - key: system.bonuses.mwak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rwak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.msak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rsak.attack
+      mode: add
+      value: '+{n}'

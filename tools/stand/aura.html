@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
+<style>
+  /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
+  .application { position: fixed; right: 30px; top: 560px; width: 300px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
+  button { font-family: inherit; color: inherit; }
+</style></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>window.TOKENS = {
+  caster: ['/assets/bestiary/chess-knight.webp', 275, 525, 45, 1],
+  goblin: ['/assets/bestiary/chess-bishop.webp', 575, 375, 45, 1],
+  ogre: ['/assets/bestiary/chess-rook.webp', 425, 475, 90, 2],
+  ally: ['/assets/bestiary/chess-knight.webp', 475, 425, 45, 1],
+  imp: ['/assets/bestiary/chess-bishop.webp', 775, 425, 45, 1]
+};
+// Отношение токенов: персонаж и союзник — дружественные, остальные — враги
+window.DISPOSITION = { caster: 1, ally: 1 };</script>
+<script src="scene.js"></script>
+<script type="module">
+window.V13 = new URLSearchParams(location.search).has('v13');
+window.CONST = { TEXT_ANCHOR_POINTS: { TOP: 2 } };
+const { field } = await import('./field.js');
+window.HP = { goblin: [25, 25], ally: [20, 30], ogre: [60, 60], imp: [10, 10], A: [30, 30] };
+const { actor, scene } = field({ aura: true }, { range: 0, uses: 2 });
+actor.system.attributes.prof = 3;
+actor.system.abilities = { cha: { mod: 4 } };
+// Токены на холсте знают своих персонажей, как Token#actor
+for (const t of canvas.tokens.placeables) Object.defineProperty(t, 'actor', { get: () => t.document.actor, configurable: true });
+// Слой интерфейса: всплывающий текст записывается
+canvas.interface = new PIXI.Container(); canvas.stage.addChild(canvas.interface);
+canvas.interface.createScrollingText = (point, text) => { window.floats = [...(window.floats ?? []), text]; };
+// Бой: персонаж ходит первым, затем гоблин
+const inits = { caster: 20, goblin: 18, ogre: 15, ally: 12, imp: 8 };
+const combatants = scene.tokens.map(t => ({ id: `c-${t.id}`, tokenId: t.id, actor: t.actor, token: t, defeated: false, initiative: inits[t.id] }));
+window.game.combat = { id: 'C', started: false, scene, round: 1, turn: 0, combatants,
+    get turns() { return [...combatants].sort((a, b) => b.initiative - a.initiative); },
+    get combatant() { return this.turns[this.turn]; } };
+game.combats = { get: () => game.combat };
+for (const a of new Set(scene.tokens.map(t => t.actor))) {
+    a.effects ??= [];
+    a.getActiveTokens ??= () => canvas.tokens.placeables.filter(t => t.actor === a);
+    a.createEmbeddedDocuments = async (type, list) => list.map(data => {
+        const effect = { ...structuredClone(data), id: foundry.utils.randomID() };
+        effect.update = async changes => { for (const [k, v] of Object.entries(changes)) foundry.utils.setProperty(effect, k, v); };
+        effect.delete = async () => { a.effects = a.effects.filter(e => e !== effect); };
+        a.effects.push(effect);
+        return effect;
+    });
+    a.deleteEmbeddedDocuments = async (type, ids) => { a.effects = a.effects.filter(e => !ids.includes(e.id)); };
+    // Спасбросок Мудрости: итог задаёт window.SAVE_OK
+    a.rollSavingThrow = async config => { window.saves = [...(window.saves ?? []), [a.id, config.ability, config.target]]; return [{ isSuccess: !!window.SAVE_OK, total: window.SAVE_OK ? 20 : 2 }]; };
+}
+// Флаги и обновления персонажа вызывают updateActor, как в Foundry
+const plain = actor.update.bind(actor);
+actor.update = async data => { await plain(data); const changes = {}; for (const [k, v] of Object.entries(data)) foundry.utils.setProperty(changes, k, v); Hooks.call('updateActor', actor, changes); };
+actor.setFlag = (m, k, v) => actor.update({ [`flags.${m}.${k}`]: v });
+actor.unsetFlag = (m, k) => actor.update({ [`flags.${m}.-=${k}`]: null });
+foundry.utils.hasProperty = (o, path) => path.split('.').reduce((x, k) => x?.[k], o) !== undefined;
+foundry.utils.deepClone = v => structuredClone(v);
+// Сообщения чата: данные целиком
+window.messages = [];
+ChatMessage.create = async data => { const message = { ...structuredClone(data), update: async changes => { for (const [k, v] of Object.entries(changes)) foundry.utils.setProperty(message, k, v); } }; messages.push(message); window.chat = data.content; return message; };
+foundry.applications.api.DialogV2.confirm = async () => window.CONFIRM ?? true;
+foundry.applications.api.DialogV2.prompt = async () => window.POSE ?? null;
+window.turn = (round, turn) => { Object.assign(game.combat, { round, turn }); return Promise.all((Hooks.events.updateCombat ?? []).map(fn => fn(game.combat, { round, turn }))); };
+window.aura = await import('/scripts/memory/skills/aura.js');
+window.auraFx = await import('/scripts/memory/skills/aura-fx.js');
+window.auraPanel = await import('/scripts/memory/skills/aura-panel.js');
+window.ready = true;
+</script></body></html>

@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
+<style>
+  /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
+  .application { position: fixed; right: 30px; top: 560px; width: 300px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
+  button { font-family: inherit; color: inherit; }
+</style></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>window.TOKENS = {
+  caster: ['/assets/bestiary/chess-knight.webp', 275, 525, 45, 1],
+  goblin: ['/assets/bestiary/chess-bishop.webp', 575, 375, 45, 1],
+  ogre: ['/assets/bestiary/chess-rook.webp', 650, 300, 90, 2],
+  ally: ['/assets/bestiary/chess-knight.webp', 475, 425, 45, 1],
+  imp: ['/assets/bestiary/chess-bishop.webp', 775, 425, 45, 1]
+};
+// Отношение токенов: персонаж и союзник — дружественные, остальные — враги
+window.DISPOSITION = { caster: 1, ally: 1 };</script>
+<script src="scene.js"></script>
+<script type="module">
+// Сначала модуль навыка: он ловит canvasReady, который вызывает field()
+window.V13 = new URLSearchParams(location.search).has('v13');
+window.freaky = await import('/scripts/memory/skills/freaky.js');
+window.freakyCards = await import('/scripts/memory/skills/freaky-cards.js');
+const { field } = await import('./field.js');
+// ПЗ (по актёрам; персонаж — A): гоблин мёртв — не участвует; огр 2×2 — единственный своего размера
+window.HP = { goblin: [0, 7] };
+const { actor } = field({ freaky: true }, { uses: 1, range: 0 });
+// Бой: все токены сцены; инициатива по убыванию, ход — персонажа (первый)
+const inits = { caster: 20, goblin: 18, ogre: 15, ally: 12, imp: 8 };
+const combatants = scene.tokens.map(t => ({ id: `c-${t.id}`, tokenId: t.id, actor: t.actor, token: t, defeated: false, initiative: inits[t.id] }));
+window.game.combat = { id: 'C', started: true, scene, round: 1, turn: 0, combatants,
+    get turns() { return [...combatants].sort((a, b) => b.initiative - a.initiative); },
+    get combatant() { return this.turns[this.turn]; },
+    async updateEmbeddedDocuments(type, list) { for (const u of list) Object.assign(combatants.find(c => c.id === u._id), u); window.initUpdates = list; },
+    async update(data) { Object.assign(this, data); Hooks.call('updateCombat', this, data); } };
+game.combats = { get: () => game.combat };
+// Активные эффекты на существах
+for (const actor of new Set(scene.tokens.map(t => t.actor))) {
+    actor.effects = [];
+    actor.createEmbeddedDocuments = async (type, list) => list.map(data => {
+        const effect = { ...structuredClone(data), id: foundry.utils.randomID(), flags: structuredClone(data.flags ?? {}) };
+        effect.update = async changes => { for (const [k, v] of Object.entries(changes)) foundry.utils.setProperty(effect, k, v); };
+        effect.delete = async () => { actor.effects = actor.effects.filter(e => e !== effect); };
+        actor.effects.push(effect);
+        return effect;
+    });
+    actor.deleteEmbeddedDocuments = async (type, ids) => { actor.effects = actor.effects.filter(e => !ids.includes(e.id)); };
+}
+window.CONST = { TEXT_ANCHOR_POINTS: { TOP: 2 } };
+canvas.interface = { createScrollingText: (point, text, options) => { window.texts = [...(window.texts ?? []), text]; } };
+window.ready = true;
+</script></body></html>

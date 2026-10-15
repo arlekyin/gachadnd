@@ -1,0 +1,21 @@
+id: fTuOgJRGCIp8H5Ja
+name: Фотосинтез
+rarity: gray
+tags:
+  - свет
+description: Завершив короткий отдых на свету, активируйте навык и восстановите сверх обычного отдыха количество ПЗ, равное {damage}.
+activation: special
+uses: 1
+recovery: short
+damage:
+  - formula: 1d6 + @prof
+    type: healing
+ranks:
+  - text: Восстанавливает количество ПЗ, равное {damage}.
+    damage:
+      - formula: 2d6 + @prof
+        type: healing
+  - text: Восстанавливает количество ПЗ, равное {damage}.
+    damage:
+      - formula: (@prof)d6 + @prof
+        type: healing

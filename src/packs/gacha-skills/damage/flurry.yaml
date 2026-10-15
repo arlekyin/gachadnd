@@ -1,0 +1,20 @@
+id: zl7yHzImPwSqninc
+name: Серия
+rarity: blue
+tags:
+  - сталь
+description: Действием совершите три безоружные атаки по одной цели в пределах 5 футов. Каждый удар при попадании наносит {damage}. Вы обязаны кричать — молча навык не работает.
+activation: action
+range: 5
+damage:
+  - formula: 1d4 + @abilities.str.mod
+    type: bludgeoning
+ranks:
+  - text: Каждый удар — {damage}.
+    damage:
+      - formula: 1d6 + @abilities.str.mod
+        type: bludgeoning
+  - text: Каждый удар — {damage}.
+    damage:
+      - formula: 1d8 + @abilities.str.mod
+        type: bludgeoning

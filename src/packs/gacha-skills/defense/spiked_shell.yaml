@@ -1,0 +1,21 @@
+id: cKxcUP8zAwUyqexq
+name: Шипастый панцирь
+rarity: blue
+tags:
+  - кровь
+  - проклятье
+  - щит
+description: Существо, совершившее по вам атаку (в том числе дальнобойную), получает {damage}, а всё получаемое им лечение уменьшается вдвое до конца его следующего хода. Активируйте навык, чтобы бросить урон.
+activation: special
+damage:
+  - formula: 1d6
+    type: piercing
+ranks:
+  - text: Урон шипов — {damage}.
+    damage:
+      - formula: 1d6 + @prof
+        type: piercing
+  - text: Урон шипов — {damage}.
+    damage:
+      - formula: 2d6 + @prof
+        type: piercing

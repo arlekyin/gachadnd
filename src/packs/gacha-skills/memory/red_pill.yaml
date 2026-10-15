@@ -1,0 +1,30 @@
+id: YtG6T6bpiYPgmkql
+name: Красная таблетка
+rarity: red
+tags:
+  - память
+  - разум
+description: |-
+  Вы видите истинный код Лабиринта. Когда вы видите врага, Мастер называет вам его КД, текущие и максимальные ПЗ, модификаторы спасбросков, уязвимости, сопротивления и иммунитеты.
+
+  Каждый навык с тегом «проклятье» в вашей Памяти даёт +1 к броскам атаки и спасброскам, максимум — ваш бонус мастерства. Штрафы проклятых навыков продолжают действовать. Бонус пересчитывается автоматически.
+memory_scaling:
+  count: tag:проклятье
+  max: prof
+  text: +{n} к броскам атаки и спасброскам.
+  changes:
+    - key: system.bonuses.mwak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rwak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.msak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rsak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.abilities.save
+      mode: add
+      value: '+{n}'

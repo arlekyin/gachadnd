@@ -1,0 +1,24 @@
+id: alrAJJkpnHw2M0S8
+name: Жажда боя
+rarity: green
+tags:
+  - кровь
+description: В начале боя активируйте навык и получите количество временных ПЗ, равное {damage}.
+activation: encounter
+trigger:
+  on: combat_start
+  use: true
+uses: 1
+recovery: combat
+damage:
+  - formula: "@prof + @details.level"
+    type: temphp
+ranks:
+  - text: Количество временных ПЗ, равное {damage}.
+    damage:
+      - formula: "2 * @prof + @details.level"
+        type: temphp
+  - text: Количество временных ПЗ, равное {damage}.
+    damage:
+      - formula: "3 * @prof + @details.level"
+        type: temphp

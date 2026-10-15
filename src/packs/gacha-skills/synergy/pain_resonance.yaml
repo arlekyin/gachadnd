@@ -1,11 +1,21 @@
 id: Xhea8vSLiWXT8cdy
 name: Резонанс боли
 rarity: green
-category: СИНЕРГИЯ
 tags:
   - кровь
   - проклятье
-description: 'Боль трансформируется в силу. Если вы получили урон от собственного навыка (или заплатили HP за его использование), вы можете заявить использование этого кристалла при вашей следующей атаке. Атака нанесет дополнительный некротический урон: 1d6 за каждый ваш экипированный навык с тегом [кровь].'
+description: Боль трансформируется в силу. Если вы получили урон от собственного навыка или заплатили ПЗ за его использование, ваша следующая атака наносит дополнительный урон Некротической энергией — {damage}. Число костей подставляется автоматически.
 activation: special
-uses: 1
 recovery: turn
+damage:
+  - formula: (@flags.gachadnd.counts.blood)d6
+    type: necrotic
+ranks:
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@flags.gachadnd.counts.blood)d8
+        type: necrotic
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@flags.gachadnd.counts.blood)d10
+        type: necrotic

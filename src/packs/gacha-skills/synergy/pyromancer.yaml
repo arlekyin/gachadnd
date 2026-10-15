@@ -1,10 +1,20 @@
 id: G1bqzXVtVjfDMEEv
 name: Пироман
 rarity: green
-category: СИНЕРГИЯ
 tags:
   - огонь
-description: Пламя разгорается всё сильнее. Когда вы наносите урон навыком с тегом [огонь], вы можете активировать этот кристалл, чтобы нанести цели дополнительный урон огнем, равный количеству ваших экипированных навыков с тегом [огонь].
+description: Пламя разгорается всё сильнее. Когда вы наносите урон навыком с тегом «огонь», цель получает дополнительный урон Огнём — {damage}. Число костей подставляется автоматически.
 activation: special
-uses: 1
 recovery: turn
+damage:
+  - formula: (@flags.gachadnd.counts.fire)d4
+    type: fire
+ranks:
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@flags.gachadnd.counts.fire)d6
+        type: fire
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: (@flags.gachadnd.counts.fire)d8
+        type: fire

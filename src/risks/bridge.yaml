@@ -1,0 +1,55 @@
+id: bridge
+name: Мост над бездной
+intro: Верёвочный мост тянется в туман. Доски гнилые, внизу — ничего. На той стороне что-то блестит.
+collapse:
+  text: Мост рвётся. Все срываются и чудом цепляются за обрывки верёвок.
+  hp: 2
+  condition: prone
+stages:
+  - name: Гнилые доски
+    approaches:
+      - label: Осторожно — простукивать каждую доску
+        skill: prc
+        dc: -2
+        fail: { text: "Доска ломается под ногой — удар о поручень.", hp: 2 }
+      - label: Дерзко — перепрыгивать с доски на доску
+        skill: acr
+        dc: 1
+        fail: { text: "Неудачный прыжок, падение на настил.", hp: 1, condition: prone }
+  - name: Порыв ветра
+    approaches:
+      - label: Вцепиться в канаты
+        skill: ath
+        fail: { text: "Ветер бьёт о канаты.", hp: 2 }
+      - label: Переждать по ритму ветра
+        skill: sur
+        dc: -1
+        fail: { text: "Ритм обманчив — вас сносит к краю.", hp: 1, condition: prone }
+  - name: Мост качается — держитесь все
+    group: true
+    approaches:
+      - label: Держаться силой
+        skill: ath
+        fail: { text: "Руки соскальзывают.", hp: 1 }
+      - label: Держать равновесие
+        skill: acr
+        fail: { text: "Равновесие потеряно.", hp: 1, condition: prone }
+  - name: Тварь из тумана
+    approaches:
+      - label: Проскользнуть незамеченным
+        skill: ste
+        fail: { text: "Тварь замечает и хлещет щупальцем.", hp: 2 }
+      - label: Отпугнуть
+        skill: itm
+        dc: 2
+        fail: { text: "Тварь не испугалась — и вы теперь тоже боитесь.", hp: 1, condition: frightened }
+  - name: Последний пролёт
+    approaches:
+      - label: Подтянуться по обрывку
+        skill: ath
+        dc: 2
+        fail: { text: "Обрывок рвётся, удар о скалу.", hp: 2 }
+      - label: Пробежать по уцелевшим доскам
+        skill: acr
+        dc: 1
+        fail: { text: "Доски уходят из-под ног.", hp: 1, condition: prone }

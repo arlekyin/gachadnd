@@ -1,0 +1,13 @@
+id: aGwFdqaeyxuhVbIg
+name: Предоплата
+rarity: purple
+tags:
+  - проклятье
+description: В начале каждого этажа активируйте навык и получите количество временных ПЗ, равное {damage}.
+drawback: Первый временный уровень этажа — без выбора навыка.
+activation: special
+uses: 1
+recovery: long
+damage:
+  - formula: 10 + @details.level
+    type: temphp

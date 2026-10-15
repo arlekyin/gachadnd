@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css"></head>
+<body style="margin:0;overflow:hidden;background:radial-gradient(circle at 25% 30%, #c2410c 0 120px, transparent 121px), radial-gradient(circle at 75% 65%, #15803d 0 100px, transparent 101px), repeating-linear-gradient(0deg, transparent 0 49px, #0006 49px 50px), repeating-linear-gradient(90deg, transparent 0 49px, #0006 49px 50px), #2b2622">
+<script src="clock.js"></script>
+<script src="foundry-mock.js"></script>
+<script type="module">
+import { playFists, prepareFists } from '/scripts/memory/effects/impact-fists.js';
+window.hits = [];
+window.go = calm => { start(); playFists({ calm, onHit: (final, index) => hits.push([index, final, clockNow()]) }); };
+const t0 = Date.now();
+await prepareFists();
+window.prepMs = Date.now() - t0;
+window.ready = true;
+</script></body></html>

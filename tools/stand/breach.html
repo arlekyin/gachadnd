@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css"></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="clock.js"></script>
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>
+window.TOKENS = {
+    caster: ['/assets/bestiary/chess-knight.webp', 640, 330, 90, 2],
+    rook: ['/assets/bestiary/chess-rook.webp', 420, 700, 90, 2],
+    // Токен Пожирателя, поставленный Мастером прозрачным: катсцена проявляет его
+    devourer: ['/assets/bestiary/devourer-token.webp', 600, 560, 100, 2, { gachadnd: { breach: { alpha: 1 } } }]
+};
+</script>
+<script src="scene.js"></script>
+<script type="module">
+import { playBreach } from '/scripts/labyrinth/breach.js';
+// Прорыв в точке сцены (как после щелчка Мастера)
+window.go = () => {
+    // Прозрачный, как после создания с alpha 0; меток поверх у него нет
+    toks.devourer.mesh.alpha = 0;
+    toks.devourer.effects.visible = false;
+    start();
+    playBreach({ sceneId: 'S', point: { x: 600, y: 560 } }).then(r => { window.done = r; });
+};
+setTimeout(() => { window.ready = true; }, 800);
+</script></body></html>

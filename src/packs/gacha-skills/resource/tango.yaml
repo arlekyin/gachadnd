@@ -1,0 +1,19 @@
+id: vDdjyrjmohdNgQVP
+name: Танго
+rarity: blue
+tags:
+  - яд
+description: Бонусным действием съешьте что-то растительное и восстановите количество ПЗ, равное {damage}.
+activation: bonus
+uses: 3
+recovery: long
+damage:
+  - formula: 2d4 + 2 * @prof
+    type: healing
+ranks:
+  - text: 4 использования за долгий отдых.
+    uses: 4
+  - text: 4 использования, каждое восстанавливает количество ПЗ, равное {damage}.
+    damage:
+      - formula: 4d4 + 2 * @prof
+        type: healing

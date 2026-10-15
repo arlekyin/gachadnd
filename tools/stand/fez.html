@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles/gachadnd.css">
+<style>
+  /* Окно Foundry: рамка и заголовок, как у ApplicationV2 */
+  .application { position: fixed; right: 30px; top: 560px; width: 300px; z-index: 10; border: 1px solid #000; box-shadow: 0 0 20px #000; font-family: 'Signika', sans-serif; background: #111; }
+  .application .window-header { padding: 6px 10px; background: #0b0b0b; color: #ddd; font-size: 14px; border-bottom: 1px solid #333; }
+  button { font-family: inherit; color: inherit; }
+</style></head>
+<body style="margin:0;background:#000;overflow:hidden">
+<script src="foundry-mock.js"></script>
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script>
+// Клетки: персонаж 10,8; e1 12,8; e2 10,6; e3 8,9; e4 13,12; далеко — far 18,3
+const at = (gx, gy) => [gx * 50 + 25, gy * 50 + 25];
+window.TOKENS = {
+  caster: ['/assets/bestiary/chess-knight.webp', ...at(10, 8), 45, 1],
+  e1: ['/assets/bestiary/chess-bishop.webp', ...at(12, 8), 45, 1],
+  e2: ['/assets/bestiary/chess-rook.webp', ...at(10, 6), 45, 1],
+  e3: ['/assets/bestiary/chess-bishop.webp', ...at(8, 9), 45, 1],
+  e4: ['/assets/bestiary/chess-rook.webp', ...at(13, 12), 45, 1],
+  far: ['/assets/bestiary/chess-bishop.webp', ...at(18, 3), 45, 1]
+};
+window.DISPOSITION = { caster: 1 };</script>
+<script src="scene.js"></script>
+<script type="module">
+window.V13 = new URLSearchParams(location.search).has('v13');
+window.fez = await import('/scripts/memory/skills/fez.js');
+const { field } = await import('./field.js');
+// Стена между персонажем и новым местом e3 (9,6)
+window.WALLS = [[440, 380, 520, 380]];
+field({ fez: true }, { uses: 1, range: 20 });
+window.ready = true;
+</script></body></html>

@@ -1,0 +1,25 @@
+<div class="gd-auto-settings">
+    <p class="gd-auto-hint">
+        <strong>Вкл.</strong> — срабатывает ли само; выключенное работает только кнопкой навыка.
+        <strong>Спрашивать</strong> — доп. урон предлагается кнопкой в чате, остальное — окном; без галочки срабатывает сразу.
+        Настройки ваши личные и действуют сразу.
+    </p>
+    {{#if masterOff}}<p class="gd-auto-warn">Мастер выключил автоматизацию для всего мира — галочки сейчас не действуют.</p>{{/if}}
+    <div class="gd-auto-list">
+        {{#each groups}}
+        <h3>{{title}}</h3>
+        <div class="gd-auto-head"><span></span><span>Вкл.</span><span>Спрашивать</span></div>
+        {{#each rows}}
+        <div class="gd-auto-row">
+            <div class="gd-auto-name"><span>{{name}}</span><small>{{kind}}</small></div>
+            <input type="checkbox" name="{{prefKey}}.enabled" data-field="enabled" data-key="{{prefKey}}" {{#if enabled}}checked{{/if}}>
+            <input type="checkbox" name="{{prefKey}}.ask" {{#if ask}}checked{{/if}}>
+        </div>
+        {{/each}}
+        {{/each}}
+    </div>
+    <footer class="gd-auto-footer">
+        <button type="button" data-action="reset"><i class="fas fa-undo"></i> По умолчанию</button>
+        <button type="submit"><i class="fas fa-save"></i> Сохранить</button>
+    </footer>
+</div>

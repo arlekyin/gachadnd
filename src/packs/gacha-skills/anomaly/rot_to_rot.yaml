@@ -1,0 +1,24 @@
+id: qaQqEbsmzm2CP5vO
+name: Гниль к гнили
+rarity: green
+tags:
+  - аномалия
+description: Атаки наносят аномалиям дополнительный урон {roll}. Когда вы попадаете по аномалии, бросьте его кнопкой навыка и добавьте к урону атаки.
+activation: special
+trigger:
+  on: damage_roll
+  once: none
+  when: [attack_only, target_anomaly]
+  bonus: { from: roll, type: necrotic }
+roll:
+  formula: 1d4
+  name: Урон по аномалии
+ranks:
+  - text: Дополнительный урон — {roll}.
+    roll:
+      formula: 1d6
+      name: Урон по аномалии
+  - text: Дополнительный урон — {roll}.
+    roll:
+      formula: 1d8
+      name: Урон по аномалии

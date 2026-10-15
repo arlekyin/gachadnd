@@ -1,0 +1,74 @@
+<div class="gd-portal {{#if ready}}ready{{/if}} {{#if closing}}closing{{/if}} {{#if breaking}}breaking{{/if}}">
+    {{#unless atRest}}
+    <p class="gd-portal-empty">Портал открывается только на Привале.</p>
+    {{else}}
+    <div class="gd-circle">
+        {{!-- Каждое кольцо — свой слой: браузер поворачивает его готовой картинкой, не перерисовывая свечение рун --}}
+        {{!-- Внешнее кольцо: мелкая вязь, медленно идёт против часовой --}}
+        <div class="gd-circle-layer gd-circle-outer">
+            <svg viewBox="0 0 300 300" aria-hidden="true">
+                <circle cx="150" cy="150" r="140" class="gd-circle-line"/>
+                <circle cx="150" cy="150" r="133" class="gd-circle-line faint"/>
+                {{#each ticks}}<path d="{{this}}" class="gd-circle-tick"/>{{/each}}
+            </svg>
+        </div>
+        {{!-- Кольцо платы: одна руна — одна единица веса; горит цветом кристалла, который её зажёг --}}
+        <div class="gd-circle-layer gd-circle-runes">
+            <svg viewBox="0 0 300 300" aria-hidden="true">
+                <circle cx="150" cy="150" r="124" class="gd-circle-line"/>
+                <circle cx="150" cy="150" r="98" class="gd-circle-line"/>
+                {{#each runes}}
+                <g class="gd-rune {{#if lit}}lit{{/if}} {{#if kindle}}kindle{{/if}} {{#if fading}}fading{{/if}}" style="--rune: {{color}}; --i: {{kindleIndex}}" transform="translate({{x}} {{y}}) rotate({{angle}}) scale(1.35)">
+                    <path class="glow" d="{{path}}"/><path d="{{path}}"/>
+                </g>
+                {{/each}}
+            </svg>
+        </div>
+        <svg class="gd-circle-layer gd-circle-svg" viewBox="0 0 300 300" aria-hidden="true">
+            <defs>
+                <radialGradient id="gd-circle-void" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#03050a"/><stop offset="70%" stop-color="#070b16"/><stop offset="100%" stop-color="#101a30"/>
+                </radialGradient>
+            </defs>
+            <circle cx="150" cy="150" r="92" fill="url(#gd-circle-void)" class="gd-circle-void"/>
+            {{!-- Круг замкнут: тонкая линия обегает кольцо рун и остаётся --}}
+            {{#if seam}}<circle cx="150" cy="150" r="111" class="gd-circle-seam" pathLength="100" transform="rotate(-90 150 150)"/>{{/if}}
+        </svg>
+        {{!-- В центре — тьма Предела: голодные души; набрана плата — проступает край луны --}}
+        <div class="gd-circle-core">
+            {{!-- Туман Предела: наползает от края тьмы и густеет с платой (portal.js) --}}
+            <canvas class="gd-core-fog" width="72" height="72"></canvas>
+            <i class="gd-soul s1"></i><i class="gd-soul s2"></i><i class="gd-soul s3"></i>
+            <i class="gd-moon"></i>
+            {{#if isGM}}
+            <button type="button" class="gd-circle-seal" data-action="open" {{#unless ready}}disabled{{/unless}} title="{{#if ready}}Открыть портал{{else}}Нужно ещё {{missing}}{{/if}}">
+                <i class="fas fa-hurricane"></i><span>{{#if ready}}Открыть{{else}}{{total}} / {{toll}}{{/if}}</span>
+            </button>
+            {{else}}
+            <span class="gd-circle-state">{{#if ready}}Круг замкнут{{else}}{{total}} / {{toll}}{{/if}}</span>
+            {{/if}}
+        </div>
+    </div>
+    <p class="gd-portal-hint">{{#if ready}}Круг замкнут — портал открывает Мастер{{else}}Щелчок — отдать кристалл кругу, правый щелчок — забрать. Нужно ещё {{missing}}{{/if}}{{#if over}} · лишнего {{over}}{{/if}}</p>
+    <div class="gd-portal-party">
+        {{#each party}}
+        <section class="gd-portal-member {{#unless editable}}locked{{/unless}}">
+            <header><img src="{{img}}" alt=""><span>{{name}}</span>{{#if given}}<b title="Вклад в плату">{{given}}</b>{{/if}}</header>
+            <div class="gd-portal-shelf">
+                {{#each crystals}}
+                <button type="button" class="gd-offering {{#if pledged}}pledged{{/if}}" style="--rarity: {{color}}" data-gd-skill="{{skillId}}"
+                    {{#if ../editable}}data-action="pledge" data-actor-id="{{../id}}" data-item-id="{{id}}"{{else}}aria-disabled="true"{{/if}}>
+                    <img src="{{img}}" alt="">
+                    <span class="gd-offering-weight" title="Вес">{{weight}}</span>
+                    {{#if (gt quantity 1)}}<span class="gd-offering-count">×{{quantity}}</span>{{/if}}
+                    {{#if pledged}}<span class="gd-offering-given">{{pledged}}</span>{{/if}}
+                </button>
+                {{else}}
+                <span class="gd-portal-none">нет кристаллов</span>
+                {{/each}}
+            </div>
+        </section>
+        {{/each}}
+    </div>
+    {{/unless}}
+</div>

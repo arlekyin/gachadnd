@@ -1,0 +1,22 @@
+id: O8hdLd05DdpYd5DH
+name: Щит Капитана
+rarity: green
+tags:
+  - щит
+description: Когда по вам попадает атака, реакцией уменьшите её урон на {roll}. Бросьте величину кнопкой навыка.
+activation: reaction
+trigger:
+  on: damaged
+  reduce: { from: roll }
+roll:
+  formula: 1d6 + @prof
+  name: Снижение урона
+ranks:
+  - text: Урон уменьшается на {roll}.
+    roll:
+      formula: 2d6 + @prof
+      name: Снижение урона
+  - text: Урон уменьшается на {roll}.
+    roll:
+      formula: 3d6 + @prof
+      name: Снижение урона

@@ -1,0 +1,13 @@
+id: j6tNLlCI5fJgoITU
+name: Между небом и землёй
+rarity: purple
+tags:
+  - аномалия
+  - разум
+description: Действием полностью восстанови все свои ПЗ, маниакально посмеиваясь.
+drawback: Смех не отпускает — до конца вашего следующего хода вы совершаете броски атаки с помехой.
+activation: action
+recovery: long
+damage:
+  - formula: '@attributes.hp.max'
+    type: healing

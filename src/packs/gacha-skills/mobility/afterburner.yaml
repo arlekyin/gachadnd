@@ -1,0 +1,16 @@
+id: ggJZTp1k5oqGhMeN
+name: Форсаж
+rarity: green
+tags:
+  - движение
+  - проклятье
+description: Ваша скорость увеличивается на 15 футов.
+drawback: Если за свой ход вы переместились меньше чем на 10 футов, в конце хода вы получаете {damage}.
+activation: special
+damage:
+  - formula: 1d4
+    type: force
+changes:
+  - key: system.attributes.movement.walk
+    mode: add
+    value: '+15'

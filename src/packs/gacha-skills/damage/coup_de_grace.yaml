@@ -1,0 +1,9 @@
+id: gRda7oyqmtpIRCSC
+name: Контрольный
+rarity: blue
+tags:
+  - казнь
+description: Один раз за бой ваша атака по сбитой с ног, схваченной или ослеплённой цели совершается с преимуществом, а попадание становится критическим.
+activation: special
+uses: 1
+recovery: combat

@@ -1,0 +1,11 @@
+<section class="gd-buyers">
+    {{#each buyers}}
+    <button type="button" class="gd-buyer {{#if active}}active{{/if}}" data-action="buyer" data-actor-id="{{id}}" title="Покупает {{name}}">
+        <img src="{{img}}" alt="">
+        <span class="gd-buyer-name">{{name}}</span>
+        <b>{{gold}} зм</b>
+    </button>
+    {{else}}
+    <span class="gd-buyers-empty">У вас нет персонажа-покупателя.</span>
+    {{/each}}
+</section>

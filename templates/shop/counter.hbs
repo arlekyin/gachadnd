@@ -1,0 +1,15 @@
+<section class="gd-counter {{#unless open}}closed{{/unless}}">
+    <div class="gd-till" title="Золото покупателя">
+        <span class="gd-till-window">{{gold}}</span>
+        <span class="gd-till-label">зм · {{buyerName}}</span>
+        {{#if discount}}<span class="gd-till-discount">скидка {{discount}}%</span>{{/if}}
+    </div>
+    <div class="gd-door">
+        <div class="gd-door-window">
+            <div class="gd-merchant"><i class="gd-hat"></i><i class="gd-head"></i><i class="gd-coat"></i><i class="gd-glint l"></i><i class="gd-glint r"></i></div>
+            <i class="gd-door-light"></i>
+        </div>
+        <span class="gd-door-sign">{{#if open}}Открыто{{else}}Закрыто{{/if}}</span>
+        <i class="gd-door-panel"></i><i class="gd-door-knob"></i>
+    </div>
+</section>

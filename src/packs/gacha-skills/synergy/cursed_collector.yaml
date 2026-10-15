@@ -1,18 +1,26 @@
 id: 3UOPGNvBihk0DmGl
 name: Проклятый коллекционер
 rarity: purple
-category: СИНЕРГИЯ
 tags:
   - проклятье
-description: За каждый ваш экипированный навык с тегом [проклятье] вы получаете +1 к броскам атаки и урона, но ваш максимум HP снижается на 3. (Редактируйте значения в Активных Эффектах вручную при изменении билда).
-activation: none
-changes:
-  - key: system.bonuses.mwak.attack
-    mode: add
-    value: '+1'
-  - key: system.bonuses.mwak.damage
-    mode: add
-    value: '+1'
-  - key: system.attributes.hp.max
-    mode: add
-    value: '-3'
+description: За каждый ваш экипированный навык с тегом «проклятье» вы получаете +1 к броскам атаки и урона оружием. Бонус и штраф пересчитываются автоматически.
+drawback: За каждый такой навык ваш максимум ПЗ уменьшается на ваш бонус мастерства.
+memory_scaling:
+  count: equipped_tag:проклятье
+  text: +{n} к броскам атаки и урона оружием, максимум ПЗ уменьшен на {n} × бонус мастерства.
+  changes:
+    - key: system.bonuses.mwak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rwak.attack
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.mwak.damage
+      mode: add
+      value: '+{n}'
+    - key: system.bonuses.rwak.damage
+      mode: add
+      value: '+{n}'
+    - key: system.attributes.hp.bonuses.overall
+      mode: add
+      value: '-{n} * @prof'

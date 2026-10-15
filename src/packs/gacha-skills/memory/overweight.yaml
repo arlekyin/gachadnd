@@ -1,0 +1,25 @@
+id: vAyKMnPiTrEWWNif
+name: Ваш вес превышен
+rarity: blue
+tags:
+  - память
+  - щит
+description: Пока в вашей Памяти не меньше 15 навыков, вы получаете +2 к КД и +2 к урону атак оружием, но ваша скорость уменьшается на 5 футов. Эффект включается автоматически.
+memory_scaling:
+  count: memory
+  min: 15
+  max: 1
+  text: +2 к КД, +2 к урону атак оружием, скорость −5 футов.
+  changes:
+    - key: system.attributes.ac.bonus
+      mode: add
+      value: '+2'
+    - key: system.bonuses.mwak.damage
+      mode: add
+      value: '+2'
+    - key: system.bonuses.rwak.damage
+      mode: add
+      value: '+2'
+    - key: system.attributes.movement.walk
+      mode: add
+      value: '-5'

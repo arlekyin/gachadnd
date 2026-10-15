@@ -1,9 +1,7 @@
 id: CtP2IgyWH9NcuGmt
 name: Сингулярность
 rarity: red
-category: СИНЕРГИЯ
 tags:
   - аномалия
-description: Излучает выбранный спектр тега на все остальные навыки в Памяти.
-activation: none
+description: Излучает выбранный спектр тега на все остальные экипированные навыки. Тег выбирается при экипировке.
 tagEmitter: true

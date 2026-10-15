@@ -1,0 +1,22 @@
+id: q1gMuUJaKXkW4X2V
+name: Мегумин
+rarity: purple
+tags:
+  - взрыв
+  - огонь
+  - проклятье
+description: Действием обрушьте взрыв на точку в пределах 150 футов. Каждое существо в сфере радиусом 20 футов совершает спасбросок Ловкости и получает {damage}, при успехе — половину.
+drawback: После взрыва вы падаете ничком и до конца боя можете перемещаться только ползком, не больше 5 футов за ход. Драматичные комментарии обязательны.
+activation: action
+range: 150
+uses: 1
+recovery: long
+target:
+  type: sphere
+  value: 20
+save:
+  ability: dex
+damage:
+  - formula: 8d6
+    type: fire
+impact: true

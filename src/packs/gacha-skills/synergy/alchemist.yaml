@@ -1,11 +1,19 @@
 id: qUub0cGrTWCSGrtk
 name: Алхимик
 rarity: blue
-category: СИНЕРГИЯ
 tags:
   - яд
-description: Ваши знания токсинов позволяют бить по самым уязвимым местам. Когда вы наносите урон цели, находящейся в состоянии Отравлен, вы наносите ей дополнительно [[/r 1d6 [poison]]] урона ядом.
+description: Ваши знания токсинов позволяют бить по самым уязвимым местам. Когда вы наносите урон Отравленной цели, она получает дополнительно {damage}.
 activation: special
 damage:
   - formula: 1d6
     type: poison
+ranks:
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: 1d8
+        type: poison
+  - text: Дополнительный урон — {damage}.
+    damage:
+      - formula: 1d10
+        type: poison

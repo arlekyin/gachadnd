@@ -1,0 +1,12 @@
+id: ltHlLouhP5sz4WEb
+name: Перезарядка
+rarity: purple
+tags:
+  - аномалия
+description: Активируйте навык и выберите другой навык из Памяти — его заряды полностью восстанавливаются. Подзарядка греет навык (см. «Перегрев»).
+activation: special
+uses: 1
+recovery: long
+recharger:
+  restore: all
+  target: memory

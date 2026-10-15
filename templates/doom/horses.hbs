@@ -1,0 +1,26 @@
+<section class="gd-horses">
+    {{#if active}}
+    {{#each horses}}
+    {{!-- Силуэт коня, как на карте. Глаз загорается цветом всадника, когда кровь доходит до его порога --}}
+    <div class="gd-horse {{status}} rider-{{key}} facing-{{facing}}" data-key="{{key}}" style="left: {{x}}%; top: {{y}}%; --heat: {{heat}}">
+        <div class="gd-horse-figure">
+            <i class="gd-horse-aura"></i>
+            <i class="fas fa-horse-head gd-horse-silhouette"></i>
+            <i class="gd-horse-socket"></i>
+            <i class="gd-horse-eye"></i>
+            <i class="gd-horse-crystal"></i>
+        </div>
+        <span class="gd-horse-name">{{name}}</span>
+        <span class="gd-horse-status">{{label}}</span>
+        {{#if canTake}}
+        <div class="gd-horse-take">
+            <select data-horse="{{key}}">{{#each @root.candidates}}<option value="{{id}}">{{name}}</option>{{/each}}</select>
+            <button type="button" data-action="take" data-horse="{{key}}">Забрать</button>
+        </div>
+        {{/if}}
+    </div>
+    {{/each}}
+    {{else}}
+    <p class="gd-doom-empty">Отряд покинул узел Погибели.</p>
+    {{/if}}
+</section>
