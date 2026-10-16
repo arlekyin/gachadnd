@@ -35,6 +35,7 @@ import { playCue, duckScene } from "../../cutscene/audio.js";
 import { hideTokenMarks, stageFilter } from "../../cutscene/stage.js";
 import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
 import { stowWindows } from "../../cutscene/windows.js";
+import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../../core/prefs.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -62,7 +63,7 @@ export function registerImpactSettings() {
         name: 'Импакт-кадры навыков',
         hint: 'Стоп-кадр во весь экран, когда ультимейт решает исход: цель погибла или потеряла половину ПЗ.',
         scope: 'client',
-        config: true,
+        config: false,
         type: Boolean,
         default: true
     });
@@ -70,7 +71,7 @@ export function registerImpactSettings() {
         name: 'Импакт-кадры без вспышек',
         hint: 'Без белой вспышки и инверсии кадра. Снимите галочку, чтобы видеть полный эффект.',
         scope: 'client',
-        config: true,
+        config: false,
         type: Boolean,
         default: true
     });
@@ -78,7 +79,7 @@ export function registerImpactSettings() {
         name: 'Импакт-кадры: замедление',
         hint: 'Во сколько раз медленнее показывать кадры — чтобы рассмотреть их. 1 — обычная скорость.',
         scope: 'client',
-        config: true,
+        config: false,
         type: Number,
         range: { min: 1, max: 30, step: 1 },
         default: 1
@@ -87,7 +88,7 @@ export function registerImpactSettings() {
         name: 'Папка звуков импакт-кадров',
         hint: 'Своя озвучка удара Сайтамы: файлы approach, inhale, lunge, contact, punch, punchFinal, fly, land, ok (.ogg). Пусто — звуки синтезируются в браузере.',
         scope: 'world',
-        config: true,
+        config: false,
         type: String,
         filePicker: 'folder',
         default: ''
@@ -96,7 +97,7 @@ export function registerImpactSettings() {
         name: 'Звук импакт-кадра',
         hint: 'Путь к звуковому файлу, например modules/gachadnd/assets/sounds/explosion.ogg. Пусто — взрыв синтезируется в браузере.',
         scope: 'world',
-        config: true,
+        config: false,
         type: String,
         default: ''
     });
@@ -109,7 +110,7 @@ export function registerImpactSettings() {
 // Рисунки кулаков и шейдер волн — заранее: после загрузки мира, когда браузер свободен, и после
 // смены размера окна. Тогда первый удар не ждёт подготовки
 Hooks.once('ready', () => {
-    if (!game.settings.get(MODULE_ID, 'impactFrames')) return;
+    if (!fxOn()) return;
     const warm = () => prepareFists().catch(error => console.warn(`${MODULE_ID} | рисунки кулаков`, error));
     setTimeout(warm, 3000);
     let resized = null;
@@ -707,8 +708,8 @@ function drawSlash(ctx, line, color) {
 function playEngineSlash({ sceneId, point, tokens, line }) {
     const stage = canvas?.stage, renderer = canvas?.app?.renderer;
     if (!canvas?.ready || !stage || !renderer || !globalThis.PIXI || (sceneId && canvas.scene?.id !== sceneId)) return false;
-    const calm = game.settings.get(MODULE_ID, 'impactCalm');
-    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    const calm = fxCalm();
+    const slow = fxSlow();
 
     const filter = new PIXI.Filter(undefined, SLASH_SHADER, { uPoint: [0, 0], uDir: [1, 0], uSplit: [0, 0], uMode: 0, uDim: 1 });
     const saved = { x: stage.position.x, y: stage.position.y, sx: stage.scale.x, sy: stage.scale.y };
@@ -859,8 +860,8 @@ function synthExplosion(volume) {
 }
 
 function playSound() {
-    if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-    const volume = game.settings.get(MODULE_ID, 'soundsVolume');
+    if (!soundOn()) return;
+    const volume = sfxVolume();
     const src = game.settings.get(MODULE_ID, 'impactSound');
     if (src) {
         const helper = foundry.audio?.AudioHelper ?? globalThis.AudioHelper;
@@ -889,16 +890,16 @@ let playId = 0;
 
 export async function playImpact({ art, style = null, sceneId, point, tokens, line = null, knock = null, dry = false }) {
     // Отлёт — правило навыка, а не украшение: Мастер переносит цель, даже если кадры у него выключены
-    if (style === 'fists' && knock && (playing || !game.settings.get(MODULE_ID, 'impactFrames'))) {
+    if (style === 'fists' && knock && (playing || !fxOn())) {
         trace(playing ? 'предыдущий кадр ещё идёт — только перенос цели' : 'импакт-кадры выключены в настройках — только перенос цели');
         return dry ? null : moveKnocked(sceneId, knock);
     }
     if (playing) return trace('предыдущий кадр ещё идёт — этот пропущен');
-    if (!game.settings.get(MODULE_ID, 'impactFrames')) return trace('импакт-кадры выключены в настройках клиента');
+    if (!fxOn()) return trace('импакт-кадры выключены в настройках клиента');
     startPlaying();
     // Сторож: кадр, который по какой-то причине не закончился, не должен заблокировать следующие
     const id = ++playId;
-    const slowFactor = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    const slowFactor = fxSlow();
     setTimeout(() => {
         if (!playing || id !== playId) return;
         trace('кадр не закончился вовремя — экран возвращён');
@@ -906,16 +907,16 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         stopPlaying();
     }, WATCHDOG_MS * slowFactor);
     if (style === 'fists') {
-        const calm = game.settings.get(MODULE_ID, 'impactCalm');
-        const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+        const calm = fxCalm();
+        const slow = fxSlow();
         // Звуки моментов: синтез или файлы из папки звуков (impact-sound.js)
         const onCue = (name, options = {}) => {
-            if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-            playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), folder: game.settings.get(MODULE_ID, 'impactSoundFolder'), ...options });
+            if (!soundOn()) return;
+            playCue(name, { volume: sfxVolume(), folder: game.settings.get(MODULE_ID, 'impactSoundFolder'), ...options });
         };
         const onHit = (final, index, pan) => onCue(final ? 'punchFinal' : 'punch', { index, pan });
         // Музыка и звуки сцены — тише на время удара
-        const unduck = game.settings.get(MODULE_ID, 'soundsEnabled') ? duckScene() : () => {};
+        const unduck = soundOn() ? duckScene() : () => {};
         try {
             const fists = (quick = false) => playFists({ calm, slow, onHit, quick });
             if (!knock) { trace('отлёта нет: не вычислена точка (см. выше) — только кулаки'); await fists(); }
@@ -958,7 +959,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         stopPlaying();
         return console.warn(`${MODULE_ID} | импакт-кадр не собран`, error);
     }
-    const calm = game.settings.get(MODULE_ID, 'impactCalm');
+    const calm = fxCalm();
     const cv = document.createElement('canvas');
     cv.className = 'gd-impact';
     cv.width = innerWidth; cv.height = innerHeight;
@@ -981,7 +982,7 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
     // первый кадр удара сдвинут и чуть крупнее, второй встаёт на место
     const ox = (Math.random() - 0.5) * 24, oy = (Math.random() - 0.5) * 24;
     const t0 = performance.now();
-    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    const slow = fxSlow();
     const finish = () => { cv.remove(); stopPlaying(); };
     const tick = now => {
         try {

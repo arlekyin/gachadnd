@@ -42,7 +42,7 @@ export function registerEconomySettings() {
         shopMagicItems: { name: 'Компендиум магических предметов магазина', hint: 'Например dnd5e.items. Берутся предметы с редкостью, кроме расходников.', type: String, default: 'dnd5e.items' }
     };
     for (const [key, config] of Object.entries(settings)) {
-        game.settings.register(MODULE_ID, key, { scope: 'world', config: true, ...config });
+        game.settings.register(MODULE_ID, key, { scope: 'world', config: false, ...config });
     }
     // Номер этажа задаётся на карте этажа; перерисовка открытых окон при его изменении
     game.settings.settings.get(`${MODULE_ID}.runFloor`).onChange = () => {

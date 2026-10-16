@@ -4,7 +4,7 @@
 // мышью, урон — взрыв, цепная реакция); Взрыв трупа (четверть ПЗ, труп исчезает, цепочка кнопкой);
 // Утечка газа (клетка мышью, отравление, рост облака, поджог уроном огнём); Ох, да! (прицел мышью,
 // пролом стены, перенос, спасбросок Силы и ничком).
-import { connect, checker, moduleErrors } from './harness.mjs';
+import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, skills, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -12,11 +12,13 @@ const { page } = f;
 const { check, summary } = checker();
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 const chats = () => ev(() => gdt.chats().map(c => c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()));
 const hp = id => ev(id => game.actors.get(id).system.attributes.hp.value, id);
 const setHp = (id, v) => ev(({ id, v }) => game.actors.get(id).update({ 'system.attributes.hp.value': v }), { id, v });
 const turn = () => ev(() => `${game.combat.round}:${game.combat.combatant?.name?.replace('GD-тест: ', '')}`);
-const next = async () => { await ev(() => game.combat.nextTurn()); await wait(1300); return turn(); };
+const next = async () => { await ev(() => game.combat.nextTurn()); await settle(); return turn(); };
 const until = async who => { do { await next(); } while (!(await turn()).endsWith(who)); };
 const place = (id, x, y) => ev(async ({ id, x, y }) => { const { placeToken } = await gdt.mod('memory/skills/pick.js'); await placeToken(game.actors.get(id).getActiveTokens()[0].document, x * 100, y * 100); }, { id, x, y });
 const target = (...actors) => ev(actors => canvas.tokens.setTargets(actors.map(a => game.actors.get(a).getActiveTokens()[0].id)), actors);
@@ -197,4 +199,4 @@ const errors = moduleErrors(f.log.slice(since));
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

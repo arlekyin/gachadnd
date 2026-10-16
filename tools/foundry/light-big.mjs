@@ -3,7 +3,7 @@
 // Вспышка: снимок 30 футов, проявка без заряда — места и ПЗ, занятая клетка — ближайшая свободная.
 // Спотлайт: темнота сцены, свет на звезде, враги — только звезда или вплотную, массовка с преимуществом,
 // «Подыграть», перевод луча без заряда, угасание после следующего раунда.
-import { connect, checker, moduleErrors } from './harness.mjs';
+import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, skills, use, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -11,6 +11,8 @@ const { page } = f;
 const { check, summary } = checker();
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 const chats = () => ev(() => gdt.chats().map(c => c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()));
 const spent = (actor, id) => ev(({ actor, id }) => game.actors.get(actor).items.get(id).system.uses.spent, { actor, id });
 const pos = id => ev(id => { const t = game.actors.get(id).getActiveTokens()[0].document; return `${t.x / 100},${t.y / 100}`; }, id);
@@ -192,4 +194,4 @@ const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

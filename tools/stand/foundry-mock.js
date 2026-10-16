@@ -1,10 +1,12 @@
 // Минимум Foundry для стендов: настройки, хуки, сокет, уведомления.
-// В адресе: ?calm — спокойный режим, ?slow=N — замедление кадров в N раз (настройка impactSlow).
+// В адресе: ?calm — спокойный режим эффектов, ?slow=N — замедление кадров в N раз (настройка impactSlow).
 (() => {
     const query = new URLSearchParams(location.search);
     const store = {
         impactFrames: true, impactCalm: query.has('calm'), impactSlow: Number(query.get('slow')) || 1, impactSound: '', impactSoundFolder: '',
-        soundsEnabled: false, soundsVolume: 0.5
+        soundsEnabled: false, soundsVolume: 0.5,
+        // Общие настройки (core/prefs.js): режим эффектов, громкость, подсказки Мастеру
+        effects: query.has('calm') ? 'calm' : 'full', volume: 1, gmHints: true
     };
     const hooks = {};
     window.Hooks = {

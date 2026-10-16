@@ -12,6 +12,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { stageFilter } from "../cutscene/stage.js";
+import { fxCalm } from "../core/prefs.js";
 
 export const OMEN_STAGES = {
     off: { label: 'Нет', frost: 0, tint: 0, fog: 0, blur: 0 },
@@ -169,7 +170,7 @@ function ensureFilter() {
         const u = filter.uniforms;
         for (const key of ['frost', 'tint', 'fog', 'blur']) u[`u${key[0].toUpperCase()}${key.slice(1)}`] = state.from[key] + (state.to[key] - state.from[key]) * ease;
         // В спокойном режиме туман и иней стоят на месте
-        if (!game.settings.get(MODULE_ID, 'impactCalm')) u.uTime = (t - state.born) / 1000;
+        if (!fxCalm()) u.uTime = (t - state.born) / 1000;
         // Стадия ушла, переход закончен — фильтр снимается, сцена рисуется как обычно
         if (k >= 1 && ORDER.indexOf(state.target) <= 0) dropFilter();
     };

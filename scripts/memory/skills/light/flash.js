@@ -15,6 +15,7 @@ import { emit, onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { cellOf, occupied, nearestFree } from "../grid.js";
 import { placeToken } from "../pick.js";
 import { isLight, ref, actorFrom, tokenOf, lightCard, esc } from "./common.js";
+import { fxCalm } from "../../../core/prefs.js";
 
 const FRAME_FT = 30;
 const FLAG = 'cameraFlash';
@@ -122,7 +123,7 @@ export function flash({ sceneId }) {
     const el = document.createElement('div');
     el.className = 'gd-light-flash';
     document.body.append(el);
-    el.animate([{ opacity: 0 }, { opacity: 0.95, offset: 0.12 }, { opacity: 0 }], { duration: 700, easing: 'ease-out' }).finished
+    el.animate([{ opacity: 0 }, { opacity: fxCalm() ? 0.45 : 0.95, offset: 0.12 }, { opacity: 0 }], { duration: 700, easing: 'ease-out' }).finished
         .catch(() => {}).finally(() => el.remove());
 }
 

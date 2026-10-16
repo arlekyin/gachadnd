@@ -21,6 +21,7 @@ import { flutter } from "../../cutscene/instruments.js";
 import { placeToken } from "./pick.js";
 import { key, cellOf, footprint, nearestFree } from "./grid.js";
 import { CARDS, dealCards, applyCards, shuffleInitiative, broadcastCards } from "./freaky-cards.js";
+import { fxOn, fxCalm, soundOn, sfxVolume } from "../../core/prefs.js";
 
 // Катсцена, мс: окна прячутся, фон темнеет и камера наезжает; полёт; пауза; всё возвращается
 const T = { focus: 550, fly: 1300, hold: 450, back: 550 };
@@ -207,8 +208,8 @@ registerCues({
 
 const sound = (name, options = {}) => {
     try {
-        if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-        playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), ...options });
+        if (!soundOn()) return;
+        playCue(name, { volume: sfxVolume(), ...options });
     } catch (error) { /* без настроек звука — тихо */ }
 };
 const setting = (key, fallback) => { try { return game.settings.get(MODULE_ID, key); } catch (error) { return fallback; } };
@@ -222,8 +223,8 @@ export function playShuffle({ sceneId, moves, crushed = [] }) {
     if (!canvas?.ready || canvas.scene?.id !== sceneId) return new Promise(resolve => setTimeout(resolve, LAND_MS + T.hold + T.back));
     const size = canvas.grid.size;
     // Без кадров катсцен — только полёт; спокойный режим — без наезда камеры
-    const cinematic = setting('impactFrames', true) !== false;
-    const calm = !!setting('impactCalm', false);
+    const cinematic = fxOn();
+    const calm = fxCalm();
     const restoreWindows = cinematic ? stowWindows() : () => {};
     const dim = new PIXI.Graphics();
     dim.eventMode = 'none';

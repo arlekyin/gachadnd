@@ -13,7 +13,10 @@ export async function install(page) {
     await page.evaluate(() => {
         const MODULE = 'gachadnd';
         const queue = [];
-        const original = CONFIG.Dice.randomUniform;
+        // Настоящий генератор — один раз на страницу: под раннером install() зовут много раз
+        CONFIG.Dice._gdtOriginal ??= CONFIG.Dice.randomUniform;
+        const original = CONFIG.Dice._gdtOriginal;
+        CONFIG.Dice.randomUniform = original;
         window.gdt = {
             MODULE,
             /** Модуль по пути от корня модуля — тот же экземпляр, что загрузила Foundry */
@@ -43,6 +46,21 @@ export async function install(page) {
             },
             resetDice() { queue.length = 0; CONFIG.Dice.randomUniform = original; },
             sleep: ms => new Promise(r => setTimeout(r, ms)),
+            /** Последнее изменение документов мира (бой, персонажи, токены, чат, эффекты, сцена) */
+            lastChange: performance.now(),
+            /**
+             * Дождаться тишины: quiet мс без изменений документов (не меньше min, не дольше max). Замена
+             * фиксированных пауз: хуки модуля у Мастера дописывают флаги и сообщения после действия.
+             */
+            async settle(quiet = 250, max = 4000, min = 100) {
+                const t0 = performance.now();
+                await gdt.sleep(min);
+                while (performance.now() - t0 < max) {
+                    if (performance.now() - gdt.lastChange >= quiet) return true;
+                    await gdt.sleep(40);
+                }
+                return false;
+            },
             async until(fn, ms = 5000, step = 100) {
                 const end = Date.now() + ms;
                 while (Date.now() < end) { const v = await fn(); if (v) return v; await gdt.sleep(step); }
@@ -58,6 +76,14 @@ export async function install(page) {
                     .map(a => ({ id: a.id, title: a.title, cls: a.constructor.name }));
             }
         };
+        // Тишина для settle(): любое изменение документов отодвигает её (хуки — один раз на страницу)
+        if (!window._gdtSettleHooks) {
+            const touch = () => { if (window.gdt) window.gdt.lastChange = performance.now(); };
+            for (const doc of ['Combat', 'Combatant', 'Actor', 'Item', 'Token', 'ChatMessage', 'ActiveEffect', 'Scene', 'Wall', 'AmbientLight', 'MeasuredTemplate']) {
+                for (const verb of ['create', 'update', 'delete']) Hooks.on(`${verb}${doc}`, touch);
+            }
+            window._gdtSettleHooks = true;
+        }
         // Окна других модулей (журналы изменений и т. п.) перекрывают HUD и кнопки; открываются с задержкой
         gdt.closeForeign = async () => {
             for (const app of [...foundry.applications.instances.values()]) {
@@ -173,31 +199,43 @@ export async function skills(page, actorId, names, { equip = true } = {}) {
 /**
  * Использовать навык как кнопкой на листе: activity.use() без настроек. Окна по ходу закрываются:
  * окно использования dnd5e — «Использовать», окно с выбором (select[name]) — значением из select,
- * остальные DialogV2 — кнопкой ok. Возвращает, что вернул use(), и какие окна были.
+ * остальные DialogV2 — кнопкой ok. Конец — use() вернулся, новых окон нет, документы затихли.
+ * Возвращает, что вернул use(), и какие окна были.
  */
-export async function use(page, actorId, itemId, { select = {}, timeout = 1500 } = {}) {
+export async function use(page, actorId, itemId, { select = {}, timeout = 6000 } = {}) {
     const windows = () => page.evaluate(() => gdt.windows());
     const before = (await windows()).map(w => w.id);
+    let finished = false;
     const result = page.evaluate(async ({ actorId, itemId }) => {
         const item = game.actors.get(actorId).items.get(itemId);
         const r = await item.system.activities.contents[0].use();
         return r === undefined ? 'undefined' : r === null ? 'null' : r === false ? 'false' : 'object';
-    }, { actorId, itemId });
+    }, { actorId, itemId }).finally(() => { finished = true; });
     const seen = [];
+    let lastWindow = Date.now();
     const end = Date.now() + timeout;
-    while (Date.now() < end) {
+    // Окна закрываются по мере появления; конец — use() вернулся, 700 мс нет новых окон и прошло
+    // не меньше 1,2 с: окно выбора цели (Перезарядка, Батарея) открывается уже после возврата use()
+    const start = Date.now();
+    let quiet = 700;
+    while (Date.now() < end && !(finished && Date.now() - lastWindow >= quiet && Date.now() - start >= 1200)) {
         for (const w of (await windows()).filter(w => !before.includes(w.id) && !seen.some(s => s.id === w.id))) {
             seen.push(w);
+            lastWindow = Date.now();
             const sel = `#${w.id}`;
+            if (await page.$(`${sel} select`)) quiet = 1500;
             for (const [name, value] of Object.entries(select)) {
                 if (await page.$(`${sel} select[name="${name}"]`)) await page.selectOption(`${sel} select[name="${name}"]`, value);
             }
             if (await page.$(`${sel} button[data-action="use"]`)) await page.click(`${sel} button[data-action="use"]`);
             else if (await page.$(`${sel} button[data-action="ok"]`)) await page.click(`${sel} button[data-action="ok"]`);
         }
-        await page.waitForTimeout(150);
+        await page.waitForTimeout(100);
     }
-    return { result: await result, windows: seen.map(w => `${w.cls}: ${w.title}`) };
+    const r = await result;
+    // Хуки модуля у Мастера дописывают своё после использования
+    await page.evaluate(() => gdt.settle());
+    return { result: r, windows: seen.map(w => `${w.cls}: ${w.title}`) };
 }
 
 /** Бой: участники по порядку инициативы (первый — самый высокий), бой начат */

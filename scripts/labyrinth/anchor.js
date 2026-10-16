@@ -11,6 +11,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { hint as hintOn } from "../core/prefs.js";
 import { mapScene, anchorScene, travelTo } from "./scene-travel.js";
 import { HOOKS, notifyRestChanged } from "../memory/memory-api.js";
 import { announceRest } from "../memory/altar/memory-altar.js";
@@ -82,6 +83,7 @@ function scentReport(scent) {
 }
 
 function whisperGM(content) {
+    if (!hintOn('hintScent')) return null;
     return ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ alias: 'Нюх Пожирателя' }),
         whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id),
@@ -90,6 +92,7 @@ function whisperGM(content) {
 }
 
 function atmosphere(text) {
+    if (!hintOn('hintAtmosphere')) return null;
     return ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ alias: 'Туман' }),
         content: `<div class="gd-scent-chat atmosphere"><i class="fas fa-wind"></i> <em>${text}</em></div>`

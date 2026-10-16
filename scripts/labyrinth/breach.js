@@ -22,6 +22,7 @@ import { clamp01, smooth, easeOut, easeIn, seeded } from "../cutscene/math.js";
 import { registerCues, playCue, tone, noise } from "../cutscene/audio.js";
 import { crackle, bass, slam, glass, flutter } from "../cutscene/instruments.js";
 import { setOmen } from "./omen.js";
+import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../core/prefs.js";
 
 const ART = new URL('../../assets/bestiary/devourer.webp', import.meta.url).href;
 // Где на картинке морда: доля ширины и высоты — она встаёт в середину разрыва
@@ -73,8 +74,8 @@ registerCues({
 });
 
 function cue(name, options = {}) {
-    if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-    playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), ...options });
+    if (!soundOn()) return;
+    playCue(name, { volume: sfxVolume(), ...options });
 }
 
 // ==========================================
@@ -290,10 +291,11 @@ function puffSprite() {
 
 /** Катсцена прорыва. @returns {Promise<boolean>} false — на этой сцене не показана */
 export async function playBreach({ sceneId, point }) {
-    if (playing || !canvas?.ready || canvas.scene?.id !== sceneId || !point) return false;
+    // Эффекты выключены — без катсцены: токен проявит обновление Мастера
+    if (playing || !fxOn() || !canvas?.ready || canvas.scene?.id !== sceneId || !point) return false;
     playing = true;
-    const calm = game.settings.get(MODULE_ID, 'impactCalm');
-    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    const calm = fxCalm();
+    const slow = fxSlow();
     const art = await loadArt();
     // Окна Foundry сворачиваются на время катсцены
     const restoreWindows = stowWindows();

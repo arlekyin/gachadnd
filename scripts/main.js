@@ -34,6 +34,8 @@ import "./memory/overheat.js";
 import "./memory/skills/light/index.js";
 import "./memory/skills/blast/index.js";
 import { registerAuraSettings } from "./memory/skills/aura-fx.js";
+import { registerPrefs, migratePrefs } from "./core/prefs.js";
+import { registerSettingsMenus } from "./core/settings-menu.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
@@ -41,6 +43,8 @@ import "./labyrinth/labyrinth.js";
 Hooks.once('init', () => {
     console.log(`%c🎲 GachaDND | Инициализация...`, 'color: #ffaa00; font-weight: bold;');
 
+    // Общие настройки — первыми в списке; частные уходят в подменю
+    registerPrefs();
     registerGachaPeriods();
     registerSoundSettings();
     registerImpactSettings();
@@ -51,6 +55,7 @@ Hooks.once('init', () => {
     registerAutomationMenu();
     registerPortalSettings();
     registerAuraSettings();
+    registerSettingsMenus();
 
     // Лабиринт дописывает в этот же объект свои функции
     game.gachadnd = Object.assign(game.gachadnd ?? {}, {
@@ -79,6 +84,8 @@ Hooks.once('init', () => {
         clearPortals: (scene) => clearPortals(scene),
         // Сводка для отладки Портала: версия, порталы на сцене, выделенные токены
         portalReport,
+        // Журнал Портала (отладка, у этого клиента): game.gachadnd.portalDebug(true)
+        portalDebug: (on = true) => game.settings.set(MODULE_ID, 'portalDebug', !!on),
         // Привал без карты: Мастер открывает и закрывает его вручную; при открытии у игроков открывается Алтарь
         setRest: async (open = true) => {
             if (!game.user?.isGM) return ui.notifications.warn("⚠️ Открывать Привал может только Мастер.");
@@ -136,6 +143,7 @@ Hooks.on('getSceneControlButtons', (controls) => {
 // Принудительная отрисовка UI после загрузки, чтобы новые кнопки появились на экране
 Hooks.once('ready', () => {
     registerSocket();
+    migratePrefs().catch(error => console.error(`${MODULE_ID} | перенос настроек`, error));
     if (ui.controls) {
         ui.controls.initialize();
         ui.controls.render(true);

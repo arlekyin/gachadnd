@@ -24,6 +24,7 @@ import { stowWindows } from "../cutscene/windows.js";
 import { clamp01, smooth, easeIn } from "../cutscene/math.js";
 import { registerCues, playCue, tone, noise } from "../cutscene/audio.js";
 import { bass, crackle, glass } from "../cutscene/instruments.js";
+import { fxCalm, fxSlow, soundOn, sfxVolume } from "../core/prefs.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const PORTAL_ID = 'gachadnd-portal';
@@ -390,8 +391,8 @@ registerCues({
 });
 
 const cue = (name, options = {}) => {
-    if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-    playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), ...options });
+    if (!soundOn()) return;
+    playCue(name, { volume: sfxVolume(), ...options });
 };
 
 let opening = false;
@@ -403,8 +404,8 @@ let opening = false;
 export function playPortalOpening(colors = [], sceneId = null) {
     if (opening) return Promise.resolve(false);
     opening = true;
-    const calm = game.settings.get(MODULE_ID, 'impactCalm');
-    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    const calm = fxCalm();
+    const slow = fxSlow();
     const restoreWindows = stowWindows();
     const bars = letterbox(0.1);
     const { ctx, W, H, remove } = overlay();

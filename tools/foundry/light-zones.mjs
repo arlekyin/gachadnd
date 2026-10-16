@@ -3,7 +3,7 @@
 // Телосложения и ослепление, поворот на 90° каждый раунд, союзник в луче — +1d4, срок и разбитый маяк.
 // Диско-шар: 6 цветных пятен в 30 футах, карта Пятницы в начале хода на пятне и при заходе на пятно,
 // новые пятна каждый раунд, уборка в конце боя.
-import { connect, checker, moduleErrors } from './harness.mjs';
+import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, skills, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -11,6 +11,8 @@ const { page } = f;
 const { check, summary } = checker();
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 
 await install(page);
 const ids = await scene(page, {
@@ -22,7 +24,7 @@ const [A, B] = ids.enemies;
 const S = await skills(page, hero, ['Маяк', 'Диско-шар']);
 const chats = () => ev(() => gdt.chats().map(c => c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()));
 const turn = () => ev(() => `${game.combat.round}:${game.combat.combatant?.name?.replace('GD-тест: ', '')}`);
-const next = async () => { await ev(() => game.combat.nextTurn()); await wait(1200); return turn(); };
+const next = async () => { await ev(() => game.combat.nextTurn()); await settle(); return turn(); };
 const effects = id => ev(id => game.actors.get(id).effects.map(e => e.name), id);
 const center = id => ev(id => { const t = game.actors.get(id).getActiveTokens()[0]; return { x: t.center.x, y: t.center.y }; }, id);
 
@@ -136,4 +138,4 @@ const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

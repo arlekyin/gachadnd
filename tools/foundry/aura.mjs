@@ -2,13 +2,15 @@
 // Включение только в бою, позы через панель и окно броска dnd5e (помеха и −5 переживают окно), КД −2
 // через system.attributes.ac.bonus, пороги 2/4/5 (помеха спасброскам врагов, автоматический спасбросок
 // Мудрости со Сл), корона на HUD токена, «Не в этой арке», долг, убывание, конец боя.
-import { connect, checker } from './harness.mjs';
+import { connect, checker, done } from './harness.mjs';
 import { install, scene, skills } from './fixtures.mjs';
 
 const f = await connect();
 const { page } = f;
 const { check, summary } = checker();
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 const ev = (fn, arg) => page.evaluate(fn, arg);
 
 await install(page);
@@ -95,7 +97,7 @@ async function pose(price, text) {
     return ev(hero => game.actors.get(hero).getFlag('gachadnd', 'auraPose'), hero);
 }
 
-const nextTurn = async () => { await ev(() => game.combat.nextTurn()); await wait(900); };
+const nextTurn = async () => { await ev(() => game.combat.nextTurn()); await settle(); };
 const turnName = () => ev(() => game.combat.combatant?.name);
 const gmChange = (delta, reason = 'тест') => ev(async ({ hero, delta, reason }) => (await gdt.mod('memory/skills/aura.js')).gmChange(game.actors.get(hero), delta, reason), { hero, delta, reason });
 const setAura = async v => { await gmChange(v - (await value())); await wait(300); };
@@ -306,4 +308,4 @@ const errors = f.log.filter(l => /pageerror|error:.*(gachadnd|Аура)/.test(l)
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

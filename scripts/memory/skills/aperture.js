@@ -22,7 +22,7 @@ const ART = { blue: `modules/${MODULE_ID}/assets/portal/blue.svg`, orange: `modu
 const TINT = { blue: 0x2f9bff, orange: 0xff8a1c };
 const LABEL = { blue: 'синий', orange: 'оранжевый' };
 const isPortalSkill = item => !!item?.flags?.[MODULE_ID]?.portal;
-// Журнал прохода в консоль: настройка «Журнал Портала» (у каждого клиента своя) или CONFIG.debug.gachadndPortal = true
+// Журнал прохода в консоль: макрос game.gachadnd.portalDebug(true) (у каждого клиента свой) или CONFIG.debug.gachadndPortal = true
 const debugOn = () => {
     if (globalThis.CONFIG?.debug?.gachadndPortal) return true;
     try { return !!game.settings.get(MODULE_ID, 'portalDebug'); } catch (error) { return false; }
@@ -33,13 +33,13 @@ export function registerPortalSettings() {
     game.settings.register(MODULE_ID, 'portalDebug', {
         name: 'Журнал Портала',
         hint: 'Пишет в консоль браузера (F12) каждый шаг прохода через Портал: какие перемещения увидел модуль, нашёл ли портал и выход, чем закончился перенос. Включать у того, кто двигает токен, и у Мастера.',
-        scope: 'client', config: true, type: Boolean, default: false
+        scope: 'client', config: false, type: Boolean, default: false
     });
 }
 
 // Строка при загрузке — по ней видно, что в браузере новый код модуля, и включён ли журнал
 Hooks.once('ready', () => {
-    console.log(`%c${MODULE_ID} | Портал: код прохода загружен (v13: moveToken, v12: updateToken); журнал ${debugOn() ? 'ВКЛЮЧЁН' : 'выключен — настройка «Журнал Портала»'}`, 'color: #2f9bff');
+    console.log(`%c${MODULE_ID} | Портал: код прохода загружен (v13: moveToken, v12: updateToken); журнал ${debugOn() ? 'ВКЛЮЧЁН' : 'выключен — включить: game.gachadnd.portalDebug(true)'}`, 'color: #2f9bff');
 });
 
 /** Сводка для отладки: версия, порталы на сцене, выделенные токены, слушатели хуков */

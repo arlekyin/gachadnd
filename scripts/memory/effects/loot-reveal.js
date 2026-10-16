@@ -20,6 +20,7 @@ import { stowWindows } from "../../cutscene/windows.js";
 import { clamp01, smooth, easeIn, easeOut, seeded } from "../../cutscene/math.js";
 import { registerCues, playCue, tone, noise } from "../../cutscene/audio.js";
 import { crackle, bass, slam, glass, flutter } from "../../cutscene/instruments.js";
+import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../../core/prefs.js";
 
 const ORDER = ['gray', 'green', 'blue', 'purple', 'red'];
 const COLORS = { blue: [0, 112, 221], purple: [163, 53, 238], red: [255, 0, 60] };
@@ -58,8 +59,8 @@ registerCues({
 });
 
 function cue(name, options = {}) {
-    if (!game.settings.get(MODULE_ID, 'soundsEnabled')) return;
-    playCue(name, { volume: game.settings.get(MODULE_ID, 'soundsVolume'), ...options });
+    if (!soundOn()) return;
+    playCue(name, { volume: sfxVolume(), ...options });
 }
 
 // ==========================================
@@ -78,7 +79,8 @@ onSocket('lootReveal', ({ rarity }) => playReveal(rarity));
 let playing = false;
 
 export function playReveal(rarity) {
-    if (playing) return Promise.resolve(false);
+    // Эффекты выключены — без вспышки и сцены: окно распределения открывается сразу
+    if (playing || !fxOn()) return Promise.resolve(false);
     if (rarity === 'purple') return purpleFlash();
     if (rarity === 'red') return redStar();
     return Promise.resolve(false);
@@ -87,7 +89,7 @@ export function playReveal(rarity) {
 /** Фиолетовый: края экрана вспыхивают цветом и гаснут */
 function purpleFlash() {
     playing = true;
-    const calm = game.settings.get(MODULE_ID, 'impactCalm');
+    const calm = fxCalm();
     const [r, g, b] = COLORS.purple;
     const el = document.createElement('div');
     el.className = 'gd-impact gd-loot-edge';
@@ -131,8 +133,8 @@ const rgba = ([r, g, b], a) => `rgba(${r}, ${g}, ${b}, ${a})`;
 /** Красный: падающая звезда, удар, кристалл в лучах */
 async function redStar() {
     playing = true;
-    const calm = game.settings.get(MODULE_ID, 'impactCalm');
-    const slow = Math.max(1, Number(game.settings.get(MODULE_ID, 'impactSlow')) || 1);
+    const calm = fxCalm();
+    const slow = fxSlow();
     const art = await loadCrystal();
     const restoreWindows = stowWindows();
     const cam = stageCamera();

@@ -3,7 +3,7 @@
 // хода и при заходе, временные ПЗ владельцу); Пол — это лава (стоял — обжёгся, двигался или выше пола —
 // нет, свечение); Раскалённый клинок (нагрев от попаданий, урон огнём строкой, плавление, сброс конусом);
 // Феникс (пепел, возрождение со вспышкой, растоптать пепел).
-import { connect, checker, moduleErrors } from './harness.mjs';
+import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, skills, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -11,10 +11,12 @@ const { page } = f;
 const { check, summary } = checker();
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 const chats = () => ev(() => gdt.chats().map(c => c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()));
 const hp = id => ev(id => { const h = game.actors.get(id).system.attributes.hp; return h.value + (h.temp ?? 0); }, id);
 const turn = () => ev(() => `${game.combat.round}:${game.combat.combatant?.name?.replace('GD-тест: ', '')}`);
-const next = async () => { await ev(() => game.combat.nextTurn()); await wait(1500); return turn(); };
+const next = async () => { await ev(() => game.combat.nextTurn()); await settle(); return turn(); };
 const place = (id, x, y) => ev(async ({ id, x, y }) => { const { placeToken } = await gdt.mod('memory/skills/pick.js'); await placeToken(game.actors.get(id).getActiveTokens()[0].document, x * 100, y * 100); }, { id, x, y });
 const clickCell = async (x, y) => {
     const s = await ev(p => { const c = canvas.clientCoordinatesFromCanvas(p); return { x: c.x, y: c.y }; }, { x: x * 100 + 50, y: y * 100 + 50 });
@@ -210,4 +212,4 @@ const errors = moduleErrors(f.log.slice(since));
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

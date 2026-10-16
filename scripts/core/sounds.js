@@ -1,3 +1,4 @@
+import { soundOn, sfxVolume } from "../core/prefs.js";
 /**
  * Gacha Roguelike dnd5e — Звуки Терминала Тумана
  *
@@ -18,14 +19,14 @@ export function registerSoundSettings() {
         name: 'Звуки Терминала Тумана',
         hint: 'Звуки экипировки, снятия и слияния навыков.',
         scope: 'client',
-        config: true,
+        config: false,
         type: Boolean,
         default: true
     });
     game.settings.register(MODULE_ID, 'soundsVolume', {
         name: 'Громкость звуков Терминала',
         scope: 'client',
-        config: true,
+        config: false,
         type: Number,
         range: { min: 0, max: 1, step: 0.05 },
         default: 0.5
@@ -35,7 +36,7 @@ export function registerSoundSettings() {
             name: config.name,
             hint: 'По умолчанию — встроенный звук Foundry.',
             scope: 'world',
-            config: true,
+            config: false,
             type: String,
             filePicker: 'audio',
             // Поле выбора файла не принимает пустую строку: без значения по умолчанию форма настроек не сохраняется
@@ -45,9 +46,9 @@ export function registerSoundSettings() {
 }
 
 export function playTerminalSound(key) {
-    if (!SOUNDS[key] || !game.settings.get(MODULE_ID, 'soundsEnabled')) return;
+    if (!SOUNDS[key] || !soundOn()) return;
     const src = game.settings.get(MODULE_ID, `sound_${key}`) || SOUNDS[key].fallback();
-    const volume = game.settings.get(MODULE_ID, 'soundsVolume');
+    const volume = sfxVolume();
     const helper = foundry.audio?.AudioHelper ?? globalThis.AudioHelper;
     helper?.play({ src, volume, autoplay: true, loop: false }, false);
 }

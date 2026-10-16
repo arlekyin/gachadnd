@@ -12,6 +12,7 @@
 import { MODULE_ID } from "../../core/constants.js";
 import { registerCues, playCue, tone, noise, duckScene } from "../../cutscene/audio.js";
 import { MAX, MIN, auraOf, auraText } from "./aura.js";
+import { fxCalm, soundOn, sfxVolume, musicVolume } from "../../core/prefs.js";
 
 const PULSE_MS = 6000;
 const PULSE_FT = 15;
@@ -20,22 +21,22 @@ const GOLD = 0xffd34d;
 const RED = 0xe0453a;
 
 const setting = (key, fallback) => { try { return game.settings.get(MODULE_ID, key) ?? fallback; } catch (error) { return fallback; } };
-const calm = () => !!setting('impactCalm', false);
+const calm = () => fxCalm();
 const sound = (name, options = {}) => {
-    if (!setting('soundsEnabled', false)) return;
-    playCue(name, { volume: setting('soundsVolume', 0.5), ...options });
+    if (!soundOn()) return;
+    playCue(name, { volume: sfxVolume(), ...options });
 };
 
 export function registerAuraSettings() {
     game.settings.register(MODULE_ID, 'auraTheme', {
         name: 'Тема героя (Счётчик ауры)',
         hint: 'Музыка, которая играет, пока аура персонажа на максимуме. Пусто — встроенный синтезированный бит.',
-        scope: 'world', config: true, type: String, filePicker: 'audio', default: ''
+        scope: 'world', config: false, type: String, filePicker: 'audio', default: ''
     });
     game.settings.register(MODULE_ID, 'auraMusicVolume', {
         name: 'Громкость темы героя',
         hint: '0 — тема не играет у вас.',
-        scope: 'client', config: true, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 0.35,
+        scope: 'client', config: false, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 0.35,
         onChange: () => { stopTheme(); refresh(); }
     });
 }
@@ -77,7 +78,7 @@ registerCues({
 let theme = null;
 
 function startTheme() {
-    const volume = Number(setting('auraMusicVolume', 0.35));
+    const volume = musicVolume();
     if (theme || !(volume > 0)) return;
     theme = { restore: duckScene(0.35, 800, 1200) };
     const src = setting('auraTheme', '');

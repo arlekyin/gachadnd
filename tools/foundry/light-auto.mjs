@@ -2,7 +2,7 @@
 // Ультрафиолет (тайные двери в радиусе), Призма (урон на 7 типов с сопротивлением и иммунитетом),
 // Скорость света (ход вне очереди, свой ход пропущен, со следующего раунда — по порядку),
 // Солнечная батарея (заряд за конец хода на ярком свету, не в темноте, 3 заряда → заряд навыка).
-import { connect, checker, moduleErrors } from './harness.mjs';
+import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, skills, use, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -10,6 +10,8 @@ const { page } = f;
 const { check, summary } = checker();
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 
 await install(page);
 const ids = await scene(page, {
@@ -31,7 +33,8 @@ const spent = id => ev(({ hero, id }) => game.actors.get(hero).items.get(id).sys
 await ev(() => gdt.mark());
 let u = await use(page, hero, S['Ультрафиолет']);
 await wait(800);
-const doors = await ev(scene => game.scenes.get(scene).walls.map(w => w.door), ids.scene);
+// Двери по координатам: порядок стен в коллекции после обновления не гарантирован
+const doors = await ev(scene => { const by = c => game.scenes.get(scene).walls.find(w => w.c[0] === c * 100 && w.c[1] !== undefined && w.c[0] === w.c[2])?.door; return [by(7), by(18), by(10)]; }, ids.scene);
 check('Ультрафиолет: тайная дверь в 30 футах стала обычной, дальняя — тайная, стена — стена', JSON.stringify(doors) === '[1,2,0]', JSON.stringify(doors) + ' окна: ' + u.windows.join(', '));
 check('Ультрафиолет: карточка в чате', (await chats()).some(c => /проступили тайные двери: 1/.test(c)), (await chats()).at(-1));
 
@@ -86,7 +89,7 @@ u = await use(page, hero, S['Скорость света']);
 await wait(800);
 check('Скорость света: ход героя вне очереди', (await turn()) === '1:Герой', await turn() + ' ' + u.windows.join(', '));
 check('Скорость света: заряд потрачен, карточка', (await spent(S['Скорость света'])) === 1 && (await chats()).some(c => /вне очереди/.test(c)));
-const next = async () => { await ev(() => game.combat.nextTurn()); await wait(700); return turn(); };
+const next = async () => { await ev(() => game.combat.nextTurn()); await settle(); return turn(); };
 check('после хода вне очереди — Второй', (await next()) === '1:Второй', await turn());
 check('свой ход героя в раунде 1 пропущен — раунд 2', (await next()) === '2:Огнеупорный', await turn());
 check('раунд 2: Второй', (await next()) === '2:Второй', await turn());
@@ -133,4 +136,4 @@ const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

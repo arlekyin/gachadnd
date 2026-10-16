@@ -15,6 +15,7 @@
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 import { registerCues, playCue, tone, noise } from "../../cutscene/audio.js";
+import { fxCalm, soundOn, sfxVolume } from "../../core/prefs.js";
 
 const KEYS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 const TIME_MS = 2500;
@@ -24,8 +25,8 @@ const isQte = item => !!item?.flags?.[MODULE_ID]?.qte;
 
 const setting = (key, fallback) => { try { return game.settings.get(MODULE_ID, key); } catch (error) { return fallback; } };
 const sound = (name, options = {}) => {
-    if (!setting('soundsEnabled', false)) return;
-    playCue(name, { volume: setting('soundsVolume', 0.5), ...options });
+    if (!soundOn()) return;
+    playCue(name, { volume: sfxVolume(), ...options });
 };
 
 registerCues({
@@ -154,7 +155,7 @@ Hooks.on('dnd5e.preApplyDamage', (actor, amount) => {
 export function playQte({ attacker = '', length = 3 + Math.floor(Math.random() * 2), time = null } = {}) {
     const keys = Object.keys(KEYS);
     const sequence = Array.from({ length }, () => keys[Math.floor(Math.random() * keys.length)]);
-    const total = time ?? TIME_MS * (setting('impactCalm', false) ? 2 : 1);
+    const total = time ?? TIME_MS * (fxCalm() ? 2 : 1);
     const el = document.createElement('div');
     el.className = 'gd-qte';
     el.innerHTML = `<div class="gd-qte-panel">

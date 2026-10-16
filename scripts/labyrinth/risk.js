@@ -70,12 +70,12 @@ export function registerRiskSettings() {
     game.settings.register(MODULE_ID, 'riskCustomFile', {
         name: 'Свои испытания Риска',
         hint: 'Путь к JSON-файлу с испытаниями (объект или список), например worlds/мой-мир/risks.json. Формат — src/risks/SCHEMA.md модуля. Добавляются к встроенным. Действует на узлы Риска, открытые после изменения.',
-        scope: 'world', config: true, type: String, default: '', onChange: reset
+        scope: 'world', config: false, type: String, default: '', onChange: reset
     });
     game.settings.register(MODULE_ID, 'riskOnlyCustom', {
         name: 'Только свои испытания Риска',
         hint: 'Встроенные испытания не используются. Действует на узлы Риска, открытые после изменения.',
-        scope: 'world', config: true, type: Boolean, default: false, onChange: reset
+        scope: 'world', config: false, type: Boolean, default: false, onChange: reset
     });
 }
 

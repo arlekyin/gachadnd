@@ -1,13 +1,15 @@
 // Перегрев в настоящей Foundry: node tools/foundry/overheat.mjs [--headed] [--slow[=мс]]
 // Трата заряда активностью dnd5e ловится в preUpdateItem, повторный activity.use() после выбора цели
 // у Перезарядки и Оверклокинга (цена 2d6 ПЗ), к100 по шансу уровня, сгорание и блок, сброс на отдыхе.
-import { connect, checker } from './harness.mjs';
+import { connect, checker, done } from './harness.mjs';
 import { install, scene, skills } from './fixtures.mjs';
 
 const f = await connect();
 const { page } = f;
 const { check, summary } = checker();
 const wait = ms => page.waitForTimeout(ms);
+// После смены хода — ожидание тишины: хуки модуля у Мастера дописывают своё (fixtures: gdt.settle)
+const settle = () => page.evaluate(() => gdt.settle());
 
 await install(page);
 const ids = await scene(page);
@@ -27,32 +29,42 @@ const hp = () => page.evaluate(hero => game.actors.get(hero).system.attributes.h
  * Использовать навык так же, как кнопка на листе: activity.use() без настроек.
  * Окна, открывшиеся по ходу (выбор цели, окно использования dnd5e), закрываются ответом answer.
  */
-async function use(id, { target = null, timeout = 1500 } = {}) {
+async function use(id, { target = null, timeout = 6000 } = {}) {
     const before = await page.evaluate(() => gdt.windows().map(w => w.id));
+    let finished = false;
     const result = page.evaluate(async ({ hero, id }) => {
         const item = game.actors.get(hero).items.get(id);
         const r = await item.system.activities.contents[0].use();
         return r === undefined ? 'undefined' : r === null ? 'null' : r === false ? 'false' : 'object';
-    }, { hero, id });
+    }, { hero, id }).finally(() => { finished = true; });
     const seen = [];
-    // Окна, появившиеся до и после возврата use()
+    let lastWindow = Date.now();
     const end = Date.now() + timeout;
-    while (Date.now() < end) {
+    // Окна закрываются по мере появления; конец — use() вернулся, 700 мс нет новых окон и прошло
+    // не меньше 1,2 с: окно выбора цели (Перезарядка, Батарея) открывается уже после возврата use()
+    const start = Date.now();
+    let quiet = 700;
+    while (Date.now() < end && !(finished && Date.now() - lastWindow >= quiet && Date.now() - start >= 1200)) {
         const opened = await page.evaluate(b => gdt.windows().filter(w => !b.includes(w.id)), before);
         for (const w of opened) {
             if (seen.some(s => s.id === w.id)) continue;
             seen.push(w);
+            lastWindow = Date.now();
             const sel = `#${w.id}`;
             if (await page.$(`${sel} select[name="target"]`)) {
+                quiet = 1500;
                 if (target) await page.selectOption(`${sel} select[name="target"]`, target);
                 await page.click(`${sel} button[data-action="ok"]`);
             } else if (await page.$(`${sel} button[data-action="use"]`)) {
                 await page.click(`${sel} button[data-action="use"]`);
             }
         }
-        await wait(150);
+        await page.waitForTimeout(100);
     }
-    return { result: await result, windows: seen.map(w => `${w.cls}: ${w.title}`) };
+    const r = await result;
+    // Бросок перегрева идёт после использования — ждём, пока документы затихнут
+    await page.evaluate(() => gdt.settle(700));
+    return { result: r, windows: seen.map(w => `${w.cls}: ${w.title}`) };
 }
 
 // 1. Свои заряды не греют
@@ -157,4 +169,4 @@ const errors = f.log.filter(l => /pageerror|error:.*gachadnd|Перегрев|П
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();
-process.exit(failed ? 1 : 0);
+done(failed);

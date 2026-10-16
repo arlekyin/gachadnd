@@ -1,0 +1,75 @@
+/**
+ * Gacha Roguelike dnd5e — Общие настройки модуля
+ *
+ * В списке настроек Foundry — только общие: эффекты, громкость, подсказки Мастеру (плюс автоматизация
+ * и сцена Якоря из своих файлов). Частные — экономика, файлы звуков, испытания Риска, отдельные
+ * подсказки — в подменю (settings-menu.js). Код модуля читает их через помощники отсюда, а не напрямую:
+ *   fxOn()    — эффекты не выключены: импакт-кадры, катсцена прорыва, сцена редкой добычи;
+ *   fxCalm()  — спокойно: без вспышек, тряски и движения (и когда эффекты выключены);
+ *   soundOn() / sfxVolume() / musicVolume() — звуки модуля с общей громкостью;
+ *   hint(key) — подсказка Мастеру или строка атмосферы включена (общий переключатель и свой).
+ */
+
+import { MODULE_ID } from "./constants.js";
+
+const get = (key, fallback) => {
+    try { return game.settings.get(MODULE_ID, key) ?? fallback; } catch (error) { return fallback; }
+};
+
+export const EFFECTS = {
+    full: 'Полные',
+    calm: 'Спокойные — без вспышек, тряски и движения',
+    off: 'Выключены — без импакт-кадров и катсцен, остальное спокойно'
+};
+
+export const effectsMode = () => EFFECTS[get('effects', 'calm')] ? get('effects', 'calm') : 'calm';
+export const fxOn = () => effectsMode() !== 'off';
+export const fxCalm = () => effectsMode() !== 'full';
+export const fxSlow = () => Math.max(1, Number(get('impactSlow', 1)) || 1);
+
+export const volumeMaster = () => Math.max(0, Number(get('volume', 1)) || 0);
+export const soundOn = () => get('soundsEnabled', true) !== false && volumeMaster() > 0;
+export const sfxVolume = () => volumeMaster() * Number(get('soundsVolume', 0.5));
+export const musicVolume = () => volumeMaster() * Number(get('auraMusicVolume', 0.35));
+
+/** Подсказки Мастеру и строки атмосферы: каждая — своя галочка в подменю «Подсказки Мастеру» */
+export const HINTS = {
+    hintScent: { name: 'Шёпот Запаха Мастеру', hint: 'При входе на узел и в Якорь в Шёпоте и Охоте: Запах отряда и может ли Пожиратель прорваться сюда.' },
+    hintAtmosphere: { name: 'Строки атмосферы игрокам', hint: 'В Шёпоте и Охоте — строка о тумане и гуле кристаллов в общий чат.' },
+    hintPulse: { name: 'Шёпот Пульса Мастеру', hint: 'После каждого боя: итог боя и совет по сложности следующих.' }
+};
+export const hint = key => get('gmHints', true) !== false && get(key, true) !== false;
+
+export function registerPrefs() {
+    game.settings.register(MODULE_ID, 'effects', {
+        name: 'Эффекты модуля',
+        hint: 'Импакт-кадры, катсцены, предвестия Пожирателя, вспышки добычи, волны навыков. У каждого игрока свои.',
+        // Как и раньше («без вспышек» было включено по умолчанию) — спокойные
+        scope: 'client', config: true, type: String, choices: EFFECTS, default: 'calm'
+    });
+    game.settings.register(MODULE_ID, 'volume', {
+        name: 'Громкость модуля',
+        hint: 'Общая громкость всех звуков модуля; отдельные — в «Звуки и эффекты». У каждого игрока своя.',
+        scope: 'client', config: true, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 1
+    });
+    game.settings.register(MODULE_ID, 'gmHints', {
+        name: 'Подсказки Мастеру',
+        hint: 'Шёпоты о Запахе и Пульсе и строки атмосферы. Модуль только напоминает — решает Мастер. По отдельности — в «Подсказки Мастеру».',
+        scope: 'world', config: true, type: Boolean, default: true
+    });
+    for (const [key, config] of Object.entries(HINTS)) {
+        game.settings.register(MODULE_ID, key, { scope: 'world', config: false, type: Boolean, default: true, ...config });
+    }
+}
+
+/**
+ * Перенос старых значений: режим эффектов — из «Импакт-кадры» и «без вспышек», если игрок менял их сам,
+ * а новый режим ещё не выбирал. Вызывается в ready у каждого клиента.
+ */
+export async function migratePrefs() {
+    const storage = game.settings.storage.get('client');
+    const stored = key => storage?.getItem?.(`${MODULE_ID}.${key}`) ?? null;
+    if (stored('effects') !== null || (stored('impactFrames') === null && stored('impactCalm') === null)) return;
+    const mode = get('impactFrames', true) === false ? 'off' : get('impactCalm', true) ? 'calm' : 'full';
+    await game.settings.set(MODULE_ID, 'effects', mode);
+}

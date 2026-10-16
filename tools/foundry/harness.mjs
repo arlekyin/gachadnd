@@ -63,24 +63,43 @@ export async function shutdownWorld(page) {
 }
 
 /**
- * Войти в мир и дождаться game.ready.
- * @returns {{ page, browser, shot, close, log }}
+ * Раннер (run.mjs) гоняет проверки в одном браузере: под ним connect() отдаёт общую страницу, а close()
+ * и done() её не закрывают. Без раннера каждая проверка, как раньше, открывает свой браузер.
  */
-export async function connect({ width = 1600, height = 900, headless = !args().headed, slowMo = slowArg() } = {}) {
+const runner = () => globalThis.gdRunner ?? null;
+let shared = null;
+
+/**
+ * Войти в мир и дождаться game.ready.
+ * @returns {{ page, browser, shot, close, log }} log — журнал этой проверки
+ */
+export async function connect(options = {}) {
+    if (runner()) {
+        if (shared) await reload(shared.session.page);
+        else shared = await open(options);
+        shared.log = [];
+        return { ...shared.session, log: shared.log, close: async () => {} };
+    }
+    const own = await open(options);
+    own.log = [];
+    return { ...own.session, log: own.log, close: () => own.session.browser.close() };
+}
+
+async function open({ width = 1600, height = 900, headless = !args().headed, slowMo = slowArg() } = {}) {
     await ensureWorld();
     fs.mkdirSync(OUT, { recursive: true });
 
     const browser = await chromium.launch({ headless: headless && !slowMo, slowMo, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
     const page = await browser.newPage({ viewport: { width, height } });
-    const log = [];
+    const state = { log: [] };
     page.on('pageerror', e => {
         const where = (e.stack ?? '').split('\n').slice(1, 4).map(l => l.trim()).join(' ← ');
-        log.push(`pageerror: ${e.message} ${where}`);
+        state.log.push(`pageerror: ${e.message} ${where}`);
         console.log('ОШИБКА СТРАНИЦЫ', e.message, '\n   ', where);
     });
     page.on('console', m => {
         const t = m.text();
-        if (m.type() === 'error' || m.type() === 'warning' || /gachadnd/i.test(t)) log.push(`${m.type()}: ${t}`);
+        if (m.type() === 'error' || m.type() === 'warning' || /gachadnd/i.test(t)) state.log.push(`${m.type()}: ${t}`);
         if (m.type() === 'error' || (m.type() === 'warning' && /gachadnd/i.test(t))) console.log('  ›', m.type(), t);
     });
 
@@ -95,11 +114,33 @@ export async function connect({ width = 1600, height = 900, headless = !args().h
     // Слой анимаций модуля и сцена иногда дорисовываются после ready
     await page.waitForTimeout(1500);
 
-    return {
-        page, browser, log,
-        shot: name => page.screenshot({ path: path.join(OUT, `${name}.png`) }),
-        close: () => browser.close()
-    };
+    // Журнал пишется в state.log: под раннером connect() подменяет его на журнал каждой проверки
+    return Object.defineProperty({
+        session: { page, browser, shot: name => page.screenshot({ path: path.join(OUT, `${name}.png`) }) }
+    }, 'log', { get: () => state.log, set: value => { state.log = value; } });
+}
+
+/**
+ * Раннер: перед каждой проверкой страница перезагружается — вход сохраняется, мир грузится заново.
+ * Одна страница не переживает десятки пересозданных сцен подряд на программном рендере.
+ */
+async function reload(page) {
+    await page.reload();
+    await page.waitForFunction(() => window.game?.ready, null, { polling: 250, timeout: 120000 });
+    await page.waitForTimeout(1000);
+}
+
+/** Раннер: закрыть общий браузер в конце прогона */
+export async function closeShared() {
+    if (shared) await shared.session.browser.close();
+    shared = null;
+}
+
+/** Конец проверки: без раннера — код выхода процесса, под раннером — итог в общий счёт */
+export function done(failed) {
+    const r = runner();
+    if (r) { r.failed = (r.failed ?? 0) + (failed ? 1 : 0); return; }
+    process.exit(failed ? 1 : 0);
 }
 
 /** --slow — пауза 400 мс перед каждым действием браузера, --slow=1000 — своя; с ней окно всегда видно */

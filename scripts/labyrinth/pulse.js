@@ -14,6 +14,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { isActiveGM } from "../core/socket.js";
+import { hint as hintOn } from "../core/prefs.js";
 import { partyActors } from "./horsemen.js";
 
 const STEPS = ['низкий', 'умеренный', 'высокий', 'высокий+', 'высокий++'];
@@ -112,6 +113,7 @@ Hooks.on('deleteCombat', async combat => {
     const updated = { offset, easyStreak, last: { result, rounds, minHp, downs } };
     await game.settings.set(MODULE_ID, 'pulse', updated);
 
+    if (!hintOn('hintPulse')) return;
     const view = pulseView();
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ alias: 'Пульс отряда' }),

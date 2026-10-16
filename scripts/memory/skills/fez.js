@@ -18,6 +18,7 @@ import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { stageCamera } from "../../cutscene/camera.js";
 import { clamp01, easeInOut } from "../../cutscene/math.js";
 import { footprint, occupied, inside, wallBetween } from "./grid.js";
+import { fxOn, fxCalm } from "../../core/prefs.js";
 
 const SPIN_MS = 900, FLASH_MS = 320;
 const isFez = item => !!item?.flags?.[MODULE_ID]?.fez;
@@ -200,8 +201,8 @@ async function turnWorld({ sceneId, casterId, range, dir, ids }) {
 // ПОВОРОТ КАРТЫ У ВСЕХ
 // ==========================================
 
-const frames = () => { try { return game.settings.get(MODULE_ID, 'impactFrames') !== false; } catch (error) { return true; } };
-const calm = () => { try { return !!game.settings.get(MODULE_ID, 'impactCalm'); } catch (error) { return false; } };
+const frames = () => fxOn();
+const calm = () => fxCalm();
 // Когда Мастер переставляет токены: в середине вспышки; без анимаций — сразу
 const spinTime = () => frames() ? (calm() ? 0 : SPIN_MS) + FLASH_MS / 2 : 0;
 
