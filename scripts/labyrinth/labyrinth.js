@@ -21,6 +21,7 @@ import { registerGraveyardSettings, GraveyardWindow } from "./graveyard.js";
 import { registerOmenSettings, setOmen } from "./omen.js";
 import { startBreach } from "./breach.js";
 import { registerSceneSettings } from "./scene-travel.js";
+import { DealWindow, registerDealSettings } from "./moon-deal.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -30,6 +31,7 @@ Hooks.once('init', () => {
     registerGraveyardSettings();
     registerOmenSettings();
     registerSceneSettings();
+    registerDealSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -55,7 +57,9 @@ Hooks.once('init', () => {
         // Предвестия Пожирателя у всех: '3', '2', '1' — ходов до прихода, 'here' — пришёл, 'off' — снять
         omen: stage => setOmen(stage),
         // Прорыв Пожирателя: Мастер щёлкает точку, у всех катсцена, затем его токен в этой точке
-        breach: () => startBreach()
+        breach: () => startBreach(),
+        // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
+        openDeal: () => DealWindow.open()
     });
 });
 

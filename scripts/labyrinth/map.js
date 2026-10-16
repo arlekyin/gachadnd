@@ -9,6 +9,7 @@ import { DoomAltar } from "./doom-altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
 import { PortalWindow } from "./portal.js";
+import { DealWindow } from "./moon-deal.js";
 import { pulseView, resetPulse } from "./pulse.js";
 import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
@@ -186,7 +187,8 @@ const NODE_HINTS = {
     shop: 'щёлкните ещё раз, чтобы открыть Магазин',
     risk: 'щёлкните ещё раз, чтобы открыть Риск',
     doom: 'щёлкните ещё раз, чтобы открыть Алтарь Погибели',
-    rest: 'щёлкните ещё раз, чтобы открыть портал в Якорь'
+    rest: 'щёлкните ещё раз, чтобы открыть портал в Якорь',
+    boss: 'после боя щёлкните ещё раз — Сделка луны'
 };
 // Порядок типов в легенде
 const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost', 'boss'];
@@ -505,7 +507,12 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             if (nodeData.type !== MAP_DATA.NODE_START) return ui.notifications.warn('Путешествие должно начинаться с начальной точки (Вход).');
         } else {
             // Щелчок по текущему узлу снова открывает его окно
-            if (mapData.currentNodeId === nodeId) return nodeData.type === MAP_DATA.NODE_REST ? PortalWindow.open() : openNodeWindow(nodeData.type);
+            // Босс: Сделка луны — только повторным щелчком, после боя (при входе окно не открывается)
+            if (mapData.currentNodeId === nodeId) {
+                if (nodeData.type === MAP_DATA.NODE_REST) return PortalWindow.open();
+                if (nodeData.type === MAP_DATA.NODE_BOSS) return DealWindow.open();
+                return openNodeWindow(nodeData.type);
+            }
             const currentNode = mapData.nodes.find(n => n.id === mapData.currentNodeId);
             if (!currentNode.next.includes(nodeId) && !mapData.visitedNodes.includes(nodeId)) {
                 return ui.notifications.warn('Отряд может двигаться только по связанным линиям вперёд!');

@@ -59,6 +59,13 @@ const GUIDE = `
 <li><strong>Утечка газа</strong> — в бою: клетка мышью, облако видно только вам. Урон огнём по кому-то в облаке (или пожар) — взрыв.</li>
 <li><strong>Ох, да!</strong> — наведите рывок на стену комнаты: стена разрежется, Поджигатель окажется за ней.</li>
 </ul>
+<h3>Сделка луны</h3>
+<p>На сцене начерчена карта этажа, отряд стоит на узле Босса. Откройте Карту этажа (кнопка на панели токенов) и щёлкните по узлу Босса — у всех откроется Сделка. Без игроков в мире отряд — все персонажи этой сцены; Мастер выбирает, за кого кладёт жертвы, щелчком по портрету.</p>
+<ul>
+<li>Щелчок по карте лота — луна опускает её к себе, это выбранный лот. Щелчок по навыку в руке или по жетону (Кость Хитов, ПЗ, осколок маски — слот Памяти, золото, кристаллы Хранилища) — жертва на чашу. Щелчок по своей гирьке на чаше — забрать.</li>
+<li>Набрали цену — полнолуние, печать краснеет. «Скрепить» — жертвы уходят навсегда, лот выдаётся; для Чужой памяти и Сплава — окно выбора.</li>
+<li>У Перегревщика 1000 зм и синий кристалл в Хранилище. Сделка — раз за этаж: заново её даст только пересборка песочницы.</li>
+</ul>
 <h3>Перегревщик (уровень 5)</h3>
 <ul>
 <li>Потратьте заряд Китти Прайд, затем Перезарядка или Оверклокинг (цена 2d6 ПЗ) — заряд вернётся заёмным. Со второго заёмного использования до долгого отдыха — бросок к100.</li>
@@ -129,6 +136,26 @@ const ids = await page.evaluate(async ({ SANDBOX, HEROES, OTHERS, GUIDE }) => {
 }, { SANDBOX, HEROES, OTHERS, GUIDE });
 
 for (const h of HEROES) await skills(page, ids.heroes[h.name], h.skills);
+
+// Сделка луны: карта этажа на сцене песочницы, отряд на узле Босса; Перегревщику — золото и кристалл в Хранилище
+await page.evaluate(() => game.gachadnd.openMapTerminal());
+await page.waitForTimeout(800);
+await page.evaluate(() => { document.querySelector('[name="length"]').value = '6'; document.querySelector('[data-action="generate"]')?.click(); });
+await page.waitForTimeout(1200);
+await page.evaluate(async hero => {
+    for (const a of foundry.applications.instances.values()) if (a.constructor.name === 'GachaMapTerminal') await a.close();
+    const map = foundry.utils.deepClone(canvas.scene.getFlag('gachadnd', 'floorMap'));
+    const boss = map.nodes.find(n => n.type === 'boss');
+    map.currentNodeId = boss.id;
+    map.visitedNodes = [boss.id];
+    await canvas.scene.setFlag('gachadnd', 'floorMap', map);
+    const actor = game.actors.get(hero);
+    await actor.update({ 'system.currency.gp': 1000 });
+    const crystals = await import('/modules/gachadnd/scripts/memory/crystals.js');
+    const stash = await import('/modules/gachadnd/scripts/memory/stash.js');
+    const [crystal] = await actor.createEmbeddedDocuments('Item', [await crystals.randomCrystal('blue')]);
+    await stash.depositCrystal(actor, crystal);
+}, ids.heroes['Перегревщик']);
 
 const report = await page.evaluate(({ SANDBOX }) => game.actors.filter(a => a.name.startsWith(SANDBOX)).map(a => {
     const memory = a.items.filter(i => i.flags.gachadnd?.skill_name);

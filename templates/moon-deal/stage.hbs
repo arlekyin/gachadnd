@@ -1,0 +1,37 @@
+<div class="gd-deal-stage">
+    <div class="gd-stars"></div>
+    <div class="gd-mist"></div>
+    <svg class="gd-threads"></svg>
+
+    <div class="gd-md-moon"><div class="gd-md-shadow"></div><div class="gd-md-mouth"></div></div>
+    <div class="gd-weight"></div>
+
+    <div class="gd-scale">
+        <div class="gd-beam"><div class="gd-pivot"></div></div>
+        <div class="gd-pan left"><div class="gd-chains"></div><div class="gd-dish"><div class="gd-load left"></div></div></div>
+        <div class="gd-pan right"><div class="gd-chains"></div><div class="gd-dish"><div class="gd-load right"></div></div></div>
+    </div>
+
+    {{#each lots}}
+    <div class="gd-lot" data-lot="{{id}}" data-action="lot" hidden>
+        <div class="gd-glyph"><i class="fas {{icon}}"></i></div>
+        <h3>{{name}}</h3>
+        <p>{{text}}</p>
+        <div class="gd-price">{{price}}</div>
+    </div>
+    {{/each}}
+
+    <div class="gd-party"></div>
+
+    <div class="gd-hand">
+        <div class="gd-hint"></div>
+        <div class="gd-fan"></div>
+        <div class="gd-tokens"></div>
+    </div>
+
+    {{#if isGM}}
+    <a class="gd-refuse" data-action="refuse">отвергнуть сделку</a>
+    <div class="gd-seal" data-action="seal" data-tooltip="Скрепить сделку: жертвы уходят луне навсегда"><div><i class="fas fa-moon"></i>Скрепить</div></div>
+    {{/if}}
+    <div class="gd-sealed-veil"><div>Луна забрала своё</div></div>
+</div>

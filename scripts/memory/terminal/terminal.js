@@ -322,7 +322,9 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                 ...tags.map(t => ({ text: t, cls: 'tag' })),
                 ...(ranked ? [{ text: `Ранг ${romanRank(rank)}${canRankUp(selected) ? ' · можно улучшить' : ''}` }] : []),
                 ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : []),
-                ...(flags.trigger ? [{ text: 'Срабатывает сам', cls: 'tag' }] : [])
+                ...(flags.trigger ? [{ text: 'Срабатывает сам', cls: 'tag' }] : []),
+                // Сплав (Сделка луны): пара навыков на один слот
+                ...(flags.fused ? [{ text: `Сплав с «${this.actor.items.get(flags.fused.partner)?.name ?? '?'}»`, cls: 'unique' }] : [])
             ],
             drawback: flags.drawback && !flags.cleansed && !flags.drawback_lifted ? drawbackHtml(descriptions.get(selected.id), flags.drawback) : null,
             notes: view.notes,

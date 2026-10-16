@@ -95,7 +95,8 @@ export function isMemorySkill(item) {
 // Сращённый всадник экипирован сверх лимита и слота не занимает
 export function occupiesSlot(item) {
     const flags = item?.flags?.[MODULE_ID];
-    return !(flags?.horseman && flags?.cleansed);
+    // Очищенный всадник и вторая половина Сплава (Сделка луны) слот не занимают
+    return !(flags?.horseman && flags?.cleansed) && !flags?.fused?.secondary;
 }
 
 /**
