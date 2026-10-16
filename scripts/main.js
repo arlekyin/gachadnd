@@ -145,7 +145,8 @@ Hooks.once('ready', () => {
     registerSocket();
     migratePrefs().catch(error => console.error(`${MODULE_ID} | перенос настроек`, error));
     if (ui.controls) {
-        ui.controls.initialize();
-        ui.controls.render(true);
+        // v13+: инструменты пересобирает render({ reset }), initialize() там устарел
+        if (game.release.generation >= 13) ui.controls.render({ reset: true });
+        else { ui.controls.initialize(); ui.controls.render(true); }
     }
 });

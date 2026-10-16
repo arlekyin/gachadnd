@@ -30,7 +30,7 @@ export async function status() {
  * Тестовый мир запущен: если в Foundry не запущен ни один мир, запустить тестовый (нужно, чтобы
  * у Foundry не было пароля администратора). Чужой активный мир не закрывается — ошибка.
  */
-export async function ensureWorld() {
+export async function ensureWorld(browser) {
     let st = await status();
     if (st.active) {
         if (st.world !== WORLD) throw new Error(`Активен мир «${st.world}», а не тестовый «${WORLD}» — останавливаюсь`);
@@ -40,13 +40,34 @@ export async function ensureWorld() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'launchWorld', world: WORLD })
     });
-    if (!res.ok) throw new Error(`Не удалось запустить мир «${WORLD}»: ${res.status} ${await res.text()}`);
+    // v14 запускает мир только через сокет со страницы настройки — нажать «запустить» у тестового мира
+    if (!res.ok && browser) await launchFromSetup(browser);
+    else if (!res.ok) throw new Error(`Не удалось запустить мир «${WORLD}»: ${res.status} ${await res.text()}`);
     for (let i = 0; i < 120; i++) {
         st = await status();
         if (st.active && st.world === WORLD) return st;
         await new Promise(r => setTimeout(r, 1000));
     }
     throw new Error(`Мир «${WORLD}» не запустился за 2 минуты`);
+}
+
+async function launchFromSetup(browser) {
+    const page = await browser.newPage();
+    try {
+        await page.goto(`${URL}/setup`);
+        const play = `[data-package-id="${WORLD}"] .control.play`;
+        await page.waitForSelector(play, { state: 'attached', timeout: 60000 });
+        // Обучающий тур и прочие оверлеи перекрывают список миров
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => document.querySelectorAll('.tour-overlay, .tour-fadeout, .tour').forEach(e => e.remove()));
+        await page.$eval(play, el => el.click());
+        // Окно миграции появляется, только если мир сделан в старой версии
+        const yes = await page.waitForSelector('dialog button[data-action="yes"], dialog button[data-action="confirm"]', { timeout: 5000 }).catch(() => null);
+        if (yes) await yes.click();
+        await page.waitForURL(/\/(game|join)/, { timeout: 120000 });
+    } finally {
+        await page.close();
+    }
 }
 
 /**
@@ -75,7 +96,11 @@ let shared = null;
  */
 export async function connect(options = {}) {
     if (runner()) {
-        if (shared) await reload(shared.session.page);
+        // Страница не пережила прошлую проверку (сервер перезапускался, вкладка упала) — новый вход
+        if (shared) await reload(shared.session.page).catch(async () => {
+            await shared.session.browser.close().catch(() => {});
+            shared = await open(options);
+        });
         else shared = await open(options);
         shared.log = [];
         return { ...shared.session, log: shared.log, close: async () => {} };
@@ -86,10 +111,9 @@ export async function connect(options = {}) {
 }
 
 async function open({ width = 1600, height = 900, headless = !args().headed, slowMo = slowArg() } = {}) {
-    await ensureWorld();
     fs.mkdirSync(OUT, { recursive: true });
-
     const browser = await chromium.launch({ headless: headless && !slowMo, slowMo, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
+    await ensureWorld(browser);
     const page = await browser.newPage({ viewport: { width, height } });
     const state = { log: [] };
     page.on('pageerror', e => {
@@ -104,10 +128,12 @@ async function open({ width = 1600, height = 900, headless = !args().headed, slo
     });
 
     await page.goto(`${URL}/join`);
-    await page.waitForSelector('select[name="userid"]', { timeout: 60000 });
-    const userId = await page.$eval('select[name="userid"]', (el, name) => [...el.options].find(o => o.textContent.trim() === name)?.value, USER);
+    // Выбор пользователя: v13 — name="userid", v14 — name="userId"
+    const select = 'select[name="userid"], select[name="userId"]';
+    await page.waitForSelector(select, { timeout: 60000 });
+    const userId = await page.$eval(select, (el, name) => [...el.options].find(o => o.textContent.trim() === name)?.value, USER);
     if (!userId) throw new Error(`Нет пользователя «${USER}» на странице входа`);
-    await page.selectOption('select[name="userid"]', userId);
+    await page.selectOption(select, userId);
     await page.fill('input[name="password"]', PASSWORD);
     await Promise.all([page.waitForURL(/\/game/, { timeout: 60000 }), page.click('button[name="join"]')]);
     await page.waitForFunction(() => window.game?.ready, null, { polling: 250, timeout: 120000 });

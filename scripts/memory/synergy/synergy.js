@@ -425,7 +425,9 @@ async function syncMemoryScaling(actor, memory, equipped, equippedTags = new Map
 
     // Счётчики тегов для формул: @flags.gachadnd.counts.explosion и т.п.
     const counts = Object.fromEntries(Object.entries(TAG_KEYS).map(([tag, key]) => [key, tagCounts[tag] ?? 0]));
-    if (!foundry.utils.objectsEqual(actor.getFlag(MODULE_ID, 'counts') ?? {}, counts)) {
+    // v14 переименовал objectsEqual в equals
+    const equal = foundry.utils.equals ?? foundry.utils.objectsEqual;
+    if (!equal(actor.getFlag(MODULE_ID, 'counts') ?? {}, counts)) {
         await actor.setFlag(MODULE_ID, 'counts', counts);
     }
     // Бонус к универсальной Сложности (Разум I: +1 при 2 навыках с тегом «разум»); флаг нужен формуле всегда

@@ -25,7 +25,7 @@ const chosen = new Map();
 
 /** Стены, которые отражают луч: задерживают свет и не открытые двери */
 function mirrors(scene) {
-    const { NONE } = CONST.WALL_SENSE_TYPES;
+    const { NONE } = CONST.EDGE_SENSE_TYPES ?? CONST.WALL_SENSE_TYPES; // v14 переименовал
     const OPEN = CONST.WALL_DOOR_STATES.OPEN;
     return scene.walls.filter(w => w.light !== NONE && !(w.door > 0 && w.ds === OPEN))
         .map(w => ({ id: w.id, a: { x: w.c[0], y: w.c[1] }, b: { x: w.c[2], y: w.c[3] } }));

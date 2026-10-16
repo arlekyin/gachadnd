@@ -36,6 +36,7 @@ import { hideTokenMarks, stageFilter } from "../../cutscene/stage.js";
 import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
 import { stowWindows } from "../../cutscene/windows.js";
 import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../../core/prefs.js";
+import { placedTemplate, shapeOf } from "../../core/templates.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -130,7 +131,7 @@ Hooks.on('dnd5e.postUseActivity', (activity, usageConfig, results) => {
         tokenId: item.actor.getActiveTokens?.()[0]?.id ?? null,
         // Шаблон области dnd5e ставит до этого хука: линия разреза — по нему. Каждый поставленный
         // шаблон приходит списком созданных документов, поэтому список плоский
-        line: templateLine([results?.templates ?? []].flat(2)[0])
+        line: templateLine(shapeOf(placedTemplate(results)))
     };
     emit('impactArm', data);
     arm(data);

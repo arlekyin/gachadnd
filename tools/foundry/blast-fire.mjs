@@ -164,7 +164,7 @@ for (let i = 0; i < 40; i++) {
     if (w) { await page.click(`#${w.id} button[data-action="use"]`); break; }
     await wait(150);
 }
-await ev(() => gdt.until(() => canvas.templates.preview?.children?.length > 0, 5000));
+await ev(() => gdt.until(() => gdt.previewing(), 5000));
 await wait(300);
 const heroCell = await ev(hero => { const t = game.actors.get(hero).getActiveTokens()[0].document; return [t.x / 100, t.y / 100]; }, hero);
 await ev(() => gdt.dice(6, 5, 5, 5, 20, 20));
@@ -172,7 +172,7 @@ await clickCell(heroCell[0], heroCell[1]);
 await ev(() => gdt.until(() => gdt.chats().some(c => /стравливает жар/.test(c)), 6000));
 const vent = (await chats()).find(c => /стравливает жар/.test(c));
 check('клинок: стравить жар 3 — конус, спасбросок Ловкости, 3d6', /3d6/.test(vent ?? '') && /Ловкости/.test(vent ?? '') && (await heat()) === 0, vent);
-check('клинок: шаблон конуса убран', !(await ev(scene => game.scenes.get(scene).templates.size, ids.scene)));
+check('клинок: шаблон конуса убран', !(await ev(scene => gdt.templates(scene).length, ids.scene)));
 
 // ---------- Феникс
 // Подальше от пожара: иначе в ход соседа огонь съест подложенные кости

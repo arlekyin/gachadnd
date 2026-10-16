@@ -58,7 +58,7 @@ const strike = async target => {
     const sel = `#chat [data-message-id="${before.id}"]`;
     const line = await page.$eval(`${sel} .gd-prism-line`, el => el.textContent.replace(/\s+/g, ' ').trim()).catch(() => null);
     await ev(id => document.querySelector(`#chat [data-message-id="${id}"] damage-application`)?.setAttribute('open', ''), before.id);
-    await page.click(`${sel} damage-application .apply-damage`);
+    await page.click(`${sel} damage-application :is(.apply-damage, .apply-button)`);
     await wait(1500);
     return ev(({ target, id, hp, line }) => {
         const message = game.messages.get(id);
@@ -72,9 +72,12 @@ await wait(500);
 check('Призма: взведена', !!(await ev(hero => game.actors.get(hero).getFlag('gachadnd', 'prism'), hero)));
 let r = await strike(A);
 check('Призма: карточка урона в чате — семь строк по цветам, сумма 10', r.card === 'fire:4 acid:1 lightning:1 poison:1 cold:1 thunder:1 force:1' && r.total === 10, r.card);
-check('Призма: в карточке строка раскладки — исходный бросок и цвета', /Призма: 10 \(1d8 \+ 2\) → 4 огонь · 1 кислота/.test(r.line ?? ''), r.line);
+// Названия типов урона — из dnd5e: в мире без русского перевода они английские
+const dmg = await ev(() => Object.fromEntries(['fire', 'acid', 'poison'].map(t => [t, game.i18n.localize(CONFIG.DND5E.damageTypes[t].label)])));
+const re = text => new RegExp(text.replace(/[()+]/g, m => `\\${m}`), 'i');
+check('Призма: в карточке строка раскладки — исходный бросок и цвета', re(`Призма: 10 (1d8 + 2) → 4 ${dmg.fire} · 1 ${dmg.acid}`).test(r.line ?? ''), r.line);
 check('Призма: «Применить» в лотке dnd5e — потеря 7 (сопротивление огню, иммунитет к яду)', r.lost === 7, JSON.stringify(r));
-check('Призма: итог по цели в чате — огонь 4 → 2, яд 1 → 0, итого 7', /Огонь 4 → 2 \(сопротивление\)/i.test(r.result ?? '') && /Яд 1 → 0 \(иммунитет\)/i.test(r.result ?? '') && /Итого урона: 7/.test(r.result ?? ''), r.result);
+check('Призма: итог по цели в чате — огонь 4 → 2, яд 1 → 0, итого 7', re(`${dmg.fire} 4 → 2 (сопротивление)`).test(r.result ?? '') && re(`${dmg.poison} 1 → 0 (иммунитет)`).test(r.result ?? '') && /Итого урона: 7/.test(r.result ?? ''), r.result);
 check('Призма: погасла после атаки', !(await ev(hero => game.actors.get(hero).getFlag('gachadnd', 'prism'), hero)));
 r = await strike(A);
 check('без Призмы: карточка — 10 рубящего, потеря 10', r.card === 'slashing:10' && r.lost === 10, JSON.stringify(r));

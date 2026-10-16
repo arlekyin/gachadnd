@@ -49,17 +49,18 @@ await page.mouse.down();
 await page.mouse.up();
 await ev(() => gdt.p);
 await wait(1500);
-const beacon = () => ev(scene => {
-    const t = game.scenes.get(scene).templates.find(t => t.flags.gachadnd?.lighthouse);
-    if (!t) return null;
-    const light = game.scenes.get(scene).lights.get(t.flags.gachadnd.lighthouse.lightId);
+const beacon = () => ev(async scene => {
+    const doc = gdt.templates(scene).find(t => t.flags.gachadnd?.lighthouse);
+    if (!doc) return null;
+    const t = (await gdt.mod('core/templates.js')).shapeOf(doc);
+    const light = game.scenes.get(scene).lights.get(doc.flags.gachadnd.lighthouse.lightId);
     return { x: t.x, y: t.y, direction: t.direction, distance: t.distance, angle: t.angle, light: light ? { x: light.x, y: light.y, rotation: light.rotation, angle: light.config.angle } : null };
 }, ids.scene);
 let b = await beacon();
 check('Маяк: конус поставлен мышью, свет зажжён в вершине', b && b.light && b.light.x === b.x && b.light.y === b.y, JSON.stringify(b));
 // Свет светит туда же, куда конус: точка луча (враг «Рядом») — в свете, герой за спиной — нет
 const lit = point => ev(({ scene, point }) => {
-    const t = game.scenes.get(scene).templates.find(t => t.flags.gachadnd?.lighthouse);
+    const t = gdt.templates(scene).find(t => t.flags.gachadnd?.lighthouse);
     const src = canvas.lighting.get(t.flags.gachadnd.lighthouse.lightId)?.lightSource;
     return !!src?.shape?.contains(point.x, point.y);
 }, { scene: ids.scene, point });
@@ -84,8 +85,8 @@ b = await beacon();
 check('Маяк: раунд 3 — луч на запад', b.direction === 180, JSON.stringify(b));
 check('Маяк: союзник в луче — +1d4 к атакам и спасброскам', (await effects(hero)).includes('Маяк: свет'), (await effects(hero)).join(', '));
 // Разбили маяк — свет гаснет
-const lightId = (await ev(scene => game.scenes.get(scene).templates.find(t => t.flags.gachadnd?.lighthouse).flags.gachadnd.lighthouse.lightId, ids.scene));
-await ev(scene => game.scenes.get(scene).templates.find(t => t.flags.gachadnd?.lighthouse).delete(), ids.scene);
+const lightId = (await ev(scene => gdt.templates(scene).find(t => t.flags.gachadnd?.lighthouse).flags.gachadnd.lighthouse.lightId, ids.scene));
+await ev(scene => gdt.templates(scene).find(t => t.flags.gachadnd?.lighthouse).delete(), ids.scene);
 await wait(800);
 check('Маяк разбит — свет погас', !(await ev(({ scene, lightId }) => game.scenes.get(scene).lights.has(lightId), { scene: ids.scene, lightId })));
 

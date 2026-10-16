@@ -21,6 +21,10 @@ export async function install(page) {
             MODULE,
             /** Модуль по пути от корня модуля — тот же экземпляр, что загрузила Foundry */
             mod: path => import(`/modules/${MODULE}/scripts/${path}`),
+            /** Шаблоны сцены: v13 — MeasuredTemplate, v14 — Регионы (туда влиты шаблоны dnd5e) */
+            templates: sceneId => [...(game.release.generation >= 14 ? game.scenes.get(sceneId).regions : game.scenes.get(sceneId).templates)],
+            /** Предпросмотр шаблона dnd5e на сцене (ждём его, прежде чем кликать) */
+            previewing: () => (canvas.regions?.preview?.children?.length || canvas.templates?.preview?.children?.length) > 0,
             /**
              * Подложить результаты костей: gdt.dice(100, 18, 33) — следующие к100 дадут 18, затем 33.
              * Каждый вызов заменяет очередь; после неё кости бросаются как обычно.
@@ -79,7 +83,7 @@ export async function install(page) {
         // Тишина для settle(): любое изменение документов отодвигает её (хуки — один раз на страницу)
         if (!window._gdtSettleHooks) {
             const touch = () => { if (window.gdt) window.gdt.lastChange = performance.now(); };
-            for (const doc of ['Combat', 'Combatant', 'Actor', 'Item', 'Token', 'ChatMessage', 'ActiveEffect', 'Scene', 'Wall', 'AmbientLight', 'MeasuredTemplate']) {
+            for (const doc of ['Combat', 'Combatant', 'Actor', 'Item', 'Token', 'ChatMessage', 'ActiveEffect', 'Scene', 'Wall', 'AmbientLight', 'MeasuredTemplate', 'Region']) {
                 for (const verb of ['create', 'update', 'delete']) Hooks.on(`${verb}${doc}`, touch);
             }
             window._gdtSettleHooks = true;

@@ -419,7 +419,9 @@ Hooks.on('deleteItem', (item, options, userId) => {
 // КРАСИВАЯ КАРТОЧКА В ЧАТЕ
 // ==========================================
 function renderCustomCard(message, htmlElement) {
-    const itemData = message.flags?.dnd5e?.itemData || {};
+    // dnd5e 5 кладёт копию предмета во флаг, dnd5e 6 — только ссылку в system.item
+    const itemData = message.flags?.dnd5e?.itemData
+        || (message.system?.item?.uuid ? fromUuidSync(message.system.item.uuid)?.toObject?.() : null) || {};
     const gachaFlags = itemData.flags?.gachadnd || message.flags?.gachadnd || {};
 
     if (!gachaFlags || !gachaFlags.rarity) return;

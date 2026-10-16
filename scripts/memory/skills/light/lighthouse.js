@@ -17,6 +17,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { addTurnEffect } from "../turn-effects.js";
 import { isLight, ref, actorFrom, centerOf, feetToPx, lightCard, esc } from "./common.js";
+import { placedTemplate, sceneTemplates, shapeOf, hasTemplate, turnTemplate, onDeleteTemplate } from "../../../core/templates.js";
 
 const ROUNDS = 10;
 const TURN = 90;
@@ -38,9 +39,9 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
 Hooks.on('dnd5e.postUseActivity', (activity, usage, results) => {
     const item = activity?.item, actor = item?.actor;
     if (!isLight(item, 'lighthouse') || !actor) return;
-    const template = (results?.templates ?? []).flat().find(t => t?.documentName === 'MeasuredTemplate');
+    const template = placedTemplate(results);
     if (!template) return ui.notifications.warn('Маяк: луч не поставлен — поставьте конус на сцене.');
-    requestGM('lightLighthouse', { ...ref(actor), templateId: template.id, sceneId: template.parent.id });
+    requestGM('lightLighthouse', { ...ref(actor), templateId: template.id, templateType: template.documentName, sceneId: template.parent.id });
 });
 
 onSocket('lightLighthouse', ({ payload }) => {
@@ -49,42 +50,45 @@ onSocket('lightLighthouse', ({ payload }) => {
 });
 
 /** Мастер: свет маяка и флаг шаблона */
-export async function raise({ actorId, tokenId, sceneId, templateId }) {
+export async function raise({ actorId, tokenId, sceneId, templateId, templateType }) {
     const scene = game.scenes.get(sceneId);
-    const template = scene?.templates.get(templateId);
+    const template = templateType === 'Region' ? scene?.regions.get(templateId) : scene?.templates.get(templateId);
+    const shape = shapeOf(template);
     const actor = actorFrom({ actorId, tokenId, sceneId });
-    if (!template || !actor) return;
+    if (!shape || !actor) return;
     const combat = game.combat?.started ? game.combat : null;
     const [light] = await scene.createEmbeddedDocuments('AmbientLight', [{
-        x: template.x, y: template.y, rotation: lightRotation(template.direction),
-        config: { bright: template.distance / 2, dim: template.distance, angle: template.angle || 53.13, color: '#ffe9a8', alpha: 0.6, animation: { type: 'sunburst', speed: 2, intensity: 3 } },
+        x: shape.x, y: shape.y, rotation: lightRotation(shape.direction),
+        config: { bright: shape.distance / 2, dim: shape.distance, angle: shape.angle || 53.13, color: '#ffe9a8', alpha: 0.6, animation: { type: 'sunburst', speed: 2, intensity: 3 } },
         flags: { [MODULE_ID]: { lighthouseLight: true } }
     }]);
     await template.update({
-        fillColor: '#ffd75e',
+        [template.documentName === 'Region' ? 'color' : 'fillColor']: '#ffd75e',
         [`flags.${MODULE_ID}.${FLAG}`]: { actorId: actor.id, tokenId, lightId: light.id, combatId: combat?.id ?? null, until: combat ? combat.round + ROUNDS : null }
     });
     await lightCard(actor, 'Маяк', `<p>Маяк зажжён. Луч поворачивается на 90° в начале каждого раунда${combat ? `, горит до конца раунда ${combat.round + ROUNDS - 1}` : ''}.</p>`, { icon: 'fa-tower-observation' });
 }
 
-const lighthouses = scene => (scene?.templates ?? []).filter(t => t.flags?.[MODULE_ID]?.[FLAG]);
+const lighthouses = scene => sceneTemplates(scene).filter(t => t.flags?.[MODULE_ID]?.[FLAG]);
 
 /** Точка в луче: в пределах дальности и в угле конуса */
 export function inBeam(template, point) {
-    const dx = point.x - template.x, dy = point.y - template.y;
-    const reach = feetToPx(template.distance, template.parent);
+    const shape = shapeOf(template);
+    if (!shape) return false;
+    const dx = point.x - shape.x, dy = point.y - shape.y;
+    const reach = feetToPx(shape.distance, template.parent);
     if (Math.hypot(dx, dy) > reach + 1) return false;
     if (!dx && !dy) return true;
     const angle = Math.toDegrees(Math.atan2(dy, dx));
-    const diff = Math.abs((((angle - template.direction) % 360) + 540) % 360 - 180);
-    return diff <= (template.angle || 53.13) / 2 + 0.5;
+    const diff = Math.abs((((angle - shape.direction) % 360) + 540) % 360 - 180);
+    return diff <= (shape.angle || 53.13) / 2 + 0.5;
 }
 
 async function douse(template) {
     const flag = template.flags[MODULE_ID][FLAG];
     const light = template.parent.lights.get(flag.lightId);
     if (light) await light.delete();
-    if (template.parent.templates.has(template.id)) await template.delete();
+    if (hasTemplate(template)) await template.delete();
 }
 
 Hooks.on('updateCombat', async (combat, changed) => {
@@ -96,8 +100,8 @@ Hooks.on('updateCombat', async (combat, changed) => {
             const flag = template.flags[MODULE_ID][FLAG];
             if (flag.combatId !== combat.id) continue;
             if (flag.until && combat.round >= flag.until) { await douse(template); continue; }
-            const direction = (template.direction + TURN) % 360;
-            await template.update({ direction });
+            const direction = (shapeOf(template).direction + TURN) % 360;
+            await turnTemplate(template, direction);
             await scene.lights.get(flag.lightId)?.update({ rotation: lightRotation(direction) });
         }
     }
@@ -155,7 +159,7 @@ async function conSave(actor, dc) {
 }
 
 // Шаблон удалили (маяк разбили) — свет гаснет
-Hooks.on('deleteMeasuredTemplate', (template) => {
+onDeleteTemplate((template) => {
     const flag = template.flags?.[MODULE_ID]?.[FLAG];
     if (!flag || !isActiveGM()) return;
     template.parent?.lights.get(flag.lightId)?.delete();

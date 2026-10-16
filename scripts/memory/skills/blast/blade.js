@@ -14,6 +14,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { emit, onSocket } from "../../../core/socket.js";
 import { inBeam } from "../light/lighthouse.js";
 import { isBlast, blastSkill, tokenOf, quiet, dcOf, blast } from "./common.js";
+import { placedTemplate, shapeOf } from "../../../core/templates.js";
 
 const MAX = 4, MELT = '2d6';
 const FLAG = 'bladeHeat';
@@ -75,7 +76,9 @@ Hooks.on('dnd5e.preRollDamageV2', (config) => {
     const heat = heatOf(blastSkill(actor, 'blade'));
     if (!heat) return;
     config.rolls ??= [];
-    config.rolls.push({ parts: [String(heat)], options: { type: 'fire', types: ['fire'], properties: [] } });
+    // dnd5e 6 ждёт у каждой строки данные формулы (config.data) — берём их у строки оружия
+    const data = config.rolls[0]?.data ?? activity.getRollData?.() ?? {};
+    config.rolls.push({ parts: [String(heat)], data: { ...data, roll: {} }, options: { type: 'fire', types: ['fire'], properties: [] } });
 });
 
 // Стравить жар
@@ -97,10 +100,11 @@ Hooks.on('dnd5e.postUseActivity', async (activity, usage, results) => {
     const heat = venting.get(item?.id);
     if (!heat) return;
     venting.delete(item.id);
-    const template = (results?.templates ?? []).flat().find(t => t?.documentName === 'MeasuredTemplate');
+    const template = placedTemplate(results);
+    const shape = shapeOf(template);
     await item.setFlag(MODULE_ID, FLAG, 0);
     const self = tokenOf(actor)?.document;
     const victims = template ? template.parent.tokens.filter(t => t.actor && !t.hidden && t.id !== self?.id && inBeam(template, { x: t.x + (t.width || 1) * template.parent.grid.size / 2, y: t.y + (t.height || 1) * template.parent.grid.size / 2 })) : [];
-    await blast({ actor, title: `${actor.name} стравливает жар клинка`, icon: 'fa-fire-flame-curved', victims, formula: `${heat}d6`, type: 'fire', ability: 'dex', dc: dcOf(item), at: template ? { sceneId: template.parent.id, x: template.x, y: template.y, radius: template.parent.grid.size * 1.5 } : null });
+    await blast({ actor, title: `${actor.name} стравливает жар клинка`, icon: 'fa-fire-flame-curved', victims, formula: `${heat}d6`, type: 'fire', ability: 'dex', dc: dcOf(item), at: shape ? { sceneId: template.parent.id, x: shape.x, y: shape.y, radius: template.parent.grid.size * 1.5 } : null });
     if (template) await template.delete();
 });

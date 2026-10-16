@@ -59,7 +59,8 @@ Hooks.on('dnd5e.preRollDamageV2', (config) => {
 
 // Карточка урона: помеченные броски → семь строк по цветам
 Hooks.on('preCreateChatMessage', (message) => {
-    if (message.flags?.dnd5e?.roll?.type !== 'damage') return;
+    // dnd5e 5 — тип броска во флаге, dnd5e 6 — тип самого сообщения
+    if ((message.flags?.dnd5e?.roll?.type ?? message.type) !== 'damage') return;
     const rolls = message.rolls ?? [];
     const prism = rolls.filter(r => marked(r.options?.properties) && !isHealing(r.options?.type));
     if (!prism.length) return;
@@ -110,7 +111,9 @@ Hooks.on('dnd5e.applyDamage', (actor, amount, options) => {
         if (!d.part) return null;
         const before = entry.before[i];
         const value = Math.trunc(d.value);
-        const why = d.active.immunity ? 'иммунитет' : d.active.resistance ? 'сопротивление' : d.active.vulnerability ? 'уязвимость' : '';
+        // dnd5e 5: active.resistance, dnd5e 6: active.type.resistance или active.all.resistance
+        const has = c => !!(d.active[c] || d.active.type?.[c] || d.active.all?.[c]);
+        const why = has('immunity') ? 'иммунитет' : has('resistance') ? 'сопротивление' : has('vulnerability') ? 'уязвимость' : '';
         const arrow = value !== before ? ` → <strong>${value}</strong>` : '';
         return `<li style="--gd-prism:${COLORS[d.type] ?? '#888'}"><span>${esc(typeLabel(d.type))}</span> ${before}${arrow}${why ? ` <em>(${why})</em>` : ''}</li>`;
     }).filter(Boolean);
@@ -120,17 +123,23 @@ Hooks.on('dnd5e.applyDamage', (actor, amount, options) => {
     });
 });
 
-// Карточка урона: цветная строка раскладки под заголовком
-onRenderChatMessage((message, html) => {
+// Карточка урона: цветная строка раскладки под заголовком. dnd5e 6 перестраивает блок броска уже после
+// хука ядра — строка ставится и в его хуке (dnd5e.renderChatMessage), второй раз она не добавится
+onRenderChatMessage(prismLine);
+Hooks.on('dnd5e.renderChatMessage', prismLine);
+
+function prismLine(message, html) {
     const flag = message.flags?.[MODULE_ID]?.prism;
     if (!flag?.parts || !html || html.querySelector?.('.gd-prism-line')) return;
     const line = document.createElement('div');
     line.className = 'gd-prism-line';
     line.innerHTML = `<i class="fas fa-rainbow"></i> Призма: ${flag.total} (${esc(flag.source)}) → `
         + flag.parts.map(p => `<span style="--gd-prism:${COLORS[p.type] ?? '#888'}">${p.value} ${esc(typeLabel(p.type).toLowerCase())}</span>`).join(' · ');
-    const anchor = html.querySelector('.dice-roll') ?? html.querySelector('.message-content');
+    // dnd5e 6: кнопка броска стоит в строке с иконкой — строку раскладки ставим перед всей строкой
+    const roll = html.querySelector('.dice-roll');
+    const anchor = roll?.closest('section.icon-row') ?? roll ?? html.querySelector('.message-content');
     anchor?.parentNode?.insertBefore(line, anchor);
-});
+}
 
 // В бою призма гаснет с концом хода, в котором её взвели
 Hooks.on('updateCombat', (combat, changed) => {

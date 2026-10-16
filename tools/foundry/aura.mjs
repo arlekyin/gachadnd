@@ -166,7 +166,7 @@ await pose('casual', 'Не глядя');
 await ev(() => { gdt.mark(); gdt.dice(20, 15, 12); });
 r = await rollWithDialog('skill', { skill: 'ath', target: 10 });
 console.log('   окно броска:', r.dialog, JSON.stringify(r.buttons), '→', JSON.stringify(r.roll));
-check('«Небрежно»: помеха сохранилась (2к20, меньший)', r.roll && /^2d20kl/.test(r.roll.formula), r.roll?.formula + ' ' + r.roll?.dice);
+check('«Небрежно»: помеха сохранилась (2к20, меньший)', r.roll && /^2d20(kl|dis)/.test(r.roll.formula), r.roll?.formula + ' ' + r.roll?.dice);
 await wait(700);
 check('«Небрежно»: удалось при Сл 10 → аура 3', (await value()) === 3, String(await value()) + ' ' + (await chats()).filter(c => /Позёрство/.test(c)).join(' | '));
 
@@ -184,7 +184,7 @@ check('«Одной левой»: 10+2−5 < 12 — провал, аура 2', (
 await setAura(4);
 const save = id => ev(async id => { const rs = await game.actors.get(id).rollSavingThrow({ ability: 'con' }, { configure: false }, { create: false }); const roll = Array.isArray(rs) ? rs[0] : rs; return roll?.formula; }, id);
 let fn = await save(NEAR), fFar = await save(FAR);
-check('порог 4: ближний враг — спасбросок с помехой', /^2d20kl/.test(fn), fn);
+check('порог 4: ближний враг — спасбросок с помехой', /^2d20(kl|dis)/.test(fn), fn);
 check('порог 4: дальний враг — без помехи', /^1d20/.test(fFar), fFar);
 
 // ---------- 8. Порог 5: враг начинает ход в 15 футах — спасбросок Мудрости со Сл, провал — испуган
@@ -271,7 +271,7 @@ check('долг −2: эффект «Кринж»', (await effects(hero)).includ
 check('долг −2: «Уверенность» снята', !(await effects(hero)).includes('Аура: Уверенность'));
 await setAura(-4);
 fn = await save(hero);
-check('долг −4: свой спасбросок с помехой', /^2d20kl/.test(fn), fn);
+check('долг −4: свой спасбросок с помехой', /^2d20(kl|dis)/.test(fn), fn);
 await setAura(-5);
 await ev(async id => {
     const a = game.actors.get(id);
@@ -283,7 +283,7 @@ const adv = await ev(async ({ hero, near }) => {
     const rs = await act.rollAttack({}, { configure: false }, {});
     return (Array.isArray(rs) ? rs[0] : rs)?.formula;
 }, { hero, near: NEAR });
-check('долг −5: атака по герою с преимуществом', /^2d20kh/.test(adv ?? ''), adv);
+check('долг −5: атака по герою с преимуществом', /^2d20(kh|adv)/.test(adv ?? ''), adv);
 check('аура не ниже −5', (await gmChange(-3), await wait(300), await value()) === -5, String(await value()));
 
 // ---------- 13. Ход без ауры: −1 (уже в долгу — ниже −5 не уходит); проверим с 0

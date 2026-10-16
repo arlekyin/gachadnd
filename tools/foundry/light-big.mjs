@@ -163,7 +163,7 @@ check('Спотлайт: враг атакует звезду', !!a.formula && /
 a = await attack(Close, hero);
 check('Спотлайт: враг вплотную атакует массовку', !!a.formula, JSON.stringify(a));
 a = await attack(hero, Foe);
-check('Спотлайт: массовка атакует из темноты с преимуществом', /^2d20kh/.test(a.formula ?? ''), JSON.stringify(a));
+check('Спотлайт: массовка атакует из темноты с преимуществом', /^2d20(kh|adv)/.test(a.formula ?? ''), JSON.stringify(a));
 a = await attack(Ally, Foe);
 check('Спотлайт: звезда — без преимущества', /^1d20/.test(a.formula ?? ''), JSON.stringify(a));
 // «Подыграть» — ход героя (массовка)

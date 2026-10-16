@@ -13,6 +13,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { addTurnEffect } from "./turn-effects.js";
 import { placeToken } from "./pick.js";
+import { createCircle, deleteTemplates } from "../../core/templates.js";
 
 export const HAND = 3;
 const RANGE = 30;
@@ -157,11 +158,11 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
             result = `Казнь: ${esc(victims.map(t => t.name).join(', '))} — ${roll.total} урона силовым полем (${prof}d8).`;
         } else result = 'Казнь: в 30 футах никого.';
     } else if (key === 'frost' || key === 'fog') {
-        await scene.createEmbeddedDocuments('MeasuredTemplate', [{
-            t: 'circle', x: target.x, y: target.y, distance: ZONE, direction: 0,
+        await createCircle(scene, {
+            x: target.x, y: target.y, distance: ZONE, name: key === 'frost' ? 'Гвинт: Трескучий мороз' : 'Гвинт: Непроглядный туман',
             fillColor: key === 'frost' ? '#9fe3ff' : '#8a8f99', borderColor: key === 'frost' ? '#d6f4ff' : '#c4c8cf',
             flags: { [MODULE_ID]: { gwentWeather: key, actorId: actor.id } }
-        }]);
+        });
         if (key === 'frost') {
             const disposition = token.disposition;
             const inside = scene.tokens.filter(t => t.disposition !== disposition && Math.hypot(center(t).x - target.x, center(t).y - target.y) <= ZONE / (scene.grid.distance ?? 5) * size + size / 2);
@@ -175,9 +176,8 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
             result = `Трескучий мороз: ${inside.length ? `замедлены ${esc(inside.map(t => t.name).join(', '))}` : 'в зоне врагов нет'}.`;
         } else result = 'Непроглядный туман: дальнобойные атаки в зону и из неё — с помехой, до конца боя.';
     } else if (key === 'clear') {
-        const ids = scene.templates.filter(t => t.flags?.[MODULE_ID]?.gwentWeather).map(t => t.id);
-        if (ids.length) await scene.deleteEmbeddedDocuments('MeasuredTemplate', ids);
-        result = `Ясное небо: снято зон — ${ids.length}.`;
+        const removed = await deleteTemplates(scene, t => t.flags?.[MODULE_ID]?.gwentWeather);
+        result = `Ясное небо: снято зон — ${removed}.`;
     } else if (key === 'horn') {
         const ally = scene.tokens.get(target.tokenId);
         await addTurnEffect(ally.actor, combat, {
@@ -232,6 +232,5 @@ export function requestPlay(actor, token, index, target = null) {
 Hooks.on('deleteCombat', async combat => {
     if (!isActiveGM()) return;
     const scene = combat.scene ?? canvas?.scene;
-    const ids = scene?.templates?.filter(t => t.flags?.[MODULE_ID]?.gwentWeather).map(t => t.id) ?? [];
-    if (ids.length) await scene.deleteEmbeddedDocuments('MeasuredTemplate', ids);
+    if (scene) await deleteTemplates(scene, t => t.flags?.[MODULE_ID]?.gwentWeather);
 });
