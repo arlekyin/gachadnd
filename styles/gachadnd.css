@@ -1173,7 +1173,7 @@
   background: linear-gradient(180deg, #070812 0%, var(--night) 40%, #120d12 100%) !important;
   font-family: 'Signika', sans-serif;
 }
-.gachadnd-shop button { height: auto; line-height: 1.2; font-family: inherit; }
+.gachadnd-shop .window-content button { height: auto; line-height: 1.2; font-family: inherit; }
 
 /* ---------- Улица ---------- */
 .gachadnd-shop .gd-street { position: absolute; inset: 0; pointer-events: none; }

@@ -502,17 +502,17 @@ Hooks.on('createItem', async (item, options, userId) => {
                 `<option value="${t}">${t.charAt(0).toUpperCase() + t.slice(1)}</option>`
             ).join('');
 
-            new Dialog({
-                title: `Настройка: ${item.name}`,
+            foundry.applications.api.DialogV2.prompt({
+                window: { title: `Настройка: ${item.name}` },
                 content: `
-                    <form autocomplete="off" style="padding-bottom: 10px;">
+                    <div style="padding-bottom: 10px;">
                         <p><strong>Навык интегрирован в Память!</strong></p>
                         <p>Этот модуль требует калибровки спектра излучения.</p>
                         
                         <div class="form-group">
                             <label>Тег для трансляции:</label>
                             <div class="form-fields">
-                                <select id="emitter-tag">
+                                <select name="emitterTag">
                                     <option value="" disabled selected>-- Выберите тег --</option>
                                     ${optionsHtml}
                                 </select>
@@ -522,39 +522,38 @@ Hooks.on('createItem', async (item, options, userId) => {
                         <div class="form-group">
                             <label>Или свой тег:</label>
                             <div class="form-fields">
-                                <input type="text" id="emitter-custom-tag" placeholder="Например: пустота">
+                                <input type="text" name="emitterCustomTag" placeholder="Например: пустота">
                             </div>
                         </div>
-                    </form>
+                    </div>
                 `,
-                buttons: {
-                    apply: {
-                        icon: '<i class="fas fa-sliders-h"></i>',
-                        label: "Запустить модуль",
-                        callback: async (html) => {
-                            const customTag = html.find('#emitter-custom-tag').val().trim().toLowerCase();
-                            const selectedTag = html.find('#emitter-tag').val();
-                            const finalTag = customTag || selectedTag;
+                ok: {
+                    icon: 'fas fa-sliders-h',
+                    label: "Запустить модуль",
+                    callback: async (event, button) => {
+                        const form = button.form.elements;
+                        const customTag = (form.emitterCustomTag?.value ?? '').trim().toLowerCase();
+                        const selectedTag = form.emitterTag?.value;
+                        const finalTag = customTag || selectedTag;
 
-                            if (!finalTag) {
-                                ui.notifications.warn("Тег не выбран!");
-                                return;
-                            }
-
-                            await item.setFlag(MODULE_ID, 'emitted_tag', finalTag);
-                            
-                            await item.update({
-                                name: `${item.name.replace(/\s*\[.*?\]/, '')} [${finalTag}]`,
-                                'system.description.value': `<p><strong>Излучает тег:</strong> ${finalTag}</p><hr>` + item.system.description.value
-                            });
-
-                            ui.notifications.info(`⚙️ Модуль настроен на тег: [${finalTag}]`);
-                            Hooks.callAll("gachadnd.synergyUpdated", actor);
+                        if (!finalTag) {
+                            ui.notifications.warn("Тег не выбран!");
+                            return;
                         }
+
+                        await item.setFlag(MODULE_ID, 'emitted_tag', finalTag);
+
+                        await item.update({
+                            name: `${item.name.replace(/\s*\[.*?\]/, '')} [${finalTag}]`,
+                            'system.description.value': `<p><strong>Излучает тег:</strong> ${finalTag}</p><hr>` + item.system.description.value
+                        });
+
+                        ui.notifications.info(`⚙️ Модуль настроен на тег: [${finalTag}]`);
+                        Hooks.callAll("gachadnd.synergyUpdated", actor);
                     }
                 },
-                default: "apply"
-            }).render(true);
+                rejectClose: false
+            });
             
         } catch (error) {
             console.error(`[GachaDND] ❌ Ошибка при вызове окна Сингулярности:`, error);

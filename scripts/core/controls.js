@@ -17,7 +17,12 @@ export function addTokenTools(controls, tools) {
     const group = tokenGroup(controls);
     if (!group) return;
     group.tools ??= [];
-    for (const tool of tools) {
+    for (let tool of tools) {
+        // v13+: кнопка вызывает onChange(event, active), onClick там устарел
+        if ((game.release?.generation ?? 12) >= 13 && tool.onClick && !tool.onChange) {
+            const { onClick, ...rest } = tool;
+            tool = { ...rest, onChange: () => onClick() };
+        }
         if (Array.isArray(group.tools)) {
             if (!group.tools.some(t => t.name === tool.name)) group.tools.push(tool);
         } else if (group.tools instanceof Map || (typeof Collection !== 'undefined' && group.tools instanceof Collection)) {
