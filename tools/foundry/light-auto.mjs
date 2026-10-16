@@ -2,7 +2,7 @@
 // Ультрафиолет (тайные двери в радиусе), Призма (урон на 7 типов с сопротивлением и иммунитетом),
 // Скорость света (ход вне очереди, свой ход пропущен, со следующего раунда — по порядку),
 // Солнечная батарея (заряд за конец хода на ярком свету, не в темноте, 3 заряда → заряд навыка).
-import { connect, checker } from './harness.mjs';
+import { connect, checker, moduleErrors } from './harness.mjs';
 import { install, scene, skills, use, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -129,7 +129,7 @@ check('батарея: 3 заряда → Призме вернулся заря
 
 await ev(() => gdt.resetDice());
 await f.shot('light_auto');
-const errors = f.log.filter(l => /pageerror|error:.*gachadnd/.test(l));
+const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();

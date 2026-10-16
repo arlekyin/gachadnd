@@ -3,7 +3,7 @@
 // Телосложения и ослепление, поворот на 90° каждый раунд, союзник в луче — +1d4, срок и разбитый маяк.
 // Диско-шар: 6 цветных пятен в 30 футах, карта Пятницы в начале хода на пятне и при заходе на пятно,
 // новые пятна каждый раунд, уборка в конце боя.
-import { connect, checker } from './harness.mjs';
+import { connect, checker, moduleErrors } from './harness.mjs';
 import { install, scene, skills, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -132,7 +132,7 @@ const left = await ev(scene => game.scenes.get(scene).lights.filter(l => l.flags
 check('конец боя — огни диско убраны', left === 0, String(left));
 
 await ev(() => gdt.resetDice());
-const errors = f.log.filter(l => /pageerror|error:.*gachadnd/.test(l));
+const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();

@@ -1,0 +1,31 @@
+id: btX7jKo7TbmE9bAh
+name: Красная бочка
+rarity: blue
+tags:
+  - взрыв
+  - огонь
+  - сталь
+description: |-
+  Бонусным действием поставьте две бочки в свободные клетки в пределах 30 футов. Бочка стоит до конца боя. Любой урон по бочке — и она взрывается: каждое существо в 10 футах совершает спасбросок Ловкости и получает {damage}, при успехе — половину. Взрыв задевает и другие бочки.
+activation: bonus
+range: 30
+uses: 1
+recovery: short
+target:
+  type: radius
+  value: 10
+save:
+  ability: dex
+damage:
+  - formula: 3d6
+    type: fire
+ranks:
+  - text: Урон {damage}.
+    damage:
+      - formula: 4d6
+        type: fire
+  - text: Урон {damage}.
+    damage:
+      - formula: 5d6
+        type: fire
+blast: barrel

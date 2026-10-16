@@ -108,6 +108,15 @@ function slowArg() {
     return slow === undefined ? 0 : slow === true ? 400 : Number(slow) || 0;
 }
 
+/**
+ * Ошибки модуля в журнале страницы: без ошибок чужих модулей мира (их баги — не наши), а
+ * fifthpendium падает на создании любого персонажа (cleanName is not defined).
+ */
+const FOREIGN = /fifthpendium|combatbooster|image-hover|vision-5e|SLighting/;
+export function moduleErrors(log) {
+    return log.filter(l => /pageerror|error:.*gachadnd/.test(l) && !FOREIGN.test(l));
+}
+
 /** Простой набор проверок с итогом в консоли */
 export function checker() {
     const results = [];

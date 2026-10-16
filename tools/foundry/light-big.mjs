@@ -3,7 +3,7 @@
 // Вспышка: снимок 30 футов, проявка без заряда — места и ПЗ, занятая клетка — ближайшая свободная.
 // Спотлайт: темнота сцены, свет на звезде, враги — только звезда или вплотную, массовка с преимуществом,
 // «Подыграть», перевод луча без заряда, угасание после следующего раунда.
-import { connect, checker } from './harness.mjs';
+import { connect, checker, moduleErrors } from './harness.mjs';
 import { install, scene, skills, use, combat } from './fixtures.mjs';
 
 const f = await connect();
@@ -188,7 +188,7 @@ for (let i = 0; i < 4; i++) { await ev(() => game.combat.nextTurn()); await wait
 await wait(2000);
 check('раунд 3: Спотлайт погас — темнота и свет токенов как были', (await env()).darkness === 0 && (await tokenLight(hero)) === 0 && !(await ev(() => game.combat.getFlag('gachadnd', 'spotlight'))), JSON.stringify(await env()));
 
-const errors = f.log.filter(l => /pageerror|error:.*gachadnd/.test(l));
+const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();

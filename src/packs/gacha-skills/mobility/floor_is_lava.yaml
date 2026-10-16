@@ -1,0 +1,26 @@
+id: fW9t2xMw70QkkKIJ
+name: Пол — это лава
+rarity: blue
+tags:
+  - огонь
+  - движение
+description: |-
+  Бонусным действием объявите: пол — это лава. 1 минуту или до конца боя каждое существо, которое заканчивает ход в той же клетке, где его начало, получает {damage}. Вас это тоже касается.
+
+  Не горят те, кто стоит выше пола: летит, висит или забрался на возвышение.
+activation: bonus
+uses: 1
+recovery: short
+damage:
+  - formula: 2d6
+    type: fire
+ranks:
+  - text: Урон {damage}.
+    damage:
+      - formula: 3d6
+        type: fire
+  - text: Урон {damage}.
+    damage:
+      - formula: 4d6
+        type: fire
+blast: lava

@@ -2461,3 +2461,17 @@
 .gd-prism-parts { list-style: none; margin: 4px 0; padding: 0; }
 .gd-prism-parts li { border-left: 4px solid var(--gd-prism); padding-left: 6px; margin: 2px 0; }
 .gd-prism-parts em { opacity: 0.75; }
+
+/* Навыки огня и взрыва: карточки в чате */
+.gd-blast-card { border-left: 3px solid #ff6a1a; padding: 2px 0 2px 8px; }
+.gd-blast-card .gd-blast-title { font-weight: 700; color: #c43d00; }
+.gd-blast-card p { margin: 4px 0; }
+.gd-blast-card .gd-blast-list { margin: 4px 0; padding-left: 18px; }
+.gd-blast-card .gd-blast-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.gd-blast-card .gd-blast-buttons button { flex: 1; }
+.gd-blast-card.gas { border-left-color: #8bd450; }
+.gd-blast-card.gas .gd-blast-title { color: #4f8a1f; }
+.gd-blast-card.lava { border-left-color: #ff3b1f; }
+/* Пол — это лава: свечение по краям экрана */
+#gd-lava-glow { position: fixed; inset: 0; pointer-events: none; z-index: 40; box-shadow: inset 0 0 90px 24px rgba(255, 70, 20, 0.45); animation: gd-lava-pulse 2.4s ease-in-out infinite; }
+@keyframes gd-lava-pulse { 50% { box-shadow: inset 0 0 120px 36px rgba(255, 110, 20, 0.55); } }

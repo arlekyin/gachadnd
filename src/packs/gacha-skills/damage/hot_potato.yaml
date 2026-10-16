@@ -1,0 +1,27 @@
+id: jy6j16lDPVzHYwdL
+name: Горячая картошка
+rarity: green
+tags:
+  - взрыв
+  - огонь
+description: |-
+  Действием прилепите бомбу к существу в 5 футах от вас. Таймер — 1d4 + 1 раунд, его знаете только вы; он тикает в начале каждого раунда.
+
+  Носитель бомбы может бонусным действием передать её существу вплотную — но не тому, от кого получил её в этом раунде. Когда таймер доходит до нуля, бомба взрывается у того, кто её держит: {damage}, и половина этого урона — каждому существу в 5 футах от него.
+activation: action
+range: 5
+uses: 2
+recovery: short
+damage:
+  - formula: 3d6
+    type: fire
+ranks:
+  - text: Урон {damage}.
+    damage:
+      - formula: 4d6
+        type: fire
+  - text: Урон {damage}.
+    damage:
+      - formula: 5d6
+        type: fire
+blast: potato

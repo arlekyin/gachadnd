@@ -1,0 +1,29 @@
+id: V7WKUYzJzNhPgXHl
+name: Ох, да!
+rarity: blue
+tags:
+  - взрыв
+  - движение
+description: |-
+  Действием рванитесь на 30 футов по прямой — сквозь стены. Стены на пути рушатся и больше не стоят. Каждое существо в 5 футах от пробитого места совершает спасбросок Силы: провал — {damage} и падает ничком, успех — половина урона.
+
+  Рывок не провоцирует атак и кончается в свободной клетке.
+activation: action
+uses: 1
+recovery: short
+save:
+  ability: str
+damage:
+  - formula: 2d8
+    type: bludgeoning
+ranks:
+  - text: Урон {damage}.
+    damage:
+      - formula: 3d8
+        type: bludgeoning
+  - text: Урон {damage}, 2 заряда.
+    uses: 2
+    damage:
+      - formula: 3d8
+        type: bludgeoning
+blast: ohyeah

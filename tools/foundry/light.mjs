@@ -1,7 +1,7 @@
 // Навыки света в настоящей Foundry: node tools/foundry/light.mjs [--headed] [--slow[=мс]]
 // Девять навыков в компендиуме (редкость, теги, заряды, отдых), кладутся персонажу и экипируются,
 // синергия тега «свет» проходит пороги 2/4/6.
-import { connect, checker } from './harness.mjs';
+import { connect, checker, moduleErrors } from './harness.mjs';
 import { install, scene, skills } from './fixtures.mjs';
 
 const LIGHT = {
@@ -61,7 +61,7 @@ for (const [count, re] of steps) {
 }
 
 await f.shot('light');
-const errors = f.log.filter(l => /pageerror|error:.*gachadnd/.test(l));
+const errors = moduleErrors(f.log);
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));
 const failed = summary();
 await f.close();

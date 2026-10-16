@@ -20,9 +20,11 @@ export async function install(page) {
             mod: path => import(`/modules/${MODULE}/scripts/${path}`),
             /**
              * Подложить результаты костей: gdt.dice(100, 18, 33) — следующие к100 дадут 18, затем 33.
-             * Остальные кости бросаются как обычно.
+             * Каждый вызов заменяет очередь; после неё кости бросаются как обычно.
              */
             dice(faces, ...values) {
+                // Очередь заменяется: остатки прошлых подложенных костей не достаются чужому броску
+                queue.length = 0;
                 queue.push(...values.map(v => ({ faces, v })));
                 CONFIG.Dice.randomUniform = function () {
                     // DiceTerm v13: Math.ceil((1 - randomUniform()) * faces); грань знает только
@@ -32,6 +34,12 @@ export async function install(page) {
                     if (!queue.length) CONFIG.Dice.randomUniform = original;
                     return 1 - (next.v - 0.5) / next.faces;
                 };
+            },
+            /** Дописать кости в очередь, не сбрасывая её: gdt.dice(20, 19); gdt.queue(6, 4, 4) */
+            queue(faces, ...values) {
+                const rest = queue.splice(0);
+                gdt.dice(faces, ...values);
+                queue.unshift(...rest);
             },
             resetDice() { queue.length = 0; CONFIG.Dice.randomUniform = original; },
             sleep: ms => new Promise(r => setTimeout(r, ms)),

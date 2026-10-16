@@ -1,0 +1,29 @@
+id: aUojdEmqqzE38skm
+name: Взрыв трупа
+rarity: blue
+tags:
+  - взрыв
+  - казнь
+description: |-
+  Бонусным действием взорвите труп в пределах 60 футов. Каждое существо в 10 футах от него совершает спасбросок Ловкости и получает урон огнём, равный четверти максимума ПЗ погибшего, при успехе — половину. Труп исчезает.
+
+  Если взрыв кого-то убил, его труп можно взорвать сразу же, без заряда и действия.
+activation: bonus
+range: 60
+uses: 2
+recovery: short
+target:
+  type: radius
+  value: 10
+save:
+  ability: dex
+ranks:
+  - text: Радиус взрыва 15 футов.
+    target:
+      type: radius
+      value: 15
+  - text: Радиус взрыва 20 футов.
+    target:
+      type: radius
+      value: 20
+blast: corpse
