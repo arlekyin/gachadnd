@@ -22,6 +22,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { onRenderChatMessage } from "../../core/chat-hooks.js";
 import { addTurnEffect } from "./turn-effects.js";
+import { saveCard } from "./blast/common.js";
 
 export const MAX = 5;
 export const MIN = -5;
@@ -217,36 +218,16 @@ async function fear(combat, combatant) {
         if (hero === enemy || !hostile(hero, enemy) || feetBetween(hero, enemy) > FEAR_FT) continue;
         const source = hero.actor;
         const dc = 8 + (source.system?.attributes?.prof ?? 2) + (source.system?.abilities?.cha?.mod ?? 0);
-        const success = await wisdomSave(actor, dc);
-        if (success) continue;
-        await addTurnEffect(actor, combat, {
-            name: 'Испуган аурой', img: 'icons/svg/terror.svg', statuses: ['frightened'],
-            description: `Аура ${source.name}: испуган до конца своего хода.`
-        }, { until: 'thisTurn', tokenId: enemy.document.id });
-        await ChatMessage.create({
-            speaker: ChatMessage.getSpeaker({ actor: source }),
-            content: `<div class="gd-aura-card"><div class="gd-aura-title"><i class="fas fa-crown"></i> Главный герой</div><p>${esc(enemy.name)} проваливает спасбросок Мудрости (Сл ${dc}) — испуган до конца своего хода.</p></div>`
+        // Как у способностей dnd5e: враг бросает спасбросок сам (кнопка в карточке), испуг — на провале
+        await saveCard({
+            actor: source, title: 'Главный герой', icon: 'fa-crown', tokens: [enemy.document], ability: 'wis', dc,
+            note: `${esc(enemy.name)} начинает ход рядом с главным героем. Провал — испуган до конца своего хода (модуль наложит сам).`,
+            onFail: { effect: { name: 'Испуган аурой', img: 'icons/svg/terror.svg', statuses: ['frightened'], description: `Аура ${source.name}: испуган до конца своего хода.` }, until: 'thisTurn' }
         });
         return;
     }
 }
 
-async function wisdomSave(actor, dc) {
-    try {
-        if (typeof actor.rollSavingThrow === 'function') {
-            const rolls = await actor.rollSavingThrow({ ability: 'wis', target: dc }, { configure: false }, {});
-            const roll = Array.isArray(rolls) ? rolls[0] : rolls;
-            if (roll) return roll.isSuccess ?? roll.total >= dc;
-        }
-    } catch (error) {
-        console.warn(`${MODULE_ID} | Аура: спасбросок`, error);
-    }
-    const save = actor.system?.abilities?.wis?.save;
-    const mod = Number(typeof save === 'object' ? save?.value : save) || actor.system?.abilities?.wis?.mod || 0;
-    const roll = await new Roll('1d20 + @mod', { mod }).evaluate();
-    await roll.toMessage?.({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `Спасбросок Мудрости (Сл ${dc}) против ауры` });
-    return roll.total >= dc;
-}
 
 // Добивание врага в ход персонажа с аурой: +1
 const killed = new Set();

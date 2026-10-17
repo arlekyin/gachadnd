@@ -19,6 +19,7 @@ import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { addTurnEffect } from "../turn-effects.js";
 import { pickCell } from "../pick.js";
 import { isBlast, ref, actorFrom, tokenOf, esc, quiet, dcOf, centerOf, feetToPx, inCircle, blast } from "./common.js";
+import { saveCard } from "./common.js";
 
 const FLAG = 'gas';
 const START = 10, GROW = 5, MAX = 30;
@@ -116,10 +117,11 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const token = combat.combatant?.token;
     const actor = token?.actor;
     if (!actor || !inside(scene, state, token) || (actor.system?.attributes?.hp?.value ?? 1) <= 0) return;
-    const rolls = await actor.rollSavingThrow({ ability: 'con', target: state.dc }, { configure: false }, {});
-    const roll = Array.isArray(rolls) ? rolls[0] : rolls;
-    if (roll && (roll.isSuccess ?? roll.total >= state.dc)) return;
-    await addTurnEffect(actor, combat, { name: 'Газ: отравлен', img: 'icons/svg/poison.svg', statuses: ['poisoned'], description: 'Наглотался газа: отравлен до конца хода.' }, { until: 'thisTurn', tokenId: token.id });
+    await saveCard({
+        actor: game.actors.get(state.actorId) ?? actor, title: `Утечка газа: ${token.name} в облаке`, icon: 'fa-smog', tokens: [token],
+        ability: 'con', dc: state.dc, note: 'Провал — отравлен до конца хода (модуль наложит сам).',
+        onFail: { effect: { name: 'Газ: отравлен', img: 'icons/svg/poison.svg', statuses: ['poisoned'], description: 'Наглотался газа: отравлен до конца хода.' }, until: 'thisTurn' }
+    });
 });
 
 // Урон огнём по существу в облаке — поджигает газ (не предпросмотр: только применённый урон)

@@ -4,7 +4,7 @@
 // нет, свечение); Раскалённый клинок (нагрев от попаданий, урон огнём строкой, плавление, сброс конусом);
 // Феникс (пепел, возрождение со вспышкой, растоптать пепел).
 import { connect, checker, moduleErrors, done } from './harness.mjs';
-import { install, scene, skills, combat } from './fixtures.mjs';
+import { install, scene, skills, combat, resolveBlast } from './fixtures.mjs';
 
 const f = await connect();
 const { page } = f;
@@ -74,25 +74,27 @@ const fire = () => ev(() => game.combat.getFlag('gachadnd', 'fire'));
 let st = await fire();
 check('Это нормально: клетка выбрана мышью — пожар в (6,7)', JSON.stringify(st?.cells) === '[[6,7]]', JSON.stringify(st?.cells));
 await f.shot('fine_1');
-await ev(() => { gdt.mark(); gdt.dice(6, 6, 6); });
+await ev(() => gdt.mark());
 await next(); // ход «Рядом»: ещё раунд 1, огонь в одной клетке — его клетка (7,7) не горит
 const hpA0 = await hp(A);
 await next(); // Бегун
 // Раунд 2: огонь на соседние клетки; «Рядом» начинает ход в (7,7) — в огне
-await ev(() => gdt.dice(6, 6, 6));
 check('раунд 2', (await next()) === '2:Герой', await turn());
 st = await fire();
 check('раунд 2: огонь перекинулся на 4 соседние клетки', st.cells.length === 5, JSON.stringify(st.cells));
+const cards0 = await ev(() => game.messages.contents.filter(m => m.flags?.gachadnd?.blastCard).length);
 await next();
-check('«Рядом» начал ход в огне — 2d6 = 12', hpA0 - (await hp(A)) === 12, `${hpA0} → ${await hp(A)}`);
+let r = await resolveBlast(page, { dice: [[6, 6, 6]] });
+check('«Рядом» начал ход в огне — карточка пожара, урон кнопкой: 2d6 = 12', r.lost[A] === 12 && cards0 < await ev(() => game.messages.contents.filter(m => m.flags?.gachadnd?.blastCard).length) && hpA0 - (await hp(A)) === 12, `${hpA0} → ${await hp(A)}`);
 // Бегун заходит в огонь в свой ход — в обход стены: сначала встаёт над ней
 await place(B, 7, 4);
 await next();
 const hpB0 = await hp(B);
-await ev(() => gdt.dice(6, 2, 3));
+const cardsB = await ev(() => game.messages.contents.filter(m => m.flags?.gachadnd?.blastCard).length);
 await ev(B => game.actors.get(B).getActiveTokens()[0].document.update({ x: 600, y: 600 }), B);
-await ev(B => gdt.until(() => (game.actors.get(B).system.attributes.hp.value) < 30, 6000), B);
-check('Бегун зашёл в огонь в свой ход — урон', hpB0 - (await hp(B)) === 5, `${hpB0} → ${await hp(B)}`);
+await ev(n => gdt.until(() => game.messages.contents.filter(m => m.flags?.gachadnd?.blastCard).length > n, 6000), cardsB);
+r = await resolveBlast(page, { dice: [[6, 2, 3]] });
+check('Бегун зашёл в огонь в свой ход — карточка, урон кнопкой: 5', r.lost[B] === 5 && hpB0 - (await hp(B)) === 5, `${hpB0} → ${await hp(B)}`);
 // Герой в огне: в начале своего хода — временные ПЗ
 await place(hero, 6, 7);
 check('раунд 3', (await next()) === '3:Герой', await turn());
@@ -108,21 +110,21 @@ await ev(() => gdt.mark());
 await useNow(hero, S['Пол — это лава']);
 await wait(1200);
 check('лава: флаг и свечение по краям экрана', !!(await ev(() => game.combat.getFlag('gachadnd', 'lava'))) && !!(await page.$('#gd-lava-glow')));
-const hpH0 = await hp(hero);
-await ev(() => gdt.dice(6, 3, 3));
-await next(); // герой стоял — 6 (временные ПЗ 3 поглотят часть)
-check('лава: герой закончил ход на месте — 2d6 = 6', hpH0 - (await hp(hero)) === 6, `${hpH0} → ${await hp(hero)}`);
+const blastCards = () => ev(() => game.messages.contents.filter(m => m.flags?.gachadnd?.blastCard && m.content.includes('Пол — это лава')).length);
+await next(); // герой стоял — карточка лавы
+r = await resolveBlast(page, { dice: [[6, 3, 3]], of: hero, title: 'Пол — это лава' });
+check('лава: герой закончил ход на месте — карточка, урон кнопкой: 2d6 = 6 (вместе с временными ПЗ)', r.lost[hero] === 6, JSON.stringify(r.lost));
 // «Рядом» двигается, Бегун стоит
 const a1 = await hp(A);
 await place(A, 7, 9);
-await ev(() => gdt.dice(6, 1, 1));
+let n0 = await blastCards();
 await next();
-check('лава: «Рядом» сдвинулся — не горит', (await hp(A)) === a1, `${a1} → ${await hp(A)}`);
+check('лава: «Рядом» сдвинулся — карточки нет', (await blastCards()) === n0 && (await hp(A)) === a1, `${a1} → ${await hp(A)}`);
 const b1 = await hp(B);
 await ev(B => game.actors.get(B).getActiveTokens()[0].document.update({ elevation: 10 }), B);
-await ev(() => gdt.dice(6, 1, 1));
+n0 = await blastCards();
 await next();
-check('лава: Бегун стоял, но выше пола — не горит', (await hp(B)) === b1, `${b1} → ${await hp(B)}`);
+check('лава: Бегун стоял, но выше пола — карточки нет', (await blastCards()) === n0 && (await hp(B)) === b1, `${b1} → ${await hp(B)}`);
 
 // ---------- Раскалённый клинок: ход героя
 await ev(() => game.combat.unsetFlag('gachadnd', 'lava'));
@@ -145,11 +147,11 @@ const dmg = await ev(async hero => {
     return rolls.map(r => `${r.options.type}:${r.formula}`).join(' | ');
 }, hero);
 check('клинок: урон оружием + нагрев огнём отдельной строкой', /fire:1$/.test(dmg), dmg);
-const h0 = await hp(hero);
 await swing(19); await swing(19);
-await swing(19, [4, 4]);
+await swing(19);
 await wait(800);
-check('клинок: нагрев 4 — плавится: 2d6 = 8 по владельцу, нагрев 0', (await heat()) === 0 && h0 - (await hp(hero)) === 8, `нагрев ${await heat()}, ПЗ ${h0} → ${await hp(hero)}`);
+r = await resolveBlast(page, { dice: [[6, 4, 4]] });
+check('клинок: нагрев 4 — плавится: карточка по владельцу, урон кнопкой 2d6 = 8, нагрев 0', (await heat()) === 0 && r.lost[hero] === 8 && r.card.victims.length === 1, `нагрев ${await heat()}, ${JSON.stringify(r.lost)}`);
 // Холодный — стравить нечего
 await useNow(hero, S['Раскалённый клинок']);
 check('клинок: холодный — стравить нечего', await ev(() => gdt.warnings.some(w => /холодный/.test(w))));
@@ -167,11 +169,12 @@ for (let i = 0; i < 40; i++) {
 await ev(() => gdt.until(() => gdt.previewing(), 5000));
 await wait(300);
 const heroCell = await ev(hero => { const t = game.actors.get(hero).getActiveTokens()[0].document; return [t.x / 100, t.y / 100]; }, hero);
-await ev(() => gdt.dice(6, 5, 5, 5, 20, 20));
 await clickCell(heroCell[0], heroCell[1]);
 await ev(() => gdt.until(() => gdt.chats().some(c => /стравливает жар/.test(c)), 6000));
 const vent = (await chats()).find(c => /стравливает жар/.test(c));
-check('клинок: стравить жар 3 — конус, спасбросок Ловкости, 3d6', /3d6/.test(vent ?? '') && /Ловкости/.test(vent ?? '') && (await heat()) === 0, vent);
+const aVent = await hp(A);
+r = await resolveBlast(page, { saves: { [A]: 1 }, dice: [[6, 5, 5, 5]], title: 'стравливает жар' });
+check('клинок: стравить жар 3 — карточка: спасбросок Ловкости и урон 3d6 кнопками; «Рядом» провалил — 15', /Ловкости/.test(vent ?? '') && r.card.formula === '3d6' && r.lost[A] === 15 && aVent - (await hp(A)) === 15 && (await heat()) === 0, `${vent}; бросок ${r.total}, спасбросок ${JSON.stringify(r.saved)}, потеря ${JSON.stringify(r.lost)}`);
 check('клинок: шаблон конуса убран', !(await ev(scene => gdt.templates(scene).length, ids.scene)));
 
 // ---------- Феникс
@@ -187,14 +190,12 @@ check('Феникс: 0 ПЗ — кучка пепла, заряд потраче
 await f.shot('phoenix_ash');
 const aBefore = await hp(A);
 // Сейчас ход героя: возрождение — в начале его следующего хода; кости — прямо перед ним
-do {
-    if (await ev(() => /Герой/.test(game.combat.nextCombatant?.name ?? ''))) await ev(() => gdt.dice(6, 6, 6, 6, 6));
-    await next();
-} while (!/Герой/.test(await turn()));
+do { await next(); } while (!/Герой/.test(await turn()));
 await wait(1000);
 const reborn = await ev(hero => ({ hp: game.actors.get(hero).system.attributes.hp.value, tex: game.actors.get(hero).getActiveTokens()[0].document.texture.src, flag: !!game.actors.get(hero).getFlag('gachadnd', 'phoenixAsh') }), hero);
 check('Феникс: в начале хода — возрождение с половиной ПЗ, токен прежний', reborn.hp === 30 && reborn.tex === tex0 && !reborn.flag, JSON.stringify(reborn));
-check('Феникс: вспышка — 4d6 = 24 по соседу', aBefore - (await hp(A)) === 24, `${aBefore} → ${await hp(A)}`);
+r = await resolveBlast(page, { dice: [[6, 6, 6, 6, 6]] });
+check('Феникс: вспышка — карточка, урон кнопкой: 4d6 = 24 по соседу', r.lost[A] === 24 && aBefore - (await hp(A)) === 24, `${aBefore} → ${await hp(A)}`);
 // Растоптать пепел
 await ev(({ hero, id }) => game.actors.get(hero).items.get(id).update({ 'system.uses.spent': 0 }), { hero, id: S['Феникс'] });
 await ev(hero => game.actors.get(hero).update({ 'system.attributes.hp.value': 0 }), hero);

@@ -22,6 +22,7 @@ import { placeToken } from "./pick.js";
 import { key, cellOf, footprint, nearestFree } from "./grid.js";
 import { CARDS, dealCards, applyCards, shuffleInitiative, broadcastCards } from "./freaky-cards.js";
 import { fxOn, fxCalm, soundOn, sfxVolume } from "../../core/prefs.js";
+import { blast } from "./blast/common.js";
 
 // Катсцена, мс: окна прячутся, фон темнеет и камера наезжает; полёт; пауза; всё возвращается
 const T = { focus: 550, fly: 1300, hold: 450, back: 550 };
@@ -152,11 +153,11 @@ async function freakyFriday({ combatId, actorId }) {
     // Придавленные — дробящий урон (живым)
     let crush = '';
     if (crushed.length) {
-        const roll = await new Roll(CRUSH).evaluate();
         const hurt = crushed.map(id => scene.tokens.get(id)).filter(t => t?.actor && alive(t.actor));
-        for (const token of hurt) await token.actor.applyDamage([{ value: roll.total, type: 'bludgeoning' }]);
+        // Как у способностей dnd5e: урон — кнопкой в карточке, применяет Мастер лотком
+        if (hurt.length) await blast({ actor: game.actors.get(actorId), title: 'Чумовая пятница: придавило', icon: 'fa-weight-hanging', victims: hurt, formula: CRUSH, type: 'bludgeoning' });
         const who = hurt.map(t => t.name).join(', ');
-        crush = who ? `<br>Придавило: ${foundry.utils.escapeHTML?.(who) ?? who} — ${roll.total} дробящего урона (${CRUSH}).` : '';
+        crush = who ? `<br>Придавило: ${foundry.utils.escapeHTML?.(who) ?? who} — ${CRUSH} дробящего урона, кнопкой в карточке.` : '';
     }
     // Карты: каждому участнику, заклинателю — баф
     const dealt = dealCards(participants(combat), actorId);

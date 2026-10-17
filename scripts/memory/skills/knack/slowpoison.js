@@ -3,8 +3,9 @@
  *
  * Бонусным действием в бою персонаж отмечает цель (T) в пределах 60 футов. Отметка считает весь урон,
  * который цель получает от кого угодно (убыль ПЗ вместе с временными) в течение 3 раундов: в раунде
- * отметки и двух следующих. Когда начинается третий раунд после отметки, яд срабатывает: урон Ядом,
- * равный подсчитанному (защиты цели считает dnd5e). Цель умерла раньше — яд пропадает.
+ * отметки и двух следующих. Когда начинается третий раунд после отметки, яд срабатывает: карточка
+ * с кнопкой урона Ядом на подсчитанное — бросает игрок, применяет Мастер лотком dnd5e (защиты цели
+ * считает dnd5e). Цель умерла раньше — яд пропадает. Карточка навыка dnd5e — в чате, как у способности.
  *
  * Счёт ведёт Мастер: флаг боя slowPoison [{ id, sourceId, tokenId, sceneId, round, hp, sum }], где hp —
  * последние известные ПЗ цели; эффект на цели «Медленный яд: N» показывает набранное.
@@ -12,17 +13,17 @@
 
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
-import { isKnack, ref, actorFrom, tokenOf, esc, quiet, targetsWithin, combatOf, hpOf, alive, card } from "./common.js";
+import { isKnack, ref, actorFrom, tokenOf, esc, noTemplate, targetsWithin, combatOf, hpOf, alive, card } from "./common.js";
 
 const RANGE = 60;
 const ROUNDS = 3;
 const FLAG = 'slowPoison';
 const ICON = 'icons/svg/poison.svg';
 
-Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
+Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     const item = activity?.item, actor = item?.actor;
     if (!isKnack(item, 'slowpoison') || !actor) return;
-    quiet(usage, message);
+    noTemplate(usage);
     const token = tokenOf(actor)?.document;
     if (!combatOf(actor) || !token) { ui.notifications.warn('Медленный яд — только в бою, в котором участвует персонаж.'); return false; }
     if (targetsWithin(token, RANGE).length !== 1) { ui.notifications.warn(`Медленный яд: выберите одну цель (T) в пределах ${RANGE} футов.`); return false; }
@@ -96,9 +97,9 @@ async function release(entry) {
     if (!actor) return;
     await effectOf(actor, entry.id)?.delete();
     if (!alive(actor)) return card(source ?? actor, 'Медленный яд', `<p>${esc(target.name)} не дожил до яда — отметка пропала.</p>`, { icon: 'fa-flask' });
-    const before = hpOf(actor);
-    if (entry.sum > 0) await actor.applyDamage([{ value: entry.sum, type: 'poison' }], { gachadndSource: entry.sourceId });
-    return card(source ?? actor, 'Медленный яд', `<p>Яд сработал: ${esc(target.name)} получает ${entry.sum} урона Ядом (−${before - hpOf(actor)}).</p>`, { icon: 'fa-flask' });
+    if (!entry.sum) return card(source ?? actor, 'Медленный яд', `<p>Яд сработал впустую: ${esc(target.name)} за три раунда не получил урона.</p>`, { icon: 'fa-flask' });
+    return card(source ?? actor, 'Медленный яд', `<p>Яд сработал: всё, что ${esc(target.name)} получил за три раунда, возвращается разом.</p><p>[[/damage ${entry.sum} poison]]</p>`,
+        { icon: 'fa-flask', flags: { slowPoisonRelease: { tokenId: target.id, sceneId: entry.sceneId, sum: entry.sum } } });
 }
 
 // Конец боя: отметки и эффекты снимаются

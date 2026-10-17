@@ -2,13 +2,14 @@
  * Gacha Roguelike dnd5e — Навыки огня и взрыва: общее
  *
  * Навык — флаг blast: <вид> (fine, lava, blade, phoenix, potato, hiss, barrel, corpse, gas, ohyeah).
- * Каждый вид — свой файл в этой папке. Здесь: поиск навыка, формула урона и Сл активности,
- * подавление штатной карточки dnd5e, взрыв (урон один раз, спасброски каждого, защиты целей
- * считает dnd5e, итог — одна карточка) и вспышка взрыва на сцене у всех.
+ * Каждый вид — свой файл в этой папке. Здесь: поиск навыка, формула урона и Сл активности, карточка
+ * взрыва с кнопками dnd5e (бросают игроки и цели, применяет Мастер лотком), ожидание спасброска для
+ * эффектов провала и вспышка взрыва на сцене у всех.
  */
 
 import { MODULE_ID } from "../../../core/constants.js";
-import { emit, onSocket } from "../../../core/socket.js";
+import { emit, onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
+import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { feetBetween } from "../light/flash.js";
 import { esc, centerOf } from "../light/common.js";
 
@@ -23,10 +24,23 @@ export const blastSkill = (actor, kind) => actor?.items?.find(i => isBlast(i, ki
 const ABILITY = { str: 'Силы', dex: 'Ловкости', con: 'Телосложения', int: 'Интеллекта', wis: 'Мудрости', cha: 'Харизмы' };
 const DAMAGE = { fire: 'огнём', thunder: 'звуком', bludgeoning: 'дробящий', poison: 'ядом', force: 'силовым полем' };
 
-/** Без штатной карточки и шаблона dnd5e: навык разрешает себя сам */
-export function quiet(usage, message) {
+/**
+ * Шаблон dnd5e не ставится — область навык считает сам. Карточка навыка dnd5e остаётся в чате, как у
+ * любой способности; её кнопки броска прячутся (см. ниже) — броски придут карточкой события
+ */
+export function quiet(usage) {
     if (usage) usage.create = { ...(usage.create ?? {}), measuredTemplate: false };
-    if (message) message.create = false;
+}
+
+/** Карточка проверки без урона: кто бросает спасбросок, кнопка dnd5e; onFail — эффект на провале */
+export async function saveCard({ actor, title, icon = 'fa-shield', tokens, ability, dc, note = '', onFail = null }) {
+    const TextEditor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+    const content = await TextEditor.enrichHTML(`<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>
+        ${note ? `<p>${note}</p>` : ''}<p>Спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}: ${esc(tokens.map(t => t.name).join(', '))}</p>
+        <p class="gd-blast-rolls">[[/save ${ability} ${dc}]]</p></div>`, { rollData: actor?.getRollData?.() ?? {} });
+    const message = await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content });
+    if (onFail) await expectSave(tokens, { ability, dc, ...onFail });
+    return message;
 }
 
 /** Урон навыка на его ранге: { formula, type } из первой части урона активности */
@@ -65,67 +79,97 @@ export function inCircle(scene, point, radius) {
     });
 }
 
-const hpOf = actor => {
-    const hp = actor?.system?.attributes?.hp ?? {};
-    return (Number(hp.value) || 0) + (Number(hp.temp) || 0);
-};
 export const isDead = actor => (Number(actor?.system?.attributes?.hp?.value) || 0) <= 0;
 
 /**
- * Взрыв: урон бросается один раз, каждый задетый — спасбросок (если есть), урон применяет dnd5e
- * (сопротивления и иммунитеты цели); splash — половина без спасброска, self — половина владельцу.
- * Итог — одна карточка в чате.
- * @returns {Promise<{ total: number, rows: object[], killed: TokenDocument[] }>}
+ * Взрыв — как у способностей dnd5e: модуль не бросает и не применяет урон сам. Карточка в чате: кто
+ * задет, кнопка спасброска (бросают цели) и кнопка урона (бросает игрок), Мастер применяет урон лотком
+ * dnd5e — защиты цели считает dnd5e, успех спасброска — множитель ½ в лотке. splash — осколки (половина
+ * без спасброска), self — владельцу половина. onFail — эффект на провале спасброска: модуль ждёт
+ * спасбросок каждой задетой цели и накладывает его сам (expectSave).
+ * @returns {Promise<{ victims: TokenDocument[], message: ChatMessage }>}
  */
-export async function blast({ actor, title, icon = 'fa-burst', victims, splash = [], formula, type = 'fire', ability = null, dc = null, half = true, self = null, at = null, note = '', extra = null }) {
-    const roll = await new Roll(formula).evaluate();
-    game.dice3d?.showForRoll?.(roll, game.user, true);
-    const rows = [], killed = [];
-    for (const token of victims) {
-        const target = token.actor;
-        if (!target) continue;
-        let value = roll.total, save = null;
-        if (ability) {
-            const rolls = await target.rollSavingThrow({ ability, target: dc }, { configure: false }, { create: false });
-            const r = Array.isArray(rolls) ? rolls[0] : rolls;
-            const success = r ? (r.isSuccess ?? r.total >= dc) : false;
-            save = { total: r?.total ?? '—', success };
-            if (success) value = half ? Math.floor(value / 2) : 0;
-        }
-        const before = hpOf(target), alive = !isDead(target);
-        // Источник урона — для навыков, которые следят за убийствами (Навылет)
-        if (value > 0) await target.applyDamage([{ value, type }], { gachadndSource: actor?.id });
-        if (extra) await extra(token, { save, value });
-        rows.push({ name: token.name, save, lost: before - hpOf(target) });
-        if (alive && isDead(target)) killed.push(token);
-    }
-    // Осколки: половина урона без спасброска
-    for (const token of splash) {
-        const target = token.actor;
-        if (!target) continue;
-        const before = hpOf(target), alive = !isDead(target);
-        const value = Math.floor(roll.total / 2);
-        if (value > 0) await target.applyDamage([{ value, type }]);
-        rows.push({ name: `${token.name} (осколки)`, save: null, lost: before - hpOf(target) });
-        if (alive && isDead(target)) killed.push(token);
-    }
-    let selfRow = '';
-    if (self) {
-        const value = Math.floor(roll.total / 2);
-        const before = hpOf(self);
-        if (value > 0) await self.applyDamage([{ value, type }]);
-        selfRow = `<li>${esc(self.name)} — половина без спасброска: −${before - hpOf(self)}</li>`;
-    }
+export async function blast({ actor, title, icon = 'fa-burst', victims = [], splash = [], formula, type = 'fire', ability = null, dc = null, half = true, self = null, at = null, note = '', onFail = null, flags = {} }) {
     if (at) boom(at);
-    const list = rows.map(r => `<li>${esc(r.name)}${r.save ? ` — спасбросок ${r.save.total}: ${r.save.success ? 'успех' : 'провал'}` : ''} — <strong>−${r.lost}</strong></li>`).join('');
-    await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>
-            <p>Урон: <strong>${roll.total}</strong> (${esc(formula)}) ${DAMAGE[type] ?? type}${ability ? `, спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}${half ? ' — успех вдвое меньше' : ''}` : ''}.</p>
-            ${note ? `<p>${note}</p>` : ''}<ul class="gd-blast-list">${list || '<li>Никого не задело.</li>'}${selfRow}</ul></div>`
+    const names = list => esc(list.map(t => t.name).join(', '));
+    const lines = [];
+    if (victims.length) lines.push(`<li>${ability ? `Спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}${half ? ' — успех: половина урона' : ' — успех: без урона'}` : 'Без спасброска'}: ${names(victims)}</li>`);
+    if (splash.length) lines.push(`<li>Осколки — половина урона без спасброска: ${names(splash)}</li>`);
+    if (self) lines.push(`<li>${esc(self.name)} — половина урона без спасброска</li>`);
+    const buttons = [ability && victims.length ? `[[/save ${ability} ${dc}]]` : '', `[[/damage ${formula} ${type}]]`].filter(Boolean).join(' ');
+    const TextEditor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+    const content = await TextEditor.enrichHTML(`<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>
+        ${note ? `<p>${note}</p>` : ''}<ul class="gd-blast-list">${lines.join('') || '<li>Никого не задело.</li>'}</ul>
+        <p class="gd-blast-rolls">${buttons}</p><p class="gd-blast-hint">Урон ${DAMAGE[type] ?? type} применяет Мастер лотком под броском.</p></div>`, { rollData: actor?.getRollData?.() ?? {} });
+    const message = await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor }), content,
+        flags: { [MODULE_ID]: { blastCard: {
+            victims: victims.map(t => t.id), splash: splash.map(t => t.id), self: self?.id ?? null,
+            sceneId: victims[0]?.parent?.id ?? splash[0]?.parent?.id ?? at?.sceneId ?? canvas?.scene?.id ?? null,
+            formula, type, ability, dc, half, ...flags
+        } } }
     });
-    return { total: roll.total, rows, killed };
+    if (onFail && ability) await expectSave(victims, { ability, dc, ...onFail });
+    return { victims, message };
 }
+
+// ==========================================
+// ОЖИДАНИЕ СПАСБРОСКА: эффект на провале
+// ==========================================
+
+const SAVE_FLAG = 'pendingSave';
+
+/**
+ * Цели бросят спасбросок сами (кнопкой в карточке); на провале модуль накладывает эффект.
+ * @param {TokenDocument[]} tokens
+ * @param {object} o { ability, dc, status, effect, until } — status: id состояния dnd5e (prone…);
+ *   effect: данные эффекта; until: 'thisTurn' | 'nextTurn' | 'nextStart' — эффект на ход в бою
+ */
+export async function expectSave(tokens, { ability, dc, status = null, effect = null, until = null }) {
+    for (const token of tokens) {
+        if (!token?.actor) continue;
+        await token.actor.setFlag(MODULE_ID, SAVE_FLAG, { ability, dc, status, effect, until, tokenId: token.id, sceneId: token.parent?.id ?? null });
+    }
+}
+
+// Спасбросок цели с ожиданием — у того клиента, где брошен; решает Мастер
+Hooks.on('dnd5e.rollSavingThrow', (rolls, data) => {
+    const actor = data?.subject;
+    const pending = actor?.getFlag?.(MODULE_ID, SAVE_FLAG);
+    if (!pending || data.ability !== pending.ability) return;
+    const roll = Array.isArray(rolls) ? rolls[0] : rolls;
+    if (roll) requestGM('blastSaveResult', { actorUuid: actor.uuid, total: roll.total });
+});
+
+onSocket('blastSaveResult', ({ payload }) => {
+    if (isActiveGM()) settleSave(payload).catch(error => console.error(`${MODULE_ID} | спасбросок`, error));
+});
+
+export async function settleSave({ actorUuid, total }) {
+    const actor = await fromUuid(actorUuid);
+    const pending = actor?.getFlag(MODULE_ID, SAVE_FLAG);
+    if (!pending) return;
+    await actor.unsetFlag(MODULE_ID, SAVE_FLAG);
+    if (total >= pending.dc) return;
+    if (pending.status && !actor.statuses?.has(pending.status)) await actor.toggleStatusEffect(pending.status, { active: true });
+    if (pending.effect) {
+        const combat = game.combat?.started ? game.combat : null;
+        if (combat && pending.until) {
+            const { addTurnEffect } = await import("../turn-effects.js");
+            await addTurnEffect(actor, combat, pending.effect, { until: pending.until, tokenId: pending.tokenId });
+        } else await actor.createEmbeddedDocuments('ActiveEffect', [{ showIcon: 2, ...pending.effect }]);
+    }
+}
+
+// Карточка навыка огня и взрыва: кнопки броска dnd5e прячутся — урон и спасбросок придут карточкой
+// события модуля (взрыв картошки, бочки, газа…), когда он случится
+const ROLL_BUTTONS = '[data-action="rollDamage"], [data-action="rollSave"], [data-action="rollAttack"], [data-action="placeTemplate"]';
+onRenderChatMessage((message, html) => {
+    if (!html?.querySelectorAll) return;
+    const item = message.getAssociatedItem?.() ?? null;
+    if (!blastKind(item)) return;
+    html.querySelectorAll(ROLL_BUTTONS).forEach(b => b.remove());
+});
 
 /** Вспышка взрыва у всех: { sceneId, x, y, radius (пиксели), color } */
 export function boom(data) {

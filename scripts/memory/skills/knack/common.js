@@ -46,13 +46,23 @@ export function sourceOf(options = {}) {
     return message?.speaker ? ChatMessage.getSpeakerActor(message.speaker) : null;
 }
 
-/** Карточка навыка в чате */
-export function card(actor, title, html, { icon = 'fa-star', flags = {} } = {}) {
-    return ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card gd-knack-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>${html}</div>`,
-        flags: { [MODULE_ID]: flags }
-    });
+/**
+ * Карточка навыка в чате. Кнопки бросков — помощники dnd5e в тексте: [[/damage 12 poison]],
+ * [[/save con 15]] — кнопки, которые жмут сами игроки и Мастер, как в карточке способности.
+ */
+export async function card(actor, title, html, { icon = 'fa-star', flags = {} } = {}) {
+    const TextEditor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+    const content = await TextEditor.enrichHTML(`<div class="gd-blast-card gd-knack-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>${html}</div>`,
+        { rollData: actor?.getRollData?.() ?? {} });
+    return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content, flags: { [MODULE_ID]: flags } });
+}
+
+/**
+ * Карточка навыка dnd5e остаётся в чате (кнопки броска — у игроков); модуль убирает только постановку
+ * шаблона: область вокруг персонажа он считает сам
+ */
+export function noTemplate(usage) {
+    if (usage) usage.create = { ...(usage.create ?? {}), measuredTemplate: false };
 }
 
 /** Вернуть потраченный заряд (отказ, отмена выбора) */

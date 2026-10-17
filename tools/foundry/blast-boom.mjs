@@ -5,7 +5,7 @@
 // Утечка газа (клетка мышью, отравление, рост облака, поджог уроном огнём); Ох, да! (прицел мышью,
 // пролом стены, перенос, спасбросок Силы и ничком).
 import { connect, checker, moduleErrors, done } from './harness.mjs';
-import { install, scene, skills, combat } from './fixtures.mjs';
+import { install, scene, skills, combat, resolveBlast } from './fixtures.mjs';
 
 const f = await connect();
 const { page } = f;
@@ -78,7 +78,7 @@ await wait(1500);
 const bombs = () => ev(() => game.combat.getFlag('gachadnd', 'potatoes') ?? []);
 let b = await bombs();
 check('картошка: бомба на «Один», таймер 2–5', b.length === 1 && b[0].timer >= 2 && b[0].timer <= 5 && (await effects(E1)).includes('Горячая картошка'), JSON.stringify(b));
-check('картошка: таймер — шёпотом владельцу', await ev(() => game.messages.contents.slice(gdt._mark).some(m => m.whisper?.length && /Таймер бомбы/.test(m.content))));
+check('картошка: таймер — видимый бросок 1d4 + 1 шёпотом владельцу и Мастеру', await ev(() => game.messages.contents.slice(gdt._mark).some(m => m.whisper?.length && /Таймер бомбы/.test(m.flavor ?? '') && m.rolls[0]?.formula === '1d4 + 1')));
 // Передача: «Два» не вплотную — нельзя; вплотную — можно
 await next(); // ход «Один»
 await target(E2);
@@ -97,10 +97,10 @@ await ev(() => game.combat.setFlag('gachadnd', 'potatoes', game.combat.getFlag('
 const h1 = await hp(E1), h2 = await hp(E2);
 await ev(() => gdt.mark());
 await until('Три');
-await ev(() => gdt.dice(6, 5, 5, 5));
 await next(); // раунд 2
 await ev(() => gdt.until(() => gdt.chats().some(c => /взрывается у/.test(c)), 5000));
-check('картошка: взрыв у носителя — 3d6 = 15, осколки «Один» — 7', h2 - (await hp(E2)) === 15 && h1 - (await hp(E1)) === 7 && !(await bombs()).length, `Два ${h2}→${await hp(E2)}, Один ${h1}→${await hp(E1)}`);
+let r = await resolveBlast(page, { dice: [[6, 5, 5, 5]], title: 'взрывается у' });
+check('картошка: взрыв у носителя — карточка, урон кнопкой: 3d6 = 15, осколки «Один» — 7', h2 - (await hp(E2)) === 15 && h1 - (await hp(E1)) === 7 && !(await bombs()).length, `Два ${h2}→${await hp(E2)}, Один ${h1}→${await hp(E1)}`);
 await setHp(E1, 30); await setHp(E2, 30);
 
 // ================= Ссссс… =================
@@ -110,11 +110,10 @@ await wait(1200);
 check('ссссс: шипит — эффект на герое', (await effects(hero)).includes('Шипит'));
 await until('Герой'); // ход героя раунда 3: вплотную «Один», в 5 футах «Два»
 const heroHp = await hp(hero), a1 = await hp(E1), a2 = await hp(E2);
-await ev(() => gdt.dice(6, 4, 4, 4, 4, 4, 4));
-await ev(() => gdt.queue(20, 1, 1));
 await next(); // конец хода героя — взрыв
 await ev(() => gdt.until(() => gdt.chats().some(c => /взрывается/.test(c) && /Герой/.test(c)), 5000));
-check('ссссс: враг вплотную — взрыв: 6d6 = 24 по «Один» и «Два», герою половина', a1 - (await hp(E1)) === 24 && a2 - (await hp(E2)) === 24 && heroHp - (await hp(hero)) === 12 && !(await effects(hero)).includes('Шипит'), `Один ${a1}→${await hp(E1)}, Два ${a2}→${await hp(E2)}, Герой ${heroHp}→${await hp(hero)}`);
+r = await resolveBlast(page, { saves: { [E1]: 1, [E2]: 1 }, dice: [[6, 4, 4, 4, 4, 4, 4]], title: 'Герой взрывается' });
+check('ссссс: враг вплотную — карточка: спасбросок и 6d6 = 24 кнопками по «Один» и «Два», герою половина', a1 - (await hp(E1)) === 24 && a2 - (await hp(E2)) === 24 && heroHp - (await hp(hero)) === 12 && !(await effects(hero)).includes('Шипит'), `Один ${a1}→${await hp(E1)}, Два ${a2}→${await hp(E2)}, Герой ${heroHp}→${await hp(hero)}`);
 await setHp(E1, 30); await setHp(E2, 30); await setHp(hero, 60);
 // Холостой: все ушли
 await until('Герой');
@@ -134,9 +133,12 @@ const barrels = () => ev(scene => game.scenes.get(scene).tokens.filter(t => t.fl
 check('бочка: две бочки в выбранных мышью клетках', JSON.stringify((await barrels()).sort()) === '["5,8","6,8"]', JSON.stringify(await barrels()));
 const e3 = await hp(E3);
 await ev(() => gdt.mark());
-await ev(() => { gdt.dice(6, 3, 3, 3); gdt.queue(20, 1, 1, 1, 1, 1, 1); });
 await ev(scene => game.scenes.get(scene).tokens.find(t => t.flags.gachadnd?.barrel && t.x === 500).actor.applyDamage(1), ids.scene);
+await ev(() => gdt.until(() => gdt.chats().some(c => /Красная бочка взрывается/.test(c)), 6000));
+// Мастер применяет урон первого взрыва — вторая бочка в нём, она и рвётся следом
+await resolveBlast(page, { saves: { [E3]: 1 }, dice: [[6, 3, 3, 3]], title: 'Красная бочка взрывается' });
 await ev(() => gdt.until(() => gdt.chats().filter(c => /Красная бочка взрывается/.test(c)).length >= 2, 6000));
+await resolveBlast(page, { saves: { [E3]: 1 }, dice: [[6, 3, 3, 3]], title: 'Красная бочка взрывается' });
 await ev(scene => gdt.until(() => !game.scenes.get(scene).tokens.some(t => t.flags.gachadnd?.barrel), 4000), ids.scene);
 const booms = (await chats()).filter(c => /Красная бочка взрывается/.test(c)).length;
 check('бочка: урон — взрыв, соседняя бочка — следом (цепная реакция)', booms === 2 && !(await barrels()).length, `взрывов ${booms}, бочек ${(await barrels()).length}`);
@@ -147,16 +149,24 @@ await setHp(E3, 0);
 await place(E1, 8, 8); await setHp(E1, 1);
 await place(E2, 9, 9); await setHp(E2, 30);
 await target(E3);
-await ev(() => { gdt.mark(); gdt.dice(20, 1, 1, 1, 1); });
+await ev(() => gdt.mark());
 await useNow(hero, S['Взрыв трупа']);
-await ev(() => gdt.until(() => gdt.chats().some(c => /Цепная реакция/.test(c)), 6000));
-check('труп: взорван — урон 7 (четверть от 30), труп исчез', !(await ev(E3 => game.actors.get(E3).getActiveTokens().length, E3)) && (await chats()).some(c => /Взрыв трупа: GD-тест: Три/.test(c) && /Урон: 7/.test(c)), (await chats()).filter(c => /Взрыв трупа/.test(c)).join(' | '));
-check('труп: «Один» погиб — кнопка цепочки', (await hp(E1)) === 0 && (await chats()).some(c => /Цепная реакция/.test(c) && /Один/.test(c)));
+await ev(() => gdt.until(() => gdt.chats().some(c => /Взрыв трупа: GD-тест: Три/.test(c)), 6000));
 const e2 = await hp(E2);
-await ev(() => gdt.dice(20, 1, 1));
+r = await resolveBlast(page, { saves: { [E1]: 1, [E2]: 20 }, title: 'Взрыв трупа: GD-тест: Три' });
+check('труп: взорван — карточка, урон кнопкой 7 (четверть от 30), труп исчез', r.total === 7 && !(await ev(E3 => game.actors.get(E3).getActiveTokens().length, E3)), `${r.total}; ${JSON.stringify(r.lost)}`);
+// «Цепная реакция» на карточке: «Один» погиб от урона — его можно взорвать
+await ev(async () => { await gdt.closeForeign(); ui.sidebar.expand?.(); ui.sidebar.changeTab?.('chat', 'primary'); });
+await wait(300);
+const corpseCard = await ev(() => game.messages.contents.findLast(m => m.flags?.gachadnd?.blastCard?.corpse)?.id);
+await page.$eval(`#chat [data-message-id="${corpseCard}"] [data-corpse-chain-check]`, el => el.click());
+await ev(() => gdt.until(() => game.messages.contents.some(m => m.flags?.gachadnd?.corpseChain), 5000));
+check('труп: «Один» погиб — кнопка цепочки', (await hp(E1)) === 0 && (await chats()).some(c => /Цепная реакция/.test(c) && /Один/.test(c)));
+const e2c = await hp(E2);
 await chatButton('corpseChain', '[data-corpse-chain]');
 await ev(() => gdt.until(() => gdt.chats().some(c => /Взрыв трупа: GD-тест: Один/.test(c)), 5000));
-check('труп: цепочка кнопкой — «Один» взорван без заряда, задел «Два»', e2 - (await hp(E2)) === 7 && (await spent(hero, S['Взрыв трупа'])) === 1, `${e2} → ${await hp(E2)}, заряды ${await spent(hero, S['Взрыв трупа'])}`);
+r = await resolveBlast(page, { saves: { [E2]: 1 }, title: 'Взрыв трупа: GD-тест: Один' });
+check('труп: цепочка кнопкой — «Один» взорван без заряда, задел «Два»', e2c - (await hp(E2)) === 7 && e2 - e2c === 3 && (await spent(hero, S['Взрыв трупа'])) === 1, `${e2} → ${e2c} → ${await hp(E2)}, заряды ${await spent(hero, S['Взрыв трупа'])}`);
 
 // ================= Утечка газа =================
 await place(E2, 3, 3); await setHp(E2, 30);
@@ -164,20 +174,21 @@ await useWith(hero, S['Утечка газа'], [[350, 350]]);
 const gas = () => ev(() => game.combat.getFlag('gachadnd', 'gas'));
 let g = await gas();
 check('газ: вентиль в выбранной клетке, радиус 10', g && g.x === 350 && g.y === 350 && g.radius === 10, JSON.stringify(g));
-await ev(() => gdt.dice(20, 1));
 await until('Два');
-check('газ: «Два» начал ход в газе — отравлен', await ev(E2 => game.actors.get(E2).statuses.has('poisoned'), E2));
+check('газ: «Два» начал ход в газе — карточка спасброска, ждёт его броска', /Утечка газа: GD-тест: Два в облаке/.test(await ev(() => gdt.chats().at(-1) ?? '')) && await ev(E2 => !!game.actors.get(E2).getFlag('gachadnd', 'pendingSave'), E2));
+await ev(() => gdt.dice(20, 1));
+await ev(E2 => game.actors.get(E2).rollSavingThrow({ ability: 'con' }, { configure: false }), E2);
+await settle(); await wait(500);
+check('газ: «Два» провалил свой спасбросок — отравлен', await ev(E2 => game.actors.get(E2).statuses.has('poisoned'), E2));
 await until('Герой');
 g = await gas();
 check('газ: новый раунд — облако растёт до 15', g.radius === 15, JSON.stringify(g));
 const e2b = await hp(E2);
-await ev(() => { gdt.mark(); gdt.dice(6, 6, 6, 6); gdt.queue(20, 1); });
+await ev(() => gdt.mark());
 await ev(E2 => game.actors.get(E2).applyDamage([{ value: 1, type: 'fire' }]), E2);
 await ev(() => gdt.until(() => gdt.chats().some(c => /Газ взрывается/.test(c)), 5000));
-// Спасбросок мог уйти чужому броску (кости Dice So Nice) — сверяемся с карточкой взрыва
-const gasCard = (await chats()).find(c => /Газ взрывается/.test(c)) ?? '';
-const gasLost = Number(/Два — спасбросок \d+: (?:успех|провал) — −(\d+)/.exec(gasCard)?.[1]);
-check('газ: огонь в облаке — взрыв 3d6 (радиус 15), облако выгорело', !(await gas()) && /Урон: 18 \(3d6\)/.test(gasCard) && (gasLost === 18 || gasLost === 9) && e2b - (await hp(E2)) === 1 + gasLost, `${e2b} → ${await hp(E2)}; ${gasCard.slice(0, 200)}`);
+r = await resolveBlast(page, { saves: { [E2]: 1 }, dice: [[6, 6, 6, 6]], title: 'Газ взрывается' });
+check('газ: огонь в облаке — карточка взрыва 3d6 (радиус 15), облако выгорело', !(await gas()) && r.card.formula === '3d6' && r.lost[E2] === 18 && e2b - (await hp(E2)) === 19, `${e2b} → ${await hp(E2)}; ${JSON.stringify(r.lost)}`);
 
 // ================= Ох, да! =================
 await place(hero, 5, 5);
@@ -185,13 +196,13 @@ await place(hero, 5, 5);
 await place(E2, 10, 5); await setHp(E2, 30);
 await ev(E2 => game.actors.get(E2).statuses.has('prone') && game.actors.get(E2).toggleStatusEffect('prone', { active: false }), E2);
 const walls0 = await ev(scene => game.scenes.get(scene).walls.size, ids.scene);
-await ev(() => { gdt.dice(8, 8, 8); gdt.queue(20, 1); });
 await useWith(hero, S['Ох, да!'], [[900, 550]]);
 await ev(() => gdt.until(() => gdt.chats().some(c => /проламывает/.test(c)), 6000));
+r = await resolveBlast(page, { saves: { [E2]: 1 }, dice: [[8, 8, 8]], title: 'проламывает' });
 const walls = await ev(scene => game.scenes.get(scene).walls.map(w => w.c.join(',')), ids.scene);
 check('ох, да: стена разрезана — пролом шириной в клетку', walls.length === walls0 + 1 && walls.includes('1000,200,1000,500') && walls.includes('1000,600,1000,900'), JSON.stringify(walls));
 check('ох, да: герой — в конце рывка за стеной', (await ev(hero => { const t = game.actors.get(hero).getActiveTokens()[0].document; return `${t.x / 100},${t.y / 100}`; }, hero)) === '11,5');
-check('ох, да: «Два» у пролома — 2d8 = 16 и ничком', 30 - (await hp(E2)) === 16 && await ev(E2 => game.actors.get(E2).statuses.has('prone'), E2), `${await hp(E2)}`);
+check('ох, да: «Два» у пролома — карточка: спасбросок Силы и 2d8 = 16 кнопками, провал — ничком', 30 - (await hp(E2)) === 16 && await ev(E2 => game.actors.get(E2).statuses.has('prone'), E2), `${await hp(E2)}`);
 await f.shot('ohyeah');
 
 await ev(() => gdt.resetDice());

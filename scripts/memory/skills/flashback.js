@@ -83,8 +83,8 @@ export async function flashback(actor, item) {
         <p class="gd-flashback-meta">${tier.cost ? `Потрачено Костей Хитов: ${tier.cost}. ` : ''}${tier.roll ? `Проверка: ${ABILITIES[answer.ability]}${tier.roll === '2d20kl' ? ', с помехой' : ''}. Сложность и последствия — за Мастером.` : 'Без проверки. Как это сработало — решает Мастер.'}</p>
     </div>`;
     const speaker = ChatMessage.getSpeaker({ actor });
-    if (!tier.roll) return ChatMessage.create({ speaker, content: head });
-    const mod = actor.system?.abilities?.[answer.ability]?.mod ?? 0;
-    const roll = await new Roll(`${tier.roll} + @mod`, { mod }).evaluate();
-    return roll.toMessage({ speaker, flavor: head });
+    await ChatMessage.create({ speaker, content: head });
+    if (!tier.roll) return;
+    // Проверка характеристики dnd5e: все бонусы и модификаторы видны в броске
+    return actor.rollAbilityCheck({ ability: answer.ability, disadvantage: tier.roll === '2d20kl' }, { configure: false });
 }

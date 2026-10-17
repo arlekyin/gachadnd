@@ -58,16 +58,47 @@ export async function detonate({ actorId, sceneId, corpseId, dc, radius }) {
     const at = boomAt(corpse, radius);
     const name = corpse.name;
     await corpse.delete();
-    const result = await blast({ actor: owner, title: `Взрыв трупа: ${name}`, icon: 'fa-skull', victims, formula: String(damage), type: 'fire', ability: 'dex', dc, at, note: `Четверть максимума ПЗ (${max}) — ${damage}.` });
-    const chain = result.killed.filter(t => t.actor?.type !== 'character');
-    if (chain.length) {
-        await ChatMessage.create({
-            speaker: ChatMessage.getSpeaker({ actor: owner }),
-            content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-skull"></i> Цепная реакция</div><p>Взрыв убил — эти трупы можно взорвать сразу, без заряда:</p><div class="gd-blast-buttons">${chain.map(t => `<button type="button" data-corpse-chain="${t.id}">${esc(t.name)}</button>`).join('')}</div></div>`,
-            flags: { [MODULE_ID]: { corpseChain: { actorId: owner.id, sceneId, dc, radius } } }
-        });
-    }
+    await blast({
+        actor: owner, title: `Взрыв трупа: ${name}`, icon: 'fa-skull', victims, formula: String(damage), type: 'fire', ability: 'dex', dc, at,
+        note: `Четверть максимума ПЗ (${max}) — ${damage}. Кого взрыв убьёт — того можно взорвать сразу, без заряда: кнопка «Цепная реакция» ниже, после применения урона.`,
+        flags: { corpse: { actorId: owner.id, dc, radius } }
+    });
 }
+
+/** Мастер: кого из задетых взрывом уже нет в живых — кнопки цепочки */
+export async function chain({ messageId }) {
+    const message = game.messages.get(messageId);
+    const card = message?.flags?.[MODULE_ID]?.blastCard;
+    if (!card?.corpse) return;
+    const scene = game.scenes.get(card.sceneId);
+    const dead = (card.victims ?? []).map(id => scene?.tokens.get(id)).filter(t => isCorpse(t));
+    const owner = game.actors.get(card.corpse.actorId);
+    if (!dead.length) return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: owner }), whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id), content: '<div class="gd-blast-card"><p>Цепной реакции нет: никто из задетых не погиб — урон ещё не применён?</p></div>' });
+    await message.update({ [`flags.${MODULE_ID}.blastCard.corpse.used`]: true });
+    await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor: owner }),
+        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-skull"></i> Цепная реакция</div><p>Взрыв убил — эти трупы можно взорвать сразу, без заряда:</p><div class="gd-blast-buttons">${dead.map(t => `<button type="button" data-corpse-chain="${t.id}">${esc(t.name)}</button>`).join('')}</div></div>`,
+        flags: { [MODULE_ID]: { corpseChain: { actorId: owner.id, sceneId: card.sceneId, dc: card.corpse.dc, radius: card.corpse.radius } } }
+    });
+}
+onSocket('blastCorpseChain', ({ payload }) => { if (isActiveGM()) chain(payload).catch(error => console.error(`${MODULE_ID} | Взрыв трупа`, error)); });
+
+// Карточка взрыва трупа: кнопка «Цепная реакция» — владельцу и Мастеру
+onRenderChatMessage((message, html) => {
+    const card = message.flags?.[MODULE_ID]?.blastCard;
+    if (!card?.corpse || !html?.querySelector || html.querySelector('[data-corpse-chain-check]')) return;
+    const owner = game.actors.get(card.corpse.actorId);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.corpseChainCheck = '';
+    button.innerHTML = '<i class="fas fa-skull"></i> Цепная реакция';
+    button.disabled = !!card.corpse.used || !(game.user.isGM || owner?.isOwner);
+    button.addEventListener('click', () => { button.disabled = true; requestGM('blastCorpseChain', { messageId: message.id }); });
+    const wrap = document.createElement('div');
+    wrap.className = 'gd-blast-buttons';
+    wrap.append(button);
+    (html.querySelector('.gd-blast-card') ?? html).append(wrap);
+});
 
 onRenderChatMessage((message, html) => {
     const flag = message.flags?.[MODULE_ID]?.corpseChain;

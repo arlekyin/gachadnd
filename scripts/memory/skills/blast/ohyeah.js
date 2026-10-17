@@ -119,8 +119,8 @@ export async function dash({ actorId, tokenId, sceneId, angle, formula, type, dc
     const at = route.breaches[0] ? { sceneId, x: route.breaches[0].point.x, y: route.breaches[0].point.y, radius: size * 1.5 } : null;
     await blast({
         actor, title: `Ох, да! — ${actor.name} проламывает стен: ${route.breaches.length}`, icon: 'fa-person-running', victims: route.victims,
-        formula, type, ability: 'str', dc, at,
-        extra: async (victim, { save }) => { if (save && !save.success && victim.actor && !victim.actor.statuses?.has('prone')) await victim.actor.toggleStatusEffect('prone', { active: true }); }
+        formula, type, ability: 'str', dc, at, note: 'Провал спасброска — ничком (модуль положит сам).',
+        onFail: { status: 'prone' }
     });
 }
 

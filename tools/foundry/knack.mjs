@@ -1,7 +1,7 @@
 // Навыки, закрывшие пустые редкости тегов, в настоящей Foundry: node tools/foundry/knack.mjs [--headed] [--slow[=мс]]
 // Хлопушка (без реакций вне боя и до начала хода в бою), Чутьё мясника (капля над раненым у того, кто
 // ведёт персонажа), Навылет (лишний урон из лотка dnd5e — кнопкой соседу), Рандомная хрень (окно выбора,
-// атаки и урон, оружие у цели, «Подобрать», пропажа в конце боя), Переливание (обмен долями ПЗ, спасбросок
+// штатные атаки dnd5e, оружие у цели с пометкой, «Подобрать», пропажа в конце боя), Переливание (обмен долями ПЗ, свой спасбросок
 // врага, союзник согласен, истощение), Медленный яд (счёт урона за 3 раунда и возврат ядом), Сверхновая
 // (накопление урона в бою, взрыв со спасбросками, ошеломление, сброс в конце боя).
 import { connect, checker, moduleErrors, done } from './harness.mjs';
@@ -103,18 +103,47 @@ await chatButton('through', '[data-gd-through]');
 check('Навылет: остаток ушёл в Два, кнопки погасли', twoBefore - (await hp(B)) === over && await ev(() => game.messages.contents.findLast(m => m.flags.gachadnd?.through).flags.gachadnd.through.done), `${twoBefore} → ${await hp(B)}`);
 await setHp(A, 30); await setHp(B, 30);
 
-// ---------- Переливание: враг — спасбросок; провал — обмен долями, истощение
+// ---------- Карточка навыка dnd5e в чате: как у любой способности
+const usageCard = name => ev(name => game.messages.contents.some(m => (m.system?.item?.name ?? m.flags?.dnd5e?.item?.name ?? m.item?.name) === name
+    || (m.type === 'usage' && m.content.includes(name)) || (m.flags?.dnd5e?.messageType === 'usage' && m.content.includes(name))), name);
+// Кнопка броска из карточки модуля (помощник dnd5e [[/damage ...]]) — как нажал бы игрок
+const pressDamage = async flag => {
+    await ev(async () => { await gdt.closeForeign(); ui.sidebar.expand?.(); ui.sidebar.changeTab?.('chat', 'primary'); });
+    await wait(400);
+    const id = await ev(flag => game.messages.contents.findLast(m => m.flags?.gachadnd?.[flag])?.id, flag);
+    const count = await ev(() => game.messages.size);
+    await page.$eval(`#chat [data-message-id="${id}"] a.roll-link-group[data-type="damage"] .roll-link`, el => el.click());
+    // Окно настройки броска dnd5e — «Бросить», как сделает игрок
+    await ev(() => gdt.until(() => [...foundry.applications.instances.values()].some(a => a.rendered && a.constructor.name === 'DamageRollConfigurationDialog'), 4000));
+    await ev(() => {
+        const app = [...foundry.applications.instances.values()].find(a => a.rendered && a.constructor.name === 'DamageRollConfigurationDialog');
+        const buttons = [...app.element.querySelectorAll('button')];
+        (buttons.find(b => /normal|roll/i.test(`${b.dataset.action} ${b.value}`)) ?? buttons.at(-1)).click();
+    });
+    await ev(count => gdt.until(() => game.messages.size > count, 4000), count);
+    await settle();
+    return ev(() => { const m = game.messages.contents.at(-1); return { type: m.type, total: m.rolls.reduce((s, r) => s + r.total, 0), dmg: m.rolls.map(r => r.options?.type).join(',') }; });
+};
+check('Хлопушка: карточка навыка dnd5e в чате', await usageCard('Хлопушка'));
+
+// ---------- Переливание: враг бросает спасбросок сам; провал — обмен долями, истощение
 await setHp(hero, 6); await setHp(A, 27);
 await target(A);
-await ev(() => gdt.dice(20, 1));
 await useNow(hero, S['Переливание']);
+check('Переливание: карточка навыка в чате, враг ждёт спасброска — ПЗ ещё не тронуты', await usageCard('Переливание') && (await hp(hero)) === 6 && await ev(a => !!game.actors.get(a).getFlag('gachadnd', 'transfusionPending'), A), await lastChat());
+// Один бросает спасбросок Телосложения (кнопкой из карточки) — к20 = 1
+await ev(() => gdt.dice(20, 1));
+await ev(a => game.actors.get(a).rollSavingThrow({ ability: 'con' }, { configure: false }), A);
+await settle(); await wait(600);
 let ex = await ev(hero => game.actors.get(hero).system.attributes.exhaustion, hero);
-check('Переливание: герой 10 % ↔ Один 90 % — герой 54/60, Один 3/30, истощение 1', (await hp(hero)) === 54 && (await hp(A)) === 3 && ex === 1, `${await hp(hero)}, ${await hp(A)}, истощение ${ex}`);
+check('Переливание: провал спасброска — герой 10 % ↔ Один 90 %: герой 54/60, Один 3/30, истощение 1', (await hp(hero)) === 54 && (await hp(A)) === 3 && ex === 1, `${await hp(hero)}, ${await hp(A)}, истощение ${ex}`);
 await resetUses(hero, S['Переливание']);
 await target(A);
-await ev(() => gdt.dice(20, 20));
 await useNow(hero, S['Переливание']);
-check('Переливание: враг выдержал спасбросок — обмена нет, заряд потрачен', (await hp(hero)) === 54 && (await hp(A)) === 3 && (await spent(hero, S['Переливание'])) === 1 && /не отдаёт/.test(await lastChat()), await lastChat());
+await ev(() => gdt.dice(20, 20));
+await ev(a => game.actors.get(a).rollSavingThrow({ ability: 'con' }, { configure: false }), A);
+await settle(); await wait(600);
+check('Переливание: враг выдержал спасбросок — обмена нет', (await hp(hero)) === 54 && (await hp(A)) === 3 && /не отдаёт/.test(await lastChat()) && !(await ev(a => game.actors.get(a).getFlag('gachadnd', 'transfusionPending'), A)), await lastChat());
 await resetUses(hero, S['Переливание']);
 await setHp(ALLY, 15);
 await target(ALLY);
@@ -136,27 +165,27 @@ await next();
 check('Хлопушка: начался ход Одного — реакции вернулись', !(await effects(A)).includes('Хлопушка: без реакций') && (await effects(B)).includes('Хлопушка: без реакций'), `${await turn()}: ${(await effects(A)).join(', ')}`);
 while (!(await turn()).endsWith('Герой')) await next();
 
-// Сверхновая: копит урон в бою, взрыв, ошеломление
+// Сверхновая: копит урон в бою; взрыв — карточка с кнопкой урона на накопленное, ошеломление
 await useNow(hero, S['Сверхновая']);
 check('Сверхновая: копить нечего — отказ, заряд цел', (await spent(hero, S['Сверхновая'])) === 0 && await ev(() => gdt.warnings.some(w => /копить пока нечего/.test(w))));
 await ev(hero => game.actors.get(hero).applyDamage(10), hero); await settle();
 await ev(hero => game.actors.get(hero).applyDamage(5), hero); await settle();
 check('Сверхновая: накоплено 15 (эффект «Сверхновая: 15»)', (await effects(hero)).includes('Сверхновая: 15'), (await effects(hero)).join(', '));
-const nova = await ev(ids => ids.map(id => game.actors.get(id).system.attributes.hp.value), [A, B, ALLY, C]);
-await ev(() => gdt.dice(20, 1, 1, 20));
+const nova = await ev(ids => ids.map(id => game.actors.get(id).system.attributes.hp.value), [A, B, ALLY]);
 await useNow(hero, S['Сверхновая']);
-const novaAfter = await ev(ids => ids.map(id => game.actors.get(id).system.attributes.hp.value), [A, B, ALLY, C]);
-const lost = nova.map((v, i) => v - novaAfter[i]);
-check('Сверхновая: трое в 20 футах — спасбросок Ловкости: провал 15, успех 7; Три вне радиуса', lost.slice(0, 3).sort().join() === '15,15,7' && lost[3] === 0, lost.join(', '));
+card = await lastChat();
+check('Сверхновая: карточка навыка и карточка взрыва — накопленное 15, в радиусе трое; урон модуль сам не применил',
+    await usageCard('Сверхновая') && /накопленное: 15/.test(card) && /Один/.test(card) && /Два/.test(card) && /Союзник/.test(card) && !/Три/.test(card)
+    && (await ev(ids => ids.map(id => game.actors.get(id).system.attributes.hp.value), [A, B, ALLY])).join() === nova.join(), card);
 check('Сверхновая: накопление сброшено, герой ошеломлён', !(await effects(hero)).some(e => e.startsWith('Сверхновая: 1')) && await ev(hero => game.actors.get(hero).statuses.has('stunned'), hero), (await effects(hero)).join(', '));
-await ev(ids => ids.forEach(id => game.actors.get(id).update({ 'system.attributes.hp.value': 30 })), [A, B, ALLY]);
-await settle();
+let rolled = await pressDamage('supernova');
+check('Сверхновая: кнопка урона в карточке — бросок урона dnd5e на 15 Силовым полем', rolled.total === 15 && /force/.test(rolled.dmg), JSON.stringify(rolled));
 
-// Медленный яд: считает урон 3 раунда и возвращает ядом
+// Медленный яд: считает урон 3 раунда; в начале третьего — карточка с кнопкой урона Ядом на сумму
 await target(B);
 const round0 = await ev(() => game.combat.round);
 await useNow(hero, S['Медленный яд']);
-check('Медленный яд: Два отмечен', (await effects(B)).includes('Медленный яд: 0'), (await effects(B)).join(', '));
+check('Медленный яд: карточка навыка, Два отмечен', await usageCard('Медленный яд') && (await effects(B)).includes('Медленный яд: 0'), (await effects(B)).join(', '));
 await ev(b => game.actors.get(b).applyDamage(5), B); await settle();
 await ev(b => game.actors.get(b).applyDamage(-3), B); await settle();
 await ev(b => game.actors.get(b).applyDamage(7), B); await settle();
@@ -164,15 +193,18 @@ check('Медленный яд: урон 5 и 7 посчитан, лечение
 const twoHp = await hp(B);
 while ((await ev(() => game.combat.round)) < round0 + 3) await next();
 await wait(800);
-check('Медленный яд: в начале третьего раунда — 12 урона Ядом, отметка снята', twoHp - (await hp(B)) === 12 && !(await effects(B)).some(e => e.startsWith('Медленный яд')), `${twoHp} → ${await hp(B)}; ${await lastChat()}`);
+check('Медленный яд: в начале третьего раунда — карточка срабатывания, отметка снята, урон модуль сам не применил', /Яд сработал/.test(await lastChat()) && (await hp(B)) === twoHp && !(await effects(B)).some(e => e.startsWith('Медленный яд')), await lastChat());
+rolled = await pressDamage('slowPoisonRelease');
+check('Медленный яд: кнопка урона — бросок урона dnd5e на 12 Ядом', rolled.total === 12 && /poison/.test(rolled.dmg), JSON.stringify(rolled));
 
-// Рандомная хрень: окно, атаки, оружие у цели, «Подобрать», пропажа в конце боя
+// Рандомная хрень: окно, штатные атаки dnd5e, оружие у цели с пометкой, «Подобрать», пропажа в конце боя
 await ev(hero => game.actors.get(hero).createEmbeddedDocuments('Item', [
     { name: 'Кинжал', type: 'weapon', img: 'icons/weapons/daggers/dagger-straight-blue.webp', system: { type: { value: 'simpleM' }, damage: { base: { number: 1, denomination: 4, types: ['piercing'] } }, equipped: false } },
     { name: 'Молот', type: 'weapon', img: 'icons/weapons/hammers/hammer-war-spiked.webp', system: { type: { value: 'martialM' }, damage: { base: { number: 1, denomination: 8, types: ['bludgeoning'] } }, equipped: false } }
 ]), hero);
 await setHp(A, 30); await setHp(B, 30);
 await target(A, B);
+const before = await ev(() => game.messages.size);
 await ev(({ hero, id }) => { gdt.warnings.length = 0; gdt.p = game.actors.get(hero).items.get(id).system.activities.contents[0].use({}, { configure: false }); }, { hero, id: S['Рандомная хрень, вперёд!'] });
 await page.waitForSelector('.application.dialog select[name="t0"]', { timeout: 8000 });
 const plan = await ev(({ A, B }) => {
@@ -184,34 +216,28 @@ const plan = await ev(({ A, B }) => {
     set('Кинжал', ta); set('Молот', tb);
     return names.join(', ');
 }, { A, B });
-// Кинжал: к20 = 15 (+5 = 20 против КД 12) — попадание, к4 = 3 (+2 = 5); Молот: к20 = 1 — мимо
-// Броски идут в порядке оружия в окне (порядок инвентаря) — кости подкладываются в том же порядке
-await ev(order => {
-    const steps = { 'Кинжал': [[20, 15], [4, 3]], 'Молот': [[20, 1]] };
-    const queue = order.split(', ').flatMap(name => steps[name] ?? []);
-    gdt.dice(...queue[0]);
-    for (const [faces, v] of queue.slice(1)) gdt.queue(faces, v);
-}, plan);
 await ev(() => document.querySelector('.application.dialog button[data-action="ok"]').click());
 await ev(() => gdt.p);
 await settle();
-await wait(1000);
+await wait(1500);
+const attacks = await ev(({ before, A, B }) => game.messages.contents.slice(before).filter(m => m.rolls.some(r => r.constructor.name === 'D20Roll' || /d20/.test(r.formula)))
+    .map(m => `${m.system?.item?.name ?? m.flags?.dnd5e?.item?.name ?? m.item?.name ?? '?'}→${(m.system?.targets ?? m.flags?.dnd5e?.targets ?? []).map(t => t.name?.replace('GD-тест: ', '')).join('+')}`), { before, A, B });
 const junk = await ev(({ hero, scene }) => ({
-    weapons: game.actors.get(hero).items.filter(i => ['Кинжал', 'Молот'].includes(i.name)).length,
+    thrown: game.actors.get(hero).items.filter(i => i.flags.gachadnd?.thrown).map(i => i.name).sort().join(','),
     tiles: game.scenes.get(scene).tiles.filter(t => t.flags.gachadnd?.junk).map(t => t.flags.gachadnd.junk.name).sort().join(',')
 }), { hero, scene: ids.scene });
-card = await lastChat();
 check('Рандомная хрень: окно предлагает неэкипированное оружие', /Кинжал/.test(plan) && /Молот/.test(plan) && !/Меч/.test(plan), plan);
-check('Рандомная хрень: Кинжал попал по Одному (−5), Молот мимо — Два цел', (await hp(A)) === 25 && (await hp(B)) === 30 && /попадание/.test(card) && /мимо/.test(card), card);
-check('Рандомная хрень: оружие ушло из инвентаря и лежит у целей', junk.weapons === 0 && junk.tiles === 'Кинжал,Молот', JSON.stringify(junk));
+check('Рандомная хрень: две штатные атаки dnd5e — Кинжал по Одному, Молот по Двум', attacks.length === 2 && attacks.some(a => /Кинжал.*Один/.test(a)) && attacks.some(a => /Молот.*Два/.test(a)), attacks.join(' | '));
+check('Рандомная хрень: урон модуль сам не применил', (await hp(A)) === 30 && (await hp(B)) === 30, `${await hp(A)}, ${await hp(B)}`);
+check('Рандомная хрень: оружие помечено брошенным и лежит у целей', junk.thrown === 'Кинжал,Молот' && junk.tiles === 'Кинжал,Молот', JSON.stringify(junk));
 await chatButton('junk', '[data-gd-junk]');
-const picked = await ev(({ hero, scene }) => ({ items: game.actors.get(hero).items.filter(i => ['Кинжал', 'Молот'].includes(i.name)).map(i => i.name), tiles: game.scenes.get(scene).tiles.filter(t => t.flags.gachadnd?.junk).length }), { hero, scene: ids.scene });
-check('Рандомная хрень: «Подобрать» вернул предмет, плитка убрана', picked.items.length === 1 && picked.tiles === 1, JSON.stringify(picked));
+const picked = await ev(({ hero, scene }) => ({ thrown: game.actors.get(hero).items.filter(i => i.flags.gachadnd?.thrown).length, items: game.actors.get(hero).items.filter(i => ['Кинжал', 'Молот'].includes(i.name)).length, tiles: game.scenes.get(scene).tiles.filter(t => t.flags.gachadnd?.junk).length }), { hero, scene: ids.scene });
+check('Рандомная хрень: «Подобрать» снял пометку и плитку', picked.thrown === 1 && picked.items === 2 && picked.tiles === 1, JSON.stringify(picked));
 await ev(() => game.combat.delete());
 await settle();
 await wait(800);
-const gone = await ev(scene => game.scenes.get(scene).tiles.filter(t => t.flags.gachadnd?.junk).length, ids.scene);
-check('конец боя: неподобранное пропало, карточка', gone === 0 && /пропало навсегда/.test(await lastChat()), await lastChat());
+const gone = await ev(({ hero, scene }) => ({ tiles: game.scenes.get(scene).tiles.filter(t => t.flags.gachadnd?.junk).length, items: game.actors.get(hero).items.filter(i => ['Кинжал', 'Молот'].includes(i.name)).length }), { hero, scene: ids.scene });
+check('конец боя: неподобранное пропало из сумки, карточка', gone.tiles === 0 && gone.items === 1 && /пропало навсегда/.test(await lastChat()), `${JSON.stringify(gone)} ${await lastChat()}`);
 check('конец боя: Сверхновая сброшена', !(await ev(hero => game.actors.get(hero).getFlag('gachadnd', 'supernova'), hero)));
 
 check('ошибок модуля в консоли нет', !moduleErrors(f.log).length, moduleErrors(f.log).slice(0, 3).join(' | '));

@@ -68,13 +68,18 @@ check('Маяк: свет направлен как конус (враг в лу
 await f.shot('lighthouse');
 
 // Ход врага «Рядом» в луче: спасбросок Телосложения, к20 = 1 — ослеплён
-await ev(() => { gdt.mark(); gdt.dice(20, 1); });
+await ev(() => gdt.mark());
 check('ход врага «Рядом»', (await next()) === '1:Рядом', await turn());
 let cs = await chats();
-check('Маяк: враг в луче — спасбросок Телосложения, провал, ослеплён', cs.some(c => /Телосложени/.test(c)) && await ev(id => game.actors.get(id).statuses.has('blinded'), A), cs.filter(c => /Маяк|Телосл/.test(c)).join(' | '));
+check('Маяк: враг в луче — карточка: спасбросок Телосложения кнопкой, враг ждёт своего броска', cs.some(c => /Маяк/.test(c) && /Телосложени/.test(c)) && await ev(id => !!game.actors.get(id).getFlag('gachadnd', 'pendingSave'), A), cs.filter(c => /Маяк|Телосл/.test(c)).join(' | '));
+// «Рядом» бросает спасбросок сам — к20 = 1
+await ev(() => gdt.dice(20, 1));
+await ev(id => game.actors.get(id).rollSavingThrow({ ability: 'con' }, { configure: false }), A);
+await settle(); await wait(500);
+check('Маяк: провал своего спасброска — ослеплён', await ev(id => game.actors.get(id).statuses.has('blinded'), A));
 await ev(() => gdt.mark());
 await next(); // «Далеко»: не в луче
-check('Маяк: враг вне луча — спасброска нет; ослепление снято с концом хода', !(await chats()).some(c => /Телосложени/.test(c)) && !(await ev(id => game.actors.get(id).statuses.has('blinded'), A)));
+check('Маяк: враг вне луча — карточки нет; ослепление снято с концом хода', !(await chats()).some(c => /Маяк/.test(c) && /Телосложени/.test(c)) && !(await ev(id => game.actors.get(id).statuses.has('blinded'), A)));
 // Раунд 2: луч на юг, раунд 3: на запад — герой в луче
 check('раунд 2', (await next()) === '2:Герой', await turn());
 b = await beacon();

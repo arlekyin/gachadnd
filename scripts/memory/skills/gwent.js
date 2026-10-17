@@ -14,6 +14,7 @@ import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { addTurnEffect } from "./turn-effects.js";
 import { placeToken } from "./pick.js";
 import { createCircle, deleteTemplates } from "../../core/templates.js";
+import { blast } from "./blast/common.js";
 
 export const HAND = 3;
 const RANGE = 30;
@@ -153,9 +154,9 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
         const victims = near.filter(t => t.actor.system.attributes.hp.value === top);
         if (victims.length) {
             const prof = actor.system?.attributes?.prof ?? 2;
-            const roll = await new Roll(`${prof}d8`).evaluate();
-            for (const t of victims) await t.actor.applyDamage([{ value: roll.total, type: 'force' }]);
-            result = `Казнь: ${esc(victims.map(t => t.name).join(', '))} — ${roll.total} урона силовым полем (${prof}d8).`;
+            // Как у способностей dnd5e: урон — кнопкой в карточке, применяет Мастер лотком
+            await blast({ actor, title: 'Гвинт: Казнь', icon: 'fa-skull', victims, formula: `${prof}d8`, type: 'force' });
+            result = `Казнь: ${esc(victims.map(t => t.name).join(', '))} — ${prof}d8 урона силовым полем, кнопкой в карточке.`;
         } else result = 'Казнь: в 30 футах никого.';
     } else if (key === 'frost' || key === 'fog') {
         await createCircle(scene, {

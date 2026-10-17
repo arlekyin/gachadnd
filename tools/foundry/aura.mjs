@@ -189,13 +189,16 @@ check('порог 4: дальний враг — без помехи', /^1d20/.t
 
 // ---------- 8. Порог 5: враг начинает ход в 15 футах — спасбросок Мудрости со Сл, провал — испуган
 await setAura(5);
-await ev(() => { gdt.mark(); gdt.dice(20, 1, 1); });
+await ev(() => gdt.mark());
 await nextTurn();
 await wait(1500);
 cs = await chats();
 const dc = await ev(hero => { const a = game.actors.get(hero); return 8 + a.system.attributes.prof + a.system.abilities.cha.mod; }, hero);
-check('ход ближнего врага: спасбросок Мудрости брошен автоматически', cs.some(c => /Мудрост|Wisdom/i.test(c)), cs.slice(-3).join(' | ').slice(0, 300));
-check(`карточка «Главный герой»: провал Сл ${dc} — испуган`, cs.some(c => /Главный герой/.test(c) && new RegExp(`Сл ${dc}`).test(c)), cs.filter(c => /Главный/.test(c)).join(' | '));
+check(`ход ближнего врага: карточка «Главный герой» — спасбросок Мудрости Сл ${dc} кнопкой, враг ждёт своего броска`, cs.some(c => /Главный герой/.test(c) && new RegExp(`Сл ${dc}`).test(c)) && await ev(id => !!game.actors.get(id).getFlag('gachadnd', 'pendingSave'), NEAR), cs.filter(c => /Главный/.test(c)).join(' | '));
+// Враг бросает спасбросок сам (кнопкой карточки) — к20 = 1
+await ev(() => gdt.dice(20, 1));
+await ev(id => game.actors.get(id).rollSavingThrow({ ability: 'wis' }, { configure: false }), NEAR);
+await ev(() => gdt.settle()); await wait(500);
 const scared = await ev(id => game.actors.get(id).statuses.has('frightened'), NEAR);
 check('ближний враг испуган', scared);
 await nextTurn();

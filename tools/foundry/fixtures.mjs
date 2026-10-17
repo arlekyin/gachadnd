@@ -254,3 +254,89 @@ export async function combat(page, sceneId, actorIds) {
         return combat.id;
     }, { sceneId, actorIds });
 }
+
+/**
+ * Карточка взрыва модуля «как за столом»: цели бросают спасбросок (кнопка карточки), игрок — урон
+ * (кнопка урона → окно настройки броска → «Бросить»), Мастер применяет урон каждому задетому:
+ * успех спасброска — ½ (или 0, если half: false), осколки и владелец — ½.
+ * @param {object} o
+ * @param {Object<string, number>} o.saves  к20 спасброска по id персонажа (по умолчанию 10)
+ * @param {number[][]} o.dice               кости урона: [[грань, значения…], …]
+ * @param {boolean} o.apply                 применить урон (по умолчанию да)
+ * @param {string} o.of                     карточка, где задет этот персонаж (id)
+ * @param {string} o.title                  карточка с этим текстом
+ * @returns {Promise<{ total, lost: Object<string, number>, saved: Object<string, boolean>, card }>} lost — по id персонажа
+ */
+export async function resolveBlast(page, { saves = {}, dice = [], apply = true, of = null, title = null } = {}) {
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    await ev(async () => { await gdt.closeForeign(); ui.sidebar.expand?.(); ui.sidebar.changeTab?.('chat', 'primary'); });
+    await page.waitForTimeout(300);
+    // Последняя карточка взрыва; of — где задет этот персонаж, title — текст в карточке
+    const card = await ev(({ of, title }) => {
+        const m = game.messages.contents.findLast(m => {
+            const c = m.flags?.gachadnd?.blastCard;
+            if (!c) return false;
+            if (title && !m.content.includes(title)) return false;
+            if (of && !(c.victims ?? []).some(id => game.scenes.get(c.sceneId)?.tokens.get(id)?.actor?.id === of)) return false;
+            return true;
+        });
+        return m ? { id: m.id, ...m.flags.gachadnd.blastCard } : null;
+    }, { of, title });
+    if (!card) throw new Error('Нет карточки взрыва');
+    const scene = id => ev(({ s, id }) => game.scenes.get(s)?.tokens.get(id)?.actor?.id ?? null, { s: card.sceneId, id });
+    const victims = [];
+    for (const id of card.victims ?? []) victims.push({ tokenId: id, actorId: await scene(id) });
+    // Спасброски целей — кнопкой карточки (бросает каждая цель за себя)
+    const saved = {};
+    if (card.ability) {
+        for (const v of victims) {
+            const d20 = saves[v.actorId] ?? 10;
+            saved[v.actorId] = await ev(async ({ s, tokenId, ability, dc, d20 }) => {
+                const actor = game.scenes.get(s).tokens.get(tokenId).actor;
+                gdt.dice(20, d20);
+                const rolls = await actor.rollSavingThrow({ ability }, { configure: false });
+                const r = Array.isArray(rolls) ? rolls[0] : rolls;
+                await gdt.settle();
+                return r.total >= dc;
+            }, { s: card.sceneId, tokenId: v.tokenId, ability: card.ability, dc: card.dc, d20 });
+        }
+    }
+    // Урон — кнопкой карточки и окном настройки броска dnd5e
+    const count = await ev(() => game.messages.size);
+    await ev(dice => { if (dice.length) { gdt.dice(...dice[0]); for (const d of dice.slice(1)) gdt.queue(...d); } }, dice);
+    await page.$eval(`#chat [data-message-id="${card.id}"] a.roll-link-group[data-type="damage"] .roll-link`, el => el.click());
+    await ev(() => gdt.until(() => [...foundry.applications.instances.values()].some(a => a.rendered && a.constructor.name === 'DamageRollConfigurationDialog'), 4000));
+    await ev(() => {
+        const app = [...foundry.applications.instances.values()].find(a => a.rendered && a.constructor.name === 'DamageRollConfigurationDialog');
+        const buttons = [...app.element.querySelectorAll('button')];
+        (buttons.find(b => /normal|roll/i.test(`${b.dataset.action} ${b.value}`)) ?? buttons.at(-1)).click();
+    });
+    // Бросок урона — первое новое сообщение с броском урона (в чат может прийти и другое)
+    const isDamage = 'm => m.type === "damage" || m.rolls.some(r => r.constructor.name === "DamageRoll")';
+    await ev(({ count, isDamage }) => gdt.until(() => game.messages.contents.slice(count).some(eval(isDamage)), 4000), { count, isDamage });
+    const rolled = await ev(({ count, isDamage }) => { const m = game.messages.contents.slice(count).find(eval(isDamage)); return { id: m.id, total: m.rolls.reduce((s, r) => s + r.total, 0) }; }, { count, isDamage });
+    const lost = {};
+    if (apply) {
+        const targets = [
+            ...victims.map(v => ({ ...v, multiplier: card.ability && saved[v.actorId] ? (card.half === false ? 0 : 0.5) : 1 })),
+            ...(card.splash ?? []).map(id => ({ tokenId: id, multiplier: 0.5 })),
+            ...(card.self ? [{ actorId: card.self, multiplier: 0.5 }] : [])
+        ];
+        for (const t of targets) {
+            const r = await ev(async ({ s, t, messageId }) => {
+                const actor = t.tokenId ? game.scenes.get(s).tokens.get(t.tokenId)?.actor : game.actors.get(t.actorId);
+                if (!actor) return null;
+                const hp = () => (Number(actor.system.attributes.hp.value) || 0) + (Number(actor.system.attributes.hp.temp) || 0);
+                const message = game.messages.get(messageId);
+                const damages = message.rolls.map(r => ({ value: r.total, type: r.options.type }));
+                const before = hp();
+                // Как «Применить» в лотке dnd5e: множитель и сообщение броска в origin
+                await actor.applyDamage(damages, { multiplier: t.multiplier, isDelta: true, origin: message, originatingMessage: message });
+                await gdt.settle();
+                return { id: actor.id, lost: before - hp() };
+            }, { s: card.sceneId, t, messageId: rolled.id });
+            if (r) lost[r.id] = (lost[r.id] ?? 0) + r.lost;
+        }
+    }
+    return { total: rolled.total, lost, saved, card };
+}

@@ -4,8 +4,10 @@
  * Пока навык экипирован, урон, который персонаж получает в начатом бою (убыль ПЗ вместе с временными),
  * копится — не больше максимума ПЗ. Накопленное видно эффектом «Сверхновая: N» и сбрасывается в конце
  * боя. Действием — взрыв: каждое существо в радиусе навыка (20 футов), кроме персонажа, — спасбросок
- * Ловкости против Сл навыка, урон Силовым полем, равный накопленному (успех — половина). Накопление
- * обнуляется, персонаж ошеломлён до конца своего следующего хода. Копить нечего — заряд не тратится.
+ * Ловкости против Сл навыка, урон Силовым полем, равный накопленному (успех — половина). Как у способностей
+ * dnd5e: спасбросок цели бросают кнопкой из карточки навыка, урон — кнопкой в карточке взрыва, применяет
+ * Мастер лотком. Накопление обнуляется, персонаж ошеломлён до конца своего следующего хода. Копить нечего —
+ * заряд не тратится.
  *
  * Счёт ведёт Мастер: флаг персонажа supernova { combatId, hp, stored }.
  */
@@ -13,17 +15,17 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { addTurnEffect } from "../turn-effects.js";
-import { isKnack, knackSkill, ref, actorFrom, tokenOf, quiet, dcOf, areaOf, around, blast, boomAt, combatOf, hpOf } from "./common.js";
+import { isKnack, knackSkill, ref, actorFrom, tokenOf, esc, noTemplate, dcOf, areaOf, around, boom, boomAt, combatOf, hpOf, card } from "./common.js";
 
 const FLAG = 'supernova';
 const ICON = 'icons/svg/sun.svg';
 
 export const storedOf = actor => Number(actor?.getFlag(MODULE_ID, FLAG)?.stored) || 0;
 
-Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
+Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     const item = activity?.item, actor = item?.actor;
     if (!isKnack(item, 'supernova') || !actor) return;
-    quiet(usage, message);
+    noTemplate(usage);
     if (!tokenOf(actor)) { ui.notifications.warn('Сверхновая: токена персонажа нет на сцене.'); return false; }
     if (!storedOf(actor)) { ui.notifications.warn('Сверхновая: копить пока нечего — получите урон в бою.'); return false; }
 });
@@ -79,11 +81,11 @@ export async function explode({ actorId, tokenId, sceneId, dc, radius }) {
     if (!actor || !token || !stored) return;
     await actor.setFlag(MODULE_ID, FLAG, { ...(actor.getFlag(MODULE_ID, FLAG) ?? {}), stored: 0, hp: hpOf(actor) });
     await show(actor, 0);
-    await blast({
-        actor, title: `${actor.name}: Сверхновая`, icon: 'fa-sun', victims: around(token, radius),
-        formula: String(stored), type: 'force', ability: 'dex', dc, at: { ...boomAt(token, radius), color: 0xfff1c4 },
-        note: `Выпущено накопленное: ${stored}.`
-    });
+    boom({ ...boomAt(token, radius), color: 0xfff1c4 });
+    const caught = around(token, radius);
+    await card(actor, 'Сверхновая', `<p>${esc(actor.name)} выпускает накопленное: <strong>${stored}</strong>.</p>
+        <p>${caught.length ? `В ${radius} футах: ${esc(caught.map(t => t.name).join(', '))} — спасбросок Ловкости (Сл ${dc}) кнопкой из карточки навыка, успех — половина урона.` : 'Рядом никого.'}</p>
+        <p>[[/damage ${stored} force]]</p>`, { icon: 'fa-sun', flags: { supernova: { stored, dc } } });
     const combat = game.combat?.started ? game.combat : null;
     const stun = { name: 'Сверхновая: ошеломлён', img: ICON, statuses: ['stunned'], description: '<p>После взрыва — ошеломлён до конца своего следующего хода.</p>' };
     if (combat?.combatants.some(c => c.tokenId === token.id)) await addTurnEffect(actor, combat, stun, { until: 'nextTurn', tokenId: token.id });

@@ -70,12 +70,14 @@ export async function stick({ actorId, tokenId, sceneId, targetId, formula }) {
     const target = game.scenes.get(sceneId)?.tokens.get(targetId);
     if (!combat || !owner || !target) return;
     const roll = await new Roll('1d4 + 1').evaluate();
+    // Таймер — видимый бросок, но шёпотом: только владельцу и Мастеру
+    const whisper = game.users.filter(u => u.isGM || owner.testUserPermission(u, 'OWNER')).map(u => u.id);
+    // Режим броска «открытый» по умолчанию стёр бы шёпот: сообщение собирается и шепчется явно
+    const data = await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: owner }), flavor: `Таймер бомбы: взрыв в начале раунда ${combat.round + roll.total}. Никому не говорите.` }, { create: false });
+    await ChatMessage.create({ ...data, whisper });
     const id = foundry.utils.randomID();
     await combat.setFlag(MODULE_ID, FLAG, [...listOf(combat), { id, ownerId: owner.id, holder: target.id, timer: roll.total, formula, from: tokenId, passRound: combat.round }]);
     await mark(target, id, true);
-    // Таймер — только владельцу и Мастеру
-    const whisper = game.users.filter(u => u.isGM || owner.testUserPermission(u, 'OWNER')).map(u => u.id);
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: owner }), whisper, content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-stopwatch"></i> Таймер бомбы</div><p>Взрыв через <strong>${roll.total}</strong> ${roll.total === 1 ? 'раунд' : 'раунда'} — в начале раунда ${combat.round + roll.total}. Никому не говорите.</p></div>` });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: owner }),
         content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-bomb"></i> Горячая картошка</div><p>Бомба прилипла к ${esc(target.name)}. Тикает…</p><div class="gd-blast-buttons"><button type="button" data-potato-pass="${id}"><i class="fas fa-hand-holding"></i> Передать своей цели</button></div></div>`,

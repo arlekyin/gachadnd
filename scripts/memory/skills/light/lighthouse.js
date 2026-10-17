@@ -18,6 +18,7 @@ import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { addTurnEffect } from "../turn-effects.js";
 import { isLight, ref, actorFrom, centerOf, feetToPx, lightCard, esc } from "./common.js";
 import { placedTemplate, sceneTemplates, shapeOf, hasTemplate, turnTemplate, onDeleteTemplate } from "../../../core/templates.js";
+import { saveCard } from "../blast/common.js";
 
 const ROUNDS = 10;
 const TURN = 90;
@@ -129,13 +130,12 @@ async function shine(combat, scene) {
             await lightCard(actor, 'Маяк', `<p>${esc(token.name)} в луче маяка: +1d4 к атакам и спасброскам до конца хода.</p>`, { icon: 'fa-tower-observation' });
         } else {
             const dc = dcOf(owner);
-            const success = await conSave(actor, dc);
-            if (success) continue;
-            await addTurnEffect(actor, combat, {
-                name: 'Маяк: ослеплён', img: 'icons/svg/blind.svg', statuses: ['blinded'],
-                description: 'Луч маяка: ослеплён до конца своего хода.'
-            }, { until: 'thisTurn', tokenId: token.id });
-            await lightCard(owner ?? actor, 'Маяк', `<p>${esc(token.name)} проваливает спасбросок Телосложения (Сл ${dc}) — ослеплён до конца своего хода.</p>`, { icon: 'fa-tower-observation' });
+            // Как у способностей dnd5e: враг бросает спасбросок сам (кнопка в карточке), слепота — на провале
+            await saveCard({
+                actor: owner ?? actor, title: 'Маяк', icon: 'fa-tower-observation', tokens: [token], ability: 'con', dc,
+                note: `${esc(token.name)} начинает ход в луче маяка. Провал — ослеплён до конца своего хода (модуль наложит сам).`,
+                onFail: { effect: { name: 'Маяк: ослеплён', img: 'icons/svg/blind.svg', statuses: ['blinded'], description: 'Луч маяка: ослеплён до конца своего хода.' }, until: 'thisTurn' }
+            });
         }
         return;
     }
@@ -147,16 +147,6 @@ export function dcOf(actor) {
     return 8 + (Number(actor?.system?.attributes?.prof) || 2) + Math.max(0, ...mods);
 }
 
-async function conSave(actor, dc) {
-    try {
-        const rolls = await actor.rollSavingThrow({ ability: 'con', target: dc }, { configure: false }, {});
-        const roll = Array.isArray(rolls) ? rolls[0] : rolls;
-        if (roll) return roll.isSuccess ?? roll.total >= dc;
-    } catch (error) {
-        console.warn('gachadnd | Маяк: спасбросок', error);
-    }
-    return false;
-}
 
 // Шаблон удалили (маяк разбили) — свет гаснет
 onDeleteTemplate((template) => {

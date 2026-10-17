@@ -4,20 +4,20 @@
  * Бонусным действием — хлопок у ног: каждое существо в радиусе навыка (10 футов, ранги — 15 и 20),
  * кроме самого персонажа, до начала своего следующего хода не может совершать реакции. В бою — эффект
  * на ход (снимается в начале хода существа), вне боя — на 6 секунд. Реакции dnd5e не запрещает:
- * эффект на токене — напоминание столу.
+ * эффект на токене — напоминание столу. Карточка навыка dnd5e — в чате, как у любой способности.
  */
 
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { addTurnEffect } from "../turn-effects.js";
-import { isKnack, ref, actorFrom, tokenOf, esc, quiet, areaOf, around, boom, boomAt, card } from "./common.js";
+import { isKnack, ref, actorFrom, tokenOf, esc, noTemplate, areaOf, around, boom, boomAt, card } from "./common.js";
 
 const ICON = 'icons/svg/sound.svg';
 
 Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     const item = activity?.item, actor = item?.actor;
     if (!isKnack(item, 'firecracker') || !actor) return;
-    quiet(usage, message);
+    noTemplate(usage);
     if (!tokenOf(actor)) {
         ui.notifications.warn('Хлопушка: токена персонажа нет на сцене.');
         return false;
