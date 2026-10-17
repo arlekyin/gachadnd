@@ -27,6 +27,7 @@ import { registerResidentSettings, settleResident, hasResident } from "./residen
 import { ResidentsWindow } from "./residents-window.js";
 import "./chronicle-log.js";
 import { playChronicle } from "./chronicle.js";
+import { EventWindow, registerEventSettings } from "./events.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -38,6 +39,7 @@ Hooks.once('init', () => {
     registerSceneSettings();
     registerDealSettings();
     registerBoonSettings();
+    registerEventSettings();
     registerResidentSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
@@ -74,7 +76,10 @@ Hooks.once('init', () => {
         openResidents: focus => ResidentsWindow.open(focus),
         settleResident: id => settleResident(id),
         // Летопись этажа у себя (показ, без рассылки): { oldMap, oldFloor, newMap, newFloor, marks }
-        playChronicle: data => playChronicle(data)
+        playChronicle: data => playChronicle(data),
+        // Событие на узле «Событие» — дневник у всех (Мастер); просмотр события без последствий
+        openEvent: () => EventWindow.open(),
+        previewEvent: id => EventWindow.preview(id)
     });
 });
 

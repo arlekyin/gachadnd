@@ -78,8 +78,20 @@ async function saveDeal(found, deal) {
     await mapScene().setFlag(MODULE_ID, 'floorMap', copy);
 }
 
+/** Лоты следующей Сделки — заранее (событие «подсмотреть»): одни и те же на этаже, где их подсмотрели */
+export function presetDealLots(floor = getFloor()) {
+    const preset = game.settings.get(MODULE_ID, 'dealPreset');
+    if (preset?.floor === floor && preset.lots?.length) return preset.lots;
+    return null;
+}
+export async function rollDealLots(floor = getFloor()) {
+    const lots = presetDealLots(floor) ?? Object.keys(LOTS).sort(() => Math.random() - 0.5).slice(0, 3);
+    await game.settings.set(MODULE_ID, 'dealPreset', { floor, lots });
+    return lots;
+}
+
 function newDeal() {
-    const pool = Object.keys(LOTS).sort(() => Math.random() - 0.5).slice(0, 3);
+    const pool = [...(presetDealLots() ?? Object.keys(LOTS).sort(() => Math.random() - 0.5).slice(0, 3))];
     // Порядок на сцене — по цене: слева дешевле
     const lots = pool.sort((a, b) => LOTS[a].price - LOTS[b].price);
     return { floor: getFloor(), lots, lot: lots[lots.length - 1], offers: [], status: 'open' };
@@ -367,6 +379,8 @@ onSocket('dealSealed', () => DealWindow.sealed());
 export function registerDealSettings() {
     // Отметки Эха Босса и Натравить Пожирателя: { type, floor, used }
     game.settings.register(MODULE_ID, 'moonBoons', { scope: 'world', config: false, type: Array, default: [] });
+    // Лоты, подсмотренные событием: { floor, lots } — Сделка этого этажа предложит их
+    game.settings.register(MODULE_ID, 'dealPreset', { scope: 'world', config: false, type: Object, default: {} });
 }
 
 // ==========================================

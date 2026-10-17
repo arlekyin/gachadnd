@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { RECOVERY_VALUES } from './scripts/core/recovery.js';
 import { validateRisk } from './scripts/labyrinth/risk-schema.js';
+import { validateEvent } from './scripts/labyrinth/event-schema.js';
 import { buildRules } from './tools/rules.mjs';
 import { buildBestiary } from './tools/bestiary.mjs';
 
@@ -932,6 +933,29 @@ if (fs.existsSync(RISK_SRC_DIR)) {
     }
 }
 
+// ==========================================
+// СОБЫТИЯ: src/events/*.yaml → data/events.json
+// ==========================================
+const EVENT_SRC_DIR = './src/events';
+const EVENT_OUT = './data/events.json';
+const events = [];
+if (fs.existsSync(EVENT_SRC_DIR)) {
+    for (const file of fs.readdirSync(EVENT_SRC_DIR).filter(f => f.endsWith('.yaml')).sort()) {
+        let ev;
+        try {
+            ev = yaml.load(fs.readFileSync(path.join(EVENT_SRC_DIR, file), 'utf8'));
+        } catch (e) {
+            errors.push(`events/${file}: ошибка YAML — ${e.message}`);
+            continue;
+        }
+        const errs = validateEvent(ev);
+        if (events.some(x => x.id === ev?.id)) errs.push(`id: «${ev.id}» уже используется`);
+        if (ev?.image?.src && !fs.existsSync(ev.image.src)) errs.push(`image.src: файла «${ev.image.src}» нет`);
+        if (errs.length) errs.forEach(e => errors.push(`events/${file} → ${e}`));
+        else events.push(ev);
+    }
+}
+
 if (errors.length) {
     console.error(`Сборка остановлена: ошибок — ${errors.length}.\n`);
     errors.forEach(e => console.error(`  ${e}`));
@@ -946,6 +970,7 @@ for (const { file, item } of items) {
 
 fs.mkdirSync(path.dirname(RISK_OUT), { recursive: true });
 fs.writeFileSync(RISK_OUT, JSON.stringify(risks, null, 2) + '\n', 'utf8');
+fs.writeFileSync(EVENT_OUT, JSON.stringify(events, null, 2) + '\n', 'utf8');
 
 // Базы компендиумов (LevelDB) полностью собираются из dist: старая база удаляется перед упаковкой,
 // иначе неполная или повреждённая база (например, после git pull) не откроется. Мир должен быть закрыт.
@@ -970,4 +995,4 @@ try {
     process.exit(1);
 }
 
-console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, существ — ${creatures.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);
+console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, событий — ${events.length}, существ — ${creatures.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);

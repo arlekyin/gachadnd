@@ -1,0 +1,7 @@
+<section class="gd-ev-left">
+    {{#unless empty}}
+    <div class="gd-ev-frame" style="aspect-ratio: {{sketchW}} / {{sketchH}}">{{{sketch}}}</div>
+    {{#if caption}}<p class="gd-ev-caption" style="--at: {{caption.at}}s">{{caption.text}}</p>{{/if}}
+    {{/unless}}
+    <div class="gd-ev-spine"></div>
+</section>

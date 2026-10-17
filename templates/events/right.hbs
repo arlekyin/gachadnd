@@ -1,0 +1,36 @@
+<section class="gd-ev-right{{#if decided}} decided{{/if}}">
+    {{#if empty}}
+    <p class="gd-ev-text">Страница пуста — событие ещё не выбрано.</p>
+    {{else}}
+    <div class="gd-ev-place">{{place}}</div>
+    <h2 class="gd-ev-title">{{title}}</h2>
+    {{#each text}}<p class="gd-ev-text" style="--at: {{at}}s">{{t}}</p>{{/each}}
+    <ol class="gd-ev-options">
+        {{#each options}}
+        <li class="gd-ev-option{{#if chosen}} chosen{{/if}}" {{#if ../open}}data-action="choose"{{/if}} data-i="{{i}}" style="--at: {{at}}s">
+            <span class="gd-ev-label">{{label}}</span>
+            {{#if detail}}<span class="gd-ev-detail">{{detail}}</span>{{/if}}
+        </li>
+        {{/each}}
+    </ol>
+    {{#if needsWho}}
+    <label class="gd-ev-who">Кто: <select name="who">{{#each who}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}</select></label>
+    {{/if}}
+    {{#if rolling}}
+    <div class="gd-ev-roll">
+        <span>{{rolling.actor}} — {{rolling.check}}</span>
+        {{#if rolling.canRoll}}<button type="button" data-action="roll"><i class="fas fa-dice-d20"></i> Бросить</button>{{else}}<em>ждём броска</em>{{/if}}
+    </div>
+    {{/if}}
+    {{#if done}}
+    <p class="gd-ev-outcome on">{{#if done.verdict}}<b>{{done.verdict}}.</b> {{/if}}{{done.text}}</p>
+    {{#if done.lines}}<p class="gd-ev-lines">{{{done.lines}}}</p>{{/if}}
+    {{else}}
+    <p class="gd-ev-outcome"></p>
+    {{/if}}
+    <div class="gd-ev-gm">
+        {{#if isGM}}{{#if open}}{{#unless preview}}<a data-action="reroll">другое событие</a>{{/unless}}{{/if}}{{/if}}
+        {{#if isGM}}<a data-action="finish">закрыть дневник</a>{{else}}{{#if done}}<a data-action="finish">закрыть дневник</a>{{/if}}{{/if}}
+    </div>
+    {{/if}}
+</section>

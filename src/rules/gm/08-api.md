@@ -24,6 +24,8 @@
 | `game.gachadnd.callDevourer()` | натравить Пожирателя в идущем бою (дар луны этого этажа): щелчок по точке прорыва |
 | `game.gachadnd.openResidents('broker')` | окно «Жильцы Якоря»; необязательно — чей прилавок открыть: `smith`, `cartographer`, `broker`, `healer`, `lurer` |
 | `game.gachadnd.settleResident('smith')` | поселить жильца в Якоре (Мастер) |
+| `game.gachadnd.openEvent()` | дневник события у всех (отряд на узле «Событие», Мастер) |
+| `game.gachadnd.previewEvent('swamp_lights')` | посмотреть событие без узла и без последствий |
 | `game.gachadnd.playChronicle(data)` | показать Летопись этажа у себя: `{ oldMap, oldFloor, newMap, newFloor, marks }` (у всех она идёт сама, когда Мастер чертит этаж) |
 | `game.gachadnd.pulse()` | Пульс отряда: ступень сложности боёв, итог последнего боя, ПЗ отряда |
 | `game.gachadnd.scent()` | Запах отряда: `{ value, state, label, thresholds, members }` |
