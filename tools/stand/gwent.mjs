@@ -1,4 +1,4 @@
-// «Сыграем... в гвинт?»: node tools/stand/gwent.mjs [--v13]
+// «Партейку?»: node tools/stand/gwent.mjs [--v13]
 // Колода на бой и добор до трёх, панель руки, одна карта за ход, все карты: Казнь, Мороз,
 // Туман, Ясное небо, Рог, Чучело, Шпион, Медик, Ведьмак. Снимок out/gwent_panel.png
 // Поле (клетки): персонаж 5,10; гоблин 11,7 (25 ПЗ); огр 12–13,5–6; союзник 9,8 (20 ПЗ); бес 15,8.
@@ -38,7 +38,7 @@ check(await page.evaluate(() => {
     foundry.applications.instances.delete?.('gachadnd-gwent-A');
     const flags = item.flags.gachadnd, saved = flags.gwent;
     delete flags.gwent;
-    flags.skill_name = 'Сыграем... в гвинт?';
+    flags.skill_name = 'Партейку?';
     const ok = useSkill() === false;
     flags.gwent = saved;
     return ok;

@@ -1,5 +1,5 @@
 /**
- * Gacha Roguelike dnd5e — «Сыграем... в гвинт?» (красный навык)
+ * Gacha Roguelike dnd5e — «Партейку?» (красный навык)
  *
  * Колода из 12 карт, рука из трёх. Колода тасуется в начале каждого боя; в начале своего хода
  * персонаж добирает руку до трёх (колода кончилась — сброс тасуется обратно). Одна карта за ход —
@@ -43,11 +43,11 @@ export const CARDS = {
         text: 'Возьмите 2 карты. До конца вашего следующего хода атаки по вам — с преимуществом.' },
     medic: { name: 'Медик', icon: 'fa-kit-medical', count: 1, target: 'discard',
         text: 'Верните в руку карту из сброса.' },
-    witcher: { name: 'Ведьмак', icon: 'fa-paw', count: 1, target: null,
+    witcher: { name: 'Охотник', icon: 'fa-paw', count: 1, target: null,
         text: 'Ваши атаки до конца этого хода наносят +2d6 урона.' }
 };
 
-export const SKILL_NAME = 'Сыграем... в гвинт?';
+export const SKILL_NAME = 'Партейку?';
 // Флаг из компендиума; навык, собранный без флага (старый компендиум), узнаётся по имени
 export const isGwent = item => {
     const flags = item?.flags?.[MODULE_ID];
@@ -125,7 +125,7 @@ export function canPlay(actor) {
 
 onSocket('gwentPlay', ({ payload }) => {
     if (!isActiveGM()) return;
-    playCard(payload).catch(error => console.error(`${MODULE_ID} | Гвинт`, error));
+    playCard(payload).catch(error => console.error(`${MODULE_ID} | Партейка`, error));
 });
 
 /** Мастер: эффект карты, рука → сброс, запись в чат */
@@ -155,12 +155,12 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
         if (victims.length) {
             const prof = actor.system?.attributes?.prof ?? 2;
             // Как у способностей dnd5e: урон — кнопкой в карточке, применяет Мастер лотком
-            await blast({ actor, title: 'Гвинт: Казнь', icon: 'fa-skull', victims, formula: `${prof}d8`, type: 'force' });
+            await blast({ actor, title: 'Партейка: Казнь', icon: 'fa-skull', victims, formula: `${prof}d8`, type: 'force' });
             result = `Казнь: ${esc(victims.map(t => t.name).join(', '))} — ${prof}d8 урона силовым полем, кнопкой в карточке.`;
         } else result = 'Казнь: в 30 футах никого.';
     } else if (key === 'frost' || key === 'fog') {
         await createCircle(scene, {
-            x: target.x, y: target.y, distance: ZONE, name: key === 'frost' ? 'Гвинт: Трескучий мороз' : 'Гвинт: Непроглядный туман',
+            x: target.x, y: target.y, distance: ZONE, name: key === 'frost' ? 'Партейка: Трескучий мороз' : 'Партейка: Непроглядный туман',
             fillColor: key === 'frost' ? '#9fe3ff' : '#8a8f99', borderColor: key === 'frost' ? '#d6f4ff' : '#c4c8cf',
             flags: { [MODULE_ID]: { gwentWeather: key, actorId: actor.id } }
         });
@@ -169,8 +169,8 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
             const inside = scene.tokens.filter(t => t.disposition !== disposition && Math.hypot(center(t).x - target.x, center(t).y - target.y) <= ZONE / (scene.grid.distance ?? 5) * size + size / 2);
             for (const t of inside) {
                 await addTurnEffect(t.actor, combat, {
-                    name: 'Гвинт: Трескучий мороз', img: 'icons/svg/frozen.svg',
-                    description: '<p>Скорость всех видов вдвое меньше.</p><p><em>Гвинт: до конца следующего хода этого существа.</em></p>',
+                    name: 'Партейка: Трескучий мороз', img: 'icons/svg/frozen.svg',
+                    description: '<p>Скорость всех видов вдвое меньше.</p><p><em>Партейка: до конца следующего хода этого существа.</em></p>',
                     changes: ['walk', 'fly', 'swim', 'climb', 'burrow'].map(m => ({ key: `system.attributes.movement.${m}`, mode: 1, value: '0.5' }))
                 }, { tokenId: t.id });
             }
@@ -182,8 +182,8 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
     } else if (key === 'horn') {
         const ally = scene.tokens.get(target.tokenId);
         await addTurnEffect(ally.actor, combat, {
-            name: 'Гвинт: Командирский рог', img: 'icons/svg/upgrade.svg',
-            description: '<p>+1d6 к броскам атаки и урону.</p><p><em>Гвинт: до конца следующего хода этого существа.</em></p>',
+            name: 'Партейка: Командирский рог', img: 'icons/svg/upgrade.svg',
+            description: '<p>+1d6 к броскам атаки и урону.</p><p><em>Партейка: до конца следующего хода этого существа.</em></p>',
             changes: [...attackBonus('attack', '+1d6'), ...attackBonus('damage', '+1d6')]
         }, { tokenId: ally.id });
         result = `Командирский рог: ${esc(ally.name)} — +1d6 к атакам и урону.`;
@@ -196,8 +196,8 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
     } else if (key === 'spy') {
         draw(state, 2);
         await addTurnEffect(actor, combat, {
-            name: 'Гвинт: Шпион', img: `${ICON}/statuses/marked.svg`,
-            description: '<p>Атаки по вам — с преимуществом.</p><p><em>Гвинт: до конца вашего следующего хода.</em></p>'
+            name: 'Партейка: Шпион', img: `${ICON}/statuses/marked.svg`,
+            description: '<p>Атаки по вам — с преимуществом.</p><p><em>Партейка: до конца вашего следующего хода.</em></p>'
         }, { tokenId: token.id });
         result = 'Шпион: +2 карты в руку, атаки по персонажу — с преимуществом до конца его следующего хода.';
     } else if (key === 'medic') {
@@ -210,11 +210,11 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
         } else result = 'Медик: возвращать нечего.';
     } else if (key === 'witcher') {
         await addTurnEffect(actor, combat, {
-            name: 'Гвинт: Ведьмак', img: 'icons/svg/sword.svg',
-            description: '<p>Атаки наносят +2d6 урона.</p><p><em>Гвинт: до конца этого хода.</em></p>',
+            name: 'Партейка: Охотник', img: 'icons/svg/sword.svg',
+            description: '<p>Атаки наносят +2d6 урона.</p><p><em>Партейка: до конца этого хода.</em></p>',
             changes: attackBonus('damage', '+2d6')
         }, { until: 'thisTurn', tokenId: token.id });
-        result = 'Ведьмак: атаки до конца хода — +2d6 урона.';
+        result = 'Охотник: атаки до конца хода — +2d6 урона.';
     }
 
     await saveState(actor, state);

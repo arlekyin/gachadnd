@@ -75,7 +75,7 @@ export function plan(scene, tokens, random = Math.random) {
     // Сначала крупные: давит больший
     const queue = tokens.map((t, i) => i).sort((a, b) => area(tokens[b]) - area(tokens[a]));
     const taken = new Set();
-    // Блоки Тетриса — тоже препятствие
+    // Блоки Кирпичей — тоже препятствие
     for (const tile of scene.tiles ?? []) if (tile.flags?.[MODULE_ID]?.tetris) taken.add(key(...cellOf(tile, size)));
     const placed = new Map(), crushed = [];
     for (const i of queue) {

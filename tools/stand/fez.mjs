@@ -1,4 +1,4 @@
-// Fez: node tools/stand/fez.mjs [--v13]
+// Перспектива: node tools/stand/fez.mjs [--v13]
 // Призраки поворота, смена направления, стена не пускает, цепочка (e2 встаёт на место e1),
 // поворот карты и вспышка, перестановка у Мастера, отмена возвращает заряд.
 // Поле (клетки): персонаж 10,8; e1 12,8; e2 10,6; e3 8,9; e4 13,12; far 18,3; стена над e3.
@@ -44,7 +44,7 @@ check(after.e3 === '8,9', 'стена не пустила e3');
 check(after.e4 === '6,11', 'e4 на краю дальности повернулся');
 check(after.far === '18,3', 'далёкий не тронут');
 if (v13) check(await page.evaluate(() => window.moves?.length === 3 && window.moves.every(m => m.action === 'displace')), 'v13: поворот — перемещения displace');
-check(/Fez/.test(await page.evaluate(() => window.chat)), 'в чате — Fez');
+check(/Перспектива/.test(await page.evaluate(() => window.chat)), 'в чате — Перспектива');
 check(await page.evaluate(() => !document.querySelector('.gd-fez-flash')), 'вспышка убрана');
 await stand.shot('fez_after');
 await stand.close();

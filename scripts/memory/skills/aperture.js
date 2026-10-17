@@ -264,7 +264,7 @@ Hooks.on('moveToken', (token, movement, operation, user) => {
     trace(`moveToken ${token.name}: от ${user?.name ?? user?.id ?? user}, путь ${(movement?.passed?.waypoints ?? []).map(w => `${w.x},${w.y}:${w.action}`).join(' → ') || '—'}, осталось ${movement?.pending?.waypoints?.length ?? '?'}, метод ${movement?.method ?? '?'}`);
     if ((user?.id ?? user) !== game.user.id) trace('  перенос делает тот, кто двигал, — не этот клиент');
     if (operation?.gachadndPortal || (user?.id ?? user) !== game.user.id) return;
-    // Перенос сам — тоже перемещение «displace»: его не ловить (кроме поворота Fez — он может
+    // Перенос сам — тоже перемещение «displace»: его не ловить (кроме поворота Перспектива — он может
     // поставить существо прямо в портал)
     const displaced = [...(movement?.passed?.waypoints ?? []), ...(movement?.pending?.waypoints ?? [])].some(w => w.action === 'displace');
     if (displaced && !operation?.gachadndFez) return trace('  это перенос (displace) — пропуск');

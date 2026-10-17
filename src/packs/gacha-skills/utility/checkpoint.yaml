@@ -1,5 +1,5 @@
 id: YisDWvuB2D7Y7Ngt
-name: Давай по новой Миша, всё хуйня
+name: Сейв-лоад
 rarity: red
 tags:
   - разум
@@ -12,3 +12,4 @@ description: |-
 activation: special
 uses: 3
 recovery: run
+explicit_name: Давай по новой Миша, всё хуйня

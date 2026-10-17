@@ -14,8 +14,8 @@ const settle = () => page.evaluate(() => gdt.settle());
 await install(page);
 const ids = await scene(page);
 const hero = ids.hero;
-const S = await skills(page, hero, ['Китти Прайд', 'Перезарядка', 'Оверклокинг', 'Давай по новой Миша, всё хуйня']);
-const KITTY = S['Китти Прайд'], RECHARGE = S['Перезарядка'], OVER = S['Оверклокинг'], GRAY = S['Давай по новой Миша, всё хуйня'];
+const S = await skills(page, hero, ['Стена? Какая стена?', 'Перезарядка', 'Оверклокинг', 'Сейв-лоад']);
+const KITTY = S['Стена? Какая стена?'], RECHARGE = S['Перезарядка'], OVER = S['Оверклокинг'], GRAY = S['Сейв-лоад'];
 
 const state = id => page.evaluate(({ hero, id }) => {
     const item = game.actors.get(hero).items.get(id);
@@ -83,7 +83,7 @@ check('Перезарядка: окно выбора цели', u.windows.some(w
 check('Перезарядка: заряд цели вернулся заёмным', k.spent === 0 && k.borrowed === 1, JSON.stringify(k));
 check('Перезарядка: свой заряд потрачен один раз', r.spent === 1, JSON.stringify(r));
 let chats = await page.evaluate(() => gdt.chats());
-check('карточка подзарядки: «без перегрева»', chats.some(c => /Перезарядка → Китти Прайд/.test(c) && /без перегрева/.test(c)), chats.length + ' сообщений');
+check('карточка подзарядки: «без перегрева»', chats.some(c => /Перезарядка → Стена\? Какая стена\?/.test(c) && /без перегрева/.test(c)), chats.length + ' сообщений');
 
 // 3. Первое заёмное использование — без броска
 await page.evaluate(() => gdt.mark());
@@ -114,7 +114,7 @@ check('третье заёмное: выпало 33 — навык сгорел 
 
 // 6. Неудаляемый навык не сгорает, а блокируется; заблокированный не используется
 if (await state(KITTY)) await page.evaluate(({ hero, id }) => game.actors.get(hero).items.get(id).delete(), { hero, id: KITTY });
-const U = (await skills(page, hero, ['Китти Прайд']))['Китти Прайд'];
+const U = (await skills(page, hero, ['Стена? Какая стена?']))['Стена? Какая стена?'];
 await page.evaluate(({ hero, id }) => game.actors.get(hero).items.get(id).setFlag('gachadnd', 'undeletable', true), { hero, id: U });
 await use(U);
 for (let i = 0; i < 2; i++) { await recharge(U); await page.evaluate(() => gdt.dice(100, 1)); await use(U, { timeout: 2500 }); }

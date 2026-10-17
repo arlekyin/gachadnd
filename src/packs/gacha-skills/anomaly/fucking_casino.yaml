@@ -1,5 +1,5 @@
 id: wCNksQkzkAfLO6AL
-name: Ебаный рот этого казино
+name: "Let's go gambling!"
 rarity: red
 tags:
   - аномалия
@@ -19,3 +19,4 @@ recovery: long
 roll:
   formula: 1d100
   name: Ставка
+explicit_name: Ебаный рот этого казино

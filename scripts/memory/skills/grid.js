@@ -1,5 +1,5 @@
 /**
- * Gacha Roguelike dnd5e — Клетки сетки для навыков, которые двигают существ (Портал, Fez)
+ * Gacha Roguelike dnd5e — Клетки сетки для навыков, которые двигают существ (Портал, Перспектива)
  *
  * Клетка — пара [x, y] в клетках сетки, ключ «x,y». Токены и плитки — документы сцены.
  */
@@ -18,7 +18,7 @@ export function footprint(token, gx, gy) {
     return out;
 }
 
-/** Клетки, куда нельзя встать: блоки Тетриса и токены сцены (кроме перечисленных) */
+/** Клетки, куда нельзя встать: блоки Кирпичей и токены сцены (кроме перечисленных) */
 export function occupied(scene, size, { except = [] } = {}) {
     const cells = new Set();
     for (const tile of scene.tiles) if (tile.flags?.[MODULE_ID]?.tetris) cells.add(key(...cellOf(tile, size)));

@@ -24,8 +24,8 @@ const listed = await ev(() => ({
     settings: [...game.settings.settings.values()].filter(s => s.namespace === 'gachadnd' && s.config).map(s => s.key).sort(),
     menus: [...game.settings.menus.keys()].filter(k => k.startsWith('gachadnd.')).map(k => k.slice(9)).sort()
 }));
-check('в общем списке — 5 общих настроек', JSON.stringify(listed.settings) === JSON.stringify(['anchorSceneId', 'automation', 'effects', 'gmHints', 'volume']), listed.settings.join(', '));
-check('кнопки подменю: экономика, звуки, подсказки, Риск, срабатывания', JSON.stringify(listed.menus) === JSON.stringify(['automationMenu', 'economyMenu', 'hintsMenu', 'riskMenu', 'soundsMenu']), listed.menus.join(', '));
+check('в общем списке — 6 общих настроек', JSON.stringify(listed.settings) === JSON.stringify(['anchorSceneId', 'automation', 'effects', 'gmHints', 'rudeNames', 'volume']), listed.settings.join(', '));
+check('кнопки подменю: экономика, звуки, подсказки, свои названия, Риск, срабатывания', JSON.stringify(listed.menus) === JSON.stringify(['automationMenu', 'economyMenu', 'hintsMenu', 'namesMenu', 'riskMenu', 'soundsMenu']), listed.menus.join(', '));
 
 // Окно настроек Foundry, вкладка модуля
 await ev(async () => {
@@ -45,7 +45,7 @@ const shown = await ev(() => {
     return { count: labels.length, labels };
 });
 await f.shot('settings_list');
-check('в окне настроек у модуля 10 строк: 5 кнопок подменю и 5 настроек', shown.count === 10, shown.labels.join(' · '));
+check('в окне настроек у модуля 12 строк: 6 кнопок подменю и 6 настроек', shown.count === 12, shown.labels.join(' · '));
 await ev(() => gdt.settingsApp.close());
 
 // ---------- Подменю: поля и сохранение
@@ -104,8 +104,8 @@ await ev(async hero => {
     const a = game.actors.get(hero);
     Object.defineProperty(a, 'hasPlayerOwner', { get: () => true, configurable: true });
     const inv = await gdt.mod('memory/inventory.js');
-    await inv.giveCrystal(a, { skillName: 'Сайтама' });
-    await inv.giveCrystal(a, { skillName: 'Fez' });
+    await inv.giveCrystal(a, { skillName: 'Серия обычных ударов' });
+    await inv.giveCrystal(a, { skillName: 'Перспектива' });
 }, ids.hero);
 const scentMessages = async () => {
     await ev(() => gdt.mark());

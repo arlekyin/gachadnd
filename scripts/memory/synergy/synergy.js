@@ -471,7 +471,7 @@ Hooks.once('ready', async () => {
     }
 });
 
-// Навыки, полученные до появления новых полей (combat_changes — Берсерк, trigger — автоматизация, impact — кадр Мегумин),
+// Навыки, полученные до появления новых полей (combat_changes — Берсерк, trigger — автоматизация, impact — кадр Взрывное искусство),
 // берут эти данные из компендиума. impact сверяется всегда: у него появляются поля (style — рисунок кадра)
 const MIGRATED_FLAGS = ['combat_changes', 'trigger', 'impact'];
 const SYNCED_FLAGS = ['impact'];

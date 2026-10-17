@@ -1,5 +1,5 @@
 /**
- * Gacha Roguelike dnd5e — «Сыграем... в гвинт?»: панель руки
+ * Gacha Roguelike dnd5e — «Партейку?»: панель руки
  *
  * Три карты руки, счётчики колоды и сброса. Клик по карте — розыгрыш: если карте нужна цель,
  * сначала выбор на сцене (точка, союзник) или из сброса (Медик). Карты, которые сейчас сыграть
@@ -19,7 +19,7 @@ export class GwentPanel extends ApplicationV2 {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-gwent'],
         tag: 'div',
-        window: { title: 'Гвинт', icon: 'fas fa-layer-group', resizable: false },
+        window: { title: 'Партейка', icon: 'fas fa-layer-group', resizable: false },
         position: { width: 470, height: 'auto' }
     };
 
@@ -34,8 +34,8 @@ export class GwentPanel extends ApplicationV2 {
             app.bringToFront?.();
             return app;
         } catch (error) {
-            console.error(`${MODULE_ID} | Гвинт: панель не открылась`, error);
-            ui.notifications.error(`Гвинт: панель не открылась — ${error?.message ?? error}. Подробности в консоли (F12).`);
+            console.error(`${MODULE_ID} | Партейка: панель не открылась`, error);
+            ui.notifications.error(`Партейка: панель не открылась — ${error?.message ?? error}. Подробности в консоли (F12).`);
             return null;
         }
     }
@@ -47,7 +47,7 @@ export class GwentPanel extends ApplicationV2 {
     }
 
     get title() {
-        return `Сыграем... в гвинт? — ${this.actor.name}`;
+        return `Партейку? — ${this.actor.name}`;
     }
 
     async _prepareContext() {
@@ -159,7 +159,7 @@ async function chooseTarget(card, caster, state) {
 Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isGwent(item) || !item.actor) return;
-    console.log(`${MODULE_ID} | Гвинт: открываю панель — ${item.actor.name}`);
+    console.log(`${MODULE_ID} | Партейка: открываю панель — ${item.actor.name}`);
     GwentPanel.open(item.actor);
     return false;
 });
@@ -174,7 +174,7 @@ Hooks.on('updateActor', (actor, changes) => {
 Hooks.on('updateCombat', () => {
     for (const app of foundry.applications.instances?.values?.() ?? []) if (app instanceof GwentPanel && app.rendered) app.render();
 });
-// Начало боя — панель открывается у тех, кто управляет персонажем с Гвинтом
+// Начало боя — панель открывается у тех, кто управляет персонажем с Партейкой
 Hooks.on('updateCombat', (combat, changed) => {
     if (changed.round !== 1 || !combat.started) return;
     for (const combatant of combat.combatants) {

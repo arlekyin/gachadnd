@@ -13,7 +13,7 @@ const state = id => page.evaluate(id => { const i = actor.items.get(id); return 
 const use = async id => { await page.evaluate(id => actor.items.get(id).activity.use(), id); await wait(700); };
 
 await run(() => {
-    skill('R', 'Тетрис', 'red', 1);
+    skill('R', 'Догони меня... Кирпичи?', 'red', 1);
     skill('P', 'Перезарядка', 'purple', 1, { recharger: { restore: 'all', target: 'memory' } });
     skill('O', 'Оверклокинг', 'blue', 1, { recharger: { restore: 1, target: 'equipped_empty' } });
     skill('G', 'Серый', 'gray', 2);

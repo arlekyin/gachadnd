@@ -1,5 +1,5 @@
 /**
- * Gacha Roguelike dnd5e — Тетрис (красный навык)
+ * Gacha Roguelike dnd5e — Кирпичи (красный навык)
  *
  * В панели (tetris-panel.js) видны «Следующая» фигура и «Запас»; их можно поменять местами в любой
  * момент. Использование навыка — у игрока на сцене силуэт «Следующей»: колесо и R поворачивают,
@@ -26,7 +26,7 @@ const isTetris = item => !!item?.flags?.[MODULE_ID]?.tetris;
 
 export function openTetris(actor) {
     const skill = actor?.items.find(isTetris);
-    if (!skill) return ui.notifications.warn('У персонажа нет навыка «Тетрис».');
+    if (!skill) return ui.notifications.warn('У персонажа нет навыка «Догони меня... Кирпичи?».');
     return TetrisPanel.open(actor, { item: skill });
 }
 
@@ -38,7 +38,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isTetris(item) || !item.actor) return;
     if (!canvas?.ready || !canvas.grid?.isSquare) {
-        ui.notifications.warn('Тетрис ставится только на сцену с квадратной сеткой.');
+        ui.notifications.warn('Кирпичи ставятся только на сцену с квадратной сеткой.');
         return false;
     }
     if (!item.actor.getActiveTokens?.()[0]) {
@@ -54,7 +54,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
     placeFigure(item.actor, item, range);
 });
 
-// Панель открывается сама в начале боя у тех, кто управляет персонажем с Тетрисом
+// Панель открывается сама в начале боя у тех, кто управляет персонажем с Кирпичами
 Hooks.on('updateCombat', (combat, changed) => {
     if (changed.round !== 1 || !combat.started) return;
     for (const combatant of combat.combatants) {
@@ -172,7 +172,7 @@ async function placeFigure(actor, item, range) {
         const spent = Number(item.system.uses?.spent ?? 0);
         if (spent > 0) await item.update({ 'system.uses.spent': spent - 1 });
         panel.render();
-        ui.notifications.info('Тетрис отменён, заряд возвращён.');
+        ui.notifications.info('Кирпичи отменены, заряд возвращён.');
     };
     const onKey = event => {
         if (event.target?.closest?.('input, textarea, [contenteditable]')) return;
@@ -193,7 +193,7 @@ async function placeFigure(actor, item, range) {
     canvas.app.view.oncontextmenu = cancel;
     canvas.app.view.onwheel = onWheel;
     document.addEventListener('keydown', onKey, true);
-    ui.notifications.info('Тетрис: колесо или R — повернуть, клик — обрушить, правая кнопка или Esc — отмена.');
+    ui.notifications.info('Кирпичи: колесо или R — повернуть, клик — обрушить, правая кнопка или Esc — отмена.');
 }
 
 // ==========================================
@@ -202,7 +202,7 @@ async function placeFigure(actor, item, range) {
 
 onSocket('tetrisDrop', ({ payload }) => {
     if (!isActiveGM()) return;
-    dropFigure(payload).catch(error => console.error(`${MODULE_ID} | Тетрис`, error));
+    dropFigure(payload).catch(error => console.error(`${MODULE_ID} | Кирпичи`, error));
 });
 
 async function dropFigure({ actorId, sceneId, type, cells, userId }) {
@@ -214,7 +214,7 @@ async function dropFigure({ actorId, sceneId, type, cells, userId }) {
     const before = fieldOf([...scene.tiles], [...scene.tokens], size, caster?.disposition ?? 1);
     const result = outcome(cells, before, size);
     // Клетки заняли, пока летел запрос
-    if (!result.free) return ui.notifications.warn('Тетрис: клетки фигуры уже заняты — обрушение отменено.');
+    if (!result.free) return ui.notifications.warn('Кирпичи: клетки фигуры уже заняты — обрушение отменено.');
 
     await scene.createEmbeddedDocuments('Tile', cells.map(c => ({
         texture: { src: BLOCK_SRC, tint: COLORS[type] ?? '#ffffff' }, x: c.x, y: c.y, width: size, height: size,
@@ -225,7 +225,7 @@ async function dropFigure({ actorId, sceneId, type, cells, userId }) {
         const text = ids.map(id => scene.tokens.get(id)?.name ?? '?').join(', ');
         return foundry.utils.escapeHTML?.(text) ?? text;
     };
-    let content = '<strong>Тетрис</strong> — фигура обрушилась.';
+    let content = '<strong>Кирпичи</strong> — фигура обрушилась.';
     if (result.blast) {
         // Детонация: блоки группы исчезают, враги в ней — цели
         // Вспыхивают блоки и враги группы; союзник в ней только связывал и не горит
@@ -270,7 +270,7 @@ function playFlash({ sceneId, cells, size }) {
     requestAnimationFrame(frame);
 }
 
-/** Убрать все блоки Тетриса со сцены (или со всех сцен) */
+/** Убрать все блоки Кирпичей со сцены (или со всех сцен) */
 export async function clearTetris(scene = null) {
     if (!game.user.isGM) return;
     for (const s of scene ? [scene] : game.scenes) {
@@ -282,5 +282,5 @@ export async function clearTetris(scene = null) {
 // Конец боя — блоки осыпаются
 Hooks.on('deleteCombat', combat => {
     if (!isActiveGM()) return;
-    clearTetris(combat.scene ?? null).catch(error => console.error(`${MODULE_ID} | Тетрис`, error));
+    clearTetris(combat.scene ?? null).catch(error => console.error(`${MODULE_ID} | Кирпичи`, error));
 });

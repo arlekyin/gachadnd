@@ -2305,7 +2305,7 @@
 @property --glow { syntax: '<color>'; inherits: true; initial-value: #ff7a3c; }
 .gachadnd-memory-altar { transition: --glow 0.9s ease-in-out; }
 
-/* Тетрис: панель «Следующая / Запас» — тёмная панель, жёлтые метки */
+/* Кирпичи: панель «Следующая / Запас» — тёмная панель, жёлтые метки */
 .gachadnd-tetris .window-content { padding: 0; background: linear-gradient(160deg, #1b1e22, #0e1012 70%); color: #d9dde2; }
 .gd-tetris { display: flex; flex-direction: column; gap: 12px; padding: 14px 14px 10px; user-select: none; }
 .gd-tetris-queue { display: flex; align-items: center; justify-content: center; gap: 12px; }
@@ -2334,7 +2334,7 @@
 .gd-tetris-status p { margin: 0; font-size: 12px; line-height: 1.35; color: #a9b0b8; }
 .gd-tetris-uses { flex: none; padding: 2px 8px; border: 1px solid #ffd43b; border-radius: 2px; color: #ffd43b; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
 
-/* Fez: вспышка, пока карта встаёт на место */
+/* Перспектива: вспышка, пока карта встаёт на место */
 .gd-fez-flash { position: fixed; inset: 0; z-index: 10000; background: #fff; opacity: 0; pointer-events: none; }
 
 /* Чумовая пятница: карты в сводке чата */
@@ -2373,7 +2373,7 @@
 .gd-qte-card.win strong { color: #2f9e44; }
 .gd-qte-card.fail strong { color: #c92a2a; }
 
-/* Гвинт: панель руки */
+/* Партейка: панель руки */
 .gachadnd-gwent .window-content { padding: 0; background: linear-gradient(160deg, #2a2118, #120e0a 75%); color: #ecdcc0; }
 .gd-gwent { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
 .gd-gwent-hand { display: flex; gap: 10px; justify-content: center; }

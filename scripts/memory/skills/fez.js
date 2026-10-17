@@ -1,7 +1,7 @@
 /**
- * Gacha Roguelike dnd5e — Fez (красный навык)
+ * Gacha Roguelike dnd5e — Перспектива (красный навык)
  *
- * Как в игре Fez, мир поворачивается на 90°: все существа в пределах дальности навыка (по сетке, как
+ * Мир поворачивается на 90°: все существа в пределах дальности навыка (по сетке, как
  * в dnd5e) поворачиваются вокруг персонажа. Использование — призраки на местах назначения: колесо
  * и R меняют направление, клик поворачивает, правая кнопка и Esc отменяют (заряд возвращается).
  *
@@ -27,7 +27,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isFez(item) || !item.actor) return;
     if (!canvas?.ready || !canvas.grid?.isSquare) {
-        ui.notifications.warn('Fez работает только на сцене с квадратной сеткой.');
+        ui.notifications.warn('Перспектива работает только на сцене с квадратной сеткой.');
         return false;
     }
     if (!item.actor.getActiveTokens?.()[0]) {
@@ -140,7 +140,7 @@ function chooseTurn(actor, item, range) {
         finish();
         const spent = Number(item.system.uses?.spent ?? 0);
         if (spent > 0) await item.update({ 'system.uses.spent': spent - 1 });
-        ui.notifications.info('Fez отменён, заряд возвращён.');
+        ui.notifications.info('Перспектива отменена, заряд возвращён.');
     };
     const onKey = event => {
         if (event.target?.closest?.('input, textarea, [contenteditable]')) return;
@@ -158,7 +158,7 @@ function chooseTurn(actor, item, range) {
     canvas.app.view.oncontextmenu = cancel;
     canvas.app.view.onwheel = onWheel;
     document.addEventListener('keydown', onKey, true);
-    ui.notifications.info('Fez: колесо или R — сменить направление, клик — повернуть мир, правая кнопка или Esc — отмена.');
+    ui.notifications.info('Перспектива: колесо или R — сменить направление, клик — повернуть мир, правая кнопка или Esc — отмена.');
 }
 
 // ==========================================
@@ -167,7 +167,7 @@ function chooseTurn(actor, item, range) {
 
 onSocket('fezTurn', ({ payload }) => {
     if (!isActiveGM()) return;
-    turnWorld(payload).catch(error => console.error(`${MODULE_ID} | Fez`, error));
+    turnWorld(payload).catch(error => console.error(`${MODULE_ID} | Перспектива`, error));
 });
 
 async function turnWorld({ sceneId, casterId, range, dir, ids }) {
@@ -193,7 +193,7 @@ async function turnWorld({ sceneId, casterId, range, dir, ids }) {
     const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ token: caster }),
-        content: `<div class="gd-fez-card"><strong>Fez</strong> — мир повернулся ${dir > 0 ? 'по часовой' : 'против часовой'}. ${names ? `Сменили место: ${foundry.utils.escapeHTML?.(names) ?? names}.` : 'Никто не сдвинулся.'}</div>`
+        content: `<div class="gd-fez-card"><strong>Перспектива</strong> — мир повернулся ${dir > 0 ? 'по часовой' : 'против часовой'}. ${names ? `Сменили место: ${foundry.utils.escapeHTML?.(names) ?? names}.` : 'Никто не сдвинулся.'}</div>`
     });
 }
 

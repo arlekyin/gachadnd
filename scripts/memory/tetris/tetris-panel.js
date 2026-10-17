@@ -1,5 +1,5 @@
 /**
- * Gacha Roguelike dnd5e — Тетрис: панель «Следующая / Запас»
+ * Gacha Roguelike dnd5e — Кирпичи: панель «Следующая / Запас»
  *
  * Обе фигуры видны заранее: решение созревает, пока ходят другие. Кнопка между ними меняет их
  * местами (как Hold в тетрисе) — в любой момент, хода это не требует. Обрушивается всегда «Следующая».
@@ -60,7 +60,7 @@ export class TetrisPanel extends ApplicationV2 {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-tetris'],
         tag: 'div',
-        window: { title: 'Тетрис', icon: 'fas fa-shapes', resizable: false },
+        window: { title: 'Догони меня... Кирпичи?', icon: 'fas fa-shapes', resizable: false },
         position: { width: 300, height: 'auto' }
     };
 
@@ -85,7 +85,7 @@ export class TetrisPanel extends ApplicationV2 {
     }
 
     get title() {
-        return `Тетрис — ${this.actor.name}`;
+        return `Кирпичи — ${this.actor.name}`;
     }
 
     #skill() {

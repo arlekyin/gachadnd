@@ -92,7 +92,7 @@ export function itemPrice(entry) {
     return entry.type === 'consumable' ? base / 2 : base;
 }
 
-// Скидка торговцев: навыки с shop_discount (Шепард) — процент за каждый навык в Памяти, с пределом
+// Скидка торговцев: навыки с shop_discount (Любимый магазин) — процент за каждый навык в Памяти, с пределом
 export function shopDiscount(actor) {
     if (!actor) return 0;
     const memory = actor.items.filter(i => i.type === 'feat' && i.flags?.[MODULE_ID]?.skill_name && !i.flags[MODULE_ID].is_crystal_item);

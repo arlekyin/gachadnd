@@ -37,6 +37,7 @@ import "./memory/skills/knack/index.js";
 import { registerAuraSettings } from "./memory/skills/aura-fx.js";
 import { registerPrefs, migratePrefs } from "./core/prefs.js";
 import { registerSettingsMenus } from "./core/settings-menu.js";
+import { registerSkillNameSettings } from "./memory/skill-names.js";
 // Лабиринт — роглайк поверх Памяти: карта, экономика, Магазин, Риск, Погибель, Всадники.
 // Память от него не зависит: без этой строки она работает как самостоятельная система
 import "./labyrinth/labyrinth.js";
@@ -46,6 +47,7 @@ Hooks.once('init', () => {
 
     // Общие настройки — первыми в списке; частные уходят в подменю
     registerPrefs();
+    registerSkillNameSettings();
     registerGachaPeriods();
     registerSoundSettings();
     registerImpactSettings();
@@ -78,7 +80,7 @@ Hooks.once('init', () => {
         openStash: (actor) => StashWindow.open(actor),
         // Окно распределения добычи (если оно идёт)
         openDraft: () => DraftWindow.show(),
-        // Головоломка Тетриса персонажа; уборка всех его блоков со сцены (Мастер)
+        // Головоломка Кирпичей персонажа; уборка всех его блоков со сцены (Мастер)
         openTetris: (actor) => openTetris(actor || canvas.tokens?.controlled[0]?.actor || game.user?.character),
         clearTetris: (scene) => clearTetris(scene),
         // Убрать порталы со сцены (Мастер)
@@ -93,7 +95,7 @@ Hooks.once('init', () => {
             await game.settings.set(MODULE_ID, 'restOpen', !!open);
             if (open) announceRest();
         },
-        // Кристалл навыка вручную: game.gachadnd.giveCrystal(actor, 'Фус-Ро-Да')
+        // Кристалл навыка вручную: game.gachadnd.giveCrystal(actor, 'Голос предков')
         giveCrystal: (actor, skillName) => giveCrystal(actor, { skillName }),
         // Восстановление зарядов по периоду: 'gachaRun', 'gachaScene' или стандартный период dnd5e
         recoverUses: async (period, actors) => {
@@ -125,9 +127,9 @@ Hooks.on('getSceneControlButtons', (controls) => {
             button: true,
             onClick: () => game.gachadnd.openLootTerminal()
         }, {
-            // Блоки Тетриса и порталы сами уходят в конце боя; вне боя — этой кнопкой
+            // Блоки Кирпичей и порталы сами уходят в конце боя; вне боя — этой кнопкой
             name: 'gachadnd-clear-field',
-            title: 'Убрать блоки Тетриса и порталы со сцены (Мастер)',
+            title: 'Убрать блоки Кирпичей и порталы со сцены (Мастер)',
             icon: 'fas fa-broom',
             visible: true,
             button: true,
@@ -135,7 +137,7 @@ Hooks.on('getSceneControlButtons', (controls) => {
                 if (!canvas?.scene) return;
                 await clearTetris(canvas.scene);
                 await clearPortals(canvas.scene);
-                ui.notifications.info('Блоки Тетриса и порталы убраны со сцены.');
+                ui.notifications.info('Блоки Кирпичей и порталы убраны со сцены.');
             }
         }] : [])
     ]);

@@ -10,7 +10,7 @@ const { page } = f;
 const { check, summary } = checker();
 await install(page);
 const ids = await scene(page, { hero: { level: 5 } });
-await skills(page, ids.hero, ['Тетрис', 'Фус-Ро-Да']);
+await skills(page, ids.hero, ['Догони меня... Кирпичи?', 'Голос предков']);
 await page.evaluate(hero => game.actors.get(hero).getActiveTokens()[0]?.control({ releaseOthers: true }), ids.hero);
 
 const opened = () => page.evaluate(() => [...foundry.applications.instances.values()].filter(a => a.rendered).map(a => ({ id: a.id, cls: a.constructor.name, title: a.title })));
@@ -24,7 +24,7 @@ const WINDOWS = [
     ['Терминал лута', 'openLootTerminal()'],
     ['Алтарь Памяти', 'openMemoryAltar(game.actors.get(hero))'],
     ['Хранилище', 'openStash(game.actors.get(hero))'],
-    ['Тетрис', 'openTetris(game.actors.get(hero))'],
+    ['Догони меня... Кирпичи?', 'openTetris(game.actors.get(hero))'],
     ['Карта этажа', 'openMapTerminal()'],
     ['Награды события', 'openEventRewards()'],
     ['Кладбище', 'openGraveyard()']
@@ -43,7 +43,7 @@ for (const [name, call] of WINDOWS) {
         await page.waitForTimeout(150);
     }
     await page.waitForTimeout(800);
-    await f.shot(`window-${name.replace(/\s+/g, '-')}`);
+    await f.shot(`window-${name.replace(/\s+/g, '-').replace(/[?<>:"/\|*]/g, '')}`);
     const lines = f.log.slice(from);
     const errs = moduleErrors(lines);
     const deprecated = [...new Set(lines.filter(l => /deprecated/i.test(l) && /modules\/gachadnd\//.test(l)).map(l => l.split('\n')[0].slice(0, 140)))];
@@ -90,7 +90,7 @@ for (const [name, type, call] of NODES) {
         await page.waitForTimeout(150);
     }
     await page.waitForTimeout(800);
-    await f.shot(`window-${name.replace(/\s+/g, '-')}`);
+    await f.shot(`window-${name.replace(/\s+/g, '-').replace(/[?<>:"/\|*]/g, '')}`);
     const lines = f.log.slice(from);
     const errs = moduleErrors(lines);
     const deprecated = [...new Set(lines.filter(l => /deprecated/i.test(l) && /modules\/gachadnd\//.test(l)).map(l => l.split('\n')[0].slice(0, 140)))];

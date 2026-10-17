@@ -162,7 +162,7 @@ class Fight {
         if (pc.hp <= 0 || amount <= 0) return;
         if (type && pc.resist.has(type)) amount = Math.floor(amount / 2);
         if (type && pc.vulnerable.has(type)) amount *= 2;
-        // Реакция на урон (Кровавый щит, Уно-реверс): одна за раунд, тратит заряд
+        // Реакция на урон (Кровавый щит, Нет, ты): одна за раунд, тратит заряд
         const reaction = pc.reaction && this.#ready(pc, 'damaged').find(t => t.trigger.reduce);
         if (reaction) {
             pc.reaction = false;
@@ -279,16 +279,16 @@ class Fight {
         };
         const strongest = () => alive(this.pcs).sort((a, b) => this.#pcValue(b) - this.#pcValue(a))[0];
         switch (face) {
-            case 1: dv.temp = Math.max(dv.temp, 5 + rank * DEVOURER.prof); this.say(`Память 1: Квен, ${dv.temp} временных ПЗ`); break;
+            case 1: dv.temp = Math.max(dv.temp, 5 + rank * DEVOURER.prof); this.say(`Память 1: Пузырь, ${dv.temp} временных ПЗ`); break;
             case 2: { const t = scent(); if (!save(t, 'str')) { advantageAll = true; this.say(`Память 2: Удалой рывок, ${t.name} сбит с ног`); } break; }
-            case 3: { const t = strongest(); if (!save(t, 'wis')) { t.frightened = true; this.say(`Память 3: Хайзенберг, ${t.name} испуган`); } break; }
-            case 4: if (this.#multiattackValue() < 2 * average(rank >= 2 ? '3d6' : '2d6')) area(rank >= 3 ? 3 : 2, rank >= 2 ? '3d6' : '2d6', 'dex', 'Игни', 'fire'); break;
-            case 5: { const t = strongest(); if (!save(t, 'wis')) { t.disadvantage = true; this.say(`Память 5: Нейрализатор, ${t.name} с помехой`); } usedAction = true; break; }
-            case 6: area(2, `${DEVOURER.prof + 1}d8`, 'str', 'Фус-Ро-Да', 'thunder'); break;
-            case 7: area(3, '8d6', 'dex', 'Мегумин', 'fire'); break;
+            case 3: { const t = strongest(); if (!save(t, 'wis')) { t.frightened = true; this.say(`Память 3: Я — опасность, ${t.name} испуган`); } break; }
+            case 4: if (this.#multiattackValue() < 2 * average(rank >= 2 ? '3d6' : '2d6')) area(rank >= 3 ? 3 : 2, rank >= 2 ? '3d6' : '2d6', 'dex', 'Прикурить?', 'fire'); break;
+            case 5: { const t = strongest(); if (!save(t, 'wis')) { t.disadvantage = true; this.say(`Память 5: Посмотрите сюда, ${t.name} с помехой`); } usedAction = true; break; }
+            case 6: area(2, `${DEVOURER.prof + 1}d8`, 'str', 'Голос предков', 'thunder'); break;
+            case 7: area(3, '8d6', 'dex', 'Взрывное искусство', 'fire'); break;
             case 8: { const t = strongest(); if (!save(t, 'wis')) { t.lostTurn = true; this.say(`Память 8: Кукловод, ${t.name} теряет ход`); } usedAction = true; break; }
             case 9: dv.warudo = true; this.say('Память 9: ЗА ВАРУДО наготове'); break;
-            case 10: area(2, '10d10', 'dex', 'Ещё один потомок Вергилия', 'force'); break;
+            case 10: area(2, '10d10', 'dex', 'Клинок последнего вздоха', 'force'); break;
         }
         if (!usedAction) this.#multiattack(scent, advantageAll);
         this.#scrapsTurn();

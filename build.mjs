@@ -212,7 +212,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger', 'light', 'blast', 'knack'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger', 'light', 'blast', 'knack', 'explicit_name'
 ];
 
 // light: <вид> — навыки света (scripts/memory/skills/light/<вид>.js)
@@ -775,6 +775,8 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.light ? { light: skill.light } : {}),
                 ...(skill.blast ? { blast: skill.blast } : {}),
                 ...(skill.knack ? { knack: skill.knack } : {}),
+                // Грубое название (18+): показывается вместо обычного, если Мастер включил «Грубые названия»
+                ...(skill.explicit_name ? { explicit_name: String(skill.explicit_name) } : {}),
                 ...(skill.recharger ? { recharger: { restore: skill.recharger.restore, target: skill.recharger.target } } : {}),
                 ...(skill.stacking ? { stacking: true, stack_base: Number(skill.damage[0].formula) } : {}),
                 ...(skill.slot_bonus ? { slot_bonus: skill.slot_bonus } : {}),

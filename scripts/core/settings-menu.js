@@ -29,6 +29,11 @@ export const MENUS = {
         hint: 'Какие шёпоты и строки атмосферы присылать.',
         keys: Object.keys(HINTS)
     },
+    namesMenu: {
+        label: 'Свои названия навыков', icon: 'fas fa-signature', restricted: true,
+        hint: 'Вернуть столу любимые названия: «Название из модуля = Своё». Хранится в мире, с модулем не уходит.',
+        keys: ['skillNames']
+    },
     riskMenu: {
         label: 'Испытания Риска', icon: 'fas fa-dice', restricted: true,
         hint: 'Свой файл испытаний и только свои испытания.',
@@ -56,6 +61,8 @@ function field(key) {
         input = `<range-picker name="${name}" value="${value}" min="${min}" max="${max}" step="${step}"></range-picker>`;
     } else if (type === 'Number') {
         input = `<input type="number" name="${name}" value="${esc(value)}" step="any">`;
+    } else if (config.multiline) {
+        input = `<textarea name="${name}" rows="10" placeholder="Серия обычных ударов = Сайтама">${esc(value)}</textarea>`;
     } else if (config.filePicker) {
         input = `<file-picker name="${name}" type="${config.filePicker === true ? 'any' : config.filePicker}" value="${esc(value)}"></file-picker>`;
     } else {

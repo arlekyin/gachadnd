@@ -55,6 +55,8 @@ const party = await ev(async ({ hero, PREFIX }) => {
 
 // Карта этажа на тестовой сцене, отряд — на узле Босса
 const floorBefore = await ev(() => game.settings.get('gachadnd', 'runFloor'));
+// Цены жертв считаются от этажа: проверка — на первом (прошлая проверка могла оставить другой)
+await ev(() => game.settings.set('gachadnd', 'runFloor', 1));
 await ev(() => game.gachadnd.openMapTerminal());
 await wait(800);
 await ev(() => { document.querySelector('[name="length"]').value = '6'; document.querySelector('[data-action="generate"]')?.click(); });
