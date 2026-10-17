@@ -22,6 +22,9 @@ import { registerOmenSettings, setOmen } from "./omen.js";
 import { startBreach } from "./breach.js";
 import { registerSceneSettings } from "./scene-travel.js";
 import { DealWindow, registerDealSettings } from "./moon-deal.js";
+import { registerBoonSettings, callEcho, callDevourer } from "./moon-boons.js";
+import { registerResidentSettings, settleResident, hasResident } from "./residents.js";
+import { ResidentsWindow } from "./residents-window.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -32,6 +35,8 @@ Hooks.once('init', () => {
     registerOmenSettings();
     registerSceneSettings();
     registerDealSettings();
+    registerBoonSettings();
+    registerResidentSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -59,7 +64,13 @@ Hooks.once('init', () => {
         // Прорыв Пожирателя: Мастер щёлкает точку, у всех катсцена, затем его токен в этой точке
         breach: () => startBreach(),
         // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
-        openDeal: () => DealWindow.open()
+        openDeal: () => DealWindow.open(),
+        // Дары луны в бою (Мастер, по просьбе отряда): Эхо Босса и натравленный Пожиратель
+        callEcho: options => callEcho(options),
+        callDevourer: options => callDevourer(options),
+        // Жильцы Якоря: окно (focus — чей прилавок: smith, cartographer, broker, healer, lurer) и поселить (Мастер)
+        openResidents: focus => ResidentsWindow.open(focus),
+        settleResident: id => settleResident(id)
     });
 });
 
@@ -71,7 +82,14 @@ Hooks.on('getSceneControlButtons', (controls) => {
         visible: true,
         button: true,
         onClick: () => game.gachadnd.openMapTerminal()
-    }, ...(game.user?.isGM ? [{
+    }, ...(hasResidentSafe('broker') ? [{
+        name: 'gachadnd-cells',
+        title: 'Ячейки Ростовщика',
+        icon: 'fas fa-vault',
+        visible: true,
+        button: true,
+        onClick: () => ResidentsWindow.open('broker')
+    }] : []), ...(game.user?.isGM ? [{
         name: 'gachadnd-anchor',
         title: 'Якорь: открыть или закрыть хаб (Мастер)',
         icon: 'fas fa-anchor',
@@ -80,3 +98,8 @@ Hooks.on('getSceneControlButtons', (controls) => {
         onClick: () => setAnchor(!isAnchorOpen())
     }] : [])]);
 });
+
+// Кнопка ячеек — пока Ростовщик живёт в Якоре (до готовности настроек его нет)
+function hasResidentSafe(id) {
+    try { return hasResident(id); } catch (error) { return false; }
+}

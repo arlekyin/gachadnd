@@ -20,6 +20,10 @@
 | `game.gachadnd.breach()` | прорыв Пожирателя: щелчок по точке на сцене, катсцена у всех, его токен в этой точке |
 | `game.gachadnd.openPortal()` | окно портала в Якорь у всех (отряд на Привале) |
 | `game.gachadnd.openDeal()` | Сделка луны у всех (отряд на узле Босса, раз за этаж) |
+| `game.gachadnd.callEcho()` | Эхо Босса в идущем бою (дар луны этого этажа): окно — кто зовёт и чьё Эхо |
+| `game.gachadnd.callDevourer()` | натравить Пожирателя в идущем бою (дар луны этого этажа): щелчок по точке прорыва |
+| `game.gachadnd.openResidents('broker')` | окно «Жильцы Якоря»; необязательно — чей прилавок открыть: `smith`, `cartographer`, `broker`, `healer`, `lurer` |
+| `game.gachadnd.settleResident('smith')` | поселить жильца в Якоре (Мастер) |
 | `game.gachadnd.pulse()` | Пульс отряда: ступень сложности боёв, итог последнего боя, ПЗ отряда |
 | `game.gachadnd.scent()` | Запах отряда: `{ value, state, label, thresholds, members }` |
 | `game.gachadnd.giveCrystal(actor, 'Имя навыка')` | выдать кристалл навыка |

@@ -16,6 +16,8 @@
  *       state.links.push({ label, icon, title, run: () => {} }) — кнопки этого места в баннере Терминала.
  *   gachadnd.terminalSkillView(item, view)                  — плашки и кнопки выбранного навыка в Терминале:
  *       view.notes.push({ text, cls }); view.actions.push({ label, icon, title, run: async () => {} }).
+ *   gachadnd.lootRolled       (roll)                        — кристаллы выпали, до показа и раздачи:
+ *       roll = { roomType, drops: [{ crystal, rarity }], lines: [] }; слушатель может убрать кристаллы из drops.
  *   gachadnd.lootGenerated    (loot)                        — добыча сгенерирована, до карточки в чате:
  *       loot = { roomType, actor, lines: [], tasks: [] }; слушатель добавляет строку карточки и промис.
  *
@@ -30,6 +32,7 @@ export const HOOKS = {
     preChangeSkill: 'gachadnd.preChangeSkill',
     queryRest: 'gachadnd.queryRest',
     terminalSkillView: 'gachadnd.terminalSkillView',
+    lootRolled: 'gachadnd.lootRolled',
     lootGenerated: 'gachadnd.lootGenerated',
     restChanged: 'gachadnd.restChanged'
 };

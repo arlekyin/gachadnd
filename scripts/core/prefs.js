@@ -36,7 +36,8 @@ export const musicVolume = () => volumeMaster() * Number(get('auraMusicVolume', 
 export const HINTS = {
     hintScent: { name: 'Шёпот Запаха Мастеру', hint: 'При входе на узел и в Якорь в Шёпоте и Охоте: Запах отряда и может ли Пожиратель прорваться сюда.' },
     hintAtmosphere: { name: 'Строки атмосферы игрокам', hint: 'В Шёпоте и Охоте — строка о тумане и гуле кристаллов в общий чат.' },
-    hintPulse: { name: 'Шёпот Пульса Мастеру', hint: 'После каждого боя: итог боя и совет по сложности следующих.' }
+    hintPulse: { name: 'Шёпот Пульса Мастеру', hint: 'После каждого боя: итог боя и совет по сложности следующих.' },
+    hintMoonBoons: { name: 'Дары луны в начале боя', hint: 'Если у отряда есть Эхо Босса или Натравить Пожирателя: шёпот Мастеру с кнопками вызова.' }
 };
 export const hint = key => get('gmHints', true) !== false && get(key, true) !== false;
 

@@ -68,7 +68,7 @@ m = await openMenu('soundsMenu');
 check('Звуки и эффекты: 10 полей у Мастера', m.fields === 10, JSON.stringify(m));
 await ev(() => gdt.menuApp.close());
 m = await openMenu('hintsMenu');
-check('Подсказки Мастеру: 3 переключателя', m.fields === 3, JSON.stringify(m));
+check('Подсказки Мастеру: 4 переключателя (Запах, атмосфера, Пульс, дары луны)', m.fields === 4, JSON.stringify(m));
 await page.uncheck(`#${m.id} input[name="gachadnd.hintPulse"]`);
 await page.click(`#${m.id} button[type="submit"]`);
 await wait(800);

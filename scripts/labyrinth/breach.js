@@ -126,7 +126,7 @@ async function devourerActor() {
  * Токен Пожирателя серединой в точку, по сетке — сразу, но прозрачным: флаг breach хранит его
  * прозрачность. Катсцена у каждого проявляет его из тумана, в конце Мастер делает его видимым.
  */
-async function placeDevourer(point) {
+async function placeDevourer(point, { ally = false } = {}) {
     const actor = await devourerActor();
     if (!actor) { ui.notifications.warn('Актёр Пожирателя не найден ни в мире, ни в Бестиарии Лабиринта.'); return null; }
     const size = canvas.grid.size;
@@ -135,25 +135,33 @@ async function placeDevourer(point) {
     const y = Math.round((point.y - (proto.height ?? 2) * size / 2) / size) * size;
     const data = (await actor.getTokenDocument({ x, y })).toObject();
     data.flags = foundry.utils.mergeObject(data.flags ?? {}, { [MODULE_ID]: { breach: { alpha: data.alpha ?? 1 } } });
+    // Натравленный луной: на стороне отряда и свой — раны не переходят на Пожирателя, что охотится за отрядом
+    if (ally) Object.assign(data, { disposition: CONST.TOKEN_DISPOSITIONS.FRIENDLY, actorLink: false });
     data.alpha = 0;
     const [token] = await canvas.scene.createEmbeddedDocuments('Token', [data]);
     return token ?? null;
 }
 
-/** Прорыв: точка, катсцена у всех, токен. Только Мастер */
-export async function startBreach() {
-    if (!game.user.isGM) return ui.notifications.warn('Прорыв Пожирателя начинает Мастер.');
-    if (playing) return;
-    const point = await pickPoint();
-    if (!point) return;
+/**
+ * Прорыв: точка, катсцена у всех, токен. Только Мастер.
+ * @param {object} [o]  ally — Пожирателя натравила луна: он на стороне отряда, предвестие не меняется;
+ *                      point — точка без щелчка (проверки)
+ * @returns {Promise<TokenDocument|null>}
+ */
+export async function startBreach({ ally = false, point = null } = {}) {
+    if (!game.user.isGM) { ui.notifications.warn('Прорыв Пожирателя начинает Мастер.'); return null; }
+    if (playing) return null;
+    point ??= await pickPoint();
+    if (!point) return null;
     const data = { sceneId: canvas.scene.id, point };
     emit('devourerBreach', data);
     // Токен ставится, пока идёт катсцена; проявляется он в ней
-    const placed = placeDevourer(point).catch(error => { console.error(`${MODULE_ID} | токен Пожирателя`, error); return null; });
-    await setOmen('here');
+    const placed = placeDevourer(point, { ally }).catch(error => { console.error(`${MODULE_ID} | токен Пожирателя`, error); return null; });
+    if (!ally) await setOmen('here');
     await playBreach(data);
     const token = await placed;
     if (token) await token.update({ alpha: token.getFlag(MODULE_ID, 'breach')?.alpha ?? 1, [`flags.${MODULE_ID}.-=breach`]: null });
+    return token;
 }
 
 // Токен, который катсцена уже проявила, остаётся видимым, пока не придёт его обновление от Мастера:

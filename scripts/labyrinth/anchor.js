@@ -105,13 +105,17 @@ export async function announceScent(nodeType) {
     const scent = partyScent();
     if (scent.state === 'silence') return;
     let hint = '';
+    // Жильцы Якоря (приманка) дописывают своё к прорыву: ctx.gm — Мастеру, ctx.players — атмосфера
+    const ctx = { nodeType, breach: scent.state === 'hunt' && BREACH_NODES.includes(nodeType), gm: [], players: [], tasks: [] };
     if (scent.state === 'hunt') {
-        hint = BREACH_NODES.includes(nodeType)
+        hint = ctx.breach
             ? '<br>Узел подходит: Пожиратель может прорваться (на узел Привала — до отдыха).'
             : '<br>Сюда он не входит — прорвётся на следующем подходящем узле.';
+        Hooks.callAll('gachadnd.huntBreach', ctx);
+        await Promise.all(ctx.tasks);
     }
-    await whisperGM(scentReport(scent) + hint);
-    await atmosphere(ATMOSPHERE[scent.state]);
+    await whisperGM(scentReport(scent) + hint + ctx.gm.join(''));
+    await atmosphere(ctx.players[0] ?? ATMOSPHERE[scent.state]);
 }
 
 // ==========================================
@@ -138,6 +142,7 @@ Hooks.on(HOOKS.queryRest, state => {
     if (!isAnchorOpen()) return;
     Object.assign(state, { atRest: true, site: 'anchor', label: 'Якорь' });
     state.links.push({ label: 'Кладбище', icon: 'fas fa-cross', title: 'Надгробия тех, чьи тела забрал Предел', run: () => GraveyardWindow.open() });
+    state.links.push({ label: 'Жильцы', icon: 'fas fa-people-roof', title: 'Жильцы Якоря и их услуги', run: () => game.gachadnd.openResidents() });
 });
 
 /**
@@ -165,6 +170,8 @@ export async function setAnchor(open = true, { travel = true } = {}) {
         });
     }
     announceRest();
+    // Жильцы: ячейки Ростовщика закрываются, после Босса у купола ждут новые
+    Hooks.callAll('gachadnd.anchorOpened');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ alias: 'Якорь' }),
         content: '<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд в <strong>Якоре</strong>. Руны над куполом медленно вращаются; Алтарь Памяти открыт. Отдыха здесь нет: Кости Хитов возвращает только Расщепление.</div>'

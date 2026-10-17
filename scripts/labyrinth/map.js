@@ -17,7 +17,7 @@ import { leaveBodies } from "./graveyard.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
 import { startBreach } from "./breach.js";
 
-const MAP_DATA = {
+export const MAP_DATA = {
     NODE_START: 'start',
     NODE_BOSS: 'boss',
     NODE_MOB: 'mob',

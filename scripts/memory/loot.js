@@ -188,6 +188,10 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
 
         if (rarityFilter === 'any') await game.settings.set(MODULE_ID, 'lootPity', { miss: pity.miss, red: pity.red });
 
+        // Подключённые системы могут забрать кристалл до показа (Лабиринт — плата натравленному Пожирателю)
+        const roll = { roomType, drops, lines: [] };
+        Hooks.callAll(HOOKS.lootRolled, roll);
+
         // Выпадение у всех: фиолетовый — вспышка, красный — сцена; распределение — после неё
         if (drops.length) await revealLoot(drops.map(d => d.rarity)).catch(error => console.warn(`${MODULE_ID} | выпадение`, error));
 
@@ -203,7 +207,7 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
         }
 
         // Подключённые системы добавляют своё (Лабиринт — золото комнаты) и строку в карточку
-        const loot = { roomType, actor: targetActor, lines: [], tasks: [] };
+        const loot = { roomType, actor: targetActor, lines: [...roll.lines], tasks: [] };
         Hooks.callAll(HOOKS.lootGenerated, loot);
         await Promise.all(loot.tasks);
 

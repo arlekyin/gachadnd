@@ -20,6 +20,7 @@ import { isMemorySkill, naturalSlotCap, setSkillEquipped, updateActorSynergies }
 import { getStash } from "../memory/stash.js";
 import { addSkillToMemory } from "../memory/inventory.js";
 import { currentSkillName } from "../memory/crystals.js";
+import { findBoss } from "./moon-boons.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -277,7 +278,8 @@ async function grant(lot, params, deal) {
     }
     // Эхо Босса и Натравить Пожирателя — на следующий этаж: отметка у отряда, вызывает Мастер
     const boons = foundry.utils.deepClone(game.settings.get(MODULE_ID, 'moonBoons') ?? []);
-    boons.push({ type: lot, floor: (deal.floor ?? getFloor()) + 1, used: false });
+    // Эхо помнит Босса этого боя; при вызове Мастер может выбрать другого
+    boons.push({ type: lot, floor: (deal.floor ?? getFloor()) + 1, used: false, ...(lot === 'echo' ? { boss: findBoss() } : {}) });
     await game.settings.set(MODULE_ID, 'moonBoons', boons);
     return lot === 'echo'
         ? 'Однажды на следующем этаже Босс встанет на сторону отряда — на один ход.'
