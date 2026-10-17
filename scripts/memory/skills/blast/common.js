@@ -93,7 +93,8 @@ export async function blast({ actor, title, icon = 'fa-burst', victims, splash =
             if (success) value = half ? Math.floor(value / 2) : 0;
         }
         const before = hpOf(target), alive = !isDead(target);
-        if (value > 0) await target.applyDamage([{ value, type }]);
+        // Источник урона — для навыков, которые следят за убийствами (Навылет)
+        if (value > 0) await target.applyDamage([{ value, type }], { gachadndSource: actor?.id });
         if (extra) await extra(token, { save, value });
         rows.push({ name: token.name, save, lost: before - hpOf(target) });
         if (alive && isDead(target)) killed.push(token);

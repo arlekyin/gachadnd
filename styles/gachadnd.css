@@ -2621,3 +2621,7 @@
 .gd-moon-card { padding: 8px 10px; border-radius: 6px; background: linear-gradient(160deg, #1d1838, #0e0b1f); color: #d9dbe8; border: 1px solid rgba(217, 219, 232, 0.35); }
 .gd-moon-card .gd-moon-title { font-family: 'Modesto Condensed', serif; font-size: 1.25em; color: #f3eedb; margin-bottom: 4px; }
 .gd-moon-card ul { margin: 2px 0 6px; padding-left: 18px; }
+
+/* Навыки knack: кнопки выбора в карточке (Навылет, Рандомная хрень) */
+.gd-knack-card .gd-knack-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.gd-knack-card .gd-knack-btn { flex: 0 1 auto; width: auto; line-height: 1.6; padding: 0 8px; }

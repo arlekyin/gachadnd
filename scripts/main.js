@@ -33,6 +33,7 @@ import "./memory/skills/aura-panel.js";
 import "./memory/overheat.js";
 import "./memory/skills/light/index.js";
 import "./memory/skills/blast/index.js";
+import "./memory/skills/knack/index.js";
 import { registerAuraSettings } from "./memory/skills/aura-fx.js";
 import { registerPrefs, migratePrefs } from "./core/prefs.js";
 import { registerSettingsMenus } from "./core/settings-menu.js";

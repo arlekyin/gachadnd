@@ -1,0 +1,23 @@
+id: d5QyFrRIqMTnBwNV
+name: Хлопушка
+rarity: gray
+tags:
+  - огонь
+  - взрыв
+description: Бонусным действием щёлкните хлопушкой у себя под ногами. Каждое существо в 10 футах от вас, кроме вас, до начала своего следующего хода не может совершать реакции — уши заложило, руки дёрнулись.
+activation: bonus
+uses: 1
+recovery: short
+target:
+  type: radius
+  value: 10
+ranks:
+  - text: Хлопок слышно в 15 футах.
+    target:
+      type: radius
+      value: 15
+  - text: Хлопок слышно в 20 футах.
+    target:
+      type: radius
+      value: 20
+knack: firecracker

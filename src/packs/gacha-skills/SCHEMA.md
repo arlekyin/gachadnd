@@ -62,6 +62,7 @@
 | `recharger` | нет | `{ restore, target }` — навык восстанавливает заряды другого навыка: `restore` — `all` или число; `target` — `memory` (любой навык Памяти с потраченными зарядами) или `equipped_empty` (экипированный навык без зарядов). Цель выбирается при использовании, заряд и цена тратятся только после выбора. Возвращённые заряды — заёмные: греют фиолетовые и красные навыки и сами зарядчики (Перегрев, scripts/memory/overheat.js). Требует `activation` и `uses`. |
 | `light` | нет | Навык света: `ultraviolet`, `speed`, `prism`, `battery`, `ricochet`, `lighthouse`, `disco`, `flash`, `spotlight` — автоматизация в `scripts/memory/skills/light/<вид>.js`. Требует `activation`. |
 | `blast` | нет | Навык огня или взрыва: `fine`, `lava`, `blade`, `phoenix`, `potato`, `hiss`, `barrel`, `corpse`, `gas`, `ohyeah` — автоматизация в `scripts/memory/skills/blast/<вид>.js`. Требует `activation`. |
+| `knack` | нет | Навыки, закрывшие пустые редкости тегов: `firecracker`, `butcher`, `through`, `junk`, `transfusion`, `slowpoison`, `supernova` — автоматизация в `scripts/memory/skills/knack/<вид>.js`. Требует `activation`, кроме пассивных `butcher` и `through`. |
 | `horseman` | нет | Всадник Погибели: `hunger`, `plague`, `war`, `death`. Только при `rarity: orange`. См. ниже. |
 | `cleanse` | при `horseman` | Условие сращивания (текст). |
 | `cleanse_goal` | нет | Целое число > 0 — сколько нужно для сращивания; прогресс виден в Терминале. |
