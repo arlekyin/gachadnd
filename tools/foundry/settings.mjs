@@ -116,6 +116,8 @@ const scentMessages = async () => {
         atmosphere: game.messages.contents.slice(gdt._mark).filter(m => !m.whisper?.length && /atmosphere/.test(m.content)).length
     }));
 };
+// Пороги Запаха зависят от этажа: два кристалла дают Охоту только на первом
+const floorBefore = await ev(async () => { const f = game.settings.get('gachadnd', 'runFloor'); await game.settings.set('gachadnd', 'runFloor', 1); return f; });
 await ev(() => Promise.all([game.settings.set('gachadnd', 'gmHints', true), game.settings.set('gachadnd', 'hintScent', true), game.settings.set('gachadnd', 'hintAtmosphere', true)]));
 let s = await scentMessages();
 check('Запах в Охоте: шёпот Мастеру и строка атмосферы', s.whisper === 1 && s.atmosphere === 1, JSON.stringify(s));
@@ -126,6 +128,7 @@ await ev(() => Promise.all([game.settings.set('gachadnd', 'hintAtmosphere', true
 s = await scentMessages();
 check('общий переключатель снят — ни шёпота, ни атмосферы', s.whisper === 0 && s.atmosphere === 0, JSON.stringify(s));
 await ev(() => game.settings.set('gachadnd', 'gmHints', true));
+await ev(f => game.settings.set('gachadnd', 'runFloor', f), floorBefore);
 // Пульс: бой с героем и врагом закончился — шёпот, если подсказка Пульса включена
 const pulseAfterFight = async () => {
     await combat(page, ids.scene, [ids.hero, ids.enemies[0]]);

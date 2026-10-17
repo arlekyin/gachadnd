@@ -2,14 +2,14 @@
  * Gacha Roguelike dnd5e — Подсказка кристалла
  *
  * Наведите курсор на кристалл в окне распределения, в карточке добычи, в награде события или в магазине —
- * рядом появится описание навыка: редкость, категория, теги и текст навыка из компендиума. Открывать
+ * рядом появится описание навыка: редкость, вес, категория, теги и текст навыка из компендиума. Открывать
  * компендиум и искать навык не нужно.
  *
  * Любой элемент с атрибутом data-gd-skill="<id навыка в компендиуме>" получает подсказку: один слушатель
  * на всём документе, навыки подгружаются из компендиума один раз и кэшируются.
  */
 
-import { MODULE_ID } from "../core/constants.js";
+import { MODULE_ID, CRYSTAL_WEIGHT } from "../core/constants.js";
 import { getSkillPack } from "./crystals.js";
 
 const RARITY = {
@@ -28,7 +28,8 @@ async function peekHtml(skillId) {
         const [label, color] = RARITY[flags.rarity] ?? RARITY.gray;
         const editor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
         const body = await editor.enrichHTML(skill.system?.description?.value ?? '', { relativeTo: skill, rollData: skill.getRollData?.() });
-        const meta = [label, flags.category, (flags.tags ?? []).join(', ')].filter(Boolean).map(esc).join(' · ');
+        const weight = `вес ${CRYSTAL_WEIGHT[flags.rarity] ?? 1}`;
+        const meta = [label, weight, flags.category, (flags.tags ?? []).join(', ')].filter(Boolean).map(esc).join(' · ');
         return `<div class="gd-peek-head" style="--rarity: ${color}"><strong>${esc(skill.name)}</strong><small>${meta}</small></div><div class="gd-peek-body">${body || '<p>Описание отсутствует.</p>'}</div>`;
     })();
     cache.set(skillId, task);

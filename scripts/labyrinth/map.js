@@ -17,6 +17,7 @@ import { getFloor } from "./economy.js";
 import { leaveAnchor, announceScent, partyScent } from "./anchor.js";
 import { leaveBodies } from "./graveyard.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
+import { addSatiety, getSatiety, satietyCap } from "./devourer-state.js";
 import { startBreach } from "./breach.js";
 
 export const MAP_DATA = {
@@ -246,7 +247,9 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             node: GachaMapTerminal.#onNode,
             generate: GachaMapTerminal.#onGenerate,
             // «Здесь» — прорыв: Мастер выбирает точку, у всех катсцена, затем токен
-            omen: (event, target) => target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)
+            omen: (event, target) => target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage),
+            // Насыщение: откуп и уход с Брюхом отмечает Мастер; 0 ПЗ и приманку модуль считает сам
+            satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер')
         }
     };
 
@@ -274,6 +277,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             hasMap: !!map?.nodes?.length,
             scent: game.user.isGM ? partyScent(undefined, floor) : null,
             pulse: game.user.isGM ? pulseView() : null,
+            satiety: game.user.isGM ? { value: getSatiety(), cap: satietyCap(floor) } : null,
             omen: game.user.isGM ? Object.entries(OMEN_STAGES).map(([stage, { label }]) => ({ stage, label, active: stage === getOmen() })) : null
         };
         if (!context.hasMap) return context;
@@ -491,11 +495,13 @@ const refreshScent = item => {
 };
 for (const hook of ['createItem', 'updateItem', 'deleteItem']) Hooks.on(hook, refreshScent);
 
-// Стадия предвестий сменилась — подсветка кнопок в подвале у Мастера
-Hooks.on('gachadnd.omenChanged', () => {
+// Стадия предвестий или Насыщение сменились — подвал у Мастера перерисовывается
+const refreshFooter = () => {
     const app = foundry.applications.instances?.get(MAP_ID);
     if (game.user.isGM && app?.rendered) app.render({ parts: ['footer'] });
-});
+};
+Hooks.on('gachadnd.omenChanged', refreshFooter);
+Hooks.on('updateSetting', setting => { if (setting.key === `${MODULE_ID}.devourerSatiety`) refreshFooter(); });
 
 // Карта изменилась (перемещение, новый этаж) — поле и строка состояния перерисовываются у всех
 Hooks.on('updateScene', (scene, changes) => {

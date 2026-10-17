@@ -7,7 +7,7 @@
  * в эту точку сразу, прозрачным: катсцена проявляет его из тумана после схлопывания. Предвестие
  * остаётся на стадии «Здесь»: бирюза, светящийся туман с искрами и размытие по краям.
  *
- * Токен — от актёра мира с флагом creature: devourer (туда Мастер вписывает Глубину и Насыщение);
+ * Токен — от актёра мира с флагом creature: devourer (Глубину и Насыщение на листе выставляет devourer-state.js);
  * если его нет — актёр импортируется из компендиума «Бестиарий Лабиринта».
  */
 
@@ -24,6 +24,7 @@ import { crackle, bass, slam, glass, flutter } from "../cutscene/instruments.js"
 import { setOmen } from "./omen.js";
 import { logChronicle } from "./chronicle-log.js";
 import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../core/prefs.js";
+import { syncDevourer } from "./devourer-state.js";
 
 const ART = new URL('../../assets/bestiary/devourer.webp', import.meta.url).href;
 // Где на картинке морда: доля ширины и высоты — она встаёт в середину разрыва
@@ -130,6 +131,8 @@ async function devourerActor() {
 async function placeDevourer(point, { ally = false } = {}) {
     const actor = await devourerActor();
     if (!actor) { ui.notifications.warn('Актёр Пожирателя не найден ни в мире, ни в Бестиарии Лабиринта.'); return null; }
+    // Глубина — этаж, Насыщение — счёт модуля; раны прошлой встречи зажили
+    await syncDevourer(actor, { restore: true });
     const size = canvas.grid.size;
     const proto = actor.prototypeToken;
     const x = Math.round((point.x - (proto.width ?? 2) * size / 2) / size) * size;

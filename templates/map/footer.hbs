@@ -20,6 +20,14 @@
         {{#each omen}}<button type="button" data-action="omen" data-stage="{{stage}}" class="{{#if active}}active{{/if}}">{{label}}</button>{{/each}}
     </div>
     {{/if}}
+    {{#if satiety}}
+    <div class="gd-map-omen gd-map-satiety" title="Насыщение Пожирателя · предел этажа {{satiety.cap}} · 0 ПЗ и приманку модуль считает сам, откуп и уход с Брюхом — кнопкой · видит только Мастер">
+        <i class="fas fa-utensils"></i> Насыщение:
+        <button type="button" data-action="satiety" data-delta="-1">−</button>
+        <b>{{satiety.value}}</b>
+        <button type="button" data-action="satiety" data-delta="1">+</button>
+    </div>
+    {{/if}}
     <div class="gd-map-legend">
         {{#each legend}}<span style="--node: {{color}}" title="{{label}}"><i class="fas {{icon}}"></i>{{count}}</span>{{/each}}
     </div>

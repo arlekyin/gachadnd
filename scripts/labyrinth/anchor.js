@@ -10,7 +10,7 @@
  * строку атмосферы.
  */
 
-import { MODULE_ID } from "../core/constants.js";
+import { MODULE_ID, CRYSTAL_WEIGHT } from "../core/constants.js";
 import { hint as hintOn } from "../core/prefs.js";
 import { mapScene, anchorScene, travelTo } from "./scene-travel.js";
 import { HOOKS, notifyRestChanged } from "../memory/memory-api.js";
@@ -25,7 +25,6 @@ import { GraveyardWindow } from "./graveyard.js";
 // ЗАПАХ
 // ==========================================
 
-const SCENT_WEIGHT = { gray: 1, green: 1, blue: 2, purple: 3, red: 5, orange: 5 };
 const OVERLOAD_SCENT = 2;
 // Узлы, на которые Пожиратель прорывается во время Охоты
 const BREACH_NODES = ['mob', 'elite', 'event', 'rest'];
@@ -43,7 +42,7 @@ export function scentThresholds(floor = getFloor()) {
 
 /** Вес кристалла — сколько вероятности он несёт: для Запаха и платы за портал */
 export function crystalWeight(item) {
-    return SCENT_WEIGHT[item.flags?.[MODULE_ID]?.rarity ?? 'gray'] ?? 1;
+    return CRYSTAL_WEIGHT[item.flags?.[MODULE_ID]?.rarity ?? 'gray'] ?? 1;
 }
 
 /** Запах одного персонажа: кристаллы в инвентаре и слоты перегрузки. Навыки в Памяти не пахнут */

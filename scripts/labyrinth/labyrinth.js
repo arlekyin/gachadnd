@@ -28,6 +28,7 @@ import { ResidentsWindow } from "./residents-window.js";
 import "./chronicle-log.js";
 import { playChronicle } from "./chronicle.js";
 import { EventWindow, registerEventSettings } from "./events.js";
+import { registerDevourerSettings, addSatiety, getSatiety, syncDevourer, worldDevourer } from "./devourer-state.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -41,6 +42,7 @@ Hooks.once('init', () => {
     registerBoonSettings();
     registerEventSettings();
     registerResidentSettings();
+    registerDevourerSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -67,6 +69,10 @@ Hooks.once('init', () => {
         omen: stage => setOmen(stage),
         // Прорыв Пожирателя: Мастер щёлкает точку, у всех катсцена, затем его токен в этой точке
         breach: () => startBreach(),
+        // Насыщение Пожирателя: game.gachadnd.satiety(+1) — откуп, уход с Брюхом; без числа — текущее
+        satiety: delta => delta ? addSatiety(delta, 'Мастер') : getSatiety(),
+        // Глубина и Насыщение на листе Пожирателя — заново (restore: ПЗ и легендарные ресурсы на максимум)
+        syncDevourer: (options = {}) => syncDevourer(worldDevourer(), options),
         // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
         openDeal: () => DealWindow.open(),
         // Дары луны в бою (Мастер, по просьбе отряда): Эхо Босса и натравленный Пожиратель

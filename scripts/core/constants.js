@@ -6,3 +6,6 @@
  */
 
 export const MODULE_ID = 'gachadnd';
+
+// Вес кристалла — сколько вероятности он несёт: Запах, плата за портал, откуп Пожирателя, приманка
+export const CRYSTAL_WEIGHT = { gray: 1, green: 1, blue: 2, purple: 3, red: 5, orange: 5 };

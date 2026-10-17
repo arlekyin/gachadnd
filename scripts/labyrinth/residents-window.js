@@ -243,7 +243,7 @@ export class ResidentsWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     #lurer(actor, state) {
         if (state.bait) return `<div class="gd-res-bait" style="--r:${RARITY_COLOR[state.bait.rarity]}"><i class="fas fa-bone"></i><div><b>Приманка спрятана: «${esc(state.bait.name)}»</b><small>Первый прорыв Охоты Пожиратель потратит на неё: съест и уйдёт, Насыщение +1.</small></div></div>`;
         const crystals = actor.items.filter(baitable);
-        return `<div class="gd-res-note">Приманка — ваш кристалл (синий или дороже) и ${price('bait', actor)} зм. Один прорыв Охоты Пожиратель потратит на неё, а не на отряд; сытым он вернётся сильнее.</div>
+        return `<div class="gd-res-note">Приманка — ваш кристалл весом от 2 и ${price('bait', actor)} зм. Один прорыв Охоты Пожиратель потратит на неё, а не на отряд; сытым он вернётся сильнее.</div>
             <div class="gd-res-list">${crystals.map(c => `<button type="button" data-action="bait" data-id="${c.id}" style="--r:${RARITY_COLOR[flagsOf(c).rarity]}">${esc(c.name)}</button>`).join('') || '<small>подходящих кристаллов нет</small>'}</div>`;
     }
 

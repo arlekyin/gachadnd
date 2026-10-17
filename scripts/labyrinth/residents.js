@@ -26,6 +26,7 @@ import { SYNERGIES } from "../memory/synergy/synergy-tiers.js";
 import { isCrystalItem } from "../memory/inventory.js";
 import { getStash } from "../memory/stash.js";
 import { heatOf } from "../memory/overheat.js";
+import { addSatiety } from "./devourer-state.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 export const ANCHOR_OPENED = 'gachadnd.anchorOpened';
@@ -165,12 +166,13 @@ Hooks.on(ANCHOR_OPENED, async () => {
 Hooks.on(HUNT_BREACH, ctx => {
     const bait = residentsState().bait;
     if (!ctx.breach || !bait || bait.eaten) return;
-    ctx.gm.push(`<br><i class="fas fa-bone"></i> <strong>Приманка:</strong> этот прорыв Пожиратель тратит на неё — съедает «${esc(bait.name)}» и уходит. Отряд он не трогает. Насыщение +1 (включите эффект на листе).`);
+    ctx.gm.push(`<br><i class="fas fa-bone"></i> <strong>Приманка:</strong> этот прорыв Пожиратель тратит на неё — съедает «${esc(bait.name)}» и уходит. Отряд он не трогает. Насыщение +1 — модуль включит эффект сам.`);
     ctx.players.push('Где-то в стороне хрустит кристалл — и гул в сумках на время затихает.');
     ctx.tasks.push((async () => {
         const state = residentsState();
         state.bait = null;
         await saveState(state);
+        await addSatiety(1, `съел приманку «${bait.name}»`);
     })());
 });
 
