@@ -144,7 +144,7 @@ async function takeFrom(actor, offers) {
     const of = kind => offers.filter(o => o.kind === kind);
     for (const o of of('skill')) {
         const item = actor.items.get(o.ref);
-        if (item) await item.delete();
+        if (item) await item.delete({ gachadndMoon: true });
     }
     if (of('hd').length) {
         const cls = mainClass(actor);
@@ -377,7 +377,8 @@ export function registerDealSettings() {
 Hooks.on('deleteItem', (item, options, userId) => {
     if (userId !== game.user.id) return;
     const partner = item.actor?.items.get(flagsOf(item).fused?.partner);
-    if (partner) partner.delete();
+    // Пара сгорает с тем же поводом (жертва луне, Очистка) — Летопись этажа отличает их от сгоревших
+    if (partner) partner.delete({ gachadndMoon: !!options.gachadndMoon, gachadndCleanse: !!options.gachadndCleanse });
 });
 
 // Экипировка пары — вместе

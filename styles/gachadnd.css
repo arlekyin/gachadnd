@@ -1932,12 +1932,12 @@
 
 /* Поле: стол, на нём наклонённый лист карты */
 .gachadnd-map .gd-map-defs { position: absolute; width: 0; height: 0; }
-.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.gachadnd-map .gd-map-board { position: relative; flex: 1; min-height: 0; overflow: hidden auto; scrollbar-width: thin; scrollbar-color: rgba(20, 18, 16, 0.45) transparent; }
 .gachadnd-map .gd-map-board.empty { display: flex; align-items: center; justify-content: center; }
 .gachadnd-map .gd-map-fog { font-size: 28px; color: var(--ink-soft); transform: rotate(-3deg); }
 /* Карта лежит перед зрителем трапецией: ближний ряд у Входа крупный, дальние ряды к Боссу уже и мельче.
    Положение рядов считает map.js, здесь — масштаб по глубине (--k) для значков, подписей и штрихов */
-.gachadnd-map .gd-map-plane { position: absolute; inset: 0; }
+.gachadnd-map .gd-map-plane { position: relative; width: 100%; }
 
 /* Живые чернила: у каждой линии, кольца и рисунка три формы, SVG плавно перетекает между ними.
    Фильтр делает штрих расплывшимся, как от пера */
@@ -1946,13 +1946,15 @@
 .gachadnd-map .gd-map-ring.gd-ink { filter: none; }
 .gachadnd-map .gd-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .gachadnd-map .gd-map-edges path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: calc(3px * var(--k, 1)); stroke-dasharray: 1 11 4 10; }
+/* Недостижимые ветки — едва заметны; дальше по пути — тонкая линия; следующий шаг — крупный пунктир */
+.gachadnd-map .gd-map-edges path.faint { stroke: var(--ink-faint); stroke-width: calc(1.6px * var(--k, 1)); stroke-dasharray: 1 9; opacity: 0.45; }
+.gachadnd-map .gd-map-edges path.ahead { stroke: var(--ink-soft); stroke-width: calc(2.2px * var(--k, 1)); }
 .gachadnd-map .gd-map-edges path.open { stroke: var(--ink); stroke-width: calc(5px * var(--k, 1)); stroke-dasharray: 16 10 8 11; }
-.gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-warm); stroke-width: calc(3.4px * var(--k, 1)); }
+.gachadnd-map .gd-map-edges path.traversed { stroke: var(--ink-warm); stroke-width: calc(3.8px * var(--k, 1)); }
 
 /* Рисунки на полях */
 .gachadnd-map .gd-map-doodle { position: absolute; transform: translate(-50%, -50%) rotate(var(--turn)); pointer-events: none; overflow: visible; }
-.gachadnd-map .gd-map-doodle path { fill: none; stroke: var(--ink-warm); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.gachadnd-map .gd-map-doodle path { fill: none; stroke: var(--ink-faint); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Узлы: значок чернилами без кружка, вокруг — мазок кистью. Значок чуть покачивается (map.js) */
 .gachadnd-map .gd-map-node {
@@ -1983,6 +1985,10 @@
 .gachadnd-map .gd-map-node.visited .gd-map-ring path { fill: var(--ink-cool); }
 .gachadnd-map .gd-map-node.visited .gd-map-label { color: var(--ink-soft); }
 .gachadnd-map .gd-map-node.reachable .gd-map-label { font-weight: 700; }
+/* Подпись — у отряда, следующего шага, Входа и Босса; у остальных — при наведении. Недостижимое бледнеет */
+.gachadnd-map .gd-map-node:not(.labeled) .gd-map-label { visibility: hidden; }
+.gachadnd-map .gd-map-node:not(.labeled):hover .gd-map-label { visibility: visible; }
+.gachadnd-map .gd-map-node.gone { opacity: 0.35; }
 
 /* Отряд: толстый мазок кровавыми чернилами */
 .gachadnd-map .gd-map-node.current { z-index: 3; }
@@ -2737,3 +2743,89 @@
 .gd-res-bait > i { font-size: 28px; color: #c77dff; }
 .gd-res-bait small { display: block; }
 .gd-res-stage.away .gd-res-anchor { color: rgba(120, 140, 150, 0.3); text-shadow: none; animation: none; }
+
+/* ==========================================
+   Летопись этажа — дневник Разлома: лист прошлого этажа с нитью пути перелистывается на новый этаж
+   ========================================== */
+.gachadnd-map.gd-chronicle { position: fixed; inset: 0; z-index: 10000; color: var(--ink); font-family: 'GD Caveat', 'Modesto Condensed', cursive; cursor: pointer; }
+.gd-chronicle .gd-chr-veil { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, #241a12 0%, #0d0906 60%, #050403 100%); opacity: 0; transition: opacity 0.7s; }
+.gd-chronicle .gd-chr-frame {
+  position: absolute; left: 50%; top: 50%; width: 720px; height: 900px; opacity: 0;
+  transform: translate(-50%, -50%) scale(var(--s, 1)) translateY(14px); perspective: 2600px;
+  transition: opacity 0.7s, transform 0.9s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.gd-chronicle.in .gd-chr-veil { opacity: 1; }
+.gd-chronicle.in .gd-chr-frame { opacity: 1; transform: translate(-50%, -50%) scale(var(--s, 1)); }
+/* Перелистнули — книга сдвигается, разворот из двух страниц встаёт посередине */
+.gd-chronicle.in .gd-chr-frame.spread { transform: translate(calc(-50% + 360px * var(--s, 1)), -50%) scale(var(--s, 1)); transition: opacity 0.7s, transform var(--turn, 1.9s) cubic-bezier(0.55, 0.05, 0.35, 1); }
+
+/* Корешок дневника слева и стопка страниц под листом */
+.gd-chronicle .gd-chr-spine {
+  position: absolute; left: -18px; top: -8px; bottom: -8px; width: 26px; z-index: 3; border-radius: 6px 2px 2px 6px;
+  background: linear-gradient(90deg, #1c130d 0%, #4a3324 45%, #2c1f15 75%, #120c08 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 220, 160, 0.08), 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.gd-chronicle .gd-chr-sheet {
+  position: absolute; inset: 0; overflow: hidden; border-radius: 2px 4px 4px 2px;
+  background:
+    radial-gradient(ellipse at 18% 22%, rgba(150, 100, 50, 0.16), transparent 34%),
+    radial-gradient(ellipse at 82% 68%, rgba(140, 90, 40, 0.14), transparent 40%),
+    radial-gradient(ellipse at 60% 12%, rgba(120, 80, 35, 0.1), transparent 30%),
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(110, 70, 30, 0.42) 100%),
+    linear-gradient(90deg, rgba(60, 35, 15, 0.28), transparent 7%),
+    var(--paper-texture),
+    linear-gradient(160deg, #eedcb2 0%, #e3cc9c 55%, #d6bb86 100%);
+}
+.gd-chronicle .gd-chr-sheet.new { box-shadow: 2px 2px 0 #d9c49a, 4px 4px 0 #cdb68b, 6px 6px 0 #c2a97d, 0 24px 60px rgba(0, 0, 0, 0.75); }
+
+/* Перелистываемая страница: лицо — прошлый этаж, оборот — чистая бумага */
+.gd-chronicle .gd-chr-leaf { position: absolute; inset: 0; z-index: 2; transform-origin: left center; transform-style: preserve-3d; }
+.gd-chronicle .gd-chr-sheet.front, .gd-chronicle .gd-chr-sheet.back { backface-visibility: hidden; }
+.gd-chronicle .gd-chr-sheet.back { transform: rotateY(180deg); filter: brightness(0.9) sepia(0.15); background-position: right; }
+/* Оборот — запись в дневнике */
+.gd-chronicle .gd-chr-diary { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 60px; transform: rotate(-1.5deg); }
+.gd-chronicle .gd-chr-diary .gd-chr-cap { font-size: 58px; }
+.gd-chronicle .gd-chr-diary .gd-chr-sub { font-size: 30px; margin-bottom: 26px; color: var(--blood); letter-spacing: 0.12em; }
+.gd-chronicle .gd-chr-diary ul { margin: 0; padding: 0; list-style: none; font-size: 26px; line-height: 1.5; text-align: center; color: var(--ink-warm); }
+.gd-chronicle .gd-chr-shade { position: absolute; inset: 0; z-index: 6; pointer-events: none; opacity: 0; background: linear-gradient(90deg, rgba(40, 24, 10, 0.55), rgba(40, 24, 10, 0.12) 70%, rgba(40, 24, 10, 0.3)); }
+.gd-chronicle .gd-chr-cast { position: absolute; inset: 0; z-index: 6; pointer-events: none; opacity: 0; transform-origin: left center; background: linear-gradient(90deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.2) 45%, transparent 85%); }
+
+.gd-chronicle .gd-chr-title { position: absolute; left: 0; right: 0; top: 14px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.gd-chronicle .gd-chr-cap { font-size: 46px; font-weight: 700; transform: rotate(-1.5deg); }
+.gd-chronicle .gd-chr-sub { font-size: 22px; color: var(--ink-soft); letter-spacing: 0.08em; }
+.gd-chronicle .gd-chr-board, .gd-chronicle .gd-chr-layer { position: absolute; left: 0; right: 0; top: 92px; bottom: 26px; }
+.gd-chronicle .gd-chr-board .gd-map-board { position: absolute; inset: 0; overflow: hidden; }
+.gd-chronicle .gd-map-node { cursor: inherit; pointer-events: none; }
+
+/* Невиданное выцветает мягко — как разбавленные чернила, а не исчезает */
+.gd-chronicle .gd-map-node, .gd-chronicle .gd-map-edges path, .gd-chronicle .gd-map-doodle { transition: opacity 2.4s ease, filter 2.4s ease; }
+.gd-chronicle .dim .gd-map-node:not(.visited):not(.current) { opacity: 0.42; filter: grayscale(0.7) sepia(0.35); }
+.gd-chronicle .dim .gd-map-edges path:not(.traversed) { opacity: 0.3; }
+.gd-chronicle .dim .gd-map-doodle { opacity: 0.5; }
+
+/* Нить пути и пометки */
+.gd-chronicle .gd-chr-layer { pointer-events: none; z-index: 5; }
+.gd-chronicle .gd-chr-thread { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.gd-chronicle .gd-chr-thread path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.gd-chronicle .gd-chr-thread path.glow { stroke: rgba(255, 196, 96, 0.4); stroke-width: 12px; filter: blur(4px); }
+.gd-chronicle .gd-chr-thread path.core { stroke: #f2bd55; stroke-width: 3px; filter: drop-shadow(0 0 2px #ffb347); }
+.gd-chronicle .gd-chr-marks { position: absolute; inset: 0; }
+.gd-chronicle .gd-chr-mark {
+  position: absolute; transform: translate(34px, -50%) rotate(-2deg) scale(0.6); transform-origin: left center; opacity: 0;
+  padding: 3px 9px 4px; background: #f3e6c4; border: 2px solid var(--ink); border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35); font-size: 19px; line-height: 1.1; white-space: nowrap; z-index: 4;
+  transition: opacity 0.45s, transform 0.55s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.gd-chronicle .gd-chr-mark.left { transform: translate(calc(-100% - 34px), -50%) rotate(2deg) scale(0.6); transform-origin: right center; }
+.gd-chronicle .gd-chr-mark.on { opacity: 1; transform: translate(34px, -50%) rotate(-2deg) scale(1); }
+.gd-chronicle .gd-chr-mark.left.on { transform: translate(calc(-100% - 34px), -50%) rotate(2deg) scale(1); }
+.gd-chronicle .gd-chr-mark i { width: 18px; text-align: center; }
+.gd-chronicle .gd-chr-mark .fallen i { color: #3b3836; }
+.gd-chronicle .gd-chr-mark .burn i { color: #c4521c; }
+.gd-chronicle .gd-chr-mark .breach i { color: #0d6b66; }
+.gd-chronicle .gd-chr-mark .moon i { color: #5662a8; }
+.gd-chronicle .gd-chr-mark .resident i { color: #8a5a1c; }
+.gd-chronicle .gd-chr-mark .more { font-size: 16px; color: var(--ink-soft); }
+
+.gd-chronicle .gd-chr-skip { position: absolute; right: 18px; bottom: 14px; color: rgba(230, 210, 170, 0.45); font-size: 18px; }
+.gd-chronicle.out { opacity: 0; transition: opacity 0.8s; pointer-events: none; }

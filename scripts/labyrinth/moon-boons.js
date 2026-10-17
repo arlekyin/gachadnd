@@ -18,6 +18,7 @@ import { hint } from "../core/prefs.js";
 import { HOOKS } from "../memory/memory-api.js";
 import { getFloor } from "./economy.js";
 import { startBreach } from "./breach.js";
+import { logChronicle } from "./chronicle-log.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 const FADE = 900;
@@ -148,6 +149,7 @@ export async function callEcho({ callerId = null, bossId = null } = {}) {
     const initiative = Number.isFinite(caller.initiative) ? Math.round((caller.initiative - 0.001) * 1000) / 1000 : null;
     await combat.createEmbeddedDocuments('Combatant', [{ tokenId: token.id, sceneId: token.parent.id, actorId: boss.id, initiative }]);
     await spendBoon(found.index);
+    logChronicle('echo', `Эхо: ${boss.name}`);
     await card(`<i class="fas fa-crown"></i> <strong>Эхо Босса.</strong> Рядом с <strong>${esc(caller.name)}</strong> встаёт ${esc(boss.name)} — бледный, как отражение в воде. Один ход сразу после позвавшего, и он рассыпется.`);
     return token;
 }
@@ -175,6 +177,7 @@ export async function callDevourer({ point = null } = {}) {
     if (combatant) await combat.rollInitiative([combatant.id]);
     await spendBoon(found.index);
     await game.settings.set(MODULE_ID, 'moonTithe', { floor: getFloor(), combat: combat.id });
+    logChronicle('devour', 'Пожиратель за отряд');
     await card(`<i class="fas fa-paw"></i> <strong>Натравить Пожирателя.</strong> Луна открыла ему дорогу — к врагам отряда. Два хода он рвёт их, потом уходит. Из добычи этого боя он заберёт свой кристалл.`);
     return token;
 }

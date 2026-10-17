@@ -139,7 +139,7 @@ async function performShopOp({ op, userId, actorId, slot, itemId }) {
         if (!(await pay(actor, price))) return deny(`${actor.name}: не хватает золота (${price} зм).`);
         if (voucher) await actor.setFlag(MODULE_ID, 'cleanse_vouchers', cleanseVouchers(actor) - 1);
         await actor.setFlag(MODULE_ID, 'shop_cleanses', (actor.getFlag(MODULE_ID, 'shop_cleanses') ?? 0) + 1);
-        await item.delete();
+        await item.delete({ gachadndCleanse: true });
         return chat(`<strong>${esc(actor.name)}</strong> очищает Память от навыка «${esc(item.name)}» за ${price} зм.`);
     }
 

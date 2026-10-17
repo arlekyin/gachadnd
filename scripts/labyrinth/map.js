@@ -100,7 +100,7 @@ function buildContentTypes(count) {
     return types.sort(() => Math.random() - 0.5);
 }
 
-function generateMapGraph(length) {
+export function generateMapGraph(length) {
     const contentRows = Math.max(1, length - 1);
     // Застава — посередине этажа, если рядов хватает (номер ряда от Входа)
     const outpostRow = contentRows >= MAP_DATA.OUTPOST_MIN_ROWS ? Math.ceil(contentRows / 2) : 0;
@@ -139,28 +139,34 @@ function generateMapGraph(length) {
     rows.push([boss]);
     nodes.push(boss);
 
+    // Пути без пересечений: узлы ряда идут слева направо, у каждого — отрезок соседних целей в следующем ряду,
+    // и отрезки не заходят друг за друга (общий край можно). Узел следующего ряда без входа отдаётся соседу
     for (let r = 0; r < rows.length - 1; r++) {
-        let cur = rows[r], nxt = rows[r + 1];
-        let incoming = {};
-        nxt.forEach(n => incoming[n.id] = 0);
-
-        cur.forEach(node => {
-            let k = Math.min(nxt.length, Math.floor(Math.random() * (MAP_DATA.MAX_EDGES - MAP_DATA.MIN_EDGES + 1)) + MAP_DATA.MIN_EDGES);
-            let order = nxt.map((n, idx) => ({ idx, dist: Math.abs(idx - node.col) })).sort((a, b) => a.dist - b.dist);
-            
-            let targets = order.slice(0, k).map(o => o.idx).sort();
-            targets.forEach(i => {
-                node.next.push(nxt[i].id);
-                incoming[nxt[i].id]++;
-            });
+        const cur = rows[r], nxt = rows[r + 1];
+        const w = cur.length, w2 = nxt.length;
+        const ranges = [];
+        let from = 0;
+        cur.forEach((node, i) => {
+            const k = Math.min(w2, Math.floor(Math.random() * (MAP_DATA.MAX_EDGES - MAP_DATA.MIN_EDGES + 1)) + MAP_DATA.MIN_EDGES);
+            const centre = w === 1 ? (w2 - 1) / 2 : i * (w2 - 1) / (w - 1);
+            // Только соседи: не дальше одного узла от места напротив
+            const c = Math.round(centre);
+            const lo = Math.max(from, Math.min(w2 - 1, c - 1, Math.round(centre - (k - 1) / 2)));
+            const hi = Math.max(lo, Math.min(w2 - 1, c + 1, lo + k - 1));
+            ranges.push([lo, hi]);
+            from = hi;
         });
-
-        nxt.forEach(n => {
-            if (incoming[n.id] === 0) {
-                let closest = cur.map(c => ({ node: c, dist: Math.abs(c.col - n.col) })).sort((a, b) => a.dist - b.dist)[0].node;
-                closest.next.push(n.id);
-                incoming[n.id]++;
-            }
+        ranges[0][0] = 0;
+        ranges[w - 1][1] = w2 - 1;
+        for (let i = 0; i < w - 1; i++) {
+            const gapLo = ranges[i][1] + 1, gapHi = ranges[i + 1][0] - 1;
+            if (gapLo > gapHi) continue;
+            const mid = Math.floor((gapLo + gapHi) / 2);
+            ranges[i][1] = mid;
+            ranges[i + 1][0] = mid + 1;
+        }
+        cur.forEach((node, i) => {
+            for (let j = ranges[i][0]; j <= ranges[i][1]; j++) node.next.push(nxt[j].id);
         });
     }
 
@@ -199,8 +205,11 @@ const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', '
  * «Живые чернила»: у каждой линии, кольца и рисунка три формы с одним набором команд пути, и SVG плавно
  * перетекает между ними (animate по атрибуту d) — штрих медленно изгибается, как чернила на мокрой бумаге. */
 
-// Поле в процентах; примерный размер в пикселях нужен, чтобы отступы и рисунки не зависели от пропорций окна
-const BOARD_PX = { x: 6.8, y: 7.4 };
+// Поле в процентах; размер в пикселях нужен, чтобы отступы и рисунки не зависели от пропорций поля.
+// Ширина — как у окна карты, высота — по числу рядов: поле выше окна и прокручивается (boardContext)
+const BOARD_W = 680;
+export const ROW_PX = 122, EDGE_PX = { top: 70, bottom: 80 };
+let BOARD_PX = { x: BOARD_W / 100, y: 7.4 };
 const INK_FORMS = 3;
 
 // Длительность цикла и сдвиг фазы у каждого рисунка свои — карта колышется не в такт.
@@ -212,14 +221,6 @@ const inkMotion = rand => ({ dur: (4.5 + rand() * 3).toFixed(2), begin: (-rand()
 /** Формы для animate: первая повторяется в конце, чтобы цикл замкнулся */
 const inkValues = forms => [...forms, forms[0]].join(';');
 
-/* Карта лежит перед зрителем трапецией: ближний край (Вход) широкий и крупный, дальний (Босс) узкий и мелкий.
- * depth — 0 у нижнего края, 1 у верхнего; scale — во сколько раз уменьшены значки, подписи и штрихи */
-const FAR_SCALE = 0.62;
-const depthScale = y => 1 - (1 - FAR_SCALE) * Math.min(1, Math.max(0, (94 - y) / 86));
-function toTrapezoid(x, depth, squeeze = 0.35) {
-    const y = 94 - 86 * depth * (1 + squeeze - squeeze * depth); // ряды сближаются к дальнему краю; на длинном этаже — слабее
-    return { x: 50 + (x - 50) * depthScale(y), y, k: depthScale(y) };
-}
 
 function seededRandom(text) {
     let h = 1779033703 ^ text.length;
@@ -346,13 +347,15 @@ function placeDoodles(rand, nodeCoords, edgePoints) {
     const far = (p, list, px) => list.every(q => Math.hypot((p.x - q.x) * BOARD_PX.x, (p.y - q.y) * BOARD_PX.y) > px);
     const pool = [...DOODLES.keys()].sort(() => rand() - 0.5);
     const placed = [];
-    for (let attempt = 0; attempt < 400 && placed.length < 7 && pool.length; attempt++) {
+    // На длинном поле рисунков больше — по одному на полтора экрана
+    const limit = Math.min(DOODLES.length, Math.round(7 * BOARD_PX.y / 7.4));
+    for (let attempt = 0; attempt < 600 && placed.length < limit && pool.length; attempt++) {
         const p = { x: 9 + rand() * 82, y: 6 + rand() * 88 };
-        if (!far(p, nodeCoords, 70) || !far(p, edgePoints, 36) || !far(p, placed, 95)) continue;
+        if (!far(p, nodeCoords, 95) || !far(p, edgePoints, 42) || !far(p, placed, 140)) continue;
         const d = DOODLES[pool.pop()];
         placed.push({
             ...p, d, values: inkValues(Array.from({ length: INK_FORMS }, () => jitterPath(d, rand, 0.9))), ...inkMotion(rand),
-            size: Math.round((48 + rand() * 26) * depthScale(p.y)), turn: Math.round(rand() * 40 - 20)
+            size: Math.round(40 + rand() * 20), turn: Math.round(rand() * 40 - 20)
         });
     }
     return placed;
@@ -406,64 +409,31 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         };
         if (!context.hasMap) return context;
 
-        const { rows, nodes, currentNodeId, visitedNodes = [] } = map;
-        const current = nodes.find(n => n.id === currentNodeId) ?? null;
-        const reachable = new Set(current ? current.next : nodes.filter(n => n.type === MAP_DATA.NODE_START).map(n => n.id));
-        const visited = new Set(visitedNodes);
+        return Object.assign(context, boardContext(map, floor));
+    }
 
-        // Координаты в процентах поля: Вход внизу, Босс вверху
-        const coords = {};
-        rows.forEach((row, r) => {
-            const depth = r / Math.max(1, rows.length - 1);
-            row.forEach((node, c) => { coords[node.id] = toTrapezoid(6 + ((c + 0.5) / row.length) * 88, depth, rows.length > 8 ? 0.1 : 0.35); });
-        });
-
-        inkClock = performance.now() / 1000;
-        // Зерно — сама карта: перерисовка и другие клиенты видят тот же набросок
-        const seed = `${floor}|${nodes.map(n => `${n.id}${n.type}${n.next.join(',')}`).join(';')}`;
-        const look = node => ({ color: MAP_DATA.COLORS[node.type] ?? node.color, icon: MAP_DATA.ICONS[node.type] ?? node.icon, label: MAP_DATA.LABELS[node.type] ?? node.label });
-
-        // Отряд обведён толстым мазком, пройденные узлы — тонким, доступные — небрежной незамкнутой петлёй
-        const RINGS = {
-            current: { radius: 34, width: 9, turns: 1.18 },
-            visited: { radius: 33, width: 4.5, turns: 1.05 },
-            reachable: { radius: 34, width: 3.6, turns: 0.82 }
-        };
-        context.nodes = nodes.map(node => {
-            const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
-            const rand = seededRandom(`${seed}|ring|${node.id}|${state}`);
-            const forms = RINGS[state] ? brushRing(rand, RINGS[state]) : null;
-            const ring = forms ? { d: forms[0], values: inkValues(forms), ...inkMotion(rand) } : null;
-            return { id: node.id, ...coords[node.id], k: coords[node.id].k.toFixed(3), ...look(node), cls: `${state} type-${node.type}`, ring, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
-        });
-
-        // Пути: пройденный — двойная линия, будто обведён дважды; доступный — крупный пунктир; остальные — бледные точки
-        const edgePoints = [];
-        context.edges = nodes.flatMap(node => node.next.map(nextId => {
-            const rand = seededRandom(`${seed}|edge|${node.id}|${nextId}`);
-            const traversed = visited.has(node.id) && visited.has(nextId);
-            const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
-            const k = (coords[node.id].k + coords[nextId].k) / 2;
-            const lines = [sketchLine(coords[node.id], coords[nextId], rand, { trim: 38 * k, wobble: 3.5 * k, flow: 3.5 * k })];
-            if (traversed) lines.push(sketchLine(coords[node.id], coords[nextId], rand, { trim: 38 * k, wobble: 3 * k, flow: 3.5 * k }));
-            edgePoints.push(...lines[0].points);
-            const strokes = lines.map(line => ({ d: line.forms[0], values: inkValues(line.forms), ...inkMotion(rand) }));
-            return { strokes, k: k.toFixed(3), cls: traversed ? 'traversed' : open ? 'open' : 'faint' };
-        }));
-        context.doodles = placeDoodles(seededRandom(`${seed}|doodles`), Object.values(coords), edgePoints);
-
-        context.current = current ? look(current) : null;
-        context.next = current ? current.next.map(id => look(nodes.find(n => n.id === id))) : [];
-        const counts = {};
-        for (const node of nodes) if (!['start'].includes(node.type)) counts[node.type] = (counts[node.type] ?? 0) + 1;
-        context.legend = LEGEND_ORDER.filter(t => counts[t]).map(t => ({ ...look({ type: t }), count: counts[t] }));
-        return context;
+    // Поле выше окна: после перерисовки окно встаёт на отряд (до выхода на карту — на Вход). Первый раз — сразу,
+    // потом плавно от того места, где поле было
+    #scrollTop = null;
+    #scrollToParty() {
+        const board = this.element?.querySelector('.gd-map-board');
+        const node = board?.querySelector('.gd-map-node.current') ?? board?.querySelector('.gd-map-node.type-start');
+        if (!board || !node) return;
+        board.addEventListener('scroll', () => { this.#scrollTop = board.scrollTop; }, { passive: true });
+        const target = Math.max(0, node.offsetTop - board.clientHeight * 0.62);
+        if (this.#scrollTop === null) board.scrollTop = target;
+        else {
+            board.scrollTop = this.#scrollTop;
+            board.scrollTo({ top: target, behavior: 'smooth' });
+        }
+        this.#scrollTop = board.scrollTop;
     }
 
     // Перерисовка поля не должна перезапускать движение: покачивание значков ставится на время страницы,
     // как и начало течения чернил (inkClock)
     _onRender(context, options) {
         super._onRender(context, options);
+        this.#scrollToParty();
         const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const now = performance.now();
         if (still) {
@@ -484,12 +454,19 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         const length = parseInt(this.element.querySelector('[name="length"]')?.value) || 11;
         // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
         const floor = Math.max(1, parseInt(this.element.querySelector('[name="floor"]')?.value) || getFloor());
+        // Прошлый этаж — для Летописи (chronicle.js): она идёт у всех, если по старой карте ходили
+        const oldMap = mapScene()?.getFlag(MODULE_ID, 'floorMap') ?? null;
+        const oldFloor = getFloor();
         await game.settings.set(MODULE_ID, 'runFloor', floor);
         // Карта чертится на текущей сцене (на сцене Якоря — на сцене этажа), сцена запоминается
         const scene = sceneForNewMap();
         if (scene) {
-            await scene.setFlag(MODULE_ID, 'floorMap', generateMapGraph(length));
+            const newMap = generateMapGraph(length);
+            // Старая Летопись уходит вместе со старой картой: unsetFlag, иначе setFlag сольёт записи
+            await scene.unsetFlag(MODULE_ID, 'floorMap');
+            await scene.setFlag(MODULE_ID, 'floorMap', newMap);
             await rememberFloorScene(scene);
+            Hooks.callAll('gachadnd.floorDrawn', { oldMap, oldFloor, newMap, newFloor: floor });
         }
     }
 
@@ -545,6 +522,85 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         // Нюх Пожирателя: Мастеру — Запах и узел прорыва, игрокам — атмосфера
         await announceScent(nodeData.type);
     }
+}
+
+/**
+ * Поле карты для шаблона board.hbs: узлы, пути, рисунки на полях, легенда. Окно карты и Летопись этажа
+ * рисуют один и тот же набросок (зерно — сама карта).
+ */
+export function boardContext(map, floor) {
+    const board = {};
+    const { rows, nodes, currentNodeId, visitedNodes = [] } = map;
+    const current = nodes.find(n => n.id === currentNodeId) ?? null;
+    const reachable = new Set(current ? current.next : nodes.filter(n => n.type === MAP_DATA.NODE_START).map(n => n.id));
+    const visited = new Set(visitedNodes);
+    // Куда ещё можно дойти: потомки текущего узла (до выхода на карту — весь этаж)
+    const ahead = new Set();
+    const queue = current ? [...current.next] : nodes.map(n => n.id);
+    while (queue.length) {
+        const id = queue.pop();
+        if (ahead.has(id)) continue;
+        ahead.add(id);
+        queue.push(...(nodes.find(n => n.id === id)?.next ?? []));
+    }
+
+    // Поле: ряды через ROW_PX снизу вверх (Вход внизу, Босс вверху); координаты — проценты поля
+    const height = EDGE_PX.top + EDGE_PX.bottom + (rows.length - 1) * ROW_PX;
+    BOARD_PX = { x: BOARD_W / 100, y: height / 100 };
+    board.height = height;
+    const coords = {};
+    rows.forEach((row, r) => {
+        const y = (height - EDGE_PX.bottom - r * ROW_PX) / height * 100;
+        row.forEach((node, c) => { coords[node.id] = { x: 8 + ((c + 0.5) / row.length) * 84, y, k: 1 }; });
+    });
+
+    inkClock = performance.now() / 1000;
+    // Зерно — сама карта: перерисовка и другие клиенты видят тот же набросок
+    const seed = `${floor}|${nodes.map(n => `${n.id}${n.type}${n.next.join(',')}`).join(';')}`;
+    const look = node => ({ color: MAP_DATA.COLORS[node.type] ?? node.color, icon: MAP_DATA.ICONS[node.type] ?? node.icon, label: MAP_DATA.LABELS[node.type] ?? node.label });
+
+    // Отряд обведён толстым мазком, пройденные узлы — тонким, доступные — небрежной незамкнутой петлёй
+    const RINGS = {
+        current: { radius: 34, width: 9, turns: 1.18 },
+        visited: { radius: 33, width: 4.5, turns: 1.05 },
+        reachable: { radius: 34, width: 3.6, turns: 0.82 }
+    };
+    // Подписи — только там, где они нужны: отряд, следующий шаг, Вход и Босс; у остальных — при наведении
+    const labeled = node => node.id === currentNodeId || reachable.has(node.id) || ['start', 'boss'].includes(node.type);
+    board.nodes = nodes.map(node => {
+        const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
+        const reach = state === 'locked' ? (ahead.has(node.id) ? ' ahead' : ' gone') : '';
+        const rand = seededRandom(`${seed}|ring|${node.id}|${state}`);
+        const forms = RINGS[state] ? brushRing(rand, RINGS[state]) : null;
+        const ring = forms ? { d: forms[0], values: inkValues(forms), ...inkMotion(rand) } : null;
+        return { id: node.id, ...coords[node.id], k: coords[node.id].k.toFixed(3), ...look(node), cls: `${state}${reach}${labeled(node) ? ' labeled' : ''} type-${node.type}`, ring, hint: node.id === currentNodeId ? NODE_HINTS[node.type] : null };
+    });
+
+    // Пути: пройденный — двойная линия, будто обведён дважды; следующий шаг — крупный пунктир; дальше, куда ещё
+    // можно дойти, — тонкая линия; недостижимые — едва заметны
+    const edgePoints = [];
+    board.edges = nodes.flatMap(node => node.next.map(nextId => {
+        const rand = seededRandom(`${seed}|edge|${node.id}|${nextId}`);
+        const traversed = visited.has(node.id) && visited.has(nextId);
+        const open = node.id === currentNodeId || (!current && node.type === MAP_DATA.NODE_START);
+        const k = (coords[node.id].k + coords[nextId].k) / 2;
+        const lines = [sketchLine(coords[node.id], coords[nextId], rand, { trim: 32 * k, wobble: 3.5 * k, flow: 3.5 * k })];
+        if (traversed) lines.push(sketchLine(coords[node.id], coords[nextId], rand, { trim: 32 * k, wobble: 3 * k, flow: 3.5 * k }));
+        edgePoints.push(...lines[0].points);
+        const strokes = lines.map(line => ({ d: line.forms[0], values: inkValues(line.forms), ...inkMotion(rand) }));
+        const further = ahead.has(nextId) && (ahead.has(node.id) || node.id === currentNodeId || !current);
+        return { strokes, from: node.id, to: nextId, k: k.toFixed(3), cls: traversed ? 'traversed' : open ? 'open' : further ? 'ahead' : 'faint' };
+    }));
+    board.doodles = placeDoodles(seededRandom(`${seed}|doodles`), Object.values(coords), edgePoints);
+
+    board.current = current ? look(current) : null;
+    board.next = current ? current.next.map(id => look(nodes.find(n => n.id === id))) : [];
+    const counts = {};
+    for (const node of nodes) if (!['start'].includes(node.type)) counts[node.type] = (counts[node.type] ?? 0) + 1;
+    board.legend = LEGEND_ORDER.filter(t => counts[t]).map(t => ({ ...look({ type: t }), count: counts[t] }));
+    // Положение узлов в процентах поля — Летопись ведёт по ним нить пути
+    board.coords = coords;
+    return board;
 }
 
 function openNodeWindow(type) {

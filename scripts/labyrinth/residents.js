@@ -317,7 +317,7 @@ async function performOp({ op, userId, ...data }) {
         if (!cleansable(item)) return deny('Этот навык не очистить.');
         const cost = cleansePrice(actor);
         if (!(await charge(userId, actor, cost))) return;
-        await item.delete();
+        await item.delete({ gachadndCleanse: true });
         return chat('healer', `Очистил Память <strong>${esc(actor.name)}</strong> от «${esc(item.name)}» за ${cost} зм.`);
     }
     if (op === 'cool') {

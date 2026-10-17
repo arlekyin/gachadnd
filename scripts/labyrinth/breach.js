@@ -22,6 +22,7 @@ import { clamp01, smooth, easeOut, easeIn, seeded } from "../cutscene/math.js";
 import { registerCues, playCue, tone, noise } from "../cutscene/audio.js";
 import { crackle, bass, slam, glass, flutter } from "../cutscene/instruments.js";
 import { setOmen } from "./omen.js";
+import { logChronicle } from "./chronicle-log.js";
 import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../core/prefs.js";
 
 const ART = new URL('../../assets/bestiary/devourer.webp', import.meta.url).href;
@@ -157,7 +158,10 @@ export async function startBreach({ ally = false, point = null } = {}) {
     emit('devourerBreach', data);
     // Токен ставится, пока идёт катсцена; проявляется он в ней
     const placed = placeDevourer(point, { ally }).catch(error => { console.error(`${MODULE_ID} | токен Пожирателя`, error); return null; });
-    if (!ally) await setOmen('here');
+    if (!ally) {
+        await setOmen('here');
+        logChronicle('breach', 'Прорыв Пожирателя');
+    }
     await playBreach(data);
     const token = await placed;
     if (token) await token.update({ alpha: token.getFlag(MODULE_ID, 'breach')?.alpha ?? 1, [`flags.${MODULE_ID}.-=breach`]: null });

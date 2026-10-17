@@ -25,6 +25,8 @@ import { DealWindow, registerDealSettings } from "./moon-deal.js";
 import { registerBoonSettings, callEcho, callDevourer } from "./moon-boons.js";
 import { registerResidentSettings, settleResident, hasResident } from "./residents.js";
 import { ResidentsWindow } from "./residents-window.js";
+import "./chronicle-log.js";
+import { playChronicle } from "./chronicle.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -70,7 +72,9 @@ Hooks.once('init', () => {
         callDevourer: options => callDevourer(options),
         // Жильцы Якоря: окно (focus — чей прилавок: smith, cartographer, broker, healer, lurer) и поселить (Мастер)
         openResidents: focus => ResidentsWindow.open(focus),
-        settleResident: id => settleResident(id)
+        settleResident: id => settleResident(id),
+        // Летопись этажа у себя (показ, без рассылки): { oldMap, oldFloor, newMap, newFloor, marks }
+        playChronicle: data => playChronicle(data)
     });
 });
 

@@ -8,6 +8,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { mapScene } from "./scene-travel.js";
 import { isMemorySkill } from "../memory/synergy/synergy.js";
 import { getFloor } from "./economy.js";
 
@@ -57,6 +58,8 @@ function graveOf(actor) {
         level: actor.system.details?.level ?? 0,
         skills: actor.items.filter(isMemorySkill).length,
         floor: getFloor(),
+        // Узел карты, где осталось тело, — для Летописи этажа
+        nodeId: mapScene()?.getFlag(MODULE_ID, 'floorMap')?.currentNodeId ?? null,
         at: Date.now()
     };
 }

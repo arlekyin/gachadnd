@@ -4,10 +4,10 @@
         <filter id="gd-ink-bleed" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.8"/><feComponentTransfer><feFuncA type="table" tableValues="0 0 1 1"/></feComponentTransfer></filter>
     </svg>
     {{#if hasMap}}
-    {{!-- Карта трапецией: дальние ряды уже и мельче, --k — масштаб по глубине --}}
-    <div class="gd-map-plane">
+    {{!-- Поле по числу рядов, выше окна: прокручивается, окно само встаёт на отряд --}}
+    <div class="gd-map-plane" style="height: {{height}}px">
         <svg class="gd-map-edges gd-ink" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {{#each edges}}{{#each strokes}}<path class="{{../cls}}" style="--k: {{../k}}" d="{{d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/each}}{{/each}}
+            {{#each edges}}{{#each strokes}}<path class="{{../cls}}" data-from="{{../from}}" data-to="{{../to}}" style="--k: {{../k}}" d="{{d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/each}}{{/each}}
         </svg>
         {{#each doodles}}
         <svg class="gd-map-doodle gd-ink" viewBox="0 0 40 40" style="left: {{x}}%; top: {{y}}%; width: {{size}}px; height: {{size}}px; --turn: {{turn}}deg"><path d="{{d}}"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path></svg>
