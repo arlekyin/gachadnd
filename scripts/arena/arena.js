@@ -10,7 +10,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
-import { layout, connected, startCells } from "./layout.js";
+import { layout, connected, startCells, VIGNETTES } from "./layout.js";
 import { paint } from "./paint.js";
 
 const CELL = 140;
@@ -60,12 +60,19 @@ function wallsOf(plan) {
         else if (o.kind === 'log') {
             const dx = Math.cos(o.rot) * r, dy = Math.sin(o.rot) * r;
             walls.push({ c: [x - dx, y - dy, x + dx, y + dy].map(Math.round), ...low });
+        } else if (o.kind === 'vignette') {
+            const v = VIGNETTES[o.name];
+            for (const [cx, cy, r] of v.circles) ring(x + cx * CELL, y + cy * CELL, r * CELL, 8, solid);
+            for (const [cx, cy, w, h] of v.rects) {
+                const x0 = x + (cx - w / 2) * CELL, y0 = y + (cy - h / 2) * CELL, x1 = x0 + w * CELL, y1 = y0 + h * CELL;
+                for (const c of [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]]) walls.push({ c: c.map(Math.round), ...low });
+            }
         } else if (o.kind === 'ruin') {
             // Как в paint.js: стена вдоль оси и вторая — поперёк, от угла
             const t = CELL * 0.62, len = (o.len ?? 3) * CELL, c = Math.cos(o.rot), s = Math.sin(o.rot);
             const at = (u, v) => [x + u * c - v * s, y + u * s + v * c];
             walls.push({ c: [...at(-t / 2, 0), ...at(len - t / 2, 0)].map(Math.round), ...solid });
-            walls.push({ c: [...at(0, -t / 2), ...at(0, len * 0.75 - t / 2)].map(Math.round), ...solid });
+            if (o.shape !== 'I') walls.push({ c: [...at(0, -t / 2), ...at(0, len * 0.75 - t / 2)].map(Math.round), ...solid });
         }
     }
     return walls;
@@ -80,7 +87,12 @@ function lightsOf(plan, mood) {
     });
     const s = plan.terrain.stream;
     if (s) s.path.forEach((p, i) => { if (i % 6 === 0 && p.x > 0 && p.y > 0 && p.x < plan.cols && p.y < plan.rows) murk(p.x, p.y, 6 + s.width * 2); });
+    for (const p of plan.terrain.pools ?? []) murk(p.x, p.y, p.r * 3 + 4);
     for (const p of plan.terrain.patches.filter(p => p.type === 'forest')) if (p.x > 0 && p.y > 0 && p.x < plan.cols && p.y < plan.rows) murk(p.x, p.y, p.r * 4);
+    for (const o of plan.objects.filter(o => o.kind === 'vignette')) for (const l of VIGNETTES[o.name].lights) lights.push({
+        x: Math.round((o.x + l.x) * CELL), y: Math.round((o.y + l.y) * CELL), walls: true,
+        config: { dim: l.dim, bright: l.bright, color: l.color, alpha: 0.5, luminosity: 0.5, attenuation: 0.6, coloration: 1, animation: { type: l.animation, speed: 3, intensity: 4 } }
+    });
     for (const o of plan.objects.filter(o => o.kind === 'crystal')) lights.push({
         x: Math.round(o.x * CELL), y: Math.round(o.y * CELL), walls: true,
         config: { dim: 10, bright: 3, color: '#2ee6d6', alpha: 0.45, luminosity: 0.5, attenuation: 0.6, coloration: 1, animation: { type: 'pulse', speed: 2, intensity: 3 } }
@@ -95,10 +107,10 @@ function lightsOf(plan, mood) {
 export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true } = {}) {
     if (!game.user.isGM) return ui.notifications.warn('Арену собирает Мастер.');
     // Планировка: если путь от отряда к врагам перекрыт — другой сид
-    let plan = layout({ cols, rows, seed, biome, encounter });
-    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter });
-
     const art = await loadArt(biome);
+    const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
+    let plan = layout({ cols, rows, seed, biome, encounter, vignettes });
+    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes });
     const canvas = paint(plan, { cell: CELL, mood, art });
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.9));
     const dir = `worlds/${game.world.id}/gachadnd-arena`;

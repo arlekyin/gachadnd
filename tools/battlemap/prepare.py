@@ -146,6 +146,16 @@ def main():
             pieces = split_sheet(im)
             for i, p in enumerate(pieces, 1): fit(p, 256).save(os.path.join(OUT, f'{name}-{i}.webp'), quality=92)
             print('россыпь', name, len(pieces), 'шт.')
+        elif name.startswith('vignette-'):
+            # Сцена на клочке земли, край которого тает в белое: внутри — непрозрачно, по краю — «цвет в альфу»
+            cut = cutout(im)
+            inner = cut.getchannel('A').filter(ImageFilter.MinFilter(41)).filter(ImageFilter.GaussianBlur(14))
+            soft = unwhite(im)
+            alpha = ImageChops.lighter(inner, soft.getchannel('A'))
+            res = Image.composite(im.convert('RGBA'), soft, inner)
+            res.putalpha(alpha)
+            fit(trim(res), 1400).save(os.path.join(OUT, f'{name}.webp'), quality=92)
+            print('виньетка', name)
         elif name.startswith('rot-'):
             fit(trim(unwhite(im))).save(os.path.join(OUT, f'{name}.webp'), quality=92)
             print('мягкий край', name)

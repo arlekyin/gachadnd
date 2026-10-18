@@ -91,15 +91,18 @@ function masks(plan, cell, seed) {
     out.moss = make(patch('moss'));
     out.rock = make(patch('rock'));
     out.path = make((x, y, wob) => edge(distToPath(terrain.path, x, y) + wob * 0.9, 0.85, 0.25));
-    if (terrain.stream) {
-        const s = terrain.stream, w = s.width / 2;
-        out.bank = make((x, y, wob) => edge(distToPath(s.path, x, y) + wob * 1.4, w + 0.9, 0.45));
-        out.riverbed = make((x, y, wob) => edge(distToPath(s.path, x, y) + wob * 0.7, w, 0.2));
+    // Вода: ручей и озерца — одно поле «расстояние до кромки» (отрицательное — в воде)
+    const pools = terrain.pools ?? [];
+    if (terrain.stream || pools.length) {
+        const s = terrain.stream;
+        const wd = (x, y) => Math.min(s ? distToPath(s.path, x, y) - s.width / 2 : 99, ...pools.map(p => Math.hypot(p.x - x, p.y - y) - p.r), 99);
+        const deepest = s ? s.width / 2 : 1.5;
+        out.bank = make((x, y, wob) => edge(wd(x, y) + wob * 1.4, 0.9, 0.45));
+        out.riverbed = make((x, y, wob) => edge(wd(x, y) + wob * (pools.length ? 1.6 : 0.7), 0, 0.2));
         out.depth = make((x, y, wob) => {
-            const d = distToPath(s.path, x, y) + wob * 0.4;
             // У брода мелко
             const f = terrain.ford ? Math.min(1, Math.hypot(x - terrain.ford.x, y - terrain.ford.y) / 1.6) : 1;
-            return edge(d, w * 0.55, 0.4) * f;
+            return edge(wd(x, y) + wob * 0.4, -deepest * 0.45, 0.4) * f;
         });
     }
     return out;
@@ -253,7 +256,7 @@ const SPRITES = {
 
 // ---------- Свой арт: какую картинку взять для предмета
 
-const ART_NAMES = { tree: ['tree-1', 'tree-2'], pine: ['pine-1'], deadtree: ['deadtree-1'], bush: ['bush-1', 'bush-2'], reeds: ['reeds-1'], rock: ['rock-1', 'rock-2'], boulder: ['boulder-1', 'rock-1'], log: ['log-1'], stump: ['stump-1'], ruin: ['ruin-1'], crystal: ['crystal-1'], pillar: [], lilypad: [] };
+const ART_NAMES = { tree: ['tree-1', 'tree-2'], pine: ['pine-1', 'pine-2'], deadtree: ['deadtree-1'], bush: ['bush-1', 'bush-2', 'bush-3'], reeds: ['reeds-1'], rock: ['rock-1', 'rock-2', 'rock-3', 'rock-4'], boulder: ['boulder-1', 'rock-1'], log: ['log-1'], stump: ['stump-1'], ruin: ['ruin-1'], crystal: ['crystal-1'], pillar: ['pillar-1'], lilypad: ['lilypads-1'], roots: ['roots-1'] };
 function artFor(art, o) {
     const have = (ART_NAMES[o.kind] ?? []).filter(n => art[n]);
     return have.length ? art[have[(o.variant - 1) % have.length]] : null;
@@ -262,7 +265,7 @@ function artFor(art, o) {
 function drawRuin(ctx, img, o, cell) {
     const t = cell * 0.62, len = (o.len ?? 3) * cell, h = Math.max(t * 1.1, (img.height / img.width) * len);
     ctx.drawImage(img, -t / 2, -h / 2, len, h);
-    ctx.save(); ctx.rotate(Math.PI / 2); ctx.drawImage(img, -t / 2, -h / 2, len * 0.75, h); ctx.restore();
+    if (o.shape !== 'I') { ctx.save(); ctx.rotate(Math.PI / 2); ctx.drawImage(img, -t / 2, -h / 2, len * 0.75, h); ctx.restore(); }
 }
 
 // Разброс оттенка (градусы) у каждого экземпляра, пятно затенения под предметом (доля радиуса),
@@ -270,6 +273,38 @@ function drawRuin(ctx, img, o, cell) {
 const VARIETY = { tree: 14, pine: 10, bush: 16, deadtree: 6, reeds: 10, rock: 5, boulder: 5, log: 6, stump: 6, crystal: 0 };
 const GROUND_SHADE = { rock: 0.95, boulder: 0.95, stump: 0.9, log: 0.55, ruin: 0, pillar: 0.9, crystal: 0.7, bush: 0.85 };
 const BASE_TUFTS = { rock: 4, boulder: 6, stump: 4, log: 4, pillar: 3, crystal: 3 };
+
+/**
+ * Виньетка: картинка целиком на свои клетки (без поворота — свет нарисован), мягкая тень, затенение под ней и
+ * трава по краю — чтобы не лежала наклейкой
+ */
+function drawVignette(ctx, o, art, cell, tuftArt, seed) {
+    const img = art[`vignette-${o.name}-1`] ?? art[`vignette-${o.name}`];
+    if (!img) return;
+    const J = rng(`${seed}|vg|${o.x.toFixed(2)}`);
+    const w = o.w * cell, h = o.h * cell, k = Math.min(w / img.width, h / img.height), dw = img.width * k, dh = img.height * k;
+    const x = o.x * cell - dw / 2, y = o.y * cell - dh / 2;
+    const g = ctx.createRadialGradient(o.x * cell, o.y * cell, Math.min(dw, dh) * 0.25, o.x * cell, o.y * cell, Math.max(dw, dh) * 0.6);
+    g.addColorStop(0, 'rgba(20,24,10,0.35)'); g.addColorStop(1, 'rgba(20,24,10,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - cell, y - cell, dw + 2 * cell, dh + 2 * cell);
+    ctx.save(); ctx.filter = `brightness(0) blur(${cell * 0.1}px)`; ctx.globalAlpha = 0.3; ctx.drawImage(img, x + cell * 0.12, y + cell * 0.15, dw, dh); ctx.restore();
+    ctx.drawImage(img, x, y, dw, dh);
+    if (o.name === 'bridge') return;
+    for (let i = 0; tuftArt.length && i < o.w * o.h * 0.9; i++) {
+        const a = J.range(0, 6.28), rx = dw / 2 * J.range(0.85, 1.05), ry = dh / 2 * J.range(0.85, 1.05), t = J.pick(tuftArt), sz = cell * J.range(0.25, 0.42), kk = sz / Math.max(t.width, t.height);
+        ctx.drawImage(t, o.x * cell + Math.cos(a) * rx - (t.width * kk) / 2, o.y * cell + Math.sin(a) * ry - (t.height * kk) / 2, t.width * kk, t.height * kk);
+    }
+}
+
+/** Рамка карты: края темнее — взгляд держится в центре, как на готовых картах (там по краю обычно лес и скалы) */
+function frame(ctx, W, H, cell) {
+    const d = cell * 2.4;
+    for (const [x0, y0, x1, y1] of [[0, 0, d, 0], [W, 0, W - d, 0], [0, 0, 0, d], [0, H, 0, H - d]]) {
+        const g = ctx.createLinearGradient(x0, y0, x1, y1);
+        g.addColorStop(0, 'rgba(18,20,10,0.42)'); g.addColorStop(1, 'rgba(18,20,10,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+}
 
 // ---------- Отрисовка
 
@@ -283,7 +318,7 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
     const ctx = canvas.getContext('2d');
     const seed = plan.seed;
     // Текстуры: свои картинки (ground-<имя>-1), иначе заглушка; берега — грязь, мох и камень — трава/подстилка
-    const GROUND_ART = { grass: 'grass', forest: 'forest-floor', moss: 'grass', rock: 'path', path: 'path', mud: 'mud', bank: 'mud', riverbed: 'riverbed' };
+    const GROUND_ART = { grass: 'grass', forest: 'forest-floor', moss: 'grass', rock: art['ground-rock-1'] ? 'rock' : 'path', path: 'path', mud: 'mud', bank: 'mud', riverbed: 'riverbed' };
     const tex = type => art[`ground-${GROUND_ART[type]}-1`] ?? art[`ground-${type}`] ?? groundTexture(type, seed);
     const M = masks(plan, cell, seed);
 
@@ -312,31 +347,24 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
         dl.fillStyle = 'rgba(24,52,58,0.6)'; dl.fillRect(0, 0, W, H);
         dl.globalCompositeOperation = 'destination-in'; dl.drawImage(M.depth, 0, 0, W, H);
         ctx.drawImage(deep, 0, 0);
-        // Кромка воды — тонкая тёмная линия и светлая пена
-        const R = rng(`water|${seed}`), s = plan.terrain.stream;
-        ctx.lineCap = 'round';
-        for (const side of [-1, 1]) {
-            ctx.beginPath();
-            s.path.forEach((p, i) => {
-                const q = s.path[Math.min(s.path.length - 1, i + 1)], dx = q.x - p.x, dy = q.y - p.y, l = Math.hypot(dx, dy) || 1, off = s.width / 2 - 0.05;
-                const x = (p.x - (dy / l) * off * side) * cell, y = (p.y + (dx / l) * off * side) * cell;
-                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-            });
-            ctx.strokeStyle = 'rgba(230,240,225,0.35)'; ctx.lineWidth = cell * 0.05; ctx.stroke();
-            // Тёмная линия берега и вторая, светлая, — внутри воды (как отражение кромки)
-            for (const [off, style, w] of [[s.width / 2 + 0.03, 'rgba(58,44,26,0.75)', cell * 0.025], [s.width / 2 - 0.22, 'rgba(210,225,215,0.22)', cell * 0.02]]) {
-                ctx.beginPath();
-                s.path.forEach((p, i) => {
-                    const q = s.path[Math.min(s.path.length - 1, i + 1)], dx = q.x - p.x, dy = q.y - p.y, l = Math.hypot(dx, dy) || 1;
-                    const x = (p.x - (dy / l) * off * side) * cell, y = (p.y + (dx / l) * off * side) * cell;
-                    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-                });
-                ctx.strokeStyle = style; ctx.lineWidth = w; ctx.stroke();
-            }
+        // Кромка любой воды по маске: тёмная линия берега и светлая полоса внутри
+        for (const [grow, color, inside] of [[cell * 0.05, 'rgba(58,44,26,0.8)', false], [cell * 0.16, 'rgba(210,225,215,0.25)', true]]) {
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            const l = c.getContext('2d');
+            l.filter = `blur(${grow}px)`; l.drawImage(M.riverbed, 0, 0, W, H); l.filter = 'none';
+            if (inside) { l.globalCompositeOperation = 'source-in'; l.drawImage(M.riverbed, 0, 0, W, H); }
+            l.globalCompositeOperation = 'destination-out';
+            if (inside) { l.filter = `blur(${grow * 0.4}px)`; }
+            l.drawImage(M.riverbed, inside ? 0 : 0, 0, W, H);
+            l.filter = 'none';
+            l.globalCompositeOperation = 'source-in'; l.fillStyle = color; l.fillRect(0, 0, W, H);
+            ctx.drawImage(c, 0, 0);
         }
+        const R = rng(`water|${seed}`), s = plan.terrain.stream ?? { path: [], width: 0 };
         // Блики-рябь
         ctx.strokeStyle = 'rgba(220,240,235,0.35)'; ctx.lineWidth = cell * 0.025;
-        for (const p of s.path) if (R() < 0.35) { const x = (p.x + R.range(-0.3, 0.3)) * cell, y = (p.y + R.range(-0.3, 0.3)) * cell; ctx.beginPath(); ctx.arc(x, y, cell * R.range(0.08, 0.18), 3.6, 5.6); ctx.stroke(); }
+        const ripples = [...s.path, ...(plan.terrain.pools ?? []).flatMap(p => Array.from({ length: Math.round(p.r * 3) }, () => { const a = R.range(0, 6.28), d = R.range(0, p.r * 0.7); return { x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d }; }))];
+        for (const p of ripples) if (R() < 0.35) { const x = (p.x + R.range(-0.3, 0.3)) * cell, y = (p.y + R.range(-0.3, 0.3)) * cell; ctx.beginPath(); ctx.arc(x, y, cell * R.range(0.08, 0.18), 3.6, 5.6); ctx.stroke(); }
     }
 
     clouds(ctx, W, H, cell, seed);
@@ -344,12 +372,13 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
     scatter(ctx, plan, cell, seed, art);
 
     // Предметы: снизу вверх по высоте — плоское, камни, кусты, кроны
-    const ORDER = ['lilypad', 'reeds', 'log', 'stump', 'rock', 'boulder', 'ruin', 'pillar', 'crystal', 'bush', 'deadtree', 'pine', 'tree'];
+    const ORDER = ['lilypad', 'vignette', 'reeds', 'log', 'stump', 'rock', 'boulder', 'ruin', 'pillar', 'crystal', 'bush', 'deadtree', 'pine', 'tree'];
     const objects = [...plan.objects].sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.y - b.y);
     const R = rng(`sprites|${seed}`);
     const tuftArt = Object.keys(art).filter(k => k.startsWith('scatter-tufts') || k.startsWith('scatter-ferns')).map(k => art[k]);
     const SHADOW = { tree: 0.35, pine: 0.32, deadtree: 0.18, bush: 0.15, rock: 0.12, boulder: 0.2, log: 0.1, ruin: 0.22, pillar: 0.25, stump: 0.08, crystal: 0.12, reeds: 0.05, lilypad: 0 };
     for (const o of objects) {
+        if (o.kind === 'vignette') { drawVignette(ctx, o, art, cell, tuftArt, seed); continue; }
         const r = o.r * cell, size = Math.ceil((o.kind === 'ruin' ? (o.len ?? 3) * 2.4 : 2.6) * Math.max(r, cell * 0.5));
         const spr = document.createElement('canvas'); spr.width = spr.height = size;
         const s = spr.getContext('2d');
@@ -390,6 +419,7 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
         }
     }
 
+    frame(ctx, W, H, cell);
     grade(ctx, plan, { W, H, cell, mood, seed, M, art, rotMask });
     return canvas;
 }
@@ -421,7 +451,7 @@ function tuft(ctx, x, y, s, R, col) {
 
 function scatter(ctx, plan, cell, seed, art = {}) {
     const pieces = prefix => Object.keys(art).filter(k => k.startsWith(prefix)).map(k => art[k]);
-    const tufts = [...pieces('scatter-tufts'), ...pieces('scatter-ferns')], small = [...pieces('scatter-pebbles'), ...pieces('scatter-twigs'), ...pieces('scatter-mushrooms')];
+    const tufts = [...pieces('scatter-tufts'), ...pieces('scatter-ferns'), ...pieces('scatter-flowers')], small = [...pieces('scatter-pebbles'), ...pieces('scatter-twigs'), ...pieces('scatter-mushrooms'), ...pieces('scatter-leaves'), ...pieces('scatter-bones')];
     const stamp = (img, x, y, size) => { const k = size / Math.max(img.width, img.height); ctx.drawImage(img, x - (img.width * k) / 2, y - (img.height * k) / 2, img.width * k, img.height * k); };
     const R = rng(`scatter|${seed}`), { cols, rows, terrain, objects } = plan;
     const near = (d, w, band) => Math.abs(d - w) < band;
