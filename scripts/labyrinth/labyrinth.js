@@ -29,7 +29,10 @@ import "./chronicle-log.js";
 import { playChronicle } from "./chronicle.js";
 import { EventWindow, registerEventSettings } from "./events.js";
 import { registerDevourerSettings, addSatiety, getSatiety, syncDevourer, worldDevourer } from "./devourer-state.js";
-import { setBossRule } from "./boss-rules.js";
+import { setBossRule, setBossRules } from "./boss-rules.js";
+import { registerWebSettings, isWeb } from "./web-map.js";
+import { WebOverlay } from "./web-overlay.js";
+import { mapScene } from "./scene-travel.js";
 import { requestScar } from "../memory/skills/living/scars.js";
 
 Hooks.once('init', () => {
@@ -45,6 +48,7 @@ Hooks.once('init', () => {
     registerEventSettings();
     registerResidentSettings();
     registerDevourerSettings();
+    registerWebSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -76,7 +80,7 @@ Hooks.once('init', () => {
         // Глубина и Насыщение на листе Пожирателя — заново (restore: ПЗ и легендарные ресурсы на максимум)
         syncDevourer: (options = {}) => syncDevourer(worldDevourer(), options),
         // Правило Босса на текущий бой (Мастер): 'muffle' | 'sleepy' | null — снять
-        bossRule: id => setBossRule(game.combat, id),
+        bossRule: id => (Array.isArray(id) ? setBossRules(game.combat, id) : setBossRule(game.combat, id)),
         // Шрам персонажу: game.gachadnd.scar(actor, 'voice' | 'burn' | 'crack' | без вида — случайный)
         scar: (actor, kind = null) => requestScar(actor, { kind, reason: 'Мастер' }),
         // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
@@ -102,7 +106,8 @@ Hooks.on('getSceneControlButtons', (controls) => {
         icon: 'fas fa-map-marked-alt',
         visible: true,
         button: true,
-        onClick: () => game.gachadnd.openMapTerminal()
+        // Паутина — слой: кнопка открывает и закрывает его
+        onClick: () => (isWeb(mapScene()?.getFlag('gachadnd', 'floorMap')) ? WebOverlay.toggle() : game.gachadnd.openMapTerminal())
     }, ...(hasResidentSafe('broker') ? [{
         name: 'gachadnd-cells',
         title: 'Ячейки Ростовщика',

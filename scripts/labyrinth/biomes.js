@@ -20,6 +20,15 @@ export const BIOMES = {
     labyrinth: { name: 'Лабиринт' }
 };
 
+/**
+ * Набросок местности под паутиной (слой паутины, web-overlay.js): assets/sketches/biome-<биом>.webp — монохромный
+ * набросок на белом (промты — docs/sketch-prompts.md). Пока рисунка нет, у болота — зарисовка «Огоньки над трясиной».
+ */
+export const BIOME_ART = {
+    swamp: 'modules/gachadnd/assets/sketches/swamp-lights.webp'
+};
+export const biomeArt = biome => BIOME_ART[biome] ?? `modules/gachadnd/assets/sketches/biome-${biome}.webp`;
+
 // Этаж → [до Заставы, после Заставы]
 const FLOORS = {
     1: ['swamp', 'town'],
@@ -36,8 +45,9 @@ export function floorBiome(floor = getFloor(), after = false) {
 
 /** Отряд за Заставой: узел отряда в ряду дальше Заставы */
 export function pastOutpost(map = mapScene()?.getFlag(MODULE_ID, 'floorMap')) {
-    const outpost = map?.nodes?.find(n => n.type === 'outpost');
     const here = map?.nodes?.find(n => n.id === map.currentNodeId);
+    if (map?.mode === 'web') return ['inner', 'boss'].includes(here?.ring);
+    const outpost = map?.nodes?.find(n => n.type === 'outpost');
     return !!(outpost && here && here.row > outpost.row);
 }
 

@@ -5,9 +5,17 @@
         <span class="gd-map-here" style="--node: {{current.color}}"><i class="fas {{current.icon}}"></i> {{current.label}}</span>
         {{#if next.length}}<span class="gd-map-next">дальше — {{#each next}}<b style="--node: {{color}}">{{label}}</b>{{/each}}</span>{{else}}<span class="gd-map-next">этаж пройден</span>{{/if}}
         {{else}}
-        <span class="gd-map-next">Отряд у Входа — путь начинается с него</span>
+        <span class="gd-map-next">{{#if web}}Отряд у края паутины — войти можно с любого узла внешней зоны{{else}}Отряд у Входа — путь начинается с него{{/if}}</span>
         {{/if}}
     </div>
+    {{#if web}}
+    <div class="gd-web-clock" title="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые 2 шага.">
+        <i class="fas fa-hourglass-half"></i> Шаг {{web.ticks}} ·
+        {{#if web.calm}}тишина ещё {{web.calm}}{{else}}{{#if web.toNext}}до ступени Босса {{web.toNext}}{{else}}Босс в полной силе{{/if}}{{/if}}
+        · ступеней {{web.stage}}/4{{#if web.eaten}} · съедено узлов: {{web.eaten}}{{/if}}
+        {{#if isGM}}{{#if web.devourer}}<button type="button" data-action="devourerGone" title="Откуп, ушёл с Брюхом — поедание замирает">Пожиратель ушёл</button>{{/if}}{{/if}}
+    </div>
+    {{/if}}
     {{#if scent}}
     <span class="gd-map-scent" style="--scent: {{scent.color}}" title="Запах отряда · Шёпот от {{scent.thresholds.whisper}}, Охота от {{scent.thresholds.hunt}} · видит только Мастер"><i class="fas {{scent.icon}}"></i> {{scent.label}} · {{scent.value}}</span>
     {{/if}}

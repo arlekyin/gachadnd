@@ -89,6 +89,7 @@ Hooks.on('updateActor', (actor, changes, options) => {
     const value = foundry.utils.getProperty(changes, 'system.attributes.hp.value');
     if (value === undefined || value > 0 || !(options.gachadndHp > 0)) return;
     addSatiety(1, 'сведён к 0 ПЗ');
+    Hooks.callAll('gachadnd.devourerDefeated', actor);
 });
 
 // Новый этаж — Глубина на листе следует за номером этажа

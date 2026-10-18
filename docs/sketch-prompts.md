@@ -64,3 +64,21 @@ plain flat white background, no paper texture, no border, no frame, no text, no 
 | `cloud_bridge` — Облачный мост | two floating rocky islands high above the clouds, a long narrow bridge made of dense cloud stretching between them, small trees clinging to the island edges, birds far below |
 | `giant_nest` — Гнездо | an enormous bird's nest made of branches on a rocky ledge above the clouds, several large crystals lying in it instead of eggs, a huge bird silhouette circling high in the sky |
 | `moon_observatory` — Обсерватория на краю | a small domed stone observatory on the very edge of a floating island, a brass telescope pointing at a large full moon, scratched marks on its wooden door, endless clouds below; the moon is blank paper |
+
+## Фоны этажей паутины
+
+Под паутиной этажа лежит бледный набросок местности: `assets/sketches/biome-<биом>.webp` (у болота пока стоит
+«Огоньки над трясиной»). Стиль — тот же, но композиция другая: **квадрат 1:1 (около 1400×1400)**, вид сверху наискосок,
+детали — по краям и в углах, **середина спокойная и светлая** (там Босс и плотная часть сети), без крупных тёмных пятен.
+
+Добавка к стилю: `square composition, wide overview of the place seen from slightly above, details around the edges and corners, calm empty light center, no focal object in the middle`
+
+| Файл | Сцена |
+|---|---|
+| `biome-swamp.webp` — лес и болота | a misty swamp forest seen from above: dead trees and reeds around the edges, dark pools of still water, a broken wooden walkway winding in from a corner, fog thinning towards the empty center |
+| `biome-town.webp` — город в глуши | a small abandoned wilderness town seen from above: leaning wooden roofs and fences around the edges, a muddy crossroads, a bell tower in one corner, empty trampled square in the center |
+| `biome-sea.webp` — море и острова | an archipelago seen from above: small rocky islands and a wrecked boat near the edges, gentle wave lines, a lighthouse on a cape in one corner, open calm water in the center |
+| `biome-storm.webp` — море в шторм | a stormy sea seen from above: towering wave crests and rain streaks around the edges, a sinking mast in one corner, lightning far away, a strange calm eye of the storm in the center |
+| `biome-deep.webp` — глубины | the deep sea floor seen from above: coral, kelp and sunken ruins around the edges, an old anchor chain from a corner, faint light rays, a dark smooth sand plain in the center |
+| `biome-sky.webp` — небесные острова | floating sky islands seen from above: cliffs with tiny trees and rope bridges around the edges, birds, a broken airship in one corner, soft open clouds in the center |
+| `biome-labyrinth.webp` — Лабиринт (этажи без биома) | an ancient stone labyrinth seen from above: crumbling walls and stairs around the edges, roots breaking through, a collapsed archway in one corner, a worn empty courtyard in the center |

@@ -1,0 +1,48 @@
+<div class="gd-wo gachadnd-map" style="--wo-size: {{size}}px; --wo-scale: {{scale}}">
+    {{!-- Сцена за страницей — приглушена и размыта --}}
+    <div class="gd-wo-dim" aria-hidden="true"></div>
+    {{!-- Страница дневника: края рассеиваются пятнами, середина чуть просвечивает (маска — styles) --}}
+    <div class="gd-wo-page">
+        <aside class="gd-wo-margin">
+            <div class="gd-wo-caption">Паутина</div>
+            <div class="gd-wo-floor">Этаж <strong>{{floorRoman}}</strong></div>
+            {{#if web}}
+            <div class="gd-wo-clock" data-tooltip="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые 2 шага.">
+                <i class="fas fa-hourglass-half"></i> Шаг {{web.ticks}}<br>
+                <small>{{#if web.calm}}тишина ещё {{web.calm}}{{else}}{{#if web.toNext}}до ступени Босса {{web.toNext}}{{else}}Босс в полной силе{{/if}}{{/if}}{{#if web.eaten}} · съедено {{web.eaten}}{{/if}}</small>
+            </div>
+            <div class="gd-wo-stages"><span>Босс</span>{{#each web.stages}}<i class="fas {{icon}} {{#if on}}on{{/if}}" data-tooltip="{{name}}: {{text}}"></i>{{/each}}</div>
+            {{/if}}
+            <div class="gd-wo-hint">{{#if hasBoard}}{{hint}}{{else}}Паутина этажа ещё не начерчена.{{/if}}</div>
+            {{#if legend}}
+            <div class="gd-wo-legend">{{#each legend}}<span style="--node: {{color}}" data-tooltip="{{label}}"><i class="fas {{icon}}"></i> {{count}}</span>{{/each}}</div>
+            {{/if}}
+            <div class="gd-wo-buttons">
+                {{#if isGM}}<button type="button" data-action="tools" class="{{#if tools}}on{{/if}}" data-tooltip="Инструменты Мастера: этаж, Запах, предвестия, Насыщение"><i class="fas fa-feather-pointed"></i></button>{{/if}}
+                <button type="button" data-action="close" data-tooltip="Закрыть (Esc)"><i class="fas fa-xmark"></i></button>
+            </div>
+        </aside>
+        {{#if hasBoard}}
+        <section class="gd-wo-board">
+            {{!-- Набросок местности этажа под сетью; внутренняя зона — свой биом, если он другой --}}
+            <div class="gd-wo-art" aria-hidden="true">
+                {{#if art.outer}}<img class="outer" src="{{art.outer}}" alt="" onerror="this.remove()">{{/if}}
+                {{#if art.inner}}<img class="inner" src="{{art.inner}}" alt="" onerror="this.remove()">{{/if}}
+            </div>
+            {{!-- Туман медленно плывёт по внешней зоне --}}
+            <div class="gd-wo-fog" aria-hidden="true"></div>
+            {{> "modules/gachadnd/templates/map/board.hbs"}}
+            {{#each notes}}<div class="gd-wo-note {{kind}}" style="left: {{x}}%; top: {{y}}%; --shift: {{shift}}px">{{text}}</div>{{/each}}
+            {{#each decor}}
+            <svg class="gd-wo-decor gd-ink {{cls}}" viewBox="0 0 40 40" style="left: {{x}}%; top: {{y}}%; width: {{size}}px; height: {{size}}px; --turn: {{turn}}deg"><path d="{{d}}"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path></svg>
+            {{/each}}
+        </section>
+        {{/if}}
+    </div>
+    {{#if isGM}}{{#if tools}}
+    <aside class="gd-wo-gm">
+        {{> "modules/gachadnd/templates/map/header.hbs"}}
+        {{> "modules/gachadnd/templates/map/footer.hbs"}}
+    </aside>
+    {{/if}}{{/if}}
+</div>

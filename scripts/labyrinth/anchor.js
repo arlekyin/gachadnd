@@ -99,11 +99,16 @@ function atmosphere(text) {
 }
 
 /** Отряд вошёл на узел: Мастеру — Запах и можно ли здесь прорваться, игрокам — атмосфера */
-export async function announceScent(nodeType) {
+export async function announceScent(nodeType, { web = false } = {}) {
     if (!game.user.isGM) return;
     const scent = partyScent();
     if (scent.state === 'silence') return;
     let hint = '';
+    // Паутина: Пожиратель ходит по карте сам (web-map.js) — здесь только Запах и атмосфера
+    if (web) {
+        await whisperGM(scentReport(scent) + (scent.state === 'hunt' ? '<br>Паутина: Пожиратель на карте идёт к отряду — скорость по Запаху.' : ''));
+        return atmosphere(ATMOSPHERE[scent.state]);
+    }
     // Жильцы Якоря (приманка) дописывают своё к прорыву: ctx.gm — Мастеру, ctx.players — атмосфера
     const ctx = { nodeType, breach: scent.state === 'hunt' && BREACH_NODES.includes(nodeType), gm: [], players: [], tasks: [] };
     if (scent.state === 'hunt') {

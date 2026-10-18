@@ -3,7 +3,9 @@
  *
  * Правило Босса. В начале боя на узле Босса модуль тянет одно правило и объявляет его всем строкой.
  * Мастеру — шёпот с кнопками «другое» и «без правила» (подсказку можно выключить). Правило действует до
- * конца боя, модуль применяет его сам. Флаг боя bossRule { id, tag?, bossId, tokenId }.
+ * конца боя, модуль применяет его сам. Флаг боя bossRule { id, ids, tag?, bossId, tokenId }.
+ * На паутине (web-map.js) правил столько, сколько ступеней Босс набрал, пока отряд ходил: 1 — Глушитель,
+ * 2 — и Крайний спит, 3 — ещё +25% ПЗ, 4 — ещё свита (подсказка Мастеру).
  *   muffle (Глушитель)     — синергии самого частого тега отряда в этом бою не действуют;
  *   sleepy (Крайний спит)  — последний экипированный навык каждого персонажа спит, пока у Босса больше
  *                            половины ПЗ.
@@ -23,6 +25,7 @@ import { mapScene } from "./scene-travel.js";
 import { MAP_DATA } from "./map.js";
 import { getFloor } from "./economy.js";
 import { findBoss } from "./moon-boons.js";
+import { isWeb, webStage } from "./web-map.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 const FLAG = 'bossRule';
@@ -40,6 +43,8 @@ export function currentNodeType() {
 
 const partyIn = combat => combat.combatants.map(c => c.actor).filter(a => a?.type === 'character' && a.hasPlayerOwner);
 export const ruleOf = combat => combat?.getFlag(MODULE_ID, FLAG) ?? null;
+/** В правиле боя есть это правило Босса */
+export const hasRule = (rule, id) => !!rule && (rule.ids ?? [rule.id]).includes(id);
 const ruleFor = actor => ruleOf(game.combats?.find(c => c.started && ruleOf(c) && c.combatants.some(cb => cb.actor?.id === actor.id)));
 
 /** Самый частый тег экипированных навыков отряда */
@@ -54,7 +59,7 @@ function partyTopTag(actors) {
 // Глушитель: тег не считается
 TAG_COUNT_MODIFIERS.push((actor, counts) => {
     const rule = ruleFor(actor);
-    if (rule?.id === 'muffle' && rule.tag) counts[rule.tag] = 0;
+    if (hasRule(rule, 'muffle') && rule.tag) counts[rule.tag] = 0;
 });
 
 const lastEquipped = actor => actor.items
@@ -76,34 +81,61 @@ async function clearRule(combat) {
  * Поставить правило Босса на бой (Мастер). id — muffle | sleepy | null (без правила).
  * @returns {Promise<object|null>} правило
  */
-export async function setBossRule(combat, id) {
+export const setBossRule = (combat, id) => setBossRules(combat, id ? [id] : []);
+
+/**
+ * Поставить несколько правил Босса сразу (паутина: по ступеням). Пустой список — снять.
+ * @returns {Promise<object|null>} правило боя { id, ids, tag?, bossId, tokenId }
+ */
+export async function setBossRules(combat, ids) {
     if (!combat || !game.user.isGM) return null;
     const previous = ruleOf(combat);
     await clearRule(combat);
-    if (!id || !BOSS_RULES[id]) {
+    ids = [...new Set(ids.filter(id => BOSS_RULES[id]))];
+    if (!ids.length) {
         if (previous) await announce(`<strong>Правило Босса снято.</strong>`);
         return null;
     }
     const party = partyIn(combat);
     const boss = findBoss(combat.scene ?? canvas.scene);
     const bossToken = (combat.scene ?? canvas.scene)?.tokens.find(t => t.actorId === boss?.id) ?? null;
-    const rule = { id, bossId: boss?.id ?? null, tokenId: bossToken?.id ?? null };
-    if (id === 'muffle') {
+    const rule = { bossId: boss?.id ?? null, tokenId: bossToken?.id ?? null };
+    if (ids.includes('muffle')) {
         rule.tag = partyTopTag(party);
-        if (!rule.tag) return setBossRule(combat, 'sleepy');
+        // Глушить нечего — вместо него Крайний спит
+        if (!rule.tag) ids = [...new Set(ids.map(id => (id === 'muffle' ? 'sleepy' : id)))];
     }
+    Object.assign(rule, { id: ids[0], ids });
     await combat.setFlag(MODULE_ID, FLAG, rule);
-    if (id === 'sleepy') {
+    if (ids.includes('sleepy')) {
         for (const actor of party) {
             const item = lastEquipped(actor);
             if (item) await sleepSkill(item, { combatId: combat.id, bossRule: true, reason: 'правило Босса «Крайний спит», пока у Босса больше половины ПЗ' });
         }
     }
     for (const actor of party) await updateActorSynergies(actor);
-    const def = BOSS_RULES[id];
-    const sleepers = id === 'sleepy' ? party.map(a => a.items.find(i => i.flags?.[MODULE_ID]?.asleep?.bossRule)).filter(Boolean) : [];
-    await announce(`<i class="fas ${def.icon}"></i> <strong>Правило Босса — ${def.name}.</strong> ${def.text(rule)}${sleepers.length ? `<br>Спят: ${sleepers.map(i => `«${esc(i.name)}» (${esc(i.actor.name)})`).join(', ')}.` : ''}`);
+    const sleepers = ids.includes('sleepy') ? party.map(a => a.items.find(i => i.flags?.[MODULE_ID]?.asleep?.bossRule)).filter(Boolean) : [];
+    const lines = ids.map(id => `<i class="fas ${BOSS_RULES[id].icon}"></i> <strong>Правило Босса — ${BOSS_RULES[id].name}.</strong> ${BOSS_RULES[id].text(rule)}`);
+    await announce(`${lines.join('<br>')}${sleepers.length ? `<br>Спят: ${sleepers.map(i => `«${esc(i.name)}» (${esc(i.actor.name)})`).join(', ')}.` : ''}`);
     return rule;
+}
+
+// Паутина, ступень 3: Босс окреп — на бой +25% к максимуму ПЗ (эффект уходит с концом боя)
+async function strengthen(combat) {
+    const boss = findBoss(combat.scene ?? canvas.scene);
+    const token = (combat.scene ?? canvas.scene)?.tokens.find(t => t.actorId === boss?.id);
+    const actor = token?.actor;
+    const hp = actor?.system?.attributes?.hp;
+    if (!hp?.max) return null;
+    const extra = Math.round(hp.max * 0.25);
+    await actor.createEmbeddedDocuments('ActiveEffect', [{
+        name: 'Ступень Босса: окреп', img: 'icons/svg/regen.svg', origin: actor.uuid,
+        changes: [{ key: 'system.attributes.hp.max', mode: 2, value: String(extra) }],
+        description: '<p>Отряд долго ходил по этажу: у Босса на четверть больше ПЗ до конца боя.</p>',
+        flags: { [MODULE_ID]: { bossBoost: combat.id } }
+    }]);
+    await actor.update({ 'system.attributes.hp.value': (Number(hp.value) || 0) + extra });
+    return extra;
 }
 
 const announce = (html, whisper = false) => ChatMessage.create({
@@ -112,9 +144,22 @@ const announce = (html, whisper = false) => ChatMessage.create({
     content: `<div class="gd-boss-rule">${html}</div>`
 });
 
-// Начало боя на узле Босса — правило
+// Начало боя на узле Босса — правило (на паутине — по ступеням)
 Hooks.on('combatStart', async combat => {
     if (!isActiveGM() || currentNodeType() !== MAP_DATA.NODE_BOSS || ruleOf(combat)) return;
+    const map = mapScene()?.getFlag(MODULE_ID, 'floorMap');
+    if (isWeb(map)) {
+        const stage = webStage(map.web?.ticks ?? 0);
+        if (!stage) return announce('<i class="fas fa-feather"></i> <strong>Босс спокоен:</strong> отряд уложился в тишину этажа — ни одной ступени.');
+        await setBossRules(combat, ['muffle', 'sleepy'].slice(0, Math.min(stage, 2)));
+        if (stage >= 3) {
+            const extra = await strengthen(combat);
+            if (extra) await announce(`<i class="fas fa-heart-circle-plus"></i> <strong>Ступень Босса — Окрепший:</strong> +${extra} к максимуму ПЗ до конца боя.`);
+        }
+        if (stage >= 4) await announce('<i class="fas fa-users"></i> <strong>Ступень Босса — Свита:</strong> выставьте с Боссом двух приспешников его этажа.', true);
+        if (hint('hintBossRules')) await announce(`<i class="fas fa-hourglass-half"></i> Ступеней Босса: ${stage} — отряд ходил по этажу ${map.web.ticks} шаг.<div class="gd-boss-rule-buttons"><button type="button" data-gd-bossrule="none"><i class="fas fa-ban"></i> Снять правила</button></div>`, true);
+        return;
+    }
     const ids = Object.keys(BOSS_RULES);
     const rule = await setBossRule(combat, ids[Math.floor(Math.random() * ids.length)]);
     if (!rule || !hint('hintBossRules')) return;
@@ -140,7 +185,7 @@ onRenderChatMessage((message, html) => {
 // Крайний спит: у Босса половина ПЗ — навыки просыпаются
 Hooks.on('updateActor', async actor => {
     if (!isActiveGM()) return;
-    const combat = game.combats?.find(c => c.started && ruleOf(c)?.id === 'sleepy');
+    const combat = game.combats?.find(c => c.started && hasRule(ruleOf(c), 'sleepy'));
     const rule = ruleOf(combat);
     if (!rule || rule.woke) return;
     const isBoss = (rule.tokenId && actor.token?.id === rule.tokenId) || (!actor.isToken && actor.id === rule.bossId);
@@ -156,7 +201,13 @@ Hooks.on('updateActor', async actor => {
 
 // Конец боя: правило уходит вместе с боем — синергии считаются заново (спящие просыпаются в scars.js)
 Hooks.on('deleteCombat', async combat => {
-    if (!isActiveGM() || !ruleOf(combat)) return;
+    if (!isActiveGM()) return;
+    // Ступень «Окрепший» уходит вместе с боем
+    for (const token of (combat.scene ?? canvas.scene)?.tokens ?? []) {
+        const boosts = token.actor?.effects.filter(e => e.flags?.[MODULE_ID]?.bossBoost === combat.id).map(e => e.id) ?? [];
+        if (boosts.length) await token.actor.deleteEmbeddedDocuments('ActiveEffect', boosts);
+    }
+    if (!ruleOf(combat)) return;
     for (const actor of partyIn(combat)) await updateActorSynergies(actor);
 });
 
