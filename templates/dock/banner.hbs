@@ -1,0 +1,35 @@
+<div class="gd-dock-banner">
+    {{#if strip}}
+    <div class="gd-strip-who" data-tooltip="{{dockActor.name}} · Предел разума {{ring.filled}}/{{ring.naturalCap}}">
+        <img src="{{dockActor.img}}" alt="">
+        <b class="{{#if ring.overloaded}}over{{/if}}">{{ring.filled}}/{{ring.naturalCap}}</b>
+    </div>
+    {{else}}
+    <nav class="gd-dock-rail">
+        <button type="button" data-action="tab" data-tab="map" data-tooltip="Карта этажа"><i class="fas fa-compass-drafting"></i></button>
+        <button type="button" class="on" data-tooltip="Терминал Тумана"><i class="fas fa-brain"></i></button>
+        <button type="button" data-action="tab" data-tab="stash" data-tooltip="Хранилище"><i class="fas fa-box-archive"></i></button>
+        {{#if isGM}}<button type="button" data-action="nextActor" data-tooltip="Следующий персонаж"><i class="fas fa-user-group"></i></button>{{/if}}
+        <span class="gd-dock-rail-gap"></span>
+        <button type="button" data-action="mode" data-tooltip="Свернуть в полосу"><i class="fas fa-angles-left"></i></button>
+        <button type="button" data-action="close" data-tooltip="Закрыть (Esc)"><i class="fas fa-xmark"></i></button>
+    </nav>
+    <header class="gd-dock-head">
+        <h1>Терминал Тумана</h1>
+        <small>{{dockActor.name}}</small>
+    </header>
+    <div class="gd-dock-mind {{#if ring.overloaded}}over{{/if}}" data-tooltip="Предел разума: занято {{ring.filled}} из {{ring.naturalCap}}{{#if ring.extra}} · абсолютный предел {{ring.absoluteCap}}{{/if}}{{#if ring.overloaded}} · перегруз: −2 к Инт, Мдр и Хар за слот сверх {{ring.naturalCap}}{{/if}}">
+        <span>Предел разума</span>
+        <svg viewBox="0 0 128 128">{{#each ring.segments}}<circle class="{{cls}}" cx="64" cy="64" r="52" stroke-dasharray="{{dash}}"/>{{/each}}</svg>
+        <b>{{ring.filled}}/{{ring.naturalCap}}</b>
+    </div>
+    {{#if atRest}}
+    <div class="gd-dock-rest">
+        <i class="fas {{restIcon}}"></i> {{restLabel}} · Кости Хитов <b>{{hitDice}}</b>
+        <button type="button" data-action="openAltar"><i class="fas fa-fire-alt"></i> Алтарь Памяти</button>
+        <button type="button" data-action="openStash"><i class="fas fa-box-archive"></i> Хранилище</button>
+        {{#each restLinks}}<button type="button" data-action="restLink" data-index="{{index}}" data-tooltip="{{title}}"><i class="{{icon}}"></i> {{label}}</button>{{/each}}
+    </div>
+    {{/if}}
+    {{/if}}
+</div>

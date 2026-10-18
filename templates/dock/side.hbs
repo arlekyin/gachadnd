@@ -1,0 +1,63 @@
+<div class="gd-dock-side">
+    {{#if strip}}
+    {{#if sky.threads.length}}
+    <div class="gd-strip-lbl">Связки</div>
+    {{#each sky.threads}}
+    <div class="gd-strip-link {{state}}" data-pop="link-{{@index}}" {{#if usable}}data-use="{{itemId}}"{{/if}}><img src="{{img}}" alt=""></div>
+    {{/each}}
+    {{/if}}
+    {{#if abilities.length}}
+    <div class="gd-strip-lbl">Синергии</div>
+    {{#each abilities}}
+    <div class="gd-strip-link ready" data-pop="ab-{{id}}" {{#if usable}}data-use="{{id}}"{{/if}}><img src="{{img}}" alt="">{{#if usesText}}<b>{{usesText}}</b>{{/if}}</div>
+    {{/each}}
+    {{/if}}
+    {{#if tiers.length}}
+    <div class="gd-strip-lbl">Теги</div>
+    <div class="gd-strip-tiers">
+        {{#each tiers}}<span data-tooltip="{{tag}}: {{count}}"><i class="fas {{icon}}"></i><em>{{#each pips}}<u class="{{#if this}}on{{/if}}"></u>{{/each}}</em></span>{{/each}}
+    </div>
+    {{/if}}
+    <button type="button" class="gd-strip-expand" data-action="mode" data-tooltip="Развернуть Терминал"><i class="fas fa-angles-right"></i></button>
+    {{else}}
+    <section class="gd-dock-sky">
+        <div class="gd-dock-lbl">Созвездие сборки · теги и связки 2 + 2</div>
+        {{#if sky.stars.length}}
+        <div class="gd-sky" style="width: {{sky.width}}px; height: {{sky.height}}px">
+            <svg viewBox="0 0 {{sky.width}} {{sky.height}}" aria-hidden="true">
+                {{#each sky.threads}}
+                <path class="gd-thread-glow {{state}}" d="{{path}}"/>
+                <path class="gd-thread {{state}}" data-name="{{name}}" data-tags="{{tags}}" d="{{path}}"/>
+                {{/each}}
+                {{#each sky.stars}}{{#each rings}}<circle class="gd-tier {{#if on}}on{{/if}} {{#if next}}next{{/if}}" cx="{{../x}}" cy="{{../y}}" r="{{r}}"/>{{/each}}{{/each}}
+            </svg>
+            {{#each sky.stars}}
+            <div class="gd-star {{cls}}" data-tag="{{tag}}" data-action="filterTag" style="left: {{x}}px; top: {{top}}px" data-tooltip="Показать карты с тегом «{{tag}}»">
+                <div class="gd-star-o" style="width: {{size}}px; height: {{size}}px"><i class="fas {{icon}}"></i></div>
+                <span>{{tag}}</span><small>{{note}}</small>
+            </div>
+            {{/each}}
+            {{#each sky.threads}}
+            <div class="gd-knot {{state}}" data-name="{{name}}" data-tags="{{tags}}" data-pop="link-{{@index}}" {{#if usable}}data-use="{{itemId}}"{{/if}} style="left: {{x}}px; top: {{y}}px">
+                <img src="{{img}}" alt=""><span>{{name}}</span><small>{{note}}</small>
+            </div>
+            {{/each}}
+        </div>
+        {{else}}
+        <div class="gd-dock-empty">Наденьте навыки — их теги зажгутся здесь звёздами, а связки 2 + 2 протянутся нитями.</div>
+        {{/if}}
+        {{#if abilities.length}}
+        <div class="gd-dock-lbl">Способности синергий</div>
+        <div class="gd-dock-abil">
+            {{#each abilities}}<div class="gd-abil" data-pop="ab-{{id}}" {{#if usable}}data-use="{{id}}"{{/if}}><img src="{{img}}" alt="">{{#if usesText}}<b>{{usesText}}</b>{{/if}}</div>{{/each}}
+        </div>
+        {{/if}}
+    </section>
+    {{/if}}
+    {{#each sky.threads}}
+    <template data-pop-for="link-{{@index}}"><h3>{{name}}</h3><div class="gd-pop-chips">{{#each duo}}<span class="tag">{{this}}</span>{{/each}}</div><div class="gd-pop-text">Связка 2 + 2: по два надетых навыка с каждым из двух тегов. {{note}}.</div>{{#if usable}}<div class="gd-pop-keys">Щелчок — использовать</div>{{/if}}</template>
+    {{/each}}
+    {{#each abilities}}
+    <template data-pop-for="ab-{{id}}"><h3>{{name}}</h3><div class="gd-pop-text">{{{desc}}}</div>{{#if usable}}<div class="gd-pop-keys">Щелчок — использовать{{#if usesText}} · заряды {{usesText}}{{/if}}</div>{{/if}}</template>
+    {{/each}}
+</div>

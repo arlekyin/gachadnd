@@ -6,6 +6,7 @@
 export { MODULE_ID } from "./core/constants.js";
 import { MODULE_ID } from "./core/constants.js";
 import { MemoryTerminal } from "./memory/terminal/terminal.js";
+import { TerminalDock } from "./dock/dock.js";
 import { GachaLootTerminal, registerLootSettings } from "./memory/loot.js";
 import "./core/compendium.js";
 import "./memory/crystal-peek.js";
@@ -68,6 +69,19 @@ Hooks.once('init', () => {
         openTerminal: (actor) => {
             const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
             if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
+            // Терминал — панель модуля слева (dock/dock.js); старое окно — game.gachadnd.openTerminalWindow
+            return TerminalDock.open(targetActor);
+        },
+        toggleTerminal: (actor) => {
+            const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
+            const open = foundry.applications.instances?.get('gachadnd-dock');
+            if (open?.rendered && (!targetActor || open.actor?.id === targetActor.id)) return open.close();
+            if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
+            return TerminalDock.open(targetActor);
+        },
+        openTerminalWindow: (actor) => {
+            const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
+            if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
             const existing = foundry.applications.instances?.get(`gachadnd-terminal-${targetActor.id}`);
             if (existing) existing.render({ force: true }).then(() => existing.bringToFront?.());
             else new MemoryTerminal(targetActor).render({ force: true });
@@ -118,7 +132,7 @@ Hooks.on('getSceneControlButtons', (controls) => {
             icon: 'fas fa-brain',
             visible: true,
             button: true,
-            onClick: () => game.gachadnd.openTerminal()
+            onClick: () => game.gachadnd.toggleTerminal()
         },
         ...(game.user?.isGM ? [{
             name: 'gachadnd-loot',

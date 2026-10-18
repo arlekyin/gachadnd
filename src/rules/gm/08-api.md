@@ -4,7 +4,7 @@
 
 | Команда | Действие |
 |---|---|
-| `game.gachadnd.openTerminal(actor)` | Терминал Тумана персонажа |
+| `game.gachadnd.openTerminal(actor)` | Терминал Тумана персонажа — панель слева (`toggleTerminal(actor)` — открыть или закрыть; `openTerminalWindow(actor)` — прежнее окно) |
 | `game.gachadnd.openMapTerminal()` | Карта этажа |
 | `game.gachadnd.openLootTerminal()` | Генератор добычи |
 | `game.gachadnd.openShop()` | Магазин на текущем узле |

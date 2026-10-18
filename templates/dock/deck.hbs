@@ -1,0 +1,51 @@
+<div class="gd-dock-deck">
+    {{#if strip}}
+    <div class="gd-strip-lbl">Навыки</div>
+    <div class="gd-strip-skills">
+        {{#each equippedCards}}
+        <div class="gd-strip-skill r-{{rarity}} {{#if spent}}spent{{/if}} {{#if hot}}hot{{/if}}" data-pop="{{id}}" {{#if usable}}data-use="{{id}}"{{/if}} style="background-image: url('{{img}}')">
+            {{#if usesText}}<b>{{usesText}}</b>{{/if}}
+        </div>
+        {{/each}}
+    </div>
+    {{else}}
+    <section class="gd-dock-equip">
+        <div class="gd-dock-lbl">Экипировано <b>{{equippedCards.length}} из {{ring.absoluteCap}}</b></div>
+        <div class="gd-dock-row">
+            {{#each equippedCards}}
+            <div class="gd-tcard gd-dcard equipped r-{{rarity}} {{#if selected}}selected{{/if}} {{#if dim}}dim{{/if}}" data-action="select" data-item-id="{{id}}" data-pop="{{id}}" data-tags="{{tagText}}" data-gains="{{gains}}" data-losses="{{losses}}" style="background-image: url('{{img}}')">
+                {{#if usesText}}<b>{{usesText}}</b>{{/if}}<span class="gd-dcard-tags">{{#each tags}}<i></i>{{/each}}</span>
+            </div>
+            {{/each}}
+            {{#each equippedEmpty}}<div class="gd-dcard empty"></div>{{/each}}
+        </div>
+    </section>
+    <section class="gd-dock-memory">
+        <div class="gd-dock-lbl">Память <b>{{memoryCards.length}} из {{capacity}}</b>
+            {{#if filterTag}}<a class="gd-dock-filter" data-action="filterTag" data-tag="{{filterTag}}">тег: <b>{{filterTag}}</b> <i class="fas fa-xmark"></i></a>{{/if}}
+        </div>
+        {{#if memoryCards.length}}
+        <div class="gd-dock-grid">
+            {{#each memoryCards}}
+            <div class="gd-tcard gd-dcard small r-{{rarity}} {{#if equipped}}equipped{{/if}} {{#if selected}}selected{{/if}} {{#if dim}}dim{{/if}}" data-action="select" data-item-id="{{id}}" data-pop="{{id}}" data-tags="{{tagText}}" data-gains="{{gains}}" data-losses="{{losses}}" style="background-image: url('{{img}}')">
+                <span class="gd-dcard-tags">{{#each tags}}<i></i>{{/each}}</span>
+            </div>
+            {{/each}}
+            {{#each memoryEmpty}}<div class="gd-dcard small empty"></div>{{/each}}
+        </div>
+        {{else}}
+        <div class="gd-dock-empty">Память пуста. Кристаллы выпадают после боёв и продаются в Магазине — поглотите кристалл из инвентаря, чтобы навык появился здесь.</div>
+        {{/if}}
+    </section>
+    {{/if}}
+    {{!-- Карточки для наведения --}}
+    {{#each memoryCards}}
+    <template data-pop-for="{{id}}">
+        <h3>{{name}}</h3>
+        <div class="gd-pop-chips"><span class="r-{{rarity}}">{{rarityLabel}}</span>{{#if category}}<span>{{category}}</span>{{/if}}{{#each tags}}<span class="tag">{{this}}</span>{{/each}}</div>
+        <div class="gd-pop-text">{{{desc}}}</div>
+        {{#if preview}}<div class="gd-pop-gain"><i class="fas fa-link"></i>{{#if previewOn}}Если надеть{{else}}Если снять{{/if}}: {{{preview}}}</div>{{/if}}
+        <div class="gd-pop-keys">{{#if ../strip}}{{#if usable}}Щелчок — использовать{{/if}}{{else}}Щелчок — подробно · двойной — {{#if equipped}}снять{{else}}надеть{{/if}}{{/if}}</div>
+    </template>
+    {{/each}}
+</div>

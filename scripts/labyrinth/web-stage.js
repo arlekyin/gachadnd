@@ -14,31 +14,34 @@
 
 import { playWeb } from "./web-sound.js";
 
-const VERT = `precision mediump float;
+export const VERT = `precision mediump float;
 attribute vec2 aVertexPosition; attribute vec2 aUvs;
 uniform mat3 translationMatrix; uniform mat3 projectionMatrix;
 varying vec2 vUv;
 void main() { vUv = aUvs; gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0); }`;
 
-const NOISE = `
+export const NOISE = `
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
 float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }`;
 
-// Туман: сизый, клубится медленно; у астролябии — тёплый латунный отсвет; к правому краю и углам тает клубами
-const FOG = `precision mediump float;
+// Туман: клубится медленно; у центра — отсвет; к правому краю и углам тает клубами. Палитра — униформы:
+// у карты сизый с латунью (FOG_MAP), у Терминала — бирюзовая туманность с фиолетовыми прожилками
+export const FOG = `precision mediump float;
 varying vec2 vUv; uniform float uTime; uniform float uAspect; uniform vec2 uCenter; uniform float uRadius; uniform float uSlide;
+uniform vec3 uLow; uniform vec3 uHigh; uniform vec3 uGlow; uniform vec3 uVein;
 ${NOISE}
 void main() {
   vec2 p = vec2(vUv.x * uAspect, vUv.y) * 2.2;
   float t = uTime * 0.03;
   float warp = fbm(p * 0.7 - vec2(t, t * 0.5));
   float n = fbm(p + vec2(t * 1.2, -t * 0.6) + warp * 1.6);
-  vec3 col = mix(vec3(0.03, 0.04, 0.05), vec3(0.15, 0.17, 0.19), smoothstep(0.3, 0.9, n));
+  vec3 col = mix(uLow, uHigh, smoothstep(0.3, 0.9, n));
+  col += uVein * smoothstep(0.55, 0.85, fbm(p * 1.3 + vec2(5.0, -t))) * 0.6;
   vec2 d = vec2((vUv.x - uCenter.x) * uAspect, vUv.y - uCenter.y);
   float glow = exp(-dot(d, d) / (uRadius * uRadius * 0.7));
-  col += vec3(0.16, 0.1, 0.035) * glow * (0.6 + 0.4 * n);
+  col += uGlow * glow * (0.6 + 0.4 * n);
   float a = 0.93 + 0.05 * n;
   float rr = length(vec2(vUv.x, (vUv.y - 0.5) * 0.95)) + (warp - 0.5) * 0.22 + (n - 0.5) * 0.08;
   float edge = 1.0 - smoothstep(0.56, 1.02, rr);
@@ -126,7 +129,11 @@ const ribbon = (pts, w, scale) => {
     return geometry;
 };
 
-const quad = (w, h) => new PIXI.Geometry()
+/** Палитры Тумана: карта и Терминал занимают одну область, отличаются только цветом */
+export const FOG_MAP = { uLow: [0.03, 0.04, 0.05], uHigh: [0.15, 0.17, 0.19], uGlow: [0.16, 0.1, 0.035], uVein: [0, 0, 0] };
+export const FOG_TERMINAL = { uLow: [0.025, 0.055, 0.065], uHigh: [0.09, 0.25, 0.26], uGlow: [0.0, 0.11, 0.11], uVein: [0.17, 0.02, 0.22] };
+
+export const quad = (w, h) => new PIXI.Geometry()
     .addAttribute('aVertexPosition', [0, 0, w, 0, w, h, 0, h], 2)
     .addAttribute('aUvs', [0, 0, 1, 0, 1, 1, 0, 1], 2)
     .addIndex([0, 1, 2, 0, 2, 3]);
@@ -173,7 +180,7 @@ export class WebStage {
         this.onStep = onStep; this.canStep = canStep; this.onHover = onHover;
         this.app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1, resizeTo });
         this.time = 0;
-        this.fog = new PIXI.Mesh(quad(1, 1), PIXI.Shader.from(VERT, FOG, { uTime: 0, uAspect: 1, uCenter: [0.35, 0.5], uRadius: 0.4, uSlide: 1.5 }));
+        this.fog = new PIXI.Mesh(quad(1, 1), PIXI.Shader.from(VERT, FOG, { uTime: 0, uAspect: 1, uCenter: [0.35, 0.5], uRadius: 0.4, uSlide: 1.5, ...FOG_MAP }));
         // Первое появление: Туман слева, потом кристаллы, потом нити между ними
         this.introPending = true;
         this.fog.eventMode = 'static';

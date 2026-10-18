@@ -78,6 +78,13 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             omen: (event, target) => (target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)),
             satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер'),
             devourerGone: () => devourerGone('по решению Мастера'),
+            // Терминал открывается на том же месте: тот же Туман, другой цвет
+            terminal: async function () {
+                const actor = canvas.tokens?.controlled[0]?.actor ?? game.user.character ?? game.actors.find(a => a.type === 'character' && a.hasPlayerOwner);
+                if (!actor) return ui.notifications.warn('Выберите персонажа или токен на сцене.');
+                await this.close({ instant: true });
+                return game.gachadnd.openTerminal(actor);
+            },
             // Удержание узла: шаг отряда, Пожиратель на узел или новое содержимое узла
             mode: function (event, target) { this.mode = this.mode === target.dataset.mode ? null : target.dataset.mode; return this.render(); },
             paintType: function (event, target) { this.paintType = target.dataset.type; this.mode = 'paint'; return this.render(); },

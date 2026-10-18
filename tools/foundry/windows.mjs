@@ -21,6 +21,7 @@ const base = (await opened()).map(w => w.id);
 
 const WINDOWS = [
     ['Терминал Памяти', 'openTerminal(game.actors.get(hero))'],
+    ['Терминал (окно)', 'openTerminalWindow(game.actors.get(hero))'],
     ['Терминал лута', 'openLootTerminal()'],
     ['Алтарь Памяти', 'openMemoryAltar(game.actors.get(hero))'],
     ['Хранилище', 'openStash(game.actors.get(hero))'],
@@ -57,8 +58,10 @@ for (const [name, call] of WINDOWS) {
 const floorBefore = await page.evaluate(() => game.settings.get('gachadnd', 'runFloor'));
 // Окна узлов проверяются на карте рядами: режим, оставшийся в мире от паутины, на время проверки — ряды
 const modeBefore = await page.evaluate(async () => {
-    const mode = game.settings.get('gachadnd', 'mapMode');
+    const mode = { mode: game.settings.get('gachadnd', 'mapMode'), scene: game.settings.get('gachadnd', 'floorSceneId') };
     await game.settings.set('gachadnd', 'mapMode', 'rows');
+    // Запомненная сцена этажа (песочница бывает с паутиной) — на время проверки эта
+    await game.settings.set('gachadnd', 'floorSceneId', canvas.scene.id);
     await canvas.scene.unsetFlag('gachadnd', 'floorMap');
     return mode;
 });
@@ -110,7 +113,8 @@ for (const [name, type, call] of NODES) {
 await page.evaluate(async ({ floor, mode }) => {
     await canvas.scene.unsetFlag('gachadnd', 'floorMap');
     await game.settings.set('gachadnd', 'runFloor', floor);
-    await game.settings.set('gachadnd', 'mapMode', mode);
+    await game.settings.set('gachadnd', 'mapMode', mode.mode);
+    await game.settings.set('gachadnd', 'floorSceneId', mode.scene);
 }, { floor: floorBefore, mode: modeBefore });
 
 // Функции без окна

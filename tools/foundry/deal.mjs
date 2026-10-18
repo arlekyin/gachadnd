@@ -55,6 +55,13 @@ const party = await ev(async ({ hero, PREFIX }) => {
 
 // Карта этажа на тестовой сцене, отряд — на узле Босса
 const floorBefore = await ev(() => game.settings.get('gachadnd', 'runFloor'));
+// Карта рядами на этой сцене: режим и запомненная сцена этажа (песочница бывает с паутиной) — свои на время проверки
+const mapBefore = await ev(async () => {
+    const before = { mode: game.settings.get('gachadnd', 'mapMode'), scene: game.settings.get('gachadnd', 'floorSceneId') };
+    await game.settings.set('gachadnd', 'mapMode', 'rows');
+    await game.settings.set('gachadnd', 'floorSceneId', canvas.scene.id);
+    return before;
+});
 // Цены жертв считаются от этажа: проверка — на первом (прошлая проверка могла оставить другой)
 await ev(() => game.settings.set('gachadnd', 'runFloor', 1));
 await ev(() => game.gachadnd.openMapTerminal());
@@ -229,11 +236,13 @@ await wait(500);
 check('повторно открыть сделку на этом этаже нельзя', await ev(() => gdt.warnings.some(w => /уже предлагала/.test(w))));
 
 // Уборка: карта этажа и номер этажа как были
-await ev(async floor => {
+await ev(async ({ floor, map }) => {
     await canvas.scene.unsetFlag('gachadnd', 'floorMap');
     await game.settings.set('gachadnd', 'runFloor', floor);
     await game.settings.set('gachadnd', 'moonBoons', []);
-}, floorBefore);
+    await game.settings.set('gachadnd', 'mapMode', map.mode);
+    await game.settings.set('gachadnd', 'floorSceneId', map.scene);
+}, { floor: floorBefore, map: mapBefore });
 check('ошибок модуля в консоли нет', !moduleErrors(f.log).length, moduleErrors(f.log).slice(0, 3).join(' | '));
 
 const failed = summary();

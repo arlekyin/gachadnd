@@ -1,10 +1,12 @@
-// Прогон проверок в одном браузере: node tools/foundry/run.mjs [имя …] [--no-sandbox] [--headed] [--slow[=мс]]
+// Прогон проверок в одном браузере: node tools/foundry/run.mjs [имя …] [--no-sandbox] [--headed] [--slow[=мс]] [--keep-world]
+// Мир, который прогон запустил сам, в конце закрывается (--keep-world — оставить): иначе лаунчер Foundry
+// не может запустить другой мир, пока его не перезапустят
 // Без имён — все проверки. Вход в мир один раз на весь прогон; в конце — песочница для ручной проверки
 // (--no-sandbox — без неё) и сводка: итог и время каждой проверки.
 //   node tools/foundry/run.mjs light-auto blast-fire     — только они, затем песочница
 import { args, closeShared } from './harness.mjs';
 
-export const ALL = ['settings', 'overheat', 'aura', 'light', 'light-auto', 'light-zones', 'light-big', 'blast-fire', 'blast-boom', 'windows', 'deal', 'knack', 'names', 'boons', 'residents', 'chronicle', 'events', 'devourer', 'living', 'web'];
+export const ALL = ['settings', 'overheat', 'aura', 'light', 'light-auto', 'light-zones', 'light-big', 'blast-fire', 'blast-boom', 'windows', 'deal', 'knack', 'names', 'boons', 'residents', 'chronicle', 'events', 'devourer', 'living', 'web', 'dock'];
 
 const names = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const list = names.length ? names : ALL;

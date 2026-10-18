@@ -26,6 +26,10 @@ export async function status() {
     return res.json();
 }
 
+// Мир запустили сами проверки — они же его и закроют в конце (иначе сервер остаётся с тестовым миром,
+// и лаунчер Foundry не может запустить другой мир, пока его не перезапустят)
+let launchedHere = false;
+
 /**
  * Тестовый мир запущен: если в Foundry не запущен ни один мир, запустить тестовый (нужно, чтобы
  * у Foundry не было пароля администратора). Чужой активный мир не закрывается — ошибка.
@@ -45,7 +49,7 @@ export async function ensureWorld(browser) {
     else if (!res.ok) throw new Error(`Не удалось запустить мир «${WORLD}»: ${res.status} ${await res.text()}`);
     for (let i = 0; i < 120; i++) {
         st = await status();
-        if (st.active && st.world === WORLD) return st;
+        if (st.active && st.world === WORLD) { launchedHere = true; return st; }
         await new Promise(r => setTimeout(r, 1000));
     }
     throw new Error(`Мир «${WORLD}» не запустился за 2 минуты`);
@@ -84,6 +88,18 @@ export async function shutdownWorld(page) {
 }
 
 /**
+ * Конец работы: мир, который запустили проверки, закрывается — сервер возвращается к выбору миров.
+ * Мир, открытый до проверок, не трогается. --keep-world — оставить запущенным.
+ */
+export async function releaseWorld(page) {
+    if (!launchedHere || args()['keep-world']) return;
+    launchedHere = false;
+    if (!(await status()).active) return;
+    await shutdownWorld(page);
+    console.log('Тестовый мир закрыт — сервер вернулся к выбору миров');
+}
+
+/**
  * Раннер (run.mjs) гоняет проверки в одном браузере: под ним connect() отдаёт общую страницу, а close()
  * и done() её не закрывают. Без раннера каждая проверка, как раньше, открывает свой браузер.
  */
@@ -107,7 +123,7 @@ export async function connect(options = {}) {
     }
     const own = await open(options);
     own.log = [];
-    return { ...own.session, log: own.log, close: () => own.session.browser.close() };
+    return { ...own.session, log: own.log, close: async () => { await releaseWorld(own.session.page).catch(e => console.log('Мир не закрылся:', e.message)); await own.session.browser.close(); } };
 }
 
 async function open({ width = 1600, height = 900, headless = !args().headed, slowMo = slowArg() } = {}) {
@@ -158,6 +174,7 @@ async function reload(page) {
 
 /** Раннер: закрыть общий браузер в конце прогона */
 export async function closeShared() {
+    if (shared) await releaseWorld(shared.session.page).catch(e => console.log('Мир не закрылся:', e.message));
     if (shared) await shared.session.browser.close();
     shared = null;
 }
