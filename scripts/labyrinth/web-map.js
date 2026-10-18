@@ -11,13 +11,35 @@
 import { MODULE_ID } from "../core/constants.js";
 import { scentThresholds, partyScent } from "./anchor.js";
 import { getFloor } from "./economy.js";
-import { buildConnectedWeb, speedFor, advanceWeb as advance } from "./web-graph.js";
+import { buildConnectedWeb, speedFor, advanceWeb as advance, WEB, BOSS_STAGES } from "./web-graph.js";
 
-export { WEB, BOSS_STAGES, webStage, ticksToNextStage, webMoves, distance, devourerLeaves, omenFor, nodeOf, isEaten, touchedSet } from "./web-graph.js";
+export { WEB, BOSS_STAGES, activeStages, moveDevourer, webStage, ticksToNextStage, webMoves, distance, devourerDistance, sealed, devourerLeaves, omenFor, nodeOf, isEaten, touchedSet, nextStepToward } from "./web-graph.js";
 
 export function registerWebSettings() {
     // Режим, которым Мастер чертил последний этаж: окно карты предлагает его снова
     game.settings.register(MODULE_ID, 'mapMode', { scope: 'world', config: false, type: String, default: 'rows' });
+    // Часы паутины и ступени Босса — Мастер правит их в инструментах паутины
+    const apply = () => applyWebSettings();
+    game.settings.register(MODULE_ID, 'webCalm', { scope: 'world', config: false, type: Number, default: WEB_DEFAULTS.CALM, onChange: apply });
+    game.settings.register(MODULE_ID, 'webEvery', { scope: 'world', config: false, type: Number, default: WEB_DEFAULTS.EVERY, onChange: apply });
+    game.settings.register(MODULE_ID, 'webStages', { scope: 'world', config: false, type: String, default: BOSS_STAGES.map(s => s.id).join(','), onChange: apply });
+    Hooks.once('setup', apply);
+    // Звуки паутины (web-sound.js) — у каждого свои; в подменю «Звуки и эффекты»
+    game.settings.register(MODULE_ID, 'webSounds', {
+        name: 'Звуки паутины', hint: 'Гул астролябии, звон кристаллов, шаги фонаря и укусы Пожирателя на карте-паутине. Громкость — «Звуки интерфейса».',
+        scope: 'client', config: false, type: Boolean, default: true
+    });
+}
+
+const WEB_DEFAULTS = { CALM: WEB.CALM, EVERY: WEB.EVERY };
+
+/** Числа паутины из настроек мира — в общие правила (web-graph.js) */
+export function applyWebSettings() {
+    const num = (key, fallback, min) => { const v = Math.round(Number(game.settings.get(MODULE_ID, key))); return Number.isFinite(v) && v >= min ? v : fallback; };
+    WEB.CALM = num('webCalm', WEB_DEFAULTS.CALM, 0);
+    WEB.EVERY = num('webEvery', WEB_DEFAULTS.EVERY, 1);
+    const ids = String(game.settings.get(MODULE_ID, 'webStages') ?? '').split(',').filter(Boolean);
+    WEB.STAGES = BOSS_STAGES.filter(s => ids.includes(s.id)).map(s => s.id);
 }
 
 export const isWeb = map => map?.mode === 'web';

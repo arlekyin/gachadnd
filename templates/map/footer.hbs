@@ -12,7 +12,7 @@
     <div class="gd-web-clock" title="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые 2 шага.">
         <i class="fas fa-hourglass-half"></i> Шаг {{web.ticks}} ·
         {{#if web.calm}}тишина ещё {{web.calm}}{{else}}{{#if web.toNext}}до ступени Босса {{web.toNext}}{{else}}Босс в полной силе{{/if}}{{/if}}
-        · ступеней {{web.stage}}/4{{#if web.eaten}} · съедено узлов: {{web.eaten}}{{/if}}
+        · ступеней {{web.stage}}/{{web.max}}{{#if web.eaten}} · съедено узлов: {{web.eaten}}{{/if}}
         {{#if isGM}}{{#if web.devourer}}<button type="button" data-action="devourerGone" title="Откуп, ушёл с Брюхом — поедание замирает">Пожиратель ушёл</button>{{/if}}{{/if}}
     </div>
     {{/if}}

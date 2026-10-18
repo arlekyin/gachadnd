@@ -168,21 +168,23 @@ export function connected(nodes) {
  * TOUCH — через сколько тиков тронутый узел съедается, PAUSE — тишина после победы над Пожирателем,
  * RUN — сколько пройденных узлов подряд за один тик, SPREAD — сколько соседей Пожиратель трогает за шаг.
  */
-export const WEB = { CALM: 12, EVERY: 2, MAX_STAGE: 4, TOUCH: 2, PAUSE: 4, RUN: 3, SPREAD: 1 };
+export const WEB = { CALM: 12, EVERY: 2, TOUCH: 2, PAUSE: 4, RUN: 3, SPREAD: 1, STAGES: null };
 
 /** Ступени Босса паутины: что даёт каждая (иконки на карте) */
 export const BOSS_STAGES = [
-    { icon: 'fa-volume-xmark', name: 'Глушитель', text: 'синергии самого частого тега отряда не действуют' },
-    { icon: 'fa-moon', name: 'Крайний спит', text: 'последний экипированный навык каждого спит, пока у Босса больше половины ПЗ' },
-    { icon: 'fa-heart-circle-plus', name: 'Окрепший', text: 'у Босса на четверть больше ПЗ' },
-    { icon: 'fa-users', name: 'Свита', text: 'с Боссом выходит свита — двое приспешников' }
+    { id: 'muffle', icon: 'fa-volume-xmark', name: 'Глушитель', text: 'синергии самого частого тега отряда не действуют' },
+    { id: 'sleepy', icon: 'fa-moon', name: 'Крайний спит', text: 'последний экипированный навык каждого спит, пока у Босса больше половины ПЗ' },
+    { id: 'strong', icon: 'fa-heart-circle-plus', name: 'Окрепший', text: 'у Босса на четверть больше ПЗ' },
+    { id: 'retinue', icon: 'fa-users', name: 'Свита', text: 'с Боссом выходит свита — двое приспешников' }
 ];
 
-export const webStage = ticks => Math.min(WEB.MAX_STAGE, ticks > WEB.CALM ? Math.floor((ticks - WEB.CALM) / WEB.EVERY) + 1 : 0);
+/** Ступени, которые Мастер оставил включёнными (WEB.STAGES — их id; null — все), по порядку */
+export const activeStages = () => (WEB.STAGES ? BOSS_STAGES.filter(s => WEB.STAGES.includes(s.id)) : BOSS_STAGES);
+export const webStage = ticks => Math.min(activeStages().length, ticks > WEB.CALM ? Math.floor((ticks - WEB.CALM) / WEB.EVERY) + 1 : 0);
 /** Сколько тиков до следующей ступени (null — ступени кончились) */
 export const ticksToNextStage = ticks => {
     const stage = webStage(ticks);
-    if (stage >= WEB.MAX_STAGE) return null;
+    if (stage >= activeStages().length) return null;
     return (stage === 0 ? WEB.CALM + 1 : WEB.CALM + stage * WEB.EVERY) - ticks;
 };
 
@@ -216,7 +218,7 @@ export function webMoves(map) {
 }
 
 /** Кратчайшее расстояние по связям (в шагах) */
-export function distance(map, from, to) {
+export function distance(map, from, to, blocked = null) {
     if (from === to) return 0;
     const seen = new Set([from]);
     let layer = [from], d = 0;
@@ -225,18 +227,29 @@ export function distance(map, from, to) {
         const next = [];
         for (const id of layer) for (const n of byId(map, id).next) {
             if (n === to) return d;
-            if (!seen.has(n)) { seen.add(n); next.push(n); }
+            if (!seen.has(n) && !blocked?.(n)) { seen.add(n); next.push(n); }
         }
         layer = next;
     }
     return Infinity;
 }
 
-function nextStepToward(map, from, to) {
+/**
+ * Куда Пожирателю нельзя ступить: узел Босса и Заставы, через которые отряд ещё не прошёл.
+ * Застава, пройденная отрядом, больше не держит — Пожиратель идёт через неё и съедает её, как любой узел.
+ */
+export const sealed = (map, id) => {
+    const node = byId(map, id);
+    return node.ring === 'boss' || (node.ring === 'outpost' && !map.visitedNodes?.includes(id));
+};
+/** Путь Пожирателя: в обход запечатанных Застав и Босса */
+export const devourerDistance = (map, from, to) => distance(map, from, to, id => id !== to && sealed(map, id));
+
+export function nextStepToward(map, from, to) {
     let best = null, bestD = Infinity;
     for (const n of byId(map, from).next) {
-        if (byId(map, n).ring === 'boss') continue;
-        const d = distance(map, n, to);
+        if (n !== to && sealed(map, n)) continue;
+        const d = devourerDistance(map, n, to);
         if (d < bestD) { best = n; bestD = d; }
     }
     return best;
@@ -245,7 +258,8 @@ function nextStepToward(map, from, to) {
 /** Скорость Пожирателя по Запаху отряда: Охота — 1, сильнее на 4 — 2, на 8 — 3 */
 export const speedFor = (value, hunt) => (value >= hunt + 8 ? 3 : value >= hunt + 4 ? 2 : 1);
 
-const edible = node => node.ring !== 'outpost' && node.ring !== 'boss';
+// Съесть можно всё, кроме Босса и запечатанных Застав
+const canEat = (map, id) => !sealed(map, id);
 
 /**
  * Тик часов этажа после шага отряда. Меняет карту и возвращает, что случилось:
@@ -260,7 +274,7 @@ export function advanceWeb(map, { scent, hunt }) {
     const result = { map, spawned: false, caught: false, moved: [], eaten: [], stage: webStage(web.ticks) };
     result.staged = result.stage > before;
     const eaten = eatenSet(map);
-    const eat = id => { if (!eaten.has(id) && edible(byId(map, id))) { eaten.add(id); result.eaten.push(id); } };
+    const eat = id => { if (!eaten.has(id) && canEat(map, id)) { eaten.add(id); result.eaten.push(id); } };
 
     // Тронутые узлы дозревают, пока Пожиратель на карте
     // Тронутые — список пар [id, тиков до поедания]: флаг сцены сливает объекты, а список заменяется целиком
@@ -273,21 +287,53 @@ export function advanceWeb(map, { scent, hunt }) {
     if (web.devourer) ripe.forEach(eat);
     const party = map.currentNodeId;
     if (!web.devourer && web.ticks > web.pausedUntil && scent.state === 'hunt' && party) {
-        const far = map.nodes.filter(n => n.ring === 'outer' && n.id !== party).sort((a, b) => distance(map, b.id, party) - distance(map, a.id, party))[0];
-        if (far) { web.devourer = far.id; result.spawned = true; eat(far.id); }
+        // Выходит на самый дальний узел края, откуда есть путь к отряду (мимо запечатанных Застав)
+        const reach = n => devourerDistance(map, n.id, party);
+        const far = map.nodes.filter(n => n.ring === 'outer' && n.id !== party && Number.isFinite(reach(n))).sort((a, b) => reach(b) - reach(a))[0];
+        if (far) { web.devourer = far.id; web.trail = [far.id]; result.spawned = true; eat(far.id); }
     } else if (web.devourer && party) {
         for (let s = 0; s < speedFor(scent.value, hunt); s++) {
             const step = nextStepToward(map, web.devourer, party);
             if (!step) break;
-            web.devourer = step;
+            stepOnto(map, step, eaten, eat);
             result.moved.push(step);
-            eat(step);
-            // Зараза: тронуто не больше SPREAD соседей за шаг (случайных) — съедается через TOUCH тиков
-            const near = byId(map, step).next.filter(n => !eaten.has(n) && edible(byId(map, n)) && !web.touched.some(([id]) => id === n));
-            for (const n of near.sort(() => Math.random() - 0.5).slice(0, WEB.SPREAD)) web.touched.push([n, WEB.TOUCH]);
             if (step === party) { result.caught = true; break; }
         }
     }
+    web.eaten = [...eaten];
+    return result;
+}
+
+/** Пожиратель ступает на узел: съедает его и трогает соседей (не больше SPREAD, случайных) — съедятся через TOUCH */
+function stepOnto(map, id, eaten, eat) {
+    const web = map.web;
+    web.devourer = id;
+    web.trail = [...(web.trail ?? []), id];
+    eat(id);
+    const near = byId(map, id).next.filter(n => !eaten.has(n) && canEat(map, n) && !web.touched.some(([t]) => t === n));
+    for (const n of near.sort(() => Math.random() - 0.5).slice(0, WEB.SPREAD)) web.touched.push([n, WEB.TOUCH]);
+}
+
+/**
+ * Мастер ходит за Пожирателя: to — узел, куда поставить (выход на карту или прыжок; след с этого узла
+ * начинается заново); без to — один шаг к отряду. Часы этажа не тикают. Возвращает { placed, moved, caught }.
+ */
+export function moveDevourer(map, to = null) {
+    const web = map.web;
+    web.touched ??= [];
+    const eaten = eatenSet(map);
+    const eat = id => { if (!eaten.has(id) && canEat(map, id)) eaten.add(id); };
+    const result = { placed: null, moved: null, caught: false };
+    if (to) {
+        const jump = !web.devourer || !byId(map, web.devourer).next.includes(to);
+        if (jump) web.trail = [];
+        stepOnto(map, to, eaten, eat);
+        result.placed = to;
+    } else if (web.devourer && map.currentNodeId) {
+        const step = nextStepToward(map, web.devourer, map.currentNodeId);
+        if (step) { stepOnto(map, step, eaten, eat); result.moved = step; }
+    }
+    result.caught = !!web.devourer && web.devourer === map.currentNodeId;
     web.eaten = [...eaten];
     return result;
 }
@@ -298,6 +344,7 @@ export function devourerLeaves(map) {
     map.web.devourer = null;
     map.web.pausedUntil = map.web.ticks + WEB.PAUSE;
     map.web.touched = [];
+    map.web.trail = [];
     return map;
 }
 
@@ -305,7 +352,7 @@ export function devourerLeaves(map) {
 export function omenFor(map, speed) {
     const at = map.web?.devourer;
     if (!at || !map.currentNodeId) return 'off';
-    const d = distance(map, at, map.currentNodeId);
+    const d = devourerDistance(map, at, map.currentNodeId);
     if (d <= speed) return '1';
     if (d <= speed * 2) return '2';
     if (d <= speed * 3) return '3';

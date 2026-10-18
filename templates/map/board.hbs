@@ -9,6 +9,8 @@
         <svg class="gd-map-edges gd-ink" viewBox="0 0 100 100" preserveAspectRatio="none">
             {{#each zones}}<path class="{{cls}}" d="{{d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/each}}
             {{#each edges}}{{#each strokes}}<path class="{{../cls}}" data-from="{{../from}}" data-to="{{../to}}" style="--k: {{../k}}{{#if ../fade}}; --fade: {{../fade}}{{/if}}" d="{{d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/each}}{{/each}}
+            {{#each trail}}<path class="trail" d="{{d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/each}}{{#each trail}}<path class="trail-glow" pathLength="1" d="{{d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/each}}
+            {{#if devourerNext}}<path class="devourer-next" d="{{devourerNext.d}}" vector-effect="non-scaling-stroke"><animate attributeName="d" values="{{devourerNext.values}}" dur="{{devourerNext.dur}}s" begin="{{devourerNext.begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path>{{/if}}
         </svg>
         {{#each doodles}}
         <svg class="gd-map-doodle gd-ink" viewBox="0 0 40 40" style="left: {{x}}%; top: {{y}}%; width: {{size}}px; height: {{size}}px; --turn: {{turn}}deg"><path d="{{d}}"><animate attributeName="d" values="{{values}}" dur="{{dur}}s" begin="{{begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path></svg>
@@ -19,7 +21,7 @@
                 {{#if ring}}<svg class="gd-map-ring gd-ink" viewBox="0 0 100 100"><path d="{{ring.d}}"><animate attributeName="d" values="{{ring.values}}" dur="{{ring.dur}}s" begin="{{ring.begin}}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.333;0.667;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1"/></path></svg>{{/if}}
                 <i class="fas {{icon}}"></i>
             </span>
-            {{#if devourer}}<span class="gd-web-paw" title="Здесь Пожиратель"><i class="fas fa-paw"></i></span>{{/if}}
+                        {{#if claw}}<svg class="gd-web-claw" viewBox="0 0 40 30" aria-hidden="true"><path d="M8 4 C10 12 9 20 5 27"/><path d="M19 2 C21 11 20 19 17 27"/><path d="M30 4 C32 12 31 20 28 26"/></svg>{{/if}}
             <span class="gd-map-label">{{label}}</span>
         </button>
         {{/each}}

@@ -19,7 +19,7 @@ import { leaveBodies } from "./graveyard.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
 import { addSatiety, getSatiety, satietyCap } from "./devourer-state.js";
 import { startBreach } from "./breach.js";
-import { WEB, BOSS_STAGES, touchedSet, isWeb, generateWebGraph, webMoves, advanceWeb, devourerLeaves, devourerSpeed, omenFor, webStage, ticksToNextStage, isEaten, nodeOf } from "./web-map.js";
+import { WEB, activeStages, moveDevourer, sealed, touchedSet, nextStepToward, isWeb, generateWebGraph, webMoves, advanceWeb, devourerLeaves, devourerSpeed, omenFor, webStage, ticksToNextStage, isEaten, nodeOf } from "./web-map.js";
 import { HUNT_BREACH } from "./residents.js";
 
 export const MAP_DATA = {
@@ -573,7 +573,7 @@ async function stepWeb(mapData, nodeData) {
     await announceScent(nodeData.type, { web: true });
 
     if (tick.staged) {
-        const stage = BOSS_STAGES[tick.stage - 1];
+        const stage = activeStages()[tick.stage - 1];
         await say('Лабиринт', `<div class="gd-boss-rule"><i class="fas ${stage.icon}"></i> <strong>Босс этажа крепнет — ${stage.name}:</strong> ${stage.text}. Отряд на этаже уже ${mapData.web.ticks} шаг.</div>`);
     }
     if (tick.spawned) {
@@ -587,6 +587,45 @@ async function stepWeb(mapData, nodeData) {
         const omen = omenFor(mapData, devourerSpeed(scent));
         if (getOmen() !== 'here' && omen !== getOmen()) await setOmen(omen);
     }
+}
+
+/**
+ * Мастер ходит за Пожирателя: nodeId — поставить на узел (выпустить или перенести), без него — шаг к отряду.
+ * Узел под ним съедается, соседи трогаются, как при обычном ходе; настиг отряд — прорыв.
+ */
+export async function gmDevourer(nodeId = null) {
+    const scene = mapScene();
+    const map = scene?.getFlag(MODULE_ID, 'floorMap');
+    if (!game.user.isGM || !isWeb(map)) return;
+    if (!nodeId && !map.web?.devourer) return ui.notifications.info('Пожирателя на паутине нет — поставьте его на узел.');
+    if (nodeId === 'boss') return ui.notifications.warn('Узел Босса Пожиратель не трогает.');
+    if (nodeId && sealed(map, nodeId)) return ui.notifications.warn('Застава держит Пожирателя, пока отряд через неё не прошёл.');
+    const copy = foundry.utils.deepClone(map);
+    const was = copy.web.devourer;
+    const result = moveDevourer(copy, nodeId);
+    if (!result.placed && !result.moved) return ui.notifications.info('Пожирателю некуда идти: отряд вне досягаемости.');
+    await scene.setFlag(MODULE_ID, 'floorMap', copy);
+    const at = nodeOf(copy, copy.web.devourer);
+    const label = MAP_DATA.LABELS[at?.type] ?? at?.label ?? '';
+    const what = result.moved ? 'шагнул к отряду' : was ? 'перенесён Мастером' : 'выпущен Мастером';
+    await say('Нюх Пожирателя', `<div class="gd-scent-chat"><i class="fas fa-paw"></i> Пожиратель ${what}: <strong>${label}</strong>.</div>`, true);
+    if (result.caught) {
+        await say('Нюх Пожирателя', '<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>Прорыв:</strong> Пожиратель настиг отряд. Нажмите «Здесь» и выберите точку на сцене.</div>', true);
+        if (getOmen() !== 'here') await setOmen('1');
+    } else if (!was && getOmen() === 'off') await setOmen(omenFor(copy, devourerSpeed()));
+}
+
+/** Мастер меняет узел паутины: тип (содержимое) — тот же вид, что у сгенерированного */
+export async function setWebNodeType(nodeId, type) {
+    const scene = mapScene();
+    const map = scene?.getFlag(MODULE_ID, 'floorMap');
+    if (!game.user.isGM || !isWeb(map) || !MAP_DATA.LABELS[type]) return;
+    if (nodeId === 'boss' || type === MAP_DATA.NODE_BOSS) return ui.notifications.warn('Босс на паутине один — в центре.');
+    const copy = foundry.utils.deepClone(map);
+    const node = nodeOf(copy, nodeId);
+    if (!node || node.type === type) return;
+    Object.assign(node, { type, label: MAP_DATA.LABELS[type], icon: MAP_DATA.ICONS[type], color: MAP_DATA.COLORS[type] });
+    await scene.setFlag(MODULE_ID, 'floorMap', copy);
 }
 
 /** Пожиратель ушёл с паутины (побеждён, откуплен, ушёл с Брюхом): поедание замирает (Мастер) */
@@ -680,7 +719,7 @@ export function webBoardContext(map, floor, { size = null } = {}) {
     };
     board.webPlane = true;
     // Дальние узлы выцветают, как старые чернила: центр чёткий, край бледный (только в слое)
-    const fadeOf = node => (size ? (1 - 0.32 * Math.max(0, Math.min(1, (Math.hypot(node.x - 50, node.y - 50) / 48 - 0.35) / 0.65))).toFixed(2) : 1);
+    const fadeOf = node => (size ? (1 - 0.15 * Math.max(0, Math.min(1, (Math.hypot(node.x - 50, node.y - 50) / 48 - 0.35) / 0.65))).toFixed(2) : 1);
     board.nodes = nodes.map(node => {
         const state = node.id === currentNodeId ? 'current' : reachable.has(node.id) ? 'reachable' : visited.has(node.id) ? 'visited' : 'locked';
         const rand = seededRandom(`${seed}|ring|${node.id}|${state}`);
@@ -695,6 +734,7 @@ export function webBoardContext(map, floor, { size = null } = {}) {
             cls: [state, ...marks, labeled && 'labeled', `type-${node.type}`, `tier-${TIER[node.type] ?? 'minor'}`].filter(Boolean).join(' '),
             hint: node.id === currentNodeId ? NODE_HINTS[node.type] ?? status : status,
             devourer: web.devourer === node.id,
+            claw: touched.has(node.id) && !eaten.has(node.id),
             fade: fadeOf(node)
         };
     });
@@ -728,6 +768,21 @@ export function webBoardContext(map, floor, { size = null } = {}) {
         const fade = Math.min(Number(fadeOf(nodes.find(n => n.id === from))), Number(fadeOf(nodes.find(n => n.id === to))));
         return { strokes, from, to, k: k.toFixed(3), fade, cls: traversed ? 'traversed' : open ? 'open' : gone ? 'faint eaten' : 'ahead' };
     });
+    // След Пожирателя: бирюзовый мазок от узла к узлу по его пути; Мастеру — куда он шагнёт дальше
+    const trail = web.devourer ? (web.trail ?? [web.devourer]) : [];
+    board.trail = trail.slice(1).map((id, i) => {
+        const from = trail[i];
+        if (!coords[from] || !coords[id]) return null;
+        const rand = seededRandom(`${seed}|trail|${from}|${id}`);
+        const line = straightLine(coords[from], coords[id], rand, { trim: size ? size * 0.03 : 24, wobble: 4, flow: 3.5, px: BOARD_PX });
+        return { d: line.forms[0], values: inkValues(line.forms), ...inkMotion(rand) };
+    }).filter(Boolean);
+    const next = web.devourer && currentNodeId && game.user?.isGM ? nextStepToward(map, web.devourer, currentNodeId) : null;
+    if (next && coords[next]) {
+        const rand = seededRandom(`${seed}|next|${web.devourer}|${next}`);
+        const line = straightLine(coords[web.devourer], coords[next], rand, { trim: size ? size * 0.045 : 30, wobble: 1.5, flow: 1.5, px: BOARD_PX });
+        board.devourerNext = { d: line.forms[0], values: inkValues(line.forms), ...inkMotion(rand) };
+    }
     // Границы зон — бледные круги от руки: Заставы и внутренняя зона
     board.zones = size ? ritual(seed, BOARD_PX) : [30.5, 15.5].map((r, i) => {
         const rand = seededRandom(`${seed}|zone|${i}`);
@@ -747,7 +802,7 @@ export function webBoardContext(map, floor, { size = null } = {}) {
     const stage = webStage(ticks);
     board.web = {
         ticks, stage, toNext: ticksToNextStage(ticks), calm: Math.max(0, WEB.CALM - ticks),
-        stages: BOSS_STAGES.map((s, i) => ({ ...s, on: i < stage })),
+        stages: activeStages().map((s, i) => ({ ...s, on: i < stage })), max: activeStages().length,
         devourer: !!web.devourer, paused: !web.devourer && (web.pausedUntil ?? -1) >= ticks,
         eaten: eaten.size
     };

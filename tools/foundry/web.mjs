@@ -15,19 +15,22 @@ await install(page);
 const ids = await scene(page, { hero: { level: 5 }, enemies: [{ name: 'Босс', x: 9, y: 5 }] });
 const [bossId] = ids.enemies;
 const since = f.log.length;
-const saved = await ev(() => Object.fromEntries(['runFloor', 'mapMode', 'floorSceneId', 'devourerOmen', 'effects'].map(k => [k, game.settings.get('gachadnd', k)])));
+const saved = await ev(() => Object.fromEntries(['runFloor', 'mapMode', 'floorSceneId', 'devourerOmen', 'effects', 'webCalm', 'webEvery', 'webStages'].map(k => [k, game.settings.get('gachadnd', k)])));
 await ev(async ({ hero, boss }) => {
     Object.defineProperty(game.actors.get(hero), 'hasPlayerOwner', { get: () => true, configurable: true });
     await game.actors.get(boss).update({ 'system.details.cr': 5 });
     await game.settings.set('gachadnd', 'effects', 'off');
     await game.settings.set('gachadnd', 'runFloor', 1);
+    // Карта — на сцене проверки, а не на запомненной сцене этажа мира
+    await game.settings.set('gachadnd', 'floorSceneId', '');
 }, { hero: ids.hero, boss: bossId });
 await skills(page, ids.hero, ['Пироман', 'Прикурить?', 'Сомелье']);
 
 const map = () => ev(() => canvas.scene.getFlag('gachadnd', 'floorMap'));
 const click = id => ev(async id => {
     gdt.mark();
-    document.querySelector(`#gachadnd-web-overlay [data-node-id="${id}"]`).click();
+    // Шаг — как удержание узла на холсте паутины
+    await (await gdt.mod('labyrinth/map.js')).stepTo(id);
     await new Promise(r => setTimeout(r, 400));
     await gdt.settle(300, 6000);
     for (const w of foundry.applications.instances.values()) if (!/gachadnd-(map-terminal|web-overlay)/.test(w.id) && /shop|risk|event|doom|portal|deal/i.test(w.id)) await w.close();
@@ -60,15 +63,29 @@ const shape = {
 check('сеть: 30–40 узлов, всё связано, внутрь — только через Заставы, к Боссу — из внутренней зоны, есть тупики', shape.mode === 'web' && shape.count >= 30 && shape.count <= 40 && shape.connected && shape.gate && shape.outposts && shape.bossLinks && shape.deadEnds >= 2 && shape.mode2 === 'web', JSON.stringify(shape));
 const drawn = await ev(() => {
     const el = document.getElementById('gachadnd-web-overlay');
+    const info = foundry.applications.instances.get('gachadnd-web-overlay')?.stageInfo() ?? {};
     return {
-        overlay: !!el, window: !!document.getElementById('gachadnd-map-terminal'),
-        nodes: el?.querySelectorAll('.gd-map-node').length, lines: el?.querySelectorAll('.gd-map-edges path:not(.zone)').length,
+        overlay: !!el, window: !!document.getElementById('gachadnd-map-terminal'), canvas: !!el?.querySelector('canvas.gd-wo-canvas'),
+        nodes: info.nodes, lines: info.edges,
         stages: el?.querySelectorAll('.gd-wo-stages i').length, clock: el?.querySelector('.gd-wo-clock')?.textContent.replace(/\s+/g, ' ').trim(),
-        reachable: el?.querySelectorAll('.gd-map-node.reachable').length
+        reachable: info.reachable
     };
 });
-check('паутина — слой вместо окна: все узлы и пути, 4 ступени Босса, часы; вход — любой узел внешней зоны', drawn.overlay && !drawn.window && drawn.nodes === shape.count && drawn.lines > shape.count - 2 && drawn.stages === 4 && /Шаг 0/.test(drawn.clock) && drawn.reachable === shape.zones.outer, JSON.stringify(drawn));
+check('паутина — слой вместо окна: все узлы и пути, 4 ступени Босса, часы; вход — любой узел внешней зоны', drawn.overlay && drawn.canvas && !drawn.window && drawn.nodes === shape.count && drawn.lines > shape.count - 2 && drawn.stages === 4 && /Шаг 0/.test(drawn.clock) && drawn.reachable === shape.zones.outer, JSON.stringify(drawn));
 await f.shot('web-1-drawn');
+// Появление: Туман слева, кристаллы, нити — кадры по ходу
+await ev(async () => { await foundry.applications.instances.get('gachadnd-web-overlay').close(); await new Promise(r => setTimeout(r, 300)); });
+const opened = Date.now();
+await ev(async () => { (await gdt.mod('labyrinth/web-overlay.js')).WebOverlay.open(); });
+for (const ms of [350, 900, 1500, 2700]) { await wait(Math.max(0, ms - (Date.now() - opened))); await f.shot(`web-0-intro-${ms}`); }
+// Закрытие: обратный порядок, слой закрывается после анимации
+const closing = Date.now();
+await ev(() => { foundry.applications.instances.get('gachadnd-web-overlay').close(); });
+for (const ms of [250, 700, 1200]) { await wait(Math.max(0, ms - (Date.now() - closing))); await f.shot(`web-0-outro-${ms}`); }
+await wait(800);
+const gone = await ev(() => !foundry.applications.instances.get('gachadnd-web-overlay')?.rendered);
+check('закрытие: сначала анимация, затем слой закрыт', gone, String(gone));
+await ev(async () => { (await gdt.mod('labyrinth/web-overlay.js')).WebOverlay.open(); await new Promise(r => setTimeout(r, 2800)); });
 
 // ---------- Ход: вход, отказ, знакомые тропы. Узлы — из сети: X с двумя соседями во внешней зоне, Y — сосед X,
 // Z — сосед Y (не X), W — другой сосед X: из Z в W — Y → X → W за один шаг
@@ -93,7 +110,7 @@ check('в сети нашлась ветка для проверки хода', 
 await click(plan.x);
 m = await map();
 check('вход с узла внешней зоны: отряд там, шаг 1', m.currentNodeId === plan.x && m.web.ticks === 1, JSON.stringify({ at: m.currentNodeId, t: m.web.ticks }));
-const lit = await ev(() => ({ open: document.querySelectorAll('#gachadnd-web-overlay .gd-map-edges path.open').length, current: document.querySelectorAll('#gachadnd-web-overlay .gd-map-node.current').length }));
+const lit = await ev(() => foundry.applications.instances.get('gachadnd-web-overlay').stageInfo());
 check('слой: отряд отмечен, пути этого шага — красным', lit.current === 1 && lit.open >= 1, JSON.stringify(lit));
 await f.shot('web-3-step');
 await click(plan.far);
@@ -106,6 +123,8 @@ const before = m.web.ticks;
 await click(plan.w);
 m = await map();
 check('знакомые тропы: Z → Y → X → W за один шаг', m.currentNodeId === plan.w && m.web.ticks === before + 1, JSON.stringify({ at: m.currentNodeId, t: m.web.ticks, before, plan }));
+const flown = await ev(() => foundry.applications.instances.get('gachadnd-web-overlay').stageInfo());
+check('фонарь летит по нитям через все узлы пути (3 ноги), знакомые тропы пульсируют', flown.legs === 3 && flown.familiar >= 1, JSON.stringify(flown));
 const chat = await ev(() => game.messages.contents.slice(gdt._mark).map(x => x.content).join(' '));
 check('чат: «знакомыми тропами»', /знакомыми тропами/.test(chat), chat.slice(0, 200));
 // Кадр для глаза: пройденные узлы зачёркнуты, на полях — запись Летописи
@@ -140,6 +159,12 @@ m = await map();
 const d1 = await ev(async () => { const w = await gdt.mod('labyrinth/web-map.js'); const mp = canvas.scene.getFlag('gachadnd', 'floorMap'); return mp.web.devourer ? w.distance(mp, mp.web.devourer, mp.currentNodeId) : 0; });
 // Заставы не съедаются: шаг Пожирателя на Заставу съеденных не прибавляет
 check('Пожиратель идёт к отряду (скорость 2 — Запах на 4 выше Охоты) и съедает узлы на пути', d1 <= d0 && m.web.eaten.length >= 1 && (m.web.eaten.length >= 2 || m.nodes.find(n => n.id === m.web.devourer)?.zone === 'outpost') && Array.isArray(m.web.touched), JSON.stringify({ d0, d1, eaten: m.web.eaten, touched: m.web.touched }));
+const bitten = await ev(() => foundry.applications.instances.get('gachadnd-web-overlay').stageInfo());
+check('Пожиратель: новые съеденные узлы вспыхивают и обрастают прядями', bitten.bursts >= 1 && bitten.tendrils >= 2, JSON.stringify(bitten));
+await ev(async () => {
+    document.querySelectorAll('#notifications li, #notifications .notification').forEach(n => n.remove());
+    await new Promise(r => setTimeout(r, 300));
+});
 await f.shot('web-2-devourer');
 
 // ---------- Вход в съеденный узел — прорыв
@@ -202,6 +227,67 @@ r = await fight(15);
 check('шаг 15 — 2 ступени: Глушитель и Крайний спит', r.ids.join() === 'muffle,sleepy' && r.max === 30, JSON.stringify(r));
 r = await fight(17);
 check('шаг 17 — 3 ступени: ещё +25% ПЗ на бой, после боя — снова 30', r.ids.length === 2 && r.max === 38 && r.after === 30, JSON.stringify(r));
+
+// ---------- Мастер: ступени и часы настраиваются; Свиту выключили — 4-й ступени нет
+await ev(async () => {
+    await game.settings.set('gachadnd', 'webStages', 'muffle,sleepy,strong');
+    await game.settings.set('gachadnd', 'webCalm', 6);
+    await game.settings.set('gachadnd', 'webEvery', 3);
+});
+const tuned = await ev(async () => { const w = await gdt.mod('labyrinth/web-graph.js'); return { s7: w.webStage(7), s10: w.webStage(10), s40: w.webStage(40), names: w.activeStages().map(s => s.id).join() }; });
+check('настройки Мастера: тишина 6, ступень каждые 3, без Свиты — не больше 3 ступеней', tuned.s7 === 1 && tuned.s10 === 2 && tuned.s40 === 3 && tuned.names === 'muffle,sleepy,strong', JSON.stringify(tuned));
+await ev(async () => { for (const k of ['webStages', 'webCalm', 'webEvery']) await game.settings.set('gachadnd', k, game.settings.settings.get(`gachadnd.${k}`).default); });
+
+// ---------- Мастер ходит за Пожирателя и правит узлы
+const gmMoves = await ev(async () => {
+    const mapMod = await gdt.mod('labyrinth/map.js');
+    const w = await gdt.mod('labyrinth/web-graph.js');
+    const mp = foundry.utils.deepClone(canvas.scene.getFlag('gachadnd', 'floorMap'));
+    // Отряд у Заставы изнутри (во внутренней зоне бывают карманы, связанные с краем только через Босса)
+    mp.currentNodeId = mp.nodes.find(n => n.zone === 'outpost').next.find(id => id.startsWith('b'));
+    // Отряд внутри — значит, прошёл Заставы: Пожиратель может идти за ним
+    mp.visitedNodes = [...new Set([...mp.visitedNodes, ...mp.nodes.filter(n => n.zone === 'outpost').map(n => n.id)])];
+    mp.web = { ...mp.web, devourer: null, eaten: [], touched: [], trail: [] };
+    await canvas.scene.setFlag('gachadnd', 'floorMap', mp);
+    const far = mp.nodes.filter(n => n.zone === 'outer').sort((a, b) => w.devourerDistance(mp, b.id, mp.currentNodeId) - w.devourerDistance(mp, a.id, mp.currentNodeId))[0].id;
+    await mapMod.gmDevourer(far);
+    const placed = canvas.scene.getFlag('gachadnd', 'floorMap').web;
+    const d0 = w.devourerDistance(canvas.scene.getFlag('gachadnd', 'floorMap'), far, mp.currentNodeId);
+    await mapMod.gmDevourer();
+    const after = canvas.scene.getFlag('gachadnd', 'floorMap');
+    const target = after.nodes.find(n => n.type === 'mob' && n.id !== after.currentNodeId).id;
+    await mapMod.setWebNodeType(target, 'shop');
+    const painted = canvas.scene.getFlag('gachadnd', 'floorMap').nodes.find(n => n.id === target);
+    return { far, placed: placed.devourer, eatenFar: placed.eaten.includes(far), d0, d1: w.devourerDistance(after, after.web.devourer, after.currentNodeId), trail: after.web.trail.length, ticks: after.web.ticks === mp.web.ticks, painted: painted.type, icon: painted.icon };
+});
+check('Мастер ставит Пожирателя на узел (съеден), шаг — ближе к отряду, часы не тикают', gmMoves.placed === gmMoves.far && gmMoves.eatenFar && gmMoves.d1 === gmMoves.d0 - 1 && gmMoves.trail === 2 && gmMoves.ticks, JSON.stringify(gmMoves));
+check('Мастер меняет узел: Монстры → Магазин', gmMoves.painted === 'shop' && gmMoves.icon === 'fa-coins', JSON.stringify(gmMoves));
+const seal = await ev(async () => {
+    const w = await gdt.mod('labyrinth/web-graph.js');
+    const mp = foundry.utils.deepClone(canvas.scene.getFlag('gachadnd', 'floorMap'));
+    const post = mp.nodes.find(n => n.zone === 'outpost');
+    const outside = post.next.find(id => id.startsWith('c'));
+    const inside = post.next.find(id => id.startsWith('b'));
+    Object.assign(mp, { currentNodeId: inside, visitedNodes: [inside] });
+    mp.web = { ...mp.web, devourer: outside, eaten: [], touched: [], trail: [outside] };
+    const before = { step: w.nextStepToward(mp, outside, inside), d: w.devourerDistance(mp, outside, inside) };
+    mp.visitedNodes.push(post.id);
+    const after = { step: w.nextStepToward(mp, outside, inside), d: w.devourerDistance(mp, outside, inside) };
+    const moved = w.moveDevourer(mp);
+    return { post: post.id, before, after, ate: mp.web.eaten.includes(post.id), moved: moved.moved };
+});
+check('Застава держит Пожирателя, пока отряд не прошёл через неё; пройденную — проходит и съедает', seal.before.step === null && !(seal.before.d < 100) && seal.after.step === seal.post && seal.after.d === 2 && seal.ate, JSON.stringify(seal));
+const layout = await ev(async () => {
+    const app = foundry.applications.instances.get('gachadnd-web-overlay');
+    app.tools = true;
+    await app.render();
+    await new Promise(r => setTimeout(r, 500));
+    const box = app.element.getBoundingClientRect();
+    const right = document.getElementById('ui-right').getBoundingClientRect();
+    return { z: getComputedStyle(app.element).zIndex, left: box.left, rightEdge: Math.round(box.right), uiRight: Math.round(right.left), panel: !!app.element.querySelector('.gd-wo-panel [data-action="devourerStep"]') };
+});
+check('слой — вся левая часть до боковой панели, под окнами Foundry; панель Мастера с Пожирателем', layout.z === '50' && layout.left === 0 && Math.abs(layout.rightEdge - layout.uiRight) <= 1 && layout.panel, JSON.stringify(layout));
+await f.shot('web-5-gm');
 
 // ---------- Уборка
 await ev(async s => {

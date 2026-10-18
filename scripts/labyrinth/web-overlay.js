@@ -1,17 +1,16 @@
 /**
  * Gacha Roguelike dnd5e — Слой паутины (вид карты в режиме паутины)
  *
- * Паутина не в окне, а слоем на большую часть экрана, как кровавая паутина: лист дневника, нарисованный живыми
- * чернилами, края листа незаметно растворяются в сцене. Узлы крупные, пути прямыми штрихами; куда отряд может
- * шагнуть сейчас — красными чернилами.
- * Щелчок по узлу ведёт отряд (Мастер), Esc или крестик — закрыть. У Мастера — панель инструментов: черчение
- * этажа, Запах, предвестия, Насыщение (те же части, что в окне карты).
+ * Паутина на весь экран, как кровавая паутина: дым, тёмные узлы с плиткой цвета типа, тонкие пути; куда отряд
+ * может шагнуть — красное свечение; шаг — удержанием узла; съеденное Пожирателем обвивают пряди. Рисует WebGL
+ * (web-stage.js, PIXI — движок сцены Foundry); заголовок, часы, подсказка и инструменты Мастера — элементы
+ * страницы поверх. Esc или крестик — закрыть.
  *
  * Данные — флаг карты сцены (web-map.js); ход — общий с окном карты (map.js → stepTo).
  */
 
 import { MODULE_ID } from "../core/constants.js";
-import { boardContext, webBoardContext, stepTo, drawFloorFrom, devourerGone, GachaMapTerminal } from "./map.js";
+import { MAP_DATA, stepTo, drawFloorFrom, devourerGone, gmDevourer, setWebNodeType, GachaMapTerminal } from "./map.js";
 import { mapScene } from "./scene-travel.js";
 import { getFloor } from "./economy.js";
 import { partyScent } from "./anchor.js";
@@ -19,58 +18,52 @@ import { pulseView } from "./pulse.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
 import { addSatiety, getSatiety, satietyCap } from "./devourer-state.js";
 import { startBreach } from "./breach.js";
-import { isWeb } from "./web-map.js";
-import { floorBiome, biomeArt } from "./biomes.js";
-import { floorMarks } from "./chronicle.js";
-import { DOODLES, INK_FORMS, seeded, inkValues, inkMotion, jitterPath } from "../core/ink.js";
+import { isWeb, webMoves, isEaten, touchedSet, nextStepToward, webStage, ticksToNextStage, activeStages, BOSS_STAGES, WEB } from "./web-map.js";
+import { WebStage } from "./web-stage.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ID = 'gachadnd-web-overlay';
 const TEMPLATES = 'modules/gachadnd/templates/map';
-const MARGIN = 250;
-
-// Записи на полях: что случилось на пройденных узлах (Летопись этажа) — почерком у самого узла
-const NOTE = {
-    burn: text => `сгорел ${text.replace(/^.*?: /, '')}`,
-    breach: () => 'прорыв Пожирателя',
-    fallen: text => `здесь пал ${text}`,
-    moon: text => text,
-    echo: text => text,
-    devour: () => 'Пожиратель за нас',
-    resident: text => text
-};
-function marginNotes(map, floor, coords) {
-    let marks = [];
-    try { marks = floorMarks(map, floor); } catch (error) { marks = map.chronicle ?? []; }
-    const seen = new Map();
-    return marks.filter(m => coords[m.nodeId] && NOTE[m.kind]).slice(-10).map(m => {
-        const n = seen.get(m.nodeId) ?? 0;
-        seen.set(m.nodeId, n + 1);
-        const text = NOTE[m.kind](String(m.text ?? ''));
-        return { x: coords[m.nodeId].x, y: coords[m.nodeId].y, text: text.length > 30 ? `${text.slice(0, 29)}…` : text, kind: m.kind, shift: n * 20 };
-    });
-}
-
-/**
- * Рисунки на листе вокруг паутины — по углам квадрата, где сеть их не задевает: роза ветров (всегда, крупно),
- * остальные — из набросков на полях Разлома (core/ink.js), живыми чернилами.
- */
-function pageDecor(seed, coords) {
-    const rand = seeded(`${seed}|decor`);
-    const ink = (d, size, x, y, turn, cls = '') => ({
-        x, y, size, turn, cls, d, values: inkValues(Array.from({ length: INK_FORMS }, () => jitterPath(d, rand, 0.7))), ...inkMotion(rand)
-    });
-    // Места по углам поля: свободнее всего от узлов — первым (там роза ветров)
-    const spots = [[8, 9], [92, 8], [8, 91], [91, 90]]
-        .map(([x, y]) => ({ x, y, room: Math.min(...coords.map(c => Math.hypot(c.x - x, c.y - y))) }))
-        .filter(s => s.room > 9).sort((a, b) => b.room - a.room);
-    const pool = DOODLES.slice(1).sort(() => rand() - 0.5);
-    return spots.slice(0, 4).map((spot, i) => i === 0
-        ? ink(DOODLES[0], Math.min(150, spot.room * 9), spot.x, spot.y, Math.round(rand() * 30 - 15), 'compass')
-        : ink(pool[i], Math.min(76, spot.room * 7), spot.x, spot.y, Math.round(rand() * 40 - 20)));
-}
-
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+// Важность узла: обычные — чуть мельче, Заставы и Босс — крупнее
+const TIER = { mob: 'minor', event: 'minor', elite: 'major', shop: 'major', rest: 'major', risk: 'major', doom: 'major', outpost: 'seal', boss: 'boss' };
+
+/** Модель паутины для рисовальщика: узлы с состоянием, пути, след Пожирателя */
+export function webModel(map) {
+    const moves = currentMoves(map);
+    const visited = new Set(map.visitedNodes ?? []);
+    const touched = touchedSet(map);
+    const web = map.web ?? {};
+    const openEdges = new Set();
+    if (map.currentNodeId) for (const path of Object.values(moves)) {
+        [map.currentNodeId, ...path].forEach((id, i, list) => { if (i) openEdges.add([list[i - 1], id].sort().join('|')); });
+    }
+    const nodes = map.nodes.map(n => {
+        const state = n.id === map.currentNodeId ? 'current' : moves[n.id] ? 'reachable' : visited.has(n.id) ? 'visited' : 'locked';
+        return {
+            id: n.id, x: n.x, y: n.y, type: n.type, tier: TIER[n.type] ?? 'minor', state,
+            color: MAP_DATA.COLORS[n.type] ?? n.color, icon: MAP_DATA.ICONS[n.type] ?? n.icon, label: MAP_DATA.LABELS[n.type] ?? n.label,
+            visited: visited.has(n.id) && n.id !== map.currentNodeId,
+            eaten: isEaten(map, n.id), touched: touched.has(n.id) && !isEaten(map, n.id),
+            path: moves[n.id] ?? null,
+            labeled: state === 'current' || n.type === 'boss' || (!!map.currentNodeId && moves[n.id]?.length === 1)
+        };
+    });
+    const seen = new Set();
+    const edges = [];
+    for (const n of map.nodes) for (const id of n.next) {
+        const key = [n.id, id].sort().join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // Ход этого шага: к новому узлу — красным, по знакомым тропам — тускло-красным
+        const cls = openEdges.has(key) ? (visited.has(n.id) && visited.has(id) ? 'familiar' : 'open') : visited.has(n.id) && visited.has(id) ? 'traversed' : isEaten(map, n.id) || isEaten(map, id) ? 'eaten' : 'ahead';
+        edges.push({ a: n.id, b: id, cls });
+    }
+    const rank = { open: 2, familiar: 1 };
+    edges.sort((x, y) => (rank[x.cls] ?? 0) - (rank[y.cls] ?? 0));
+    return { nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], next: web.devourer && map.currentNodeId && game.user.isGM ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
+}
+const currentMoves = map => webMoves(map);
 
 export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
@@ -79,19 +72,34 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         tag: 'div',
         window: { frame: false, positioned: false },
         actions: {
-            node: (event, target) => stepTo(target.dataset.nodeId),
             close: function () { return this.close(); },
             tools: function () { this.tools = !this.tools; return this.render(); },
             generate: function () { return drawFloorFrom(this.element); },
             omen: (event, target) => (target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)),
             satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер'),
-            devourerGone: () => devourerGone('по решению Мастера')
+            devourerGone: () => devourerGone('по решению Мастера'),
+            // Удержание узла: шаг отряда, Пожиратель на узел или новое содержимое узла
+            mode: function (event, target) { this.mode = this.mode === target.dataset.mode ? null : target.dataset.mode; return this.render(); },
+            paintType: function (event, target) { this.paintType = target.dataset.type; this.mode = 'paint'; return this.render(); },
+            devourerStep: () => gmDevourer(),
+            stageToggle: (event, target) => {
+                const ids = new Set(String(game.settings.get(MODULE_ID, 'webStages')).split(',').filter(Boolean));
+                ids.has(target.dataset.stage) ? ids.delete(target.dataset.stage) : ids.add(target.dataset.stage);
+                return game.settings.set(MODULE_ID, 'webStages', BOSS_STAGES.map(s => s.id).filter(id => ids.has(id)).join(','));
+            },
+            clock: (event, target) => {
+                const key = target.dataset.key;
+                const value = Math.max(key === 'webEvery' ? 1 : 0, Number(game.settings.get(MODULE_ID, key)) + Number(target.dataset.delta));
+                return game.settings.set(MODULE_ID, key, value);
+            }
         }
     };
 
     static PARTS = { overlay: { template: `${TEMPLATES}/web-overlay.hbs` } };
 
     tools = false;
+    mode = null;
+    paintType = 'mob';
 
     static open() {
         const existing = foundry.applications.instances?.get(ID);
@@ -106,7 +114,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
 
     async _preFirstRender(context, options) {
         await super._preFirstRender(context, options);
-        await foundry.applications.handlebars.loadTemplates([`${TEMPLATES}/header.hbs`, `${TEMPLATES}/footer.hbs`, `${TEMPLATES}/board.hbs`]);
+        await foundry.applications.handlebars.loadTemplates([`${TEMPLATES}/header.hbs`, `${TEMPLATES}/footer.hbs`]);
     }
 
     async _prepareContext() {
@@ -123,53 +131,124 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             omen: isGM ? Object.entries(OMEN_STAGES).map(([stage, { label }]) => ({ stage, label, active: stage === getOmen() })) : null
         };
         if (!isWeb(map)) return context;
-        // Лист: квадрат на большую часть высоты экрана; рисунок — тот же набросок живыми чернилами, что у окна
-        // Страница на весь экран: поле слева, паутина — квадрат почти во всю высоту страницы
-        const size = Math.round(Math.min(window.innerHeight * 0.66, window.innerWidth * 0.62 - MARGIN - 40));
-        const board = webBoardContext(map, floor, { size });
-        const moves = board.nodes.filter(n => n.cls.includes('reachable')).length;
-        return Object.assign(context, board, {
-            size, scale: (size / 560 * 0.74).toFixed(3), hasBoard: true,
-            art: { outer: biomeArt(floorBiome(floor, false)), inner: floorBiome(floor, true) !== floorBiome(floor, false) ? biomeArt(floorBiome(floor, true)) : null },
-            notes: marginNotes(map, floor, board.coords),
-            decor: pageDecor(`${floor}|${map.nodes.map(n => n.id).join('')}`, Object.values(board.coords)),
-            hint: isGM
-                ? (map.currentNodeId ? 'Щёлкните узел — отряд пойдёт туда. Красными чернилами — куда можно за этот шаг.' : 'Щёлкните узел внешней зоны — отряд войдёт на этаж.')
-                : 'Куда идти — решаете вслух, отряд ведёт Мастер. Красными чернилами — куда можно за этот шаг.',
-            moves
+        const ticks = map.web?.ticks ?? 0;
+        const stage = webStage(ticks);
+        const counts = {};
+        for (const n of map.nodes) counts[n.type] = (counts[n.type] ?? 0) + 1;
+        this.model = webModel(map);
+        const enabled = new Set(activeStages().map(s => s.id));
+        const PAINT = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost'];
+        return Object.assign(context, {
+            hasBoard: true,
+            web: {
+                ticks, stage, toNext: ticksToNextStage(ticks), calm: Math.max(0, WEB.CALM - ticks), eaten: (map.web?.eaten ?? []).length,
+                stages: activeStages().map((s, i) => ({ ...s, on: i < stage })), devourer: !!map.web?.devourer, max: activeStages().length
+            },
+            mode: this.mode,
+            gm: isGM && this.tools ? {
+                calm: WEB.CALM, every: WEB.EVERY,
+                stages: BOSS_STAGES.map(s => ({ ...s, enabled: enabled.has(s.id) })),
+                paint: PAINT.map(t => ({ type: t, label: MAP_DATA.LABELS[t], icon: MAP_DATA.ICONS[t], color: MAP_DATA.COLORS[t], on: this.mode === 'paint' && this.paintType === t }))
+            } : null,
+            legend: ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost', 'boss'].filter(t => counts[t]).map(t => ({ label: MAP_DATA.LABELS[t], icon: MAP_DATA.ICONS[t], color: MAP_DATA.COLORS[t], count: counts[t] })),
+            hint: this.mode === 'devourer' ? 'Щёлкните узел и ещё раз — Пожиратель встанет туда и съест его. Снова «Поставить» — выход из режима.'
+                : this.mode === 'paint' ? `Щёлкните узел и ещё раз — он станет «${MAP_DATA.LABELS[this.paintType]}». Снова «Править узлы» — выход из режима.`
+                : isGM
+                ? (map.currentNodeId ? 'Щёлкните кристалл, затем ещё раз — отряд пойдёт туда. Янтарные нити — куда можно за этот шаг.' : 'Щёлкните кристалл внешнего кольца, затем ещё раз — отряд войдёт на этаж.')
+                : 'Куда идти — решаете вслух, отряд ведёт Мастер. Янтарные нити — куда можно за этот шаг.'
         });
     }
 
     _onFirstRender(context, options) {
         super._onFirstRender(context, options);
         this.element.classList.add('gd-wo-opening');
-        setTimeout(() => this.element?.classList.remove('gd-wo-opening'), 600);
+        setTimeout(() => this.element?.classList.remove('gd-wo-opening'), 1100);
         this.escape = event => { if (event.key === 'Escape' && !event.target.closest?.('input, select, textarea')) this.close(); };
         document.addEventListener('keydown', this.escape);
-        // Размер листа — от экрана
-        this.resize = foundry.utils.debounce(() => this.render(), 200);
-        window.addEventListener('resize', this.resize);
     }
 
     _onRender(context, options) {
         super._onRender(context, options);
-        // Значки узлов чуть покачиваются, как на карте рядов; при «меньше движения» — замирают
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-            this.element.querySelectorAll('svg.gd-ink').forEach(svg => svg.pauseAnimations?.());
-            return;
+        const slot = this.element.querySelector('.gd-wo-canvas-slot');
+        if (!slot) return;
+        // Холст живёт между перерисовками: переносится в новое место, рисунок — по новой модели
+        if (!this.stage) {
+            const canvas = document.createElement('canvas');
+            canvas.className = 'gd-wo-canvas';
+            this.stage = new WebStage(canvas, {
+                canStep: () => game.user.isGM,
+                resizeTo: this.element,
+                onStep: (id, held) => {
+                    if (!game.user.isGM) return ui.notifications.info('Отряд ведёт Мастер — скажите ему, куда идти.');
+                    if (!held) return;
+                    if (this.mode === 'devourer') return gmDevourer(id);
+                    if (this.mode === 'paint') return setWebNodeType(id, this.paintType);
+                    return stepTo(id);
+                },
+                onHover: (n, p, r) => this.#tooltip(n, p, r)
+            });
+            // Выбран кристалл — подсказка, что второй щелчок ведёт отряд
+            this.stage.onSelect = n => {
+                const hint = this.element?.querySelector('.gd-wo-hint');
+                if (!hint) return;
+                hint.dataset.base ??= hint.textContent;
+                hint.textContent = n ? `${n.label}: щёлкните ещё раз — ${this.mode === 'devourer' ? 'Пожиратель встанет сюда' : this.mode === 'paint' ? 'узел сменится' : 'отряд пойдёт сюда'}.` : hint.dataset.base;
+                hint.classList.toggle('armed', !!n);
+            };
         }
-        const now = performance.now();
-        this.element.querySelectorAll('.gd-map-mark i').forEach((icon, index) => {
-            const sway = icon.animate([{ transform: 'rotate(-3deg) translateY(1px)' }, { transform: 'rotate(3deg) translateY(-1px)' }],
-                { duration: 4800 + (index % 3) * 850, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
-            sway.currentTime = now + index * 1700;
-        });
+        slot.replaceWith(this.stage.view);
+        this.#fit();
+        if (!this.model) return;
+        // Паутина — левее середины своей части экрана (справа край слоя тает), во всю высоту
+        this.stage.app.resize();
+        const W = this.element.clientWidth, H = this.element.clientHeight;
+        const size = Math.round(Math.min(H * 0.86, W * 0.64));
+        this.stage.update({ ...this.model, size, center: { x: Math.max(size / 2 + 24, W * 0.35), y: H * 0.53 } });
+    }
+
+    /**
+     * Слой занимает всю левую часть экрана — до боковой панели справа: поверх левого меню и панели макросов,
+     * но под окнами (магазин, событие, листы) — они открываются над картой
+     */
+    #fit() {
+        const right = document.getElementById('ui-right');
+        const edge = right?.getBoundingClientRect().left;
+        this.element.style.right = edge > window.innerWidth * 0.5 ? `${Math.max(0, window.innerWidth - edge)}px` : '0px';
+    }
+
+    #tooltip(n, p, r) {
+        const tip = this.element?.querySelector('.gd-wo-tip');
+        if (!tip) return;
+        if (!n) { tip.hidden = true; return; }
+        const state = n.eaten ? 'съеден: награды нет, вход — прорыв' : n.touched ? 'тронут Пожирателем' : n.state === 'visited' ? 'пройден' : n.state === 'reachable' ? 'можно за этот шаг' : n.state === 'current' ? 'здесь отряд' : '';
+        tip.innerHTML = `<b>${n.label}</b>${state ? `<small>${state}</small>` : ''}`;
+        tip.style.left = `${p.x}px`;
+        tip.style.top = `${p.y - r - 14}px`;
+        tip.hidden = false;
+    }
+
+    /** Закрытие — с обратной анимацией: паутина рассасывается, подписи и Туман уезжают влево */
+    async close(options = {}) {
+        if (this.stage && this.rendered && !this.closing && !options.instant) {
+            this.closing = true;
+            this.element.classList.add('gd-wo-closing');
+            this.element.style.pointerEvents = 'none';
+            await this.stage.outro();
+        }
+        return super.close(options);
     }
 
     _onClose(options) {
+        this.closing = false;
         super._onClose(options);
         document.removeEventListener('keydown', this.escape);
-        window.removeEventListener('resize', this.resize);
+        this.stage?.destroy();
+        this.stage = null;
+    }
+
+    /** Для проверок: что нарисовано */
+    stageInfo() {
+        return { nodes: this.stage?.nodes.size ?? 0, open: this.model?.edges.filter(e => e.cls === 'open' || e.cls === 'familiar').length ?? 0, edges: this.model?.edges.length ?? 0, tendrils: this.stage?.tendrils.length ?? 0, legs: this.stage?.lastLegs ?? 0, bursts: this.stage?.biteCount ?? 0, familiar: this.stage?.familiar?.length ?? 0, current: this.model?.nodes.filter(n => n.state === 'current').length ?? 0, reachable: this.model?.nodes.filter(n => n.state === 'reachable').length ?? 0 };
     }
 }
 
@@ -184,10 +263,11 @@ Hooks.on('updateScene', (scene, changes) => {
 });
 const refresh = () => { const app = foundry.applications.instances?.get(ID); if (app?.rendered) app.render(); };
 Hooks.on('gachadnd.omenChanged', refresh);
-Hooks.on('updateSetting', setting => { if ([`${MODULE_ID}.devourerSatiety`, `${MODULE_ID}.runFloor`].includes(setting.key)) refresh(); });
+Hooks.on('updateSetting', setting => { if ([`${MODULE_ID}.devourerSatiety`, `${MODULE_ID}.runFloor`, `${MODULE_ID}.webCalm`, `${MODULE_ID}.webEvery`, `${MODULE_ID}.webStages`].includes(setting.key)) refresh(); });
 let timer = null;
 for (const hook of ['createItem', 'updateItem', 'deleteItem']) Hooks.on(hook, item => {
     if (!game.user.isGM || !item?.parent?.hasPlayerOwner) return;
     clearTimeout(timer);
     timer = setTimeout(refresh, 200);
 });
+window.addEventListener('resize', foundry.utils.debounce(refresh, 250));

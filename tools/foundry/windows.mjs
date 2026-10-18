@@ -55,6 +55,13 @@ for (const [name, call] of WINDOWS) {
 
 // Окна узлов: на тестовой сцене чертится карта этажа, отряд по очереди встаёт на узел нужного типа
 const floorBefore = await page.evaluate(() => game.settings.get('gachadnd', 'runFloor'));
+// Окна узлов проверяются на карте рядами: режим, оставшийся в мире от паутины, на время проверки — ряды
+const modeBefore = await page.evaluate(async () => {
+    const mode = game.settings.get('gachadnd', 'mapMode');
+    await game.settings.set('gachadnd', 'mapMode', 'rows');
+    await canvas.scene.unsetFlag('gachadnd', 'floorMap');
+    return mode;
+});
 const NODES = [['Алтарь Рока', 'doom', 'openDoomAltar()'], ['Магазин', 'shop', 'openShop()'], ['Риски', 'risk', 'openRisk()'], ['Портал в Предел', 'rest', 'openPortal()']];
 let types = [];
 for (let attempt = 0; attempt < 6 && !NODES.every(([, type]) => types.includes(type)); attempt++) {
@@ -100,10 +107,11 @@ for (const [name, type, call] of NODES) {
     await closeAll(base);
     await page.waitForTimeout(300);
 }
-await page.evaluate(async floor => {
+await page.evaluate(async ({ floor, mode }) => {
     await canvas.scene.unsetFlag('gachadnd', 'floorMap');
     await game.settings.set('gachadnd', 'runFloor', floor);
-}, floorBefore);
+    await game.settings.set('gachadnd', 'mapMode', mode);
+}, { floor: floorBefore, mode: modeBefore });
 
 // Функции без окна
 for (const [name, call] of [['Якорь: открыть', 'setAnchor(true)'], ['Якорь: закрыть', 'setAnchor(false)'], ['Запах отряда', 'scent()'],

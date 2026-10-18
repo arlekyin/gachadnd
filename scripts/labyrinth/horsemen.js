@@ -36,7 +36,12 @@ export function hasTakenHorseman(actor) {
 
 export function partyActors() {
     // Персонаж, чьё тело пожрал Предел, из отряда выбыл
-    return game.actors.filter(a => a.type === 'character' && a.hasPlayerOwner && !a.getFlag(MODULE_ID, 'devoured'));
+    const alive = game.actors.filter(a => a.type === 'character' && !a.getFlag(MODULE_ID, 'devoured'));
+    const owned = alive.filter(a => a.hasPlayerOwner);
+    if (owned.length) return owned;
+    // Ни у одного персонажа нет игрока (Мастер водит один или проверяет) — отряд: персонажи с токенами на сцене
+    const onScene = new Set((canvas?.scene?.tokens ?? []).map(t => t.actorId));
+    return alive.filter(a => onScene.has(a.id));
 }
 
 function isActiveGM() {

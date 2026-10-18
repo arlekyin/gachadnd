@@ -25,7 +25,7 @@ import { mapScene } from "./scene-travel.js";
 import { MAP_DATA } from "./map.js";
 import { getFloor } from "./economy.js";
 import { findBoss } from "./moon-boons.js";
-import { isWeb, webStage } from "./web-map.js";
+import { isWeb, webStage, activeStages } from "./web-map.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 const FLAG = 'bossRule';
@@ -151,12 +151,14 @@ Hooks.on('combatStart', async combat => {
     if (isWeb(map)) {
         const stage = webStage(map.web?.ticks ?? 0);
         if (!stage) return announce('<i class="fas fa-feather"></i> <strong>Босс спокоен:</strong> отряд уложился в тишину этажа — ни одной ступени.');
-        await setBossRules(combat, ['muffle', 'sleepy'].slice(0, Math.min(stage, 2)));
-        if (stage >= 3) {
+        const got = activeStages().slice(0, stage).map(s => s.id);
+        const rules = got.filter(id => id === 'muffle' || id === 'sleepy');
+        if (rules.length) await setBossRules(combat, rules);
+        if (got.includes('strong')) {
             const extra = await strengthen(combat);
             if (extra) await announce(`<i class="fas fa-heart-circle-plus"></i> <strong>Ступень Босса — Окрепший:</strong> +${extra} к максимуму ПЗ до конца боя.`);
         }
-        if (stage >= 4) await announce('<i class="fas fa-users"></i> <strong>Ступень Босса — Свита:</strong> выставьте с Боссом двух приспешников его этажа.', true);
+        if (got.includes('retinue')) await announce('<i class="fas fa-users"></i> <strong>Ступень Босса — Свита:</strong> выставьте с Боссом двух приспешников его этажа.', true);
         if (hint('hintBossRules')) await announce(`<i class="fas fa-hourglass-half"></i> Ступеней Босса: ${stage} — отряд ходил по этажу ${map.web.ticks} шаг.<div class="gd-boss-rule-buttons"><button type="button" data-gd-bossrule="none"><i class="fas fa-ban"></i> Снять правила</button></div>`, true);
         return;
     }

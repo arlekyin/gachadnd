@@ -32,3 +32,6 @@ tools/stand/out/
 
 # Проверки в Foundry: снимки
 tools/foundry/out/
+
+# Звуки паутины для прослушивания: node tools/sound/render.mjs
+tools/sound/out/

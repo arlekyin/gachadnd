@@ -65,7 +65,7 @@ await page.click(`#${m.id} button[type="submit"]`);
 await wait(800);
 check('Экономика: изменённое поле сохранилось', await ev(() => game.settings.get('gachadnd', 'goldBase')) === 150);
 m = await openMenu('soundsMenu');
-check('Звуки и эффекты: 10 полей у Мастера', m.fields === 10, JSON.stringify(m));
+check('Звуки и эффекты: 11 полей у Мастера (со звуками паутины)', m.fields === 11, JSON.stringify(m));
 await ev(() => gdt.menuApp.close());
 m = await openMenu('hintsMenu');
 check('Подсказки Мастеру: 5 переключателей (Запах, атмосфера, Пульс, дары луны, правило Босса)', m.fields === 5, JSON.stringify(m));
