@@ -43,7 +43,8 @@ const CATEGORIES = {
     resource: 'РЕСУРС',
     synergy: 'СИНЕРГИЯ',
     utility: 'УТИЛИТА',
-    horseman: 'ВСАДНИК'
+    horseman: 'ВСАДНИК',
+    scar: 'ШРАМ'
 };
 
 // ==========================================
@@ -213,7 +214,7 @@ const EFFECT_MODES = { custom: 0, multiply: 1, add: 2, downgrade: 3, upgrade: 4,
 const ALLOWED_FIELDS = [
     'id', 'name', 'rarity', 'category', 'tags', 'description', 'activation', 'range', 'target',
     'uses', 'recovery', 'slot_bonus', 'forced_loot', 'tagEmitter', 'drawback', 'cost', 'save', 'damage', 'roll', 'changes',
-    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger', 'light', 'blast', 'knack', 'explicit_name'
+    'combat_changes', 'trigger', 'ranks', 'stacking', 'memory_scaling', 'memory_bonus', 'undeletable', 'combat_swap', 'personal', 'loot_bonus', 'horseman', 'cleanse', 'cleanse_goal', 'cleansed', 'shop_discount', 'impact', 'tetris', 'portal', 'fez', 'cat', 'freaky', 'flashback', 'qte', 'gwent', 'aura', 'recharger', 'light', 'blast', 'knack', 'living', 'living_max', 'duo', 'scar', 'explicit_name'
 ];
 
 // light: <вид> — навыки света (scripts/memory/skills/light/<вид>.js)
@@ -224,10 +225,16 @@ const BLAST_KINDS = ['fine', 'lava', 'blade', 'phoenix', 'potato', 'hiss', 'barr
 // пассивные (butcher, through) работают без activation
 const KNACK_KINDS = ['firecracker', 'butcher', 'through', 'junk', 'transfusion', 'slowpoison', 'supernova'];
 const KNACK_PASSIVE = ['butcher', 'through'];
+// living: <вид> — живые навыки со счётчиком и двойные навыки (scripts/memory/skills/living/<вид>.js);
+// living_max — предел счётчика, меняется по рангам; duo: [тег, тег] — двойной навык: выпадает, только если
+// у кого-то в отряде в Памяти есть навыки обоих тегов; scar: <вид> — шрам (scripts/memory/skills/living/scars.js)
+const LIVING_KINDS = ['hone', 'third', 'countdown', 'ember', 'pyre', 'jet', 'bastion'];
+const LIVING_PASSIVE = ['hone', 'third', 'jet'];
+const SCAR_KINDS = ['voice', 'burn', 'crack'];
 
 // Ранг меняет только числа: заряды, дальность, размер области, формулы урона/лечения/броска,
 // значения тех же эффектов. Новых механик ранг не добавляет. Ранг наследует предыдущий ранг.
-const RANK_FIELDS = ['text', 'uses', 'range', 'target', 'damage', 'roll', 'changes'];
+const RANK_FIELDS = ['text', 'uses', 'range', 'target', 'damage', 'roll', 'changes', 'living_max'];
 const MAX_EXTRA_RANKS = 2;
 // Уникальные редкости: повтор навыка не поглощается, рангов нет
 const UNIQUE_RARITIES = ['purple', 'red', 'orange'];
@@ -369,6 +376,25 @@ function validateSkill(skill, folder) {
     if (skill.knack !== undefined) {
         if (!KNACK_KINDS.includes(skill.knack)) err('knack', `допустимо: ${KNACK_KINDS.join(', ')}`);
         if (!isActive && !KNACK_PASSIVE.includes(skill.knack)) err('knack', 'срабатывает при использовании — нужна activation');
+    }
+
+    if (skill.living !== undefined) {
+        if (!LIVING_KINDS.includes(skill.living)) err('living', `допустимо: ${LIVING_KINDS.join(', ')}`);
+        if (!isActive && !LIVING_PASSIVE.includes(skill.living)) err('living', 'срабатывает при использовании — нужна activation');
+    }
+    if (skill.living_max !== undefined) {
+        if (!isPositiveInt(skill.living_max)) err('living_max', 'целое число больше 0');
+        if (skill.living === undefined) err('living_max', 'предел счётчика — только у навыка living');
+    }
+    if (skill.duo !== undefined) {
+        const pair = Array.isArray(skill.duo) ? skill.duo : [];
+        if (pair.length !== 2 || pair[0] === pair[1]) err('duo', 'список из двух разных тегов');
+        pair.forEach(t => { if (!(skill.tags ?? []).includes(t)) err('duo', `тег «${t}» должен быть и в tags`); });
+    }
+    if (skill.scar !== undefined) {
+        if (!SCAR_KINDS.includes(skill.scar)) err('scar', `допустимо: ${SCAR_KINDS.join(', ')}`);
+        if (isActive) err('scar', 'шрам не используется — activation не нужна');
+        if (skill.ranks) err('scar', 'у шрама нет рангов');
     }
 
     // recharger: { restore: all | N, target: memory | equipped_empty } — навык восстанавливает заряды другого
@@ -691,6 +717,7 @@ function buildItem(skill, folder, rank = 1) {
     ] : [];
     const hasChanges = [skill, ...(skill.ranks ?? [])].some(r => r?.changes);
     const rankTexts = (skill.ranks ?? []).map((r, i) => withFormula(r.text, resolveRank(skill, i + 2)));
+    const original = skill;
     skill = ranked;
     const rarity = RARITIES[skill.rarity];
     const category = CATEGORIES[folder];
@@ -776,6 +803,10 @@ function buildItem(skill, folder, rank = 1) {
                 ...(skill.light ? { light: skill.light } : {}),
                 ...(skill.blast ? { blast: skill.blast } : {}),
                 ...(skill.knack ? { knack: skill.knack } : {}),
+                ...(skill.living ? { living: skill.living } : {}),
+                ...(skill.living_max ? { living_max_by_rank: Array.from({ length: maxRank }, (_, i) => resolveRank(original, i + 1).living_max) } : {}),
+                ...(skill.duo ? { duo: skill.duo } : {}),
+                ...(skill.scar ? { scar: skill.scar } : {}),
                 // Грубое название (18+): показывается вместо обычного, если Мастер включил «Грубые названия»
                 ...(skill.explicit_name ? { explicit_name: String(skill.explicit_name) } : {}),
                 ...(skill.recharger ? { recharger: { restore: skill.recharger.restore, target: skill.recharger.target } } : {}),

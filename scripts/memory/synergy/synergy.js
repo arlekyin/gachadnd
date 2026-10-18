@@ -4,6 +4,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-data.js";
+import { duoGrants, rememberSpent } from "./duo-links.js";
 import { RECOVERY_VALUES } from "../../core/recovery.js";
 import { getSkillPack } from "../crystals.js";
 
@@ -108,6 +109,18 @@ export function naturalSlotCap(actor) {
     return 6 + Math.floor(level / 2) + (Number(actor?.getFlag?.(MODULE_ID, 'extra_slots')) || 0);
 }
 
+/**
+ * Навык действует: экипирован и не спит. Спящий навык (флаг asleep — шрам «Чужой голос», правило Босса
+ * «Крайний спит») занимает слот, но не даёт тегов, эффектов, срабатываний и не используется.
+ */
+export const isAwake = item => !!item?.flags?.[MODULE_ID]?.is_active && !item.flags[MODULE_ID].asleep;
+
+/**
+ * Поправки к счёту тегов: (actor, tagCounts) => void — слушатель меняет счёт на месте (шрам «Ожог памяти»,
+ * правило Босса «Глушитель»). Регистрируются из других частей модуля.
+ */
+export const TAG_COUNT_MODIFIERS = [];
+
 // Персонаж участвует в начатом бою — менять навыки нельзя (кроме Горячей замены)
 export function isInCombat(actor) {
     return !!game.combats?.some(c => c.started && c.combatants.some(cb => cb.actor?.id === actor?.id));
@@ -120,13 +133,15 @@ export function getSlotBonus(items) {
 
 // Обновления эффектов навыка: передаваемые эффекты действуют только у экипированного навыка
 function getEffectSyncUpdates(item, active) {
+    active &&= !item.flags?.[MODULE_ID]?.asleep;
     return item.effects
         .filter(e => e.transfer && (e.disabled === active))
         .map(e => ({ _id: e.id, disabled: !active }));
 }
 
 export async function setSkillEquipped(item, active) {
-    await item.setFlag(MODULE_ID, 'is_active', active);
+    // Когда экипирован — для правила Босса «Крайний спит»
+    await item.update({ [`flags.${MODULE_ID}.is_active`]: active, ...(active ? { [`flags.${MODULE_ID}.equipped_at`]: Date.now() } : {}) });
     const updates = getEffectSyncUpdates(item, active);
     if (updates.length) await item.updateEmbeddedDocuments('ActiveEffect', updates);
 }
@@ -201,8 +216,10 @@ export async function updateActorSynergies(actor) {
         }
 
         // --- Б. РАСЧЁТ СИНЕРГИЙ И НАВЫКОВ ---
+        // Спящие навыки занимают слот (перегрузка выше), но тегов не дают
+        const awakeItems = activeItems.filter(isAwake);
         const emittedTags = [];
-        activeItems.forEach(item => {
+        awakeItems.forEach(item => {
             const flags = item.flags[MODULE_ID] || {};
             // Защита от строкового 'true'
             const isEmitter = flags.tagEmitter === true || flags.tagEmitter === "true";
@@ -215,7 +232,7 @@ export async function updateActorSynergies(actor) {
         const tagCounts = {};
         // Теги каждого экипированного навыка с учётом излучения — для memory_scaling
         const equippedTags = new Map();
-        activeItems.forEach(item => {
+        awakeItems.forEach(item => {
             const flags = item.flags[MODULE_ID] || {};
             let currentTags = [...(flags.tags || [])].map(t => String(t).toLowerCase().trim());
             const isEmitter = flags.tagEmitter === true || flags.tagEmitter === "true";
@@ -235,6 +252,9 @@ export async function updateActorSynergies(actor) {
             });
         });
         
+        for (const modify of TAG_COUNT_MODIFIERS) {
+            try { modify(actor, tagCounts); } catch (error) { console.error(`${MODULE_ID} | поправка тегов`, error); }
+        }
         console.log(`[GachaDND] Итоговое количество тегов:`, tagCounts);
 
         const earnedSynergies = [];
@@ -274,6 +294,9 @@ export async function updateActorSynergies(actor) {
         }
         
         console.log(`[GachaDND] Заработанные синергии:`, earnedSynergies.map(s => s.name));
+
+        // Связки синергий: двойной навык — у того, у кого экипированы оба тега (duo-links.js)
+        itemsToGrant.push(...await duoGrants(actor, tagCounts, SYNERGY_FEATURE_VERSION));
 
         // 1. Управление Активными Эффектами
         const synergyMarker = "Синергия: ";
@@ -336,6 +359,7 @@ export async function updateActorSynergies(actor) {
         }
 
         if (itemsToDelete.length > 0) {
+            await rememberSpent(actor, itemsToDelete.map(id => actor.items.get(id)).filter(Boolean));
             await actor.deleteEmbeddedDocuments("Item", itemsToDelete);
         }
 
@@ -349,9 +373,14 @@ export async function updateActorSynergies(actor) {
         if (itemsToCreate.length > 0) {
             await actor.createEmbeddedDocuments("Item", itemsToCreate);
             ui.notifications.info(`✨ ${actor.name}: новые способности синергий — ${itemsToCreate.map(i => i.name).join(', ')}.`);
+            const links = itemsToCreate.filter(i => String(i.flags[MODULE_ID].tagSource).startsWith('duo:'));
+            if (links.length) await ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ actor }),
+                content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-link"></i> Связка синергий</div><p>${links.map(i => `<strong>${i.name}</strong> (${i.flags[MODULE_ID].duo.join(' + ')})`).join(', ')} — пока экипированы оба тега.</p></div>`
+            });
         }
 
-        await syncMemoryScaling(actor, gachaItems, activeItems, equippedTags, tagCounts);
+        await syncMemoryScaling(actor, gachaItems, awakeItems, equippedTags, tagCounts);
         await syncCombatChanges(actor);
 
         console.log(`[GachaDND] === РАСЧЕТ УСПЕШНО ЗАВЕРШЕН ===`);
@@ -506,7 +535,7 @@ export async function syncCombatChanges(actor, endedCombatId = null) {
     if (!actor) return;
     const inCombat = !!game.combats?.some(c => c.id !== endedCombatId && c.started && c.combatants.some(cb => cb.actor?.id === actor.id));
     const sources = inCombat
-        ? actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active && i.flags[MODULE_ID].combat_changes?.length && !i.flags[MODULE_ID].drawback_lifted)
+        ? actor.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active && !i.flags[MODULE_ID].asleep && i.flags[MODULE_ID].combat_changes?.length && !i.flags[MODULE_ID].drawback_lifted)
         : [];
     const existing = actor.effects.filter(e => e.flags?.[MODULE_ID]?.combat_source);
     const toDelete = existing.filter(e => !sources.some(i => i.id === e.flags[MODULE_ID].combat_source)).map(e => e.id);

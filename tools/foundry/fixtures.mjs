@@ -189,7 +189,8 @@ export async function skills(page, actorId, names, { equip = true } = {}) {
         for (const name of names) {
             const before = new Set(actor.items.map(i => i.id));
             await inv.addSkillToMemory(actor, name, { forced: true });
-            const item = actor.items.find(i => !before.has(i.id));
+            // Новый навык Памяти: заодно могла выдаться связка синергий — она не навык Памяти
+            const item = actor.items.find(i => !before.has(i.id) && syn.isMemorySkill(i));
             if (!item) throw new Error(`Навык «${name}» не добавился`);
             if (equip) await syn.setSkillEquipped(item, true);
             ids[name] = item.id;

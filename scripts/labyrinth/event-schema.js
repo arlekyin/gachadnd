@@ -26,6 +26,7 @@ export const EFFECTS = {
     omen: v => (Number.isInteger(v) && v !== 0) || 'целое: + предвестие Пожирателя ближе, − дальше (не до прихода)',
     deal_preview: v => v === true || 'true — открыть отряду лоты следующей Сделки луны',
     moon_mark: v => v === true || 'true — метка луны на персонаже',
+    scar: v => v === true || ['voice', 'burn', 'crack'].includes(v) || 'true (случайный шрам) или вид: voice, burn, crack',
     skill: v => (v && EVENT_RARITIES.includes(v.rarity)) || `{ rarity: ${EVENT_RARITIES.join('|')} } — случайный навык сразу в Память`,
     hit_dice: v => (Number.isInteger(v) && v !== 0) || 'целое: + вернуть потраченные Кости Хитов, − потратить',
     hp: v => (typeof v === 'number' && v !== 0 && Math.abs(v) <= 1) || 'доля максимума ПЗ: + лечение, − урон (−0,25 = четверть)',

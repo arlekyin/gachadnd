@@ -15,6 +15,16 @@
         {{/each}}
     </div>
     {{/if}}
+    {{#if links.length}}
+    <div class="gd-links"><div class="gd-build-title">Связки синергий</div>
+        {{#each links}}
+        <div class="gd-link-row {{#if ready}}ready{{/if}}" title="{{#if ready}}Связка действует — способность в «Активных синергиях»{{else}}Связка включится, когда экипированы оба тега{{/if}}">
+            <img src="{{img}}"><span class="gd-link-name">{{name}}</span>
+            <span class="gd-link-parts">{{#each parts}}<span class="{{#if done}}done{{/if}}">{{tag}} {{have}}/{{need}}</span>{{/each}}</span>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
     {{#if synergies.length}}
     <div class="gd-synergies"><div class="gd-build-title">Активные синергии</div>
         <div class="gd-syn-list">

@@ -41,7 +41,7 @@ export const RESIDENTS = {
 };
 
 // Цены — доля Базы этажа
-export const PRICES = { smith: 0.6, chart: 0.4, cell: 0.3, cool: 0.3, bait: 0.5 };
+export const PRICES = { smith: 0.6, chart: 0.4, cell: 0.3, cool: 0.3, bait: 0.5, scar: 0.3 };
 export const LIMITS = { chart: 2, cells: 3 };
 const BAIT_RARITIES = ['blue', 'purple', 'red', 'orange'];
 // Обычные навыки: уникальные (фиолетовые и красные) и всадники не перековываются
@@ -80,7 +80,7 @@ export const allTags = () => SYNERGIES.map(s => s.tag).sort((a, b) => a.localeCo
 // ==========================================
 
 /** Навыки, которые можно перековать: обычные навыки Памяти, не всадники, не неудаляемые */
-export const forgeable = item => isMemorySkill(item) && COMMON.includes(flagsOf(item).rarity) && !flagsOf(item).horseman && !flagsOf(item).undeletable;
+export const forgeable = item => isMemorySkill(item) && COMMON.includes(flagsOf(item).rarity) && !flagsOf(item).horseman && !flagsOf(item).undeletable && !flagsOf(item).scar;
 export const smithUsed = actor => residentsState().smith?.[actor.id] === residentsState().visit;
 
 /** Навык, который Знахарь может очистить (как в магазине) */
@@ -321,6 +321,16 @@ async function performOp({ op, userId, ...data }) {
         if (!(await charge(userId, actor, cost))) return;
         await item.delete({ gachadndCleanse: true });
         return chat('healer', `Очистил Память <strong>${esc(actor.name)}</strong> от «${esc(item.name)}» за ${cost} зм.`);
+    }
+    if (op === 'scar') {
+        if (!need('healer') || !inAnchor()) return;
+        const item = actor.items.get(data.itemId);
+        if (!isMemorySkill(item) || !flagsOf(item).scar) return deny('Это не шрам.');
+        const cost = price('scar', actor);
+        if (!(await charge(userId, actor, cost))) return;
+        await item.delete({ gachadndCleanse: true, gachadndScar: true });
+        await updateActorSynergies(actor);
+        return chat('healer', `Залечил шрам <strong>${esc(actor.name)}</strong>: «${esc(item.name)}» (${cost} зм).`);
     }
     if (op === 'cool') {
         if (!need('healer') || !inAnchor()) return;

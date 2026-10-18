@@ -30,6 +30,7 @@ import { isCrystalItem } from "../memory/inventory.js";
 import { validateEvent } from "./event-schema.js";
 import { randomCrystal, getSkillPack } from "../memory/crystals.js";
 import { addSkillToMemory } from "../memory/inventory.js";
+import { grantScar } from "../memory/skills/living/scars.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ID = 'gachadnd-event';
@@ -180,7 +181,7 @@ export async function applyEffects(effects = [], { one, who, title }) {
                 if (qty > 1) await item.update({ 'system.quantity': qty - 1 }); else await item.delete();
                 lines.push(`${esc(actor.name)}: отдан «${esc(item.name)}»`);
             } else if (key === 'take_skill') {
-                const pool = actor.items.filter(i => isMemorySkill(i) && !i.flags[MODULE_ID].undeletable && !i.flags[MODULE_ID].horseman);
+                const pool = actor.items.filter(i => isMemorySkill(i) && !i.flags[MODULE_ID].undeletable && !i.flags[MODULE_ID].horseman && !i.flags[MODULE_ID].scar);
                 const item = pool[Math.floor(Math.random() * pool.length)];
                 if (!item) { lines.push(`${esc(actor.name)}: продать нечего`); continue; }
                 const amount = Math.round(floorBase() * value.pay * (RARITY_WEIGHT[item.flags[MODULE_ID].rarity] ?? 1));
@@ -197,6 +198,9 @@ export async function applyEffects(effects = [], { one, who, title }) {
                 const hot = actor.items.filter(i => isMemorySkill(i) && (heatOf(i).extra || heatOf(i).locked || heatOf(i).borrowed));
                 if (hot.length) await actor.updateEmbeddedDocuments('Item', hot.map(i => ({ _id: i.id, [`flags.${MODULE_ID}.heat`]: { borrowed: 0, extra: 0, locked: false } })));
                 lines.push(`${esc(actor.name)}: перегрев снят${hot.length ? '' : ' (его не было)'}`);
+            } else if (key === 'scar') {
+                const scar = await grantScar(actor, { kind: value === true ? null : value, reason: 'Событие оставило след' });
+                lines.push(`${esc(actor.name)}: ${scar ? `шрам «${esc(scar.name)}»` : 'шрамов больше некуда — обошлось'}`);
             } else if (key === 'moon_mark') {
                 await actor.setFlag(MODULE_ID, 'moonMark', { floor: getFloor(), at: Date.now() });
                 lines.push(`${esc(actor.name)}: метка луны`);

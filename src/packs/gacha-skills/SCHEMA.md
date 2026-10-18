@@ -13,6 +13,7 @@
 | `synergy` | СИНЕРГИЯ |
 | `utility` | УТИЛИТА |
 | `horseman` | ВСАДНИК |
+| `scar` | ШРАМ |
 
 ## Поля
 
@@ -63,6 +64,10 @@
 | `light` | нет | Навык света: `ultraviolet`, `speed`, `prism`, `battery`, `ricochet`, `lighthouse`, `disco`, `flash`, `spotlight` — автоматизация в `scripts/memory/skills/light/<вид>.js`. Требует `activation`. |
 | `blast` | нет | Навык огня или взрыва: `fine`, `lava`, `blade`, `phoenix`, `potato`, `hiss`, `barrel`, `corpse`, `gas`, `ohyeah` — автоматизация в `scripts/memory/skills/blast/<вид>.js`. Требует `activation`. |
 | `knack` | нет | Навыки, закрывшие пустые редкости тегов: `firecracker`, `butcher`, `through`, `junk`, `transfusion`, `slowpoison`, `supernova` — автоматизация в `scripts/memory/skills/knack/<вид>.js`. Требует `activation`, кроме пассивных `butcher` и `through`. |
+| `living` | нет | Живой навык: `hone`, `third`, `countdown`, `ember`, `pyre`, `jet`, `bastion` — автоматизация в `scripts/memory/skills/living/<вид>.js` (двойные — `duo.js`). Счётчик — флаг `counter` навыка, значок у токена. Требует `activation`, кроме пассивных `hone`, `third`, `jet`. |
+| `living_max` | нет | Предел счётчика живого навыка; меняется по рангам (Набить руку: 4 → 3 → 2). |
+| `duo` | нет | `[тег, тег]` — связка синергий: кристаллом не выпадает, а выдаётся способностью синергии персонажу, у которого экипировано не меньше 2 навыков каждого тега (scripts/memory/synergy/duo-links.js). Оба тега — и в `tags`. |
+| `scar` | нет | Шрам: `voice`, `burn`, `crack` — scripts/memory/skills/living/scars.js. Только в папке `scar`, без `activation` и рангов. В добыче не выпадает: его кладут враги и события. |
 | `horseman` | нет | Всадник Погибели: `hunger`, `plague`, `war`, `death`. Только при `rarity: orange`. См. ниже. |
 | `cleanse` | при `horseman` | Условие сращивания (текст). |
 | `cleanse_goal` | нет | Целое число > 0 — сколько нужно для сращивания; прогресс виден в Терминале. |

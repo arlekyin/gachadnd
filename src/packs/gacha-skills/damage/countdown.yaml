@@ -1,0 +1,29 @@
+id: zBgl2RvcuJnGduWm
+name: Обратный отсчёт
+rarity: blue
+tags:
+  - взрыв
+description: |-
+  Бонусным действием повесьте на существо в пределах 30 футов отсчёт 3 (цель выделите заранее). В начале каждого вашего хода отсчёт уменьшается на 1.
+
+  На нуле — взрыв радиусом 10 футов вокруг носителя: {damage} урона звуком и ещё 1к6 за каждое ваше попадание по носителю, пока шёл отсчёт. Спасбросок Ловкости — половина урона. Если носитель погиб раньше, взрыв — сразу. Только в бою.
+activation: bonus
+range: 30
+uses: 1
+recovery: short
+save:
+  ability: dex
+  dc: universal
+damage:
+  - formula: 3d6
+    type: thunder
+living: countdown
+ranks:
+  - text: Взрыв — {damage}.
+    damage:
+      - formula: 4d6
+        type: thunder
+  - text: Взрыв — {damage}.
+    damage:
+      - formula: 5d6
+        type: thunder

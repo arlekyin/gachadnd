@@ -73,6 +73,19 @@ export function buildCrystalData(skill) {
     };
 }
 
+const LOOT_FIELDS = [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`, `flags.${MODULE_ID}.duo`, `flags.${MODULE_ID}.scar`];
+
+/**
+ * Что может выпасть в добыче: без всадников (только с алтаря Погибели), без шрамов (их кладут враги и
+ * события) и без двойных навыков (это связки синергий: synergy/duo-links.js)
+ */
+export function lootable(index) {
+    return [...index].filter(e => {
+        const flags = e.flags?.[MODULE_ID] ?? {};
+        return flags.rarity !== 'orange' && !flags.scar && !flags.duo;
+    });
+}
+
 /**
  * Случайный кристалл заданной редкости. requiredTag — подстрока тега (Проклятая комната);
  * если навыков с тегом этой редкости нет, тег важнее редкости, а без тега — любой навык.
@@ -81,9 +94,8 @@ export function buildCrystalData(skill) {
 export async function randomCrystal(rarity, requiredTag = null) {
     const pack = getSkillPack();
     if (!pack) return null;
-    const index = await pack.getIndex({ fields: [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`] });
-    // Всадники не выпадают в добыче — только с алтаря Погибели
-    const all = [...index].filter(e => e.flags?.[MODULE_ID]?.rarity !== 'orange');
+    const index = await pack.getIndex({ fields: LOOT_FIELDS });
+    const all = lootable(index);
     const rarityOf = e => e.flags?.[MODULE_ID]?.rarity;
     const hasTag = e => (e.flags?.[MODULE_ID]?.tags ?? []).some(t => t.toLowerCase().includes(requiredTag.toLowerCase()));
 
@@ -100,8 +112,8 @@ export async function randomCrystal(rarity, requiredTag = null) {
 export async function randomCrystalWithTag(rarity, tag) {
     const pack = getSkillPack();
     if (!pack) return null;
-    const index = await pack.getIndex({ fields: [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`] });
-    const pool = [...index].filter(e => e.flags?.[MODULE_ID]?.rarity === rarity && (e.flags?.[MODULE_ID]?.tags ?? []).includes(tag));
+    const index = await pack.getIndex({ fields: LOOT_FIELDS });
+    const pool = lootable(index).filter(e => e.flags?.[MODULE_ID]?.rarity === rarity && (e.flags?.[MODULE_ID]?.tags ?? []).includes(tag));
     if (!pool.length) return null;
     const entry = pool[Math.floor(Math.random() * pool.length)];
     return buildCrystalData(await pack.getDocument(entry._id));
@@ -111,9 +123,9 @@ export async function randomCrystalWithTag(rarity, tag) {
 export async function tagsWithRarity(rarity) {
     const pack = getSkillPack();
     if (!pack) return [];
-    const index = await pack.getIndex({ fields: [`flags.${MODULE_ID}.rarity`, `flags.${MODULE_ID}.tags`] });
+    const index = await pack.getIndex({ fields: LOOT_FIELDS });
     const tags = new Set();
-    for (const e of index) if (e.flags?.[MODULE_ID]?.rarity === rarity) (e.flags[MODULE_ID].tags ?? []).forEach(t => tags.add(t));
+    for (const e of lootable(index)) if (e.flags?.[MODULE_ID]?.rarity === rarity) (e.flags[MODULE_ID].tags ?? []).forEach(t => tags.add(t));
     return [...tags];
 }
 

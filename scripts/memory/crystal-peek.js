@@ -30,7 +30,8 @@ async function peekHtml(skillId) {
         const body = await editor.enrichHTML(skill.system?.description?.value ?? '', { relativeTo: skill, rollData: skill.getRollData?.() });
         const weight = `вес ${CRYSTAL_WEIGHT[flags.rarity] ?? 1}`;
         const meta = [label, weight, flags.category, (flags.tags ?? []).join(', ')].filter(Boolean).map(esc).join(' · ');
-        return `<div class="gd-peek-head" style="--rarity: ${color}"><strong>${esc(skill.name)}</strong><small>${meta}</small></div><div class="gd-peek-body">${body || '<p>Описание отсутствует.</p>'}</div>`;
+        const duo = flags.duo ? `<small class="gd-peek-duo">связка синергий: ${flags.duo.map(esc).join(' + ')} — по 2 экипированных навыка каждого тега</small>` : '';
+        return `<div class="gd-peek-head" style="--rarity: ${color}"><strong>${esc(skill.name)}</strong><small>${meta}</small>${duo}</div><div class="gd-peek-body">${body || '<p>Описание отсутствует.</p>'}</div>`;
     })();
     cache.set(skillId, task);
     return task;

@@ -5,6 +5,7 @@
  * Вкладка «Слоты» — компактный список экипированного для быстрого доступа в бою.
  */
 
+import { duoProgress, DUO_THRESHOLD } from "../synergy/duo-links.js";
 import { MODULE_ID } from "../../core/constants.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "../synergy/synergy.js";
 import { HOOKS, restSite, allowSkillChange } from "../memory-api.js";
@@ -279,6 +280,11 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             feature: selected ? this.#feature(selected, emittedTags, descriptions) : null,
             ring: this.#ring(naturalCap, absoluteCap, slotted),
             build: this.#build(tagCounts),
+            // Связки синергий: двойной навык — по DUO_THRESHOLD экипированных навыков каждого из двух тегов
+            links: (await duoProgress(tagCounts)).map(l => ({
+                name: l.name, img: l.img, ready: l.ready,
+                parts: l.duo.map((tag, i) => ({ tag, have: Math.min(l.have[i], DUO_THRESHOLD), need: DUO_THRESHOLD, done: l.have[i] >= DUO_THRESHOLD }))
+            })),
             synergies: this.#synergies(synergyItems, synergyEffects, descriptions)
         };
     }

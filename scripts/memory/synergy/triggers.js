@@ -90,7 +90,7 @@ export function activeTriggers(actor, on, { all = false } = {}) {
     }
     for (const item of actor?.items ?? []) {
         const flags = item.flags?.[MODULE_ID] ?? {};
-        if (flags.trigger?.on !== on || !flags.is_active || flags.is_crystal_item) continue;
+        if (flags.trigger?.on !== on || !flags.is_active || flags.asleep || flags.is_crystal_item) continue;
         result.push({ id: `skill:${item.id}`, prefKey: `skill-${flags.skill_id ?? item.id}`, name: item.name, trigger: flags.trigger, item, skill: true });
     }
     return all ? result : result.filter(source => getPref(source).enabled);

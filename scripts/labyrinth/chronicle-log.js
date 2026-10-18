@@ -28,7 +28,7 @@ export function logChronicle(kind, text, nodeId = null) {
 
 // Навык сгорел: перегрев, Голод, вытеснение, пара Сплава. Очистка и жертва луне — не «сгорел»
 Hooks.on('deleteItem', (item, options) => {
-    if (!isActiveGM() || options.gachadndCleanse || options.gachadndMoon || !isMemorySkill(item)) return;
+    if (!isActiveGM() || options.gachadndCleanse || options.gachadndMoon || !isMemorySkill(item) || item.flags?.[MODULE_ID]?.scar) return;
     const actor = item.parent;
     if (actor?.type !== 'character' || !actor.hasPlayerOwner) return;
     logChronicle('burn', `${actor.name}: «${item.name}»`);

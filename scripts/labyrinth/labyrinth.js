@@ -29,6 +29,8 @@ import "./chronicle-log.js";
 import { playChronicle } from "./chronicle.js";
 import { EventWindow, registerEventSettings } from "./events.js";
 import { registerDevourerSettings, addSatiety, getSatiety, syncDevourer, worldDevourer } from "./devourer-state.js";
+import { setBossRule } from "./boss-rules.js";
+import { requestScar } from "../memory/skills/living/scars.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -73,6 +75,10 @@ Hooks.once('init', () => {
         satiety: delta => delta ? addSatiety(delta, 'Мастер') : getSatiety(),
         // Глубина и Насыщение на листе Пожирателя — заново (restore: ПЗ и легендарные ресурсы на максимум)
         syncDevourer: (options = {}) => syncDevourer(worldDevourer(), options),
+        // Правило Босса на текущий бой (Мастер): 'muffle' | 'sleepy' | null — снять
+        bossRule: id => setBossRule(game.combat, id),
+        // Шрам персонажу: game.gachadnd.scar(actor, 'voice' | 'burn' | 'crack' | без вида — случайный)
+        scar: (actor, kind = null) => requestScar(actor, { kind, reason: 'Мастер' }),
         // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
         openDeal: () => DealWindow.open(),
         // Дары луны в бою (Мастер, по просьбе отряда): Эхо Босса и натравленный Пожиратель

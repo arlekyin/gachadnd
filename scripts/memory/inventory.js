@@ -409,6 +409,8 @@ Hooks.on('deleteItem', (item, options, userId) => {
     if (!actor) return;
 
     if (!isMemorySkill(item)) return;
+    // Снятый шрам — не сожжённый навык
+    if (item.flags[MODULE_ID]?.scar) return;
     ui.notifications.info(`🔥 Навык «${item.name}» сожжён.`);
     // Удаление навыка из Памяти — сожжение: растёт счётчик (Городская легенда),
     // а синергии и эффекты от состава Памяти пересчитываются

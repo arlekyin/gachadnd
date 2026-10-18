@@ -1,0 +1,20 @@
+id: QhcNPeXfJHNsTGWY
+name: Тлеющий уголь
+rarity: purple
+tags:
+  - огонь
+description: |-
+  Действием выпустите пламя вокруг точки в пределах 60 футов: {damage} урона огнём, спасбросок Ловкости — половина.
+
+  Радиус пламени — 5 футов. Каждые 3 существа, убитых вашим уроном огнём, раздувают уголь: радиус +5 футов, до 30. Счёт не сбрасывается до конца забега.
+activation: action
+range: 60
+uses: 2
+recovery: long
+save:
+  ability: dex
+  dc: universal
+damage:
+  - formula: 4d6
+    type: fire
+living: ember

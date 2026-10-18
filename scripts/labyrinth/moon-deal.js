@@ -105,7 +105,7 @@ const weightOf = deal => deal.offers.reduce((sum, o) => sum + o.w, 0);
 
 /** Навык, который можно сжечь на весах: экипированный навык Памяти, не неудаляемый и не всадник */
 const burnable = item => isMemorySkill(item) && flagsOf(item).is_active && !flagsOf(item).undeletable
-    && !flagsOf(item).horseman && WEIGHT[flagsOf(item).rarity];
+    && !flagsOf(item).horseman && !flagsOf(item).scar && WEIGHT[flagsOf(item).rarity];
 
 const mainClass = actor => actor.items.filter(i => i.type === 'class').sort((a, b) => (b.system.levels ?? 0) - (a.system.levels ?? 0))[0] ?? null;
 
@@ -210,7 +210,7 @@ async function takeFrom(actor, offers) {
 // ==========================================
 
 /** Навыки, которые можно скопировать Чужой памятью: обычные (не уникальные), не всадники */
-const commonSkill = item => isMemorySkill(item) && COMMON.includes(flagsOf(item).rarity) && !flagsOf(item).horseman;
+const commonSkill = item => isMemorySkill(item) && COMMON.includes(flagsOf(item).rarity) && !flagsOf(item).horseman && !flagsOf(item).scar;
 // Сплав: пара сгорает вместе — неудаляемый навык в неё не входит
 const fusable = item => commonSkill(item) && flagsOf(item).is_active && !flagsOf(item).fused && !flagsOf(item).undeletable;
 
