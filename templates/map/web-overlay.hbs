@@ -17,7 +17,7 @@
     </header>
     <div class="gd-wo-buttons">
         <button type="button" data-action="terminal" data-tooltip="Терминал Тумана"><i class="fas fa-brain"></i></button>
-        {{#if isGM}}<button type="button" data-action="tools" class="{{#if tools}}on{{/if}}" data-tooltip="Инструменты Мастера: этаж, Запах, предвестия, Насыщение"><i class="fas fa-sliders"></i></button>{{/if}}
+        {{#if isGM}}<button type="button" data-action="tools" class="{{#if tools}}on{{/if}}" data-tooltip="Панель Мастера"><i class="fas fa-sliders"></i></button>{{/if}}
         <button type="button" data-action="close" data-tooltip="Закрыть (Esc)"><i class="fas fa-xmark"></i></button>
     </div>
     {{#if legend}}
@@ -25,38 +25,5 @@
     {{/if}}
     <div class="gd-wo-hint">{{#if hasBoard}}{{hint}}{{else}}Паутина этажа ещё не начерчена.{{/if}}</div>
     <div class="gd-wo-tip" hidden></div>
-    {{#if isGM}}{{#if tools}}
-    <aside class="gd-wo-gm gachadnd-map">
-        {{#if gm}}
-        <section class="gd-wo-panel">
-            <h3><i class="fas fa-paw"></i> Пожиратель</h3>
-            <div class="gd-wo-row">
-                <button type="button" data-action="mode" data-mode="devourer" class="{{#if (eq mode 'devourer')}}on{{/if}}" data-tooltip="Удержание узла ставит Пожирателя туда: выпустить или перенести"><i class="fas fa-location-crosshairs"></i> Поставить</button>
-                <button type="button" data-action="devourerStep" {{#unless web.devourer}}disabled{{/unless}} data-tooltip="Шаг к отряду: узел съедается, соседи трогаются"><i class="fas fa-shoe-prints"></i> Шаг к отряду</button>
-                <button type="button" data-action="devourerGone" {{#unless web.devourer}}disabled{{/unless}} data-tooltip="Ушёл с паутины: поедание замирает"><i class="fas fa-person-walking-arrow-right"></i> Убрать</button>
-            </div>
-            <h3><i class="fas fa-pen-ruler"></i> Править узлы</h3>
-            <div class="gd-wo-row gd-wo-paint">
-                {{#each gm.paint}}<button type="button" data-action="paintType" data-type="{{type}}" class="{{#if on}}on{{/if}}" style="--node: {{color}}" data-tooltip="{{label}}"><i class="fas {{icon}}"></i></button>{{/each}}
-                {{#if (eq mode 'paint')}}<button type="button" data-action="mode" data-mode="paint" class="on" data-tooltip="Выйти из правки"><i class="fas fa-check"></i></button>{{/if}}
-            </div>
-            <h3><i class="fas fa-hourglass-half"></i> Часы этажа</h3>
-            <div class="gd-wo-row">
-                <span>Тишина, шагов</span>
-                <button type="button" data-action="clock" data-key="webCalm" data-delta="-1">−</button><b>{{gm.calm}}</b><button type="button" data-action="clock" data-key="webCalm" data-delta="1">+</button>
-            </div>
-            <div class="gd-wo-row">
-                <span>Ступень Босса каждые</span>
-                <button type="button" data-action="clock" data-key="webEvery" data-delta="-1">−</button><b>{{gm.every}}</b><button type="button" data-action="clock" data-key="webEvery" data-delta="1">+</button>
-            </div>
-            <h3><i class="fas fa-skull"></i> Ступени Босса</h3>
-            <div class="gd-wo-stage-list">
-                {{#each gm.stages}}<button type="button" data-action="stageToggle" data-stage="{{id}}" class="{{#if enabled}}on{{/if}}"><i class="fas {{icon}}"></i> <b>{{name}}</b> <small>{{text}}</small></button>{{/each}}
-            </div>
-        </section>
-        {{/if}}
-        {{> "modules/gachadnd/templates/map/header.hbs"}}
-        {{> "modules/gachadnd/templates/map/footer.hbs"}}
-    </aside>
-    {{/if}}{{/if}}
+    {{#if gm}}{{> "modules/gachadnd/templates/map/web-gm.hbs"}}{{/if}}
 </div>

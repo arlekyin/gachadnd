@@ -3259,3 +3259,74 @@
 .gachadnd-web-overlay .gd-wo-tip.boss .rw b { color: #ffcf8a; font-weight: 400; }
 .gachadnd-web-overlay .gd-wo-tip.boss .nx { margin-top: 6px; font-size: 12px; color: #e0a090; }
 .gachadnd-web-overlay .gd-wo-tip.boss .gm { margin-top: 6px; font-size: 11px; color: #7f786d; }
+
+/* Панель Мастера на паутине (web-gm.hbs): вкладки «Игра», «Карта», «Этаж», латунные разделители; свёрнутая — полоса значков */
+.gachadnd-web-overlay { --gm-brass: #c9a063; --gm-brass-d: #6b5634; --gm-amber: #ffb347; --gm-bone: #ece6d8; --gm-ink: #cfc8b9; --gm-mute: #8f887c; --gm-teal: #2ee6d6; }
+.gachadnd-web-overlay .gd-wo-gm { right: 28px; top: 76px; bottom: 24px; width: 330px; max-height: none; display: flex; flex-direction: column; overflow: hidden;
+  background: linear-gradient(180deg, rgba(16, 15, 14, 0.96), rgba(12, 11, 11, 0.94)); border: 1px solid #3a3226; border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); color: var(--gm-ink); }
+.gachadnd-web-overlay .gd-wo-gm::before { content: ''; position: absolute; inset: 6px; border: 1px solid rgba(201, 160, 99, 0.18); border-radius: 7px; pointer-events: none; }
+.gachadnd-web-overlay .gd-wo-tabs { display: flex; gap: 2px; padding: 10px 12px 0; border-bottom: 1px solid rgba(201, 160, 99, 0.25); flex: none; }
+.gachadnd-web-overlay .gd-wo-tabs button { flex: 1; height: auto; padding: 8px 0 9px; margin: 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gm-mute);
+  background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; cursor: pointer; line-height: 1.2; }
+.gachadnd-web-overlay .gd-wo-tabs button i { display: block; font-size: 15px; margin: 0 0 4px; }
+.gachadnd-web-overlay .gd-wo-tabs button:hover { color: var(--gm-bone); box-shadow: none; background: none; }
+.gachadnd-web-overlay .gd-wo-tabs button.on { color: var(--gm-amber); border-bottom-color: var(--gm-amber); }
+.gachadnd-web-overlay .gd-wo-tabs .gd-wo-tabs-fold { flex: none; width: 30px; }
+.gachadnd-web-overlay .gd-wo-tabs .gd-wo-tabs-fold i { font-size: 13px; color: var(--gm-brass); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel { flex: 1; overflow-y: auto; padding: 4px 16px 14px; font-size: 13px; }
+.gachadnd-web-overlay .gd-wo-panel h4 { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; padding: 0; border: none; font-size: 10.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gm-mute); }
+.gachadnd-web-overlay .gd-wo-panel h4::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(201, 160, 99, 0.35), transparent); }
+.gachadnd-web-overlay .gd-wo-panel h4 i { color: var(--gm-brass); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-row span { flex: none; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-row .grow { flex: 1; font-size: 13px; color: var(--gm-ink); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button { display: inline-flex; align-items: center; gap: 6px; width: auto; height: 30px; padding: 0 11px; margin: 0; line-height: 1; font-size: 12.5px;
+  color: var(--gm-bone); background: rgba(201, 160, 99, 0.06); border: 1px solid var(--gm-brass-d); border-radius: 15px; box-shadow: none; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button i { margin: 0; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.sq { width: 30px; padding: 0; justify-content: center; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.wide { width: 100%; justify-content: center; margin-top: 4px; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.teal { border-color: rgba(46, 230, 214, 0.55); background: rgba(46, 230, 214, 0.08); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button:hover:not(:disabled) { color: #fff; border-color: var(--gm-brass); background: rgba(201, 160, 99, 0.16); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.on { color: #fff3dc; border-color: var(--gm-amber); background: rgba(255, 179, 71, 0.18); box-shadow: 0 0 10px rgba(255, 140, 30, 0.35); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button:disabled { opacity: 0.4; }
+.gachadnd-web-overlay .gd-wo-big { display: flex; align-items: baseline; gap: 8px; }
+.gachadnd-web-overlay .gd-wo-big b { font-family: 'Modesto Condensed', Georgia, serif; font-weight: 400; font-size: 30px; line-height: 1; color: var(--gm-bone); }
+.gachadnd-web-overlay .gd-wo-bar { position: relative; height: 10px; margin: 8px 0 4px; border-radius: 5px; background: #23201d; }
+.gachadnd-web-overlay .gd-wo-bar i { position: absolute; left: 0; top: 0; bottom: 0; max-width: 100%; border-radius: 5px; background: linear-gradient(90deg, #7f8c8d, #d4a64a 46%, #ff4d4d 70%); background-size: 298px 100%; }
+.gachadnd-web-overlay .gd-wo-bar u { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--gm-bone); text-decoration: none; }
+.gachadnd-web-overlay .gd-wo-bar-lbl { position: relative; height: 15px; font-size: 11px; color: var(--gm-mute); }
+.gachadnd-web-overlay .gd-wo-bar-lbl span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.gachadnd-web-overlay .gd-wo-line { font-size: 13px; }
+.gachadnd-web-overlay .gd-wo-line b { font-weight: 400; }
+.gachadnd-web-overlay .gd-wo-pulse { display: flex; gap: 3px; margin-top: 8px; }
+.gachadnd-web-overlay .gd-wo-pulse i { flex: 1; height: 8px; border-radius: 2px; background: #2a2622; }
+.gachadnd-web-overlay .gd-wo-pulse i.on { background: #6fbf73; }
+.gachadnd-web-overlay .gd-wo-note { margin-top: 6px; font-size: 11.5px; line-height: 1.4; color: var(--gm-mute); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-row .gd-wo-note.inline { margin: 0 0 0 4px; flex: 1; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.pill { min-width: 52px; justify-content: center; border-color: #3a4a48; color: var(--gm-mute); background: none; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.pill.on { border-color: var(--gm-teal); color: #e8fffb; background: rgba(46, 230, 214, 0.14); box-shadow: 0 0 10px rgba(46, 230, 214, 0.35); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-panel button.pill.here { border-color: #c0392b; color: #ffb4a8; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-sat { display: flex; gap: 6px; }
+.gachadnd-web-overlay .gd-wo-sat i { width: 22px; height: 10px; border-radius: 2px; background: #2a2622; }
+.gachadnd-web-overlay .gd-wo-sat i.on { background: var(--gm-teal); box-shadow: 0 0 6px rgba(46, 230, 214, 0.5); }
+.gachadnd-web-overlay .gd-wo-types { display: grid; grid-template-columns: repeat(8, 32px); gap: 5px; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-types button { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 6px; border-color: #3a3226; background: none; font-size: 14px; color: color-mix(in srgb, var(--node, #fff) 80%, #fff); }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-types button.on { color: color-mix(in srgb, var(--node, #fff) 80%, #fff); }
+.gachadnd-web-overlay .gd-wo-history { font-size: 11.5px; line-height: 1.5; color: var(--gm-mute); margin-bottom: 8px; }
+.gachadnd-web-overlay .gd-wo-stages-row { display: flex; gap: 8px; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-stages-row button { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: 50%; font-size: 17px; border: 1.5px solid #6a2a20; color: #ffd0c4; background: #3a0e0a; }
+.gachadnd-web-overlay .gd-wo-gm .gd-wo-stages-row button.off { border-color: #3a3226; color: #5d544a; background: #1a1714; }
+/* Свёрнутая панель — столбик значков */
+.gachadnd-web-overlay .gd-wo-strip { position: absolute; right: 28px; top: 76px; z-index: 3; width: 48px; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  border-radius: 24px; background: rgba(14, 13, 12, 0.95); border: 1px solid #3a3226; }
+.gachadnd-web-overlay .gd-wo-strip button { width: 32px; height: 32px; padding: 0; margin: 0; display: grid; place-items: center; border-radius: 50%; border: none; background: none; color: var(--gm-mute); box-shadow: none; cursor: pointer; }
+.gachadnd-web-overlay .gd-wo-strip button i { margin: 0; }
+.gachadnd-web-overlay .gd-wo-strip button:first-child { color: var(--gm-brass); }
+.gachadnd-web-overlay .gd-wo-strip button:hover { color: var(--gm-bone); background: rgba(201, 160, 99, 0.12); box-shadow: none; }
+.gachadnd-web-overlay .gd-wo-strip button.alert { color: #ff8070; box-shadow: 0 0 0 1px #ff8070; }
+.gachadnd-web-overlay .gd-wo-strip button.teal { color: var(--gm-teal); }
+/* Режим правки: янтарная рамка по слою и полоса сверху */
+.gachadnd-web-overlay .gd-wo-edit-frame { position: absolute; inset: 0; z-index: 2; pointer-events: none; box-shadow: inset 0 0 0 3px rgba(255, 179, 71, 0.55), inset 0 0 40px rgba(255, 140, 30, 0.18); }
+.gachadnd-web-overlay .gd-wo-edit-banner { position: absolute; left: 50%; top: 22px; z-index: 3; transform: translateX(-50%); padding: 8px 18px; border-radius: 18px; white-space: nowrap;
+  background: rgba(40, 26, 8, 0.95); border: 1px solid var(--gm-amber); color: #ffe2b0; font-size: 13.5px; box-shadow: 0 0 16px rgba(255, 140, 30, 0.4); }
+.gachadnd-web-overlay .gd-wo-edit-banner a { color: var(--gm-amber); cursor: pointer; }

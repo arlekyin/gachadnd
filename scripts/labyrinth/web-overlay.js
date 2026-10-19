@@ -21,12 +21,25 @@ import { startBreach } from "./breach.js";
 import { getSatiety as satietyNow } from "./devourer-state.js";
 import { isWeb, webMoves, isEaten, touchedSet, nextStepToward, webStage, ticksToNextStage, activeStages, BOSS_STAGES, WEB } from "./web-map.js";
 import { WebStage } from "./web-stage.js";
+import { editHistory, undoEdit, linkNodes, unlinkNodes, moveParty, eatNode, cleanNode, shiftClock } from "./web-edit.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ID = 'gachadnd-web-overlay';
 const TEMPLATES = 'modules/gachadnd/templates/map';
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
 // Важность узла: обычные — чуть мельче, Заставы и Босс — крупнее
+// Режимы правки: значок и текст полосы сверху
+const EDIT_MODES = {
+    devourer: { icon: 'fa-location-crosshairs', text: 'дважды щёлкните узел — Пожиратель встанет туда' },
+    paint: { icon: 'fa-palette', text: 'дважды щёлкните узел — он сменит тип' },
+    link: { icon: 'fa-link', text: 'щёлкните два узла — между ними протянется нить' },
+    unlink: { icon: 'fa-link-slash', text: 'щёлкните два узла — нить между ними порвётся' },
+    move: { icon: 'fa-person-walking-arrow-right', text: 'дважды щёлкните узел — отряд окажется там без шага' },
+    eat: { icon: 'fa-droplet', text: 'дважды щёлкните узел — Пожиратель съест его' },
+    clean: { icon: 'fa-sun', text: 'дважды щёлкните узел — порча сойдёт' }
+};
+/** «12 шагов», «2 шага», «1 шаг» */
+const steps = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'шаг' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'шага' : 'шагов'}`;
 const TIER = { mob: 'minor', event: 'minor', elite: 'major', shop: 'major', rest: 'major', risk: 'major', doom: 'major', outpost: 'seal', boss: 'boss' };
 
 /** Модель паутины для рисовальщика: узлы с состоянием, пути, след Пожирателя */
@@ -82,7 +95,20 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         window: { frame: false, positioned: false },
         actions: {
             close: function () { return this.close(); },
-            tools: function () { this.tools = !this.tools; return this.render(); },
+            tools: function () { this.tools = !this.tools; this.collapsed = false; return this.render(); },
+            gmTab: function (event, target) { this.tab = target.dataset.tab; this.collapsed = false; return this.render(); },
+            gmCollapse: function () { this.collapsed = !this.collapsed; return this.render(); },
+            shiftClock: (event, target) => shiftClock(Number(target.dataset.delta)),
+            undo: () => undoEdit(),
+            // Черновик нового этажа: номер, вид карты, длина рядов
+            draft: function (event, target) {
+                const { key, delta, value } = target.dataset;
+                const d = this.draft;
+                if (key === 'mode') d.mode = value;
+                else d[key] = Math.max(key === 'length' ? 3 : 1, Math.min(key === 'length' ? 15 : 20, d[key] + Number(delta)));
+                return this.render();
+            },
+            bossReward: () => game.settings.set(MODULE_ID, 'webBossReward', !game.settings.get(MODULE_ID, 'webBossReward')),
             generate: function () { return drawFloorFrom(this.element); },
             omen: (event, target) => (target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)),
             satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер'),
@@ -95,7 +121,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                 return game.gachadnd.openTerminal(actor);
             },
             // Удержание узла: шаг отряда, Пожиратель на узел или новое содержимое узла
-            mode: function (event, target) { this.mode = this.mode === target.dataset.mode ? null : target.dataset.mode; return this.render(); },
+            mode: function (event, target) { this.mode = this.mode === target.dataset.mode ? null : target.dataset.mode; this.linkFrom = null; return this.render(); },
             paintType: function (event, target) { this.paintType = target.dataset.type; this.mode = 'paint'; return this.render(); },
             devourerStep: () => gmDevourer(),
             stageToggle: (event, target) => {
@@ -116,6 +142,10 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
     tools = false;
     mode = null;
     paintType = 'mob';
+    tab = 'play';
+    collapsed = false;
+    linkFrom = null;
+    draft = null;
 
     static open() {
         const existing = foundry.applications.instances?.get(ID);
@@ -130,7 +160,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
 
     async _preFirstRender(context, options) {
         await super._preFirstRender(context, options);
-        await foundry.applications.handlebars.loadTemplates([`${TEMPLATES}/header.hbs`, `${TEMPLATES}/footer.hbs`]);
+        await foundry.applications.handlebars.loadTemplates([`${TEMPLATES}/header.hbs`, `${TEMPLATES}/footer.hbs`, `${TEMPLATES}/web-gm.hbs`]);
     }
 
     async _prepareContext() {
@@ -152,6 +182,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         const counts = {};
         for (const n of map.nodes) counts[n.type] = (counts[n.type] ?? 0) + 1;
         this.model = webModel(map);
+        this.draft ??= { floor: map.visitedNodes?.length ? floor + 1 : floor, mode: 'web', length: 7 };
         const enabled = new Set(activeStages().map(s => s.id));
         const PAINT = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost'];
         return Object.assign(context, {
@@ -162,25 +193,45 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                 stages: activeStages().map((s, i) => ({ ...s, on: i < stage })), devourer: !!map.web?.devourer, max: activeStages().length
             },
             mode: this.mode,
+            editing: isGM && EDIT_MODES[this.mode] ? { ...EDIT_MODES[this.mode], mode: this.mode } : null,
             gm: isGM && this.tools ? {
-                calm: WEB.CALM, every: WEB.EVERY,
+                calm: WEB.CALM, every: WEB.EVERY, tab: this.tab, collapsed: this.collapsed,
+                calmText: `Босс спит первые ${steps(WEB.CALM)}`, everyText: `Потом крепнет каждые ${steps(WEB.EVERY)}`,
+                scent: this.#scentBar(context.scent),
+                huntAlert: context.scent?.state === 'hunt',
+                pulse: { ...context.pulse, steps: [-1, 0, 1, 2].map(o => o <= (context.pulse?.offset ?? 0)) },
+                satiety: { ...context.satiety, dots: Array.from({ length: context.satiety.cap }, (_, i) => i < context.satiety.value), speed: (n => n === 1 ? '1 узел за шаг' : `${n} узла за шаг`)(1 + Math.floor(Math.min(5, context.satiety.value) / 2)) },
+                omenOn: !!getOmen(),
+                undo: editHistory()[0] ?? null, history: editHistory().slice(0, 6),
+                draft: this.draft, reward: !!game.settings.get(MODULE_ID, 'webBossReward'),
                 stages: BOSS_STAGES.map(s => ({ ...s, enabled: enabled.has(s.id) })),
                 paint: PAINT.map(t => ({ type: t, label: MAP_DATA.LABELS[t], icon: MAP_DATA.ICONS[t], color: MAP_DATA.COLORS[t], on: this.mode === 'paint' && this.paintType === t }))
             } : null,
             legend: ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost', 'boss'].filter(t => counts[t]).map(t => ({ label: MAP_DATA.LABELS[t], icon: MAP_DATA.ICONS[t], color: MAP_DATA.COLORS[t], count: counts[t] })),
-            hint: this.mode === 'devourer' ? 'Щёлкните узел и ещё раз — Пожиратель встанет туда и съест его. Снова «Поставить» — выход из режима.'
-                : this.mode === 'paint' ? `Щёлкните узел и ещё раз — он станет «${MAP_DATA.LABELS[this.paintType]}». Снова «Править узлы» — выход из режима.`
+            hint: isGM && EDIT_MODES[this.mode] ? `Режим правки: ${this.mode === 'paint' ? `дважды щёлкните узел — он станет «${MAP_DATA.LABELS[this.paintType]}»` : EDIT_MODES[this.mode].text}. Esc — выход.`
                 : isGM
                 ? (map.currentNodeId ? 'Щёлкните кристалл, затем ещё раз — отряд пойдёт туда. Янтарные нити — куда можно за этот шаг.' : 'Щёлкните кристалл внешнего кольца, затем ещё раз — отряд войдёт на этаж.')
                 : 'Куда идти — решаете вслух, отряд ведёт Мастер. Янтарные нити — куда можно за этот шаг.'
         });
     }
 
+    #scentBar(scent) {
+        if (!scent) return null;
+        const top = Math.max(scent.thresholds.hunt * 1.25, scent.value, 1);
+        const pct = v => Math.round((v / top) * 100);
+        return { ...scent, whisper: scent.thresholds.whisper, hunt: scent.thresholds.hunt, fill: pct(scent.value), whisperAt: pct(scent.thresholds.whisper), huntAt: pct(scent.thresholds.hunt) };
+    }
+
     _onFirstRender(context, options) {
         super._onFirstRender(context, options);
         this.element.classList.add('gd-wo-opening');
         setTimeout(() => this.element?.classList.remove('gd-wo-opening'), 1100);
-        this.escape = event => { if (event.key === 'Escape' && !event.target.closest?.('input, select, textarea')) this.close(); };
+        // Esc: сначала выход из режима правки, затем закрытие
+        this.escape = event => {
+            if (event.key !== 'Escape' || event.target.closest?.('input, select, textarea')) return;
+            if (this.mode) { this.mode = null; this.linkFrom = null; this.render(); return; }
+            this.close();
+        };
         document.addEventListener('keydown', this.escape);
     }
 
@@ -200,16 +251,32 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                     if (!held) return;
                     if (this.mode === 'devourer') return gmDevourer(id);
                     if (this.mode === 'paint') return setWebNodeType(id, this.paintType);
+                    if (this.mode === 'move') return moveParty(id);
+                    if (this.mode === 'eat') return eatNode(id);
+                    if (this.mode === 'clean') return cleanNode(id);
+                    if (this.mode === 'link' || this.mode === 'unlink') return;
                     return stepTo(id);
                 },
                 onHover: (n, p, r) => this.#tooltip(n, p, r)
             });
             // Выбран кристалл — подсказка, что второй щелчок ведёт отряд
             this.stage.onSelect = n => {
+                // Нити: первый узел запоминается, второй — связать или разорвать
+                if (this.mode === 'link' || this.mode === 'unlink') {
+                    if (n && this.linkFrom && this.linkFrom !== n.id) {
+                        const from = this.linkFrom;
+                        this.linkFrom = null;
+                        return this.mode === 'link' ? linkNodes(from, n.id) : unlinkNodes(from, n.id);
+                    }
+                    this.linkFrom = n?.id ?? null;
+                }
                 const hint = this.element?.querySelector('.gd-wo-hint');
                 if (!hint) return;
                 hint.dataset.base ??= hint.textContent;
-                hint.textContent = n ? `${n.label}: щёлкните ещё раз — ${this.mode === 'devourer' ? 'Пожиратель встанет сюда' : this.mode === 'paint' ? 'узел сменится' : 'отряд пойдёт сюда'}.` : hint.dataset.base;
+                const then = { devourer: 'Пожиратель встанет сюда', paint: 'узел сменится', move: 'отряд окажется здесь', eat: 'узел будет съеден', clean: 'порча сойдёт' }[this.mode];
+                hint.textContent = !n ? hint.dataset.base
+                    : this.mode === 'link' || this.mode === 'unlink' ? `${n.label}: теперь щёлкните второй узел.`
+                    : `${n.label}: щёлкните ещё раз — ${then ?? 'отряд пойдёт сюда'}.`;
                 hint.classList.toggle('armed', !!n);
             };
         }
@@ -303,7 +370,7 @@ Hooks.on('updateScene', (scene, changes) => {
 });
 const refresh = () => { const app = foundry.applications.instances?.get(ID); if (app?.rendered) app.render(); };
 Hooks.on('gachadnd.omenChanged', refresh);
-Hooks.on('updateSetting', setting => { if ([`${MODULE_ID}.devourerSatiety`, `${MODULE_ID}.runFloor`, `${MODULE_ID}.webCalm`, `${MODULE_ID}.webEvery`, `${MODULE_ID}.webStages`].includes(setting.key)) refresh(); });
+Hooks.on('updateSetting', setting => { if ([`${MODULE_ID}.devourerSatiety`, `${MODULE_ID}.runFloor`, `${MODULE_ID}.webCalm`, `${MODULE_ID}.webEvery`, `${MODULE_ID}.webStages`, `${MODULE_ID}.webBossReward`].includes(setting.key)) refresh(); });
 let timer = null;
 for (const hook of ['createItem', 'updateItem', 'deleteItem']) Hooks.on(hook, item => {
     if (!game.user.isGM || !item?.parent?.hasPlayerOwner) return;

@@ -53,6 +53,7 @@ export function pulseView() {
     return {
         last: last ? `${last.label}${pulse.easyStreak > 1 ? ` ×${pulse.easyStreak}` : ''}` : 'боёв не было',
         color: last?.color ?? '#8c8275',
+        offset: pulse.offset,
         shift: pulse.offset ? `ступень ${shift}` : 'базовая ступень',
         mob: pulseStep('mob', pulse), elite: pulseStep('elite', pulse), boss: pulseStep('boss', pulse),
         detail: pulse.last ? `Последний бой: ${pulse.last.rounds} р., минимум ПЗ ${Math.round(pulse.last.minHp * 100)} %, падений ${pulse.last.downs}` : ''

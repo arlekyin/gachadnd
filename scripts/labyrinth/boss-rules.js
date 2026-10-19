@@ -243,7 +243,7 @@ Hooks.on('deleteCombat', async combat => {
 // Награда за ступени Босса паутины: каждая набранная ступень — ещё один кристалл в добыче Босса; если набраны
 // все — один из них фиолетовый. Жадный отряд рискует сильнее, но и уносит больше
 Hooks.on(MEMORY_HOOKS.lootPlanned, plan => {
-    if (plan.roomType !== 'boss' || currentNodeType() !== MAP_DATA.NODE_BOSS) return;
+    if (plan.roomType !== 'boss' || currentNodeType() !== MAP_DATA.NODE_BOSS || !game.settings.get(MODULE_ID, 'webBossReward')) return;
     const map = mapScene()?.getFlag(MODULE_ID, 'floorMap');
     if (!isWeb(map)) return;
     const stage = webStage(map.web?.ticks ?? 0);

@@ -305,6 +305,49 @@ const layout = await ev(async () => {
 check('слой — вся левая часть до боковой панели, под окнами Foundry; панель Мастера с Пожирателем', layout.z === '50' && layout.left === 0 && Math.abs(layout.rightEdge - layout.uiRight) <= 1 && layout.panel, JSON.stringify(layout));
 await f.shot('web-5-gm');
 
+// ---------- Панель Мастера: правки карты, история и отмена, вкладки
+const edits = await ev(async () => {
+    const e = await gdt.mod('labyrinth/web-edit.js');
+    const { mapScene } = await gdt.mod('labyrinth/scene-travel.js');
+    const flag = () => mapScene().getFlag('gachadnd', 'floorMap');
+    const wait = () => new Promise(r => setTimeout(r, 150));
+    const mp = flag();
+    const ring = mp.nodes.filter(n => n.ring === 'outer');
+    const a = ring.find(n => ring.some(m => m.id !== n.id && !n.next.includes(m.id)));
+    const b = ring.find(m => m.id !== a.id && !a.next.includes(m.id));
+    const ticks = mp.web.ticks ?? 0;
+    await e.linkNodes(a.id, b.id); await wait();
+    const linked = flag().nodes.find(n => n.id === a.id).next.includes(b.id);
+    const label = e.editHistory()[0];
+    await e.shiftClock(3); await wait();
+    const shifted = flag().web.ticks === ticks + 3;
+    await e.undoEdit(); await wait();
+    const unshifted = flag().web.ticks === ticks;
+    await e.undoEdit(); await wait();
+    const unlinked = !flag().nodes.find(n => n.id === a.id).next.includes(b.id);
+    // Разрыв, после которого паутина распадётся, — отказ
+    const leaf = flag().nodes.find(n => n.next.length === 1);
+    if (leaf) await e.unlinkNodes(leaf.id, leaf.next[0]);
+    await wait();
+    const kept = !leaf || flag().nodes.find(n => n.id === leaf.id).next.length === 1;
+    return { linked, label, shifted, unshifted, unlinked, kept, left: e.editHistory().length };
+});
+check('панель Мастера: нить связывается, часы сдвигаются, «Отменить» возвращает оба шага; распад паутины — отказ', edits.linked && edits.shifted && edits.unshifted && edits.unlinked && edits.kept && /нить/.test(edits.label), JSON.stringify(edits));
+const tabs = {};
+for (const [tab, mode, shot] of [['map', 'link', 'web-6-edit'], ['floor', null, 'web-7-floor'], ['play', null, 'web-8-strip']]) {
+    tabs[tab] = await ev(async ([tab, mode, collapsed]) => {
+        const app = foundry.applications.instances.get('gachadnd-web-overlay');
+        Object.assign(app, { tab, mode, collapsed });
+        await app.render();
+        await new Promise(r => setTimeout(r, 400));
+        const q = sel => !!app.element.querySelector(sel);
+        return { panel: q('.gd-wo-gm'), strip: q('.gd-wo-strip'), banner: q('.gd-wo-edit-banner'), calm: app.element.querySelector('.gd-wo-panel .grow')?.textContent ?? '', text: [...app.element.querySelectorAll('.gd-wo-panel .grow')].map(x => x.textContent.trim()) };
+    }, [tab, mode, shot === 'web-8-strip']);
+    await f.shot(shot);
+}
+check('вкладки: «Карта» с полосой правки, «Этаж» с числами в строках часов, свёрнутая — столбик значков', tabs.map.banner && tabs.floor.text.some(t => /^Босс спит первые \d+ шаг/.test(t)) && tabs.floor.text.some(t => /^Потом крепнет каждые \d+ шаг/.test(t)) && tabs.play.strip && !tabs.play.panel, JSON.stringify(tabs));
+await ev(async () => { const app = foundry.applications.instances.get('gachadnd-web-overlay'); Object.assign(app, { tab: 'play', mode: null, collapsed: false }); await app.render(); });
+
 // ---------- Уборка
 await ev(async s => {
     foundry.applications.instances.get('gachadnd-map-terminal')?.close();

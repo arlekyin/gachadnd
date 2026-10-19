@@ -24,6 +24,8 @@ export function registerWebSettings() {
     game.settings.register(MODULE_ID, 'webCalm', { scope: 'world', config: false, type: Number, default: WEB_DEFAULTS.CALM, onChange: apply });
     game.settings.register(MODULE_ID, 'webEvery', { scope: 'world', config: false, type: Number, default: WEB_DEFAULTS.EVERY, onChange: apply });
     game.settings.register(MODULE_ID, 'webStages', { scope: 'world', config: false, type: String, default: BOSS_STAGES.map(s => s.id).join(','), onChange: apply });
+    // Награда за ступени Босса (boss-rules.js): +1 кристалл за ступень; Мастер может выключить на панели
+    game.settings.register(MODULE_ID, 'webBossReward', { scope: 'world', config: false, type: Boolean, default: true });
     Hooks.once('setup', apply);
     // Звуки паутины (web-sound.js) — у каждого свои; в подменю «Звуки и эффекты»
     game.settings.register(MODULE_ID, 'webSounds', {
