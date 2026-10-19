@@ -225,6 +225,7 @@ export class WebStage {
         this.familiar = [];
         this.bursts = [];
         this.bossEye = null;
+        this.twitch = [];
         this.selected = null;
         const { size, center } = model;
         const half = size / 2;
@@ -253,8 +254,49 @@ export class WebStage {
             const { cx, cy } = curve(at(byId.get(e.a)), at(byId.get(e.b)), e.a + e.b);
             return { a, b, c: { x: cx, y: cy } };
         };
-        const STYLE = { open: [AMBER, 2.4, 1], familiar: [DIM_AMBER, 2, 0.9], traversed: [0x7d6440, 1.8, 0.75], eaten: [0x0d4743, 1.8, 0.8], ahead: [0x56616b, 1.3, 0.55] };
+        const STYLE = { open: [AMBER, 2.4, 1], familiar: [DIM_AMBER, 2, 0.9], traversed: [0x7d6440, 1.8, 0.75], eaten: [0x23302e, 1.6, 0.6], ahead: [0x56616b, 1.3, 0.55] };
+        // Путь Пожирателя — сами нити перекрашены в его чёрно-бирюзовый (переливаются по порядку пути);
+        // следующий шаг — нить окрашена от него до середины
+        const painted = new Map();
+        const tr = model.trail ?? [];
+        for (let i = 1; i < tr.length; i++) painted.set([tr[i - 1], tr[i]].sort().join('|'), i);
+        const devNow = model.devourer ?? tr.at(-1);
+        const nextKey = devNow && model.next ? [devNow, model.next].sort().join('|') : null;
+        this.devLines = [];
+        // Нить, окрашенная чёрно-бирюзовым: та же кривая, но вместо ровной линии — переливающаяся полоса (шейдер следа)
+        const devShader = PIXI.Shader.from(VERT, TRAIL, { uTime: this.time, uReveal: 999, uHead: 0 });
+        this.trails = [devShader];
+        const devRibbon = (P0, C, P2, k = 1, head = false) => {
+            const pts = [];
+            for (let i = 0; i <= 18; i++) { const t = (i / 18) * k, u = 1 - t; pts.push({ x: u * u * P0.x + 2 * u * t * C.x + t * t * P2.x, y: u * u * P0.y + 2 * u * t * C.y + t * t * P2.y }); }
+            const under = new PIXI.Graphics();
+            under.lineStyle({ width: 14, color: 0x010808, alpha: 0.65, cap: "round" }).moveTo(pts[0].x, pts[0].y);
+            for (const q of pts.slice(1)) under.lineTo(q.x, q.y);
+            under.filters = [new PIXI.BlurFilter(3)];
+            this.glows.addChild(under);
+            const geometry = ribbon(pts, 9, 60);
+            const shader = head ? PIXI.Shader.from(VERT, TRAIL, { uTime: this.time, uReveal: geometry.lengths.at(-1), uHead: 1 }) : devShader;
+            if (head) this.creeps.push({ shader, reach: geometry.lengths.at(-1) });
+            this.lines.addChild(new PIXI.Mesh(geometry, shader));
+        };
+        this.creeps = [];
         for (const e of model.edges) {
+            const key = [e.a, e.b].sort().join('|');
+            if (painted.has(key)) {
+                const a = at(byId.get(e.a)), b = at(byId.get(e.b)), { cx, cy } = curve(a, b, e.a + e.b);
+                devRibbon(a, { x: cx, y: cy }, b);
+                continue;
+            }
+            if (key === nextKey) {
+                const a = at(byId.get(e.a)), b = at(byId.get(e.b)), { cx, cy } = curve(a, b, e.a + e.b);
+                const g = new PIXI.Graphics();
+                g.lineStyle({ width: STYLE.ahead[1], color: STYLE.ahead[0], alpha: STYLE.ahead[2], cap: 'round' }).moveTo(a.x, a.y).quadraticCurveTo(cx, cy, b.x, b.y);
+                // Половина от Пожирателя — окрашена, с яркой головой
+                const fromDev = e.a === devNow, P0 = fromDev ? a : b, P2 = fromDev ? b : a;
+                this.lines.addChild(g);
+                devRibbon(P0, { x: cx, y: cy }, P2, 0.55, true);
+                continue;
+            }
             const a = at(byId.get(e.a)), b = at(byId.get(e.b));
             const { cx, cy } = curve(a, b, e.a + e.b);
             const [color, width, alpha] = STYLE[e.cls] ?? STYLE.ahead;
@@ -287,31 +329,11 @@ export class WebStage {
                 this.sparks.push({ g: spark, p0: from[0], p1: from[1], c: { x: cx, y: cy }, phase: seed(e.b + e.a) });
             }
         }
-        // След Пожирателя: тёмная подложка и полоса с чёрно-бирюзовыми переливами
-        this.trails = [];
-        if (model.trail?.length > 1) {
-            const pts = model.trail.map(id => byId.get(id)).filter(Boolean).map(at);
-            const base = new PIXI.Graphics();
-            base.lineStyle({ width: 15, color: 0x010808, alpha: 0.7, cap: 'round', join: 'round' });
-            pts.forEach((p, i) => (i ? base.lineTo(p.x, p.y) : base.moveTo(p.x, p.y)));
-            base.filters = [new PIXI.BlurFilter(5)];
-            this.glows.addChild(base);
-            const geometry = ribbon(pts, 10, 60);
-            const total = geometry.lengths.at(-1);
-            // Пожиратель прошёл дальше — след дорастает от прежней длины (если след тот же, а не новый)
-            const old = prev?.trail ?? [];
-            const same = old.length && old.length < model.trail.length && old.every((id, i) => model.trail[i] === id);
-            const from = same ? geometry.lengths[old.length - 1] : total;
-            // Перерисовка посреди анимации (флаг, предвестия, чат) — проявление продолжается, а не начинается заново
-            const going = this.reveal && this.reveal.ids.join() === model.trail.join() ? this.reveal : null;
-            const reveal = going ? { ...going } : { from: from + 0.12, to: total + 0.12, start: performance.now(), ms: Math.max(1, total - from) * 260, ids: model.trail };
-            const state = revealAt(reveal, performance.now());
-            const shader = PIXI.Shader.from(VERT, TRAIL, { uTime: this.time, uReveal: state.value, uHead: state.head });
-            base.alpha = state.base;
-            this.lines.addChild(new PIXI.Mesh(geometry, shader));
-            this.trails.push(shader);
-            this.reveal = { ...reveal, shader, base, lengths: geometry.lengths };
-        } else this.reveal = null;
+        const devId = devNow;
+        // Где он сейчас — тёмный вихрь крупнее прядей съеденного
+        this.devourerAt = devId && byId.get(devId) ? at(byId.get(devId)) : null;
+
+        this.reveal = null;
 
         // Фонарь отряда: тёплый ореол; при смене узла летит по нитям пути (знакомые тропы — через все узлы)
         if (here) {
@@ -391,12 +413,8 @@ export class WebStage {
             if (isBoss) { this.#bossEye(node, r, model.boss, p, gem); icon.visible = false; }
             node.addChild(icon, rim, facets);
             node.alpha = (n.state === 'locked' ? 0.85 : 1) * lit;
-            if (n.touched) {
-                const claw = new PIXI.Graphics();
-                claw.lineStyle({ width: 2.2, color: 0x12a89e, alpha: 0.95, cap: 'round' });
-                for (const dx of [-6, 0, 6]) claw.moveTo(dx - 2, -1.2 * r - 14).quadraticCurveTo(dx + 2, -1.2 * r - 9, dx - 1, -1.2 * r - 4);
-                node.addChild(claw);
-            }
+            // Учуян Пожирателем: порча ползёт по кристаллу со стороны Пожирателя; 2 шага — до середины, 1 — почти доверху
+            if (n.touched) this.#infect(node, n, p, r, model, at, byId);
             node.eventMode = 'static';
             node.cursor = 'pointer';
             node.hitArea = new PIXI.Polygon(crystal(r * 1.3));
@@ -405,6 +423,19 @@ export class WebStage {
             node.on('pointertap', event => { event.stopPropagation(); this.#tap(n); });
             this.nodesLayer.addChild(node);
             this.nodes.set(n.id, { node, glow, facets, data: n, r, lit, base: node.alpha, x: Math.hypot(p.x - center.x, p.y - center.y) / half });
+            // Пожиратель здесь: тёмная воронка и крупный быстрый вихрь прядей
+            if (n.id === (model.devourer ?? model.trail?.at(-1)) && (model.devourer || model.trail?.length)) {
+                const pit = new PIXI.Graphics();
+                pit.beginFill(0x010605, 0.75).drawCircle(p.x, p.y, r * 2).endFill();
+                pit.filters = [new PIXI.BlurFilter(r * 0.6)];
+                this.glows.addChild(pit);
+                const Q = r * 8;
+                const vortex = new PIXI.Mesh(quad(Q, Q), PIXI.Shader.from(VERT, TENDRIL, { uTime: 0, uSeed: 0.37, uGrow: 1, uInner: (r * 1.1 / (Q / 2)) }));
+                vortex.position.set(p.x - Q / 2, p.y - Q / 2);
+                vortex.speed = 2.4;
+                this.fogLayer.addChild(vortex);
+                this.tendrils.push(vortex);
+            }
             if (n.eaten) {
                 const Q = r * 4.6;
                 const mesh = new PIXI.Mesh(quad(Q, Q), PIXI.Shader.from(VERT, TENDRIL, { uTime: 0, uSeed: (p.x * 0.013 + p.y * 0.007) % 1, uGrow: 1, uInner: (r * 1.05 / (Q / 2)) }));
@@ -441,6 +472,35 @@ export class WebStage {
             trail: model.trail ?? [], eaten: model.nodes.filter(n => n.eaten).map(n => n.id),
             bossTicks: model.boss?.ticks, bossStage: model.boss?.stage
         };
+    }
+
+    /**
+     * Заражение учуянного узла: тёмное пятно и бирюзово-чёрные прожилки внутри кристалла (маской по его форме) от края,
+     * обращённого к Пожирателю; снизу — короткие пряди. Чем меньше шагов до поедания, тем дальше порча и гуще пряди;
+     * в последний шаг кристалл подёргивается.
+     */
+    #infect(node, n, p, r, model, at, byId) {
+        const left = Math.max(1, Math.min(2, n.touched)), k = left >= 2 ? 0.5 : 0.88;
+        const dev = model.trail?.length ? byId.get(model.trail.at(-1)) : null;
+        const dp = dev ? at(dev) : { x: p.x, y: p.y + r * 4 };
+        const a = Math.atan2(dp.y - p.y, dp.x - p.x), ux = Math.cos(a), uy = Math.sin(a);
+        const shape = crystal(r), mask = new PIXI.Graphics();
+        mask.beginFill(0xffffff).drawPolygon(shape).endFill();
+        const rot = new PIXI.Graphics();
+        rot.mask = mask;
+        // Тёмное пятно от края к центру
+        const ex = ux * r * 0.9, ey = uy * r * 1.1;
+        for (let i = 0; i < 5; i++) rot.beginFill(0x020e0d, 0.16 * k).drawCircle(ex * (1 - i * 0.12 * k), ey * (1 - i * 0.12 * k), r * (0.4 + i * 0.14 * k)).endFill();
+        // Под значком, поверх тела кристалла
+        node.addChildAt(mask, 2);
+        node.addChildAt(rot, 2);
+        // Короткие пряди — тот же шейдер, что у съеденного, но слабее
+        const Q = r * 3.6;
+        const mesh = new PIXI.Mesh(quad(Q, Q), PIXI.Shader.from(VERT, TENDRIL, { uTime: 0, uSeed: seed(n.id), uGrow: left >= 2 ? 0.4 : 0.65, uInner: (r * 1.05 / (Q / 2)) }));
+        mesh.position.set(p.x - Q / 2, p.y - Q / 2);
+        this.fogLayer.addChild(mesh);
+        this.tendrils.push(mesh);
+        if (left < 2) (this.twitch ??= []).push({ node, x: p.x, y: p.y, s: seed(n.id) * 10 });
     }
 
     /**
@@ -762,8 +822,15 @@ export class WebStage {
         if (this.left) return;
         if (this.intro) this.#introFrame(this.still ? this.intro.start + 99999 : performance.now());
         this.fog.shader.uniforms.uTime = t;
-        for (const m of this.tendrils) m.shader.uniforms.uTime = t;
+        for (const m of this.tendrils) m.shader.uniforms.uTime = t * (m.speed ?? 1);
         for (const shader of this.trails ?? []) shader.uniforms.uTime = t;
+        for (const l of this.devLines ?? []) {
+            if (l.g.destroyed) continue;
+            const k = 0.5 + 0.5 * Math.sin(t * 1.8 - l.phase * 0.8);
+            l.g.tint = mixc(0x1c4644, 0xffffff, k);
+            l.g.alpha = l.next ? 0.6 + 0.4 * Math.sin(t * 2.6) : 0.75 + 0.25 * k;
+        }
+        for (const c of this.creeps ?? []) { c.shader.uniforms.uTime = t; c.shader.uniforms.uHead = 0.6 + 0.4 * Math.sin(t * 2.6); c.shader.uniforms.uReveal = c.reach + Math.sin(t * 1.3) * 0.06; }
         // Кольца вращаются медленно, в разные стороны
         if (this.outpostRing) this.outpostRing.rotation = -t * 0.02;
         if (this.innerRing) this.innerRing.rotation = t * 0.035;
@@ -774,6 +841,12 @@ export class WebStage {
             this.pointer.g.rotation = this.pointer.from + (this.pointer.to - this.pointer.from) * e;
         }
         const stage = this.model?.boss?.stage ?? 0;
+        // Последний шаг до поедания — кристалл подёргивается: короткие рывки раз в пару секунд
+        for (const tw of this.twitch ?? []) {
+            if (tw.node.destroyed) continue;
+            const ph = (t + tw.s) % 2.4, amp = ph < 0.25 ? 1.6 * Math.sin(ph / 0.25 * Math.PI) : 0;
+            tw.node.position.set(tw.x + Math.sin(t * 60 + tw.s) * amp, tw.y + Math.cos(t * 47) * amp * 0.5);
+        }
         if (this.bossEye && !this.bossEye.lid.destroyed) {
             const e = this.bossEye, now = performance.now();
             const k = Math.max(0, Math.min(1, (now - e.start) / 1100)), ease = 1 - (1 - k) ** 3;

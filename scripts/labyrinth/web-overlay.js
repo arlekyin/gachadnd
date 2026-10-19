@@ -44,7 +44,7 @@ export function webModel(map) {
             id: n.id, x: n.x, y: n.y, type: n.type, tier: TIER[n.type] ?? 'minor', state,
             color: MAP_DATA.COLORS[n.type] ?? n.color, icon: MAP_DATA.ICONS[n.type] ?? n.icon, label: MAP_DATA.LABELS[n.type] ?? n.label,
             visited: visited.has(n.id) && n.id !== map.currentNodeId,
-            eaten: isEaten(map, n.id), touched: touched.has(n.id) && !isEaten(map, n.id),
+            eaten: isEaten(map, n.id), touched: touched.has(n.id) && !isEaten(map, n.id) ? ((web.touched ?? []).find(([id]) => id === n.id)?.[1] ?? 2) : 0,
             path: moves[n.id] ?? null,
             labeled: state === 'current' || n.type === 'boss' || (!!map.currentNodeId && moves[n.id]?.length === 1)
         };
@@ -69,7 +69,7 @@ export function webModel(map) {
         stages: stages.map((st, i) => ({ ...st, at: i ? WEB.CALM + i * WEB.EVERY : WEB.CALM + 1 })),
         reward: webStage(ticks), purple: webStage(ticks) >= stages.length && stages.length > 0
     };
-    return { boss, nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], next: web.devourer && map.currentNodeId && game.user.isGM ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
+    return { boss, nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], devourer: web.devourer ?? null, next: web.devourer && map.currentNodeId ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
 }
 const currentMoves = map => webMoves(map);
 

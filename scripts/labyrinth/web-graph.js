@@ -301,7 +301,11 @@ export function advanceWeb(map, { scent, hunt }) {
     if (!web.devourer && web.ticks > web.pausedUntil && scent.state === 'hunt' && party) {
         // Выходит на самый дальний узел края, откуда есть путь к отряду (мимо запечатанных Застав)
         const reach = n => devourerDistance(map, n.id, party);
-        const far = map.nodes.filter(n => n.ring === 'outer' && n.id !== party && Number.isFinite(reach(n))).sort((a, b) => reach(b) - reach(a))[0];
+        // …и напротив отряда по кругу (не ближе 100°), чтобы было куда уйти; если таких нет — просто самый дальний
+        const pn = byId(map, party), pa = Math.atan2(pn.y - 50, pn.x - 50);
+        const apart = n => { const d = Math.abs(Math.atan2(Math.sin(Math.atan2(n.y - 50, n.x - 50) - pa), Math.cos(Math.atan2(n.y - 50, n.x - 50) - pa))); return d >= (100 * Math.PI) / 180; };
+        const pool = map.nodes.filter(n => n.ring === 'outer' && n.id !== party && Number.isFinite(reach(n)));
+        const far = (pool.some(apart) ? pool.filter(apart) : pool).sort((a, b) => reach(b) - reach(a))[0];
         if (far) { web.devourer = far.id; web.trail = [far.id]; result.spawned = true; eat(far.id); }
     } else if (web.devourer && party) {
         for (let s = 0; s < speedFor(scent.value, hunt); s++) {
