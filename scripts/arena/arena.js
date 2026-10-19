@@ -78,16 +78,13 @@ function wallsOf(plan) {
     return walls;
 }
 
-/** Свет: «живая муть» над водой и в перелесках, друзы Тумана */
+/** Свет: «живая муть» в перелесках, друзы Тумана (над водой свет пока не ставим — вылезал за края сцены) */
 function lightsOf(plan, mood) {
     const lights = [];
     const murk = (x, y, dim) => lights.push({
         x: Math.round(x * CELL), y: Math.round(y * CELL), walls: true,
         config: { dim, bright: 0, color: MURK[mood] ?? MURK.day, alpha: 0.5, luminosity: 0.5, attenuation: 0.5, coloration: 1, animation: { type: 'ghost', speed: 3, intensity: 3 } }
     });
-    const s = plan.terrain.stream;
-    if (s) s.path.forEach((p, i) => { if (i % 6 === 0 && p.x > 0 && p.y > 0 && p.x < plan.cols && p.y < plan.rows) murk(p.x, p.y, 6 + s.width * 2); });
-    for (const p of plan.terrain.pools ?? []) murk(p.x, p.y, p.r * 3 + 4);
     for (const p of plan.terrain.patches.filter(p => p.type === 'forest')) if (p.x > 0 && p.y > 0 && p.x < plan.cols && p.y < plan.rows) murk(p.x, p.y, p.r * 4);
     for (const o of plan.objects.filter(o => o.kind === 'vignette')) for (const l of VIGNETTES[o.name].lights) lights.push({
         x: Math.round((o.x + l.x) * CELL), y: Math.round((o.y + l.y) * CELL), walls: true,
@@ -104,13 +101,13 @@ function lightsOf(plan, mood) {
  * Собрать арену: новая планировка, картинка, сцена, стены, свет, токены. Только Мастер.
  * @returns {Promise<{ scene, plan }>}
  */
-export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true } = {}) {
+export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true, scheme = null } = {}) {
     if (!game.user.isGM) return ui.notifications.warn('Арену собирает Мастер.');
     // Планировка: если путь от отряда к врагам перекрыт — другой сид
     const art = await loadArt(biome);
     const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
-    let plan = layout({ cols, rows, seed, biome, encounter, vignettes });
-    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes });
+    let plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme });
+    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme });
     const canvas = paint(plan, { cell: CELL, mood, art });
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.9));
     const dir = `worlds/${game.world.id}/gachadnd-arena`;

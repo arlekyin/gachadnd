@@ -30,6 +30,23 @@ for (const mood of ['day', 'night', 'fog', 'rot']) {
     await page.waitForTimeout(1500);
     await f.shot(`arena-${mood}`);
 }
+// Брод: ручей и камни брода — снимок воды крупно
+const ford = await ev(async ({ hero, enemies }) => {
+    const { scene, plan } = await game.gachadnd.arena.generate({ seed: 's1', mood: 'day', scheme: 'crossing', party: [hero], enemies });
+    if (canvas.scene?.id !== scene.id) await scene.view();
+    for (let i = 0; i < 40 && (canvas.scene?.id !== scene.id || !canvas.ready); i++) await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 2500));
+    if (game.paused) game.togglePause(false, { broadcast: true });
+    document.getElementById('pause')?.classList.remove('paused');
+    const water = scene.lights.filter(l => l.config.animation?.type === 'fog');
+    const p = plan.terrain.stream?.path[Math.floor((plan.terrain.stream?.path.length ?? 0) / 3)] ?? { x: 14, y: 10 };
+    await canvas.animatePan({ x: p.x * 140, y: p.y * 140, scale: 1, duration: 0 });
+    document.querySelectorAll('#notifications li, #notifications .notification').forEach(n => n.remove());
+    return { stream: !!plan.terrain.stream, water: water.length };
+}, { hero: ids.hero, enemies: ids.enemies });
+check('брод: ручей есть, свет над водой не ставится', ford.stream && ford.water === 0, JSON.stringify(ford));
+await page.waitForTimeout(1500);
+await f.shot('arena-water');
 await ev(id => game.scenes.get(id)?.view(), back);
 const errors = moduleErrors(f.log.slice(since));
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));

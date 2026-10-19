@@ -4,6 +4,7 @@
 Берёт картинки из assets/battlemap/<биом>/_src/ (как пришли из генератора) и кладёт готовые в assets/battlemap/<биом>/:
 - ground-*      — бесшовная текстура 1024×1024 (стык краёв смешивается со сдвинутой копией);
 - scatter-*     — лист мелочи на белом фоне режется на отдельные штуки: scatter-tufts-1-1.webp, -1-2 …;
+- *-sheet       — лист вариантов любого предмета (2×2, 3×3 на белом): rock-2-sheet → rock-2-1.webp, rock-2-2 …;
 - остальное     — предмет: белый фон, связанный с краями, становится прозрачным (мягкий край), обрезка по предмету,
                   длинная сторона — не больше 768 px.
 """
@@ -79,6 +80,18 @@ def unwhite(im):
     return res
 
 
+def dehalo(res, src):
+    """Бледный ореол по краю (остаток белого фона): у полупрозрачных светлых пикселей альфа гасится — чем ближе
+    исходный цвет к белому, тем прозрачнее; плотная середина не трогается."""
+    import numpy as np
+    a = np.asarray(res, dtype=np.float32).copy()
+    light = np.asarray(src.convert('RGB'), dtype=np.float32).min(axis=2)
+    keep = np.clip((255 - light) / 110, 0, 1) ** 0.9
+    edge = a[..., 3] < 250
+    a[..., 3] = np.where(edge, a[..., 3] * keep, a[..., 3])
+    return Image.fromarray(a.astype(np.uint8), 'RGBA')
+
+
 def trim(im, pad=4):
     box = im.getchannel('A').point(lambda a: 255 if a > 12 else 0).getbbox()
     if not box: return im
@@ -109,10 +122,10 @@ def seamless(im, size=1024):
     return a
 
 
-def split_sheet(im):
+def split_sheet(im, grow=15):
     """Лист мелочи: отдельные штуки — связные пятна непрозрачного (с расширением, чтобы части одной штуки слиплись)."""
     cut = cutout(im)
-    a = cut.getchannel('A').point(lambda v: 255 if v > 40 else 0).filter(ImageFilter.MaxFilter(15))
+    a = cut.getchannel('A').point(lambda v: 255 if v > 40 else 0).filter(ImageFilter.MaxFilter(grow))
     w, h = a.size
     data = a.load()
     seen = bytearray(w * h)
@@ -122,14 +135,21 @@ def split_sheet(im):
             if data[x, y] == 0 or seen[y * w + x]: continue
             q = deque([(x, y)]); seen[y * w + x] = 1
             x0 = x1 = x; y0 = y1 = y
+            own = [(x, y)]
             while q:
                 cx, cy = q.popleft()
+                own.append((cx, cy))
                 x0, x1, y0, y1 = min(x0, cx), max(x1, cx), min(y0, cy), max(y1, cy)
                 for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
                     if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and data[nx, ny]:
                         seen[ny * w + nx] = 1; q.append((nx, ny))
             if (x1 - x0) * (y1 - y0) > 900:
-                pieces.append(trim(cut.crop((x0, y0, x1 + 1, y1 + 1))))
+                m = Image.new('L', (x1 - x0 + 1, y1 - y0 + 1), 0)
+                mp = m.load()
+                for cx, cy in own: mp[cx - x0, cy - y0] = 255
+                piece = cut.crop((x0, y0, x1 + 1, y1 + 1))
+                piece.putalpha(ImageChops.darker(piece.getchannel('A'), m))
+                pieces.append(trim(piece))
     return pieces
 
 
@@ -143,9 +163,20 @@ def main():
             print('земля', name)
         elif name.startswith('scatter-'):
             for f in glob.glob(os.path.join(OUT, f'{name}-*.webp')): os.remove(f)
-            pieces = split_sheet(im)
+            # Травинки пучка лежат врозь — их склеивает расширение; листья и кости — отдельные штуки, почти без него
+            pieces = split_sheet(im, 3 if any(k in name for k in ('leaves', 'bones')) else 15)
+            # Обрезки и крошки (меньше трети самой крупной штуки) — прочь: растянутые до размера штуки, они мылятся
+            top = max((max(p.size) for p in pieces), default=0)
+            pieces = [p for p in pieces if max(p.size) >= top / 3]
             for i, p in enumerate(pieces, 1): fit(p, 256).save(os.path.join(OUT, f'{name}-{i}.webp'), quality=92)
             print('россыпь', name, len(pieces), 'шт.')
+        elif name.endswith('-sheet'):
+            # Лист вариантов: каждый вариант — отдельный предмет того же вида
+            base = name[:-len('-sheet')]
+            for f in glob.glob(os.path.join(OUT, f'{base}-*.webp')): os.remove(f)
+            pieces = [p for p in split_sheet(im) if max(p.size) > 64]
+            for i, p in enumerate(pieces, 1): fit(p).save(os.path.join(OUT, f'{base}-{i}.webp'), quality=92)
+            print('лист вариантов', base, len(pieces), 'шт.')
         elif name.startswith('vignette-'):
             # Сцена на клочке земли, край которого тает в белое: внутри — непрозрачно, по краю — «цвет в альфу»
             cut = cutout(im)
@@ -154,6 +185,10 @@ def main():
             alpha = ImageChops.lighter(inner, soft.getchannel('A'))
             res = Image.composite(im.convert('RGBA'), soft, inner)
             res.putalpha(alpha)
+            res = dehalo(res, im)
+            # Акварельный край сам светлеет к белому — бледная полоса читается ореолом: маска сужается внутрь
+            a = res.getchannel('A')
+            res.putalpha(ImageChops.darker(a, a.filter(ImageFilter.MinFilter(61)).filter(ImageFilter.GaussianBlur(18))))
             fit(trim(res), 1400).save(os.path.join(OUT, f'{name}.webp'), quality=92)
             print('виньетка', name)
         elif name.startswith('rot-'):
