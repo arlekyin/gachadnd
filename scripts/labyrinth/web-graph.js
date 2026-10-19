@@ -145,9 +145,21 @@ export function buildConnectedWeb(rand, types, shape = WEB_SHAPE) {
     let web = null;
     for (let attempt = 0; attempt < 30; attempt++) {
         web = buildWeb(rand, types, shape);
-        if (connected(web.nodes)) return web;
+        if (connected(web.nodes) && !pockets(web.nodes)) return web;
     }
     return web;
+}
+
+/**
+ * Карманы: узлы, до которых с края можно дойти только через Босса. Пожиратель Босса не трогает — в кармане он
+ * отряд не достанет; такие сети генератор отбрасывает
+ */
+export function pockets(nodes) {
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const start = nodes.filter(n => n.ring === 'outer').map(n => n.id);
+    const seen = new Set(start), queue = [...start];
+    while (queue.length) for (const id of byId.get(queue.shift()).next) if (id !== 'boss' && !seen.has(id)) { seen.add(id); queue.push(id); }
+    return nodes.filter(n => n.id !== 'boss' && !seen.has(n.id)).map(n => n.id).length;
 }
 
 /** Все узлы связаны с Боссом (проверка сети) */

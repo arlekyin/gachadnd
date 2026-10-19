@@ -224,6 +224,7 @@ export class WebStage {
         this.sparks = [];
         this.familiar = [];
         this.bursts = [];
+        this.bossEye = null;
         this.selected = null;
         const { size, center } = model;
         const half = size / 2;
@@ -235,6 +236,7 @@ export class WebStage {
         const here = current ? at(current) : null;
 
         this.#drawRings(center, half, model.nodes.filter(n => n.tier === 'seal').map(n => Math.atan2(at(n).y - center.y, at(n).x - center.x)));
+        this.#drawClock(center, half, model.boss);
 
         // Нити: изогнуты, как жилы в породе; ход этого шага — янтарь с бегущей искрой, знакомые тропы — тусклый янтарь
         const curve = (a, b, key) => {
@@ -361,7 +363,8 @@ export class WebStage {
             glow.alpha = n.type === 'boss' ? 0.35 : n.state === 'reachable' && !visited ? 0.45 : 0;
             const shape = crystal(r);
             const gem = new PIXI.Graphics();
-            const body = visited ? mixc(shade(col, 0.45), 0x2a2724, 0.65) : n.state === 'locked' ? shade(col, 0.55) : shade(col, 0.8);
+            const isBoss = n.type === 'boss' && !!model.boss;
+            const body = isBoss ? 0xd8382a : visited ? mixc(shade(col, 0.45), 0x2a2724, 0.65) : n.state === 'locked' ? shade(col, 0.55) : shade(col, 0.8);
             gem.beginFill(0x000000, 0.45).drawPolygon(shape.map((v, i) => v + (i % 2 ? 3 : 1.5))).endFill();
             gem.beginFill(body, 1).lineStyle({ width: 1.4, color: visited ? 0x5d5547 : mixc(col, 0xffffff, 0.45), alpha: 0.9 }).drawPolygon(shape).endFill();
             gem.lineStyle(0);
@@ -384,7 +387,9 @@ export class WebStage {
             if (n.state === 'current') rim.lineStyle({ width: 2.4, color: 0xfff1c9, alpha: 1 }).drawPolygon(crystal(r * 1.22));
             // Выбор: грани загораются по одной
             const facets = new PIXI.Graphics();
-            node.addChild(glow, gem, icon, rim, facets);
+            node.addChild(glow, gem);
+            if (isBoss) { this.#bossEye(node, r, model.boss, p, gem); icon.visible = false; }
+            node.addChild(icon, rim, facets);
             node.alpha = (n.state === 'locked' ? 0.85 : 1) * lit;
             if (n.touched) {
                 const claw = new PIXI.Graphics();
@@ -417,7 +422,7 @@ export class WebStage {
                 }
             }
             // Подпись — только у отряда и Босса; остальное — подсказкой при наведении
-            if (n.state === 'current' || n.type === 'boss') {
+            if (n.state === 'current') {
                 const label = new PIXI.Text(n.label, { fontFamily: 'Modesto Condensed, Signika, serif', fontSize: Math.round(R * 0.85), fill: n.type === 'boss' ? 0xe8a49c : 0xffdca0, stroke: 0x000000, strokeThickness: 4, letterSpacing: 0.5 });
                 label.anchor.set(0.5, 0);
                 label.position.set(p.x, p.y + r * 1.3 + 4);
@@ -433,8 +438,77 @@ export class WebStage {
         this.prev = {
             current: current?.id ?? null, here,
             paths: Object.fromEntries(model.nodes.filter(n => n.path).map(n => [n.id, n.path])),
-            trail: model.trail ?? [], eaten: model.nodes.filter(n => n.eaten).map(n => n.id)
+            trail: model.trail ?? [], eaten: model.nodes.filter(n => n.eaten).map(n => n.id),
+            bossTicks: model.boss?.ticks, bossStage: model.boss?.stage
         };
+    }
+
+    /**
+     * Глаз Босса в кристалле: без ступеней закрыт (спит, веко чуть дышит), с каждой ступенью приоткрывается,
+     * на полной — открыт, зрачок горит. Зрачок следит за фонарём отряда (и во время его перелёта). Изредка моргает.
+     * Новая ступень — веко поднимается после того, как долетят искры.
+     */
+    #bossEye(node, r, boss, pos, gem) {
+        const max = Math.max(1, boss.stages.length), to = Math.min(1, boss.stage / max);
+        // Грани: шесть треугольников от центра — у каждой свой тон (свет сверху слева), рёбра светлее
+        const V = [[0, -1.2], [0.78, -0.42], [0.78, 0.5], [0, 1.2], [-0.78, 0.5], [-0.78, -0.42]].map(([x, y]) => [x * r, y * r]);
+        const facets = new PIXI.Graphics(), cx = -0.06 * r, cy = -0.08 * r;
+        const tones = [0.34, 0.08, -0.18, -0.34, -0.12, 0.2];
+        V.forEach((a, i) => {
+            const b = V[(i + 1) % 6], k = tones[i];
+            facets.beginFill(k > 0 ? 0xffffff : 0x000000, Math.abs(k) * 0.55).drawPolygon([cx, cy, a[0], a[1], b[0], b[1]]).endFill();
+        });
+        facets.lineStyle({ width: 1, color: 0xffe0d0, alpha: 0.35 });
+        for (const [x, y] of V) facets.moveTo(cx, cy).lineTo(x, y);
+        // Блики на рёбрах верхней левой стороны
+        facets.lineStyle({ width: 2, color: 0xffffff, alpha: 0.55, cap: 'round' }).moveTo(V[5][0] * 0.95, V[5][1] * 0.95).lineTo(V[0][0], V[0][1] * 0.95);
+        facets.lineStyle({ width: 1.4, color: 0xffffff, alpha: 0.35, cap: 'round' }).moveTo(V[4][0] * 0.96, V[4][1] * 0.9).lineTo(V[5][0] * 0.96, V[5][1] * 0.9);
+        // Свечение изнутри — за глазом, сильнее с пробуждением
+        const inner = new PIXI.Graphics();
+        inner.beginFill(0xff6a3a, 1).drawEllipse(0, 0.05 * r, 0.62 * r, 0.75 * r).endFill();
+        inner.filters = [new PIXI.BlurFilter(r * 0.35)];
+        inner.blendMode = PIXI.BLEND_MODES.ADD;
+        // Бегущий отсвет по граням — полоса света, маской по форме кристалла
+        const sheen = new PIXI.Graphics(), sheenMask = new PIXI.Graphics();
+        sheenMask.beginFill(0xffffff).drawPolygon(V.flat()).endFill();
+        sheen.mask = sheenMask;
+        sheen.blendMode = PIXI.BLEND_MODES.ADD;
+        const glow = new PIXI.Graphics(), lid = new PIXI.Graphics(), mask = new PIXI.Graphics(), iris = new PIXI.Graphics(), lines = new PIXI.Graphics();
+        glow.filters = [new PIXI.BlurFilter(r * 0.25)];
+        iris.mask = mask;
+        node.addChild(facets, inner, sheen, sheenMask, glow, lid, iris, mask, lines);
+        const from = Math.min(1, (this.prev?.bossStage ?? boss.stage) / max), rising = from < to;
+        this.bossEye = { glow, lid, mask, iris, lines, r, pos, from: rising ? from : to, to, start: performance.now() + (rising ? 900 : 0), full: to >= 1, aura: node.children[0], gem, inner, sheen, sheenAt: performance.now() + 1500, blinkAt: performance.now() + 3000 + Math.random() * 4000 };
+        this.#drawEye(rising ? from : to, 0);
+    }
+
+    #drawEye(open, blink) {
+        const e = this.bossEye;
+        if (!e || e.lid.destroyed) return;
+        const r = e.r, w = 0.62 * r, h = Math.max(0.02, (0.06 + 0.94 * open) * (1 - blink)) * 0.42 * r;
+        const almond = g => g.moveTo(-w, 0).quadraticCurveTo(0, -h * 2, w, 0).quadraticCurveTo(0, h * 2, -w, 0);
+        e.lid.clear(); e.mask.clear(); e.iris.clear(); e.lines.clear(); e.glow.clear();
+        const awake = open > 0.04 && h > 0.04 * r;
+        if (awake) {
+            e.lid.beginFill(0xf2d6b8, 0.95); almond(e.lid); e.lid.endFill();
+            e.mask.beginFill(0xffffff); almond(e.mask); e.mask.endFill();
+            // Взгляд — к фонарю отряда
+            const lx = this.lantern.position.x - e.pos.x, ly = this.lantern.position.y - e.pos.y, d = Math.hypot(lx, ly) || 1;
+            const reach = 0.24 * r * Math.min(1, d / (r * 4));
+            const px = (lx / d) * reach, py = (ly / d) * reach * 0.5;
+            const ir = 0.27 * r;
+            e.iris.beginFill(0x8a1a12).drawCircle(px, py, ir).endFill();
+            e.iris.beginFill(0xff5a30, 0.85).drawCircle(px - ir * 0.15, py - ir * 0.15, ir * 0.7).endFill();
+            e.iris.beginFill(0x1a0504).drawEllipse(px, py, 0.065 * r, 0.21 * r).endFill();
+            e.iris.beginFill(0xffffff, 0.7).drawCircle(px - ir * 0.4, py - ir * 0.45, ir * 0.18).endFill();
+            if (e.full) { e.glow.beginFill(0xff5a30, 0.55 + 0.45 * Math.sin(performance.now() / 300)).drawCircle(px, py, ir * 1.4).endFill(); }
+            e.lines.lineStyle({ width: 1.8, color: 0x5a0e0a, alpha: 1 }); almond(e.lines);
+        } else {
+            // Спит: сомкнутое веко с ресницами
+            e.lines.lineStyle({ width: 2, color: 0xe8a090, alpha: 0.9, cap: 'round' }).moveTo(-w, 0).quadraticCurveTo(0, 0.14 * r, w, 0);
+            for (const t of [-0.5, -0.15, 0.2, 0.55]) e.lines.moveTo(t * w, 0.05 * r).lineTo(t * w - 0.02 * r, 0.16 * r);
+        }
+        e.open = open;
     }
 
     /** Латунные кольца: обод с делениями, кольцо Застав с засовами, пунктир внутренней зоны, сердце у Босса */
@@ -450,21 +524,7 @@ export class WebStage {
         };
         this.rim = ring(RINGS.rim, (g, r) => {
             g.lineStyle({ width: 1.6, color: BRASS, alpha: 0.42 }).drawCircle(0, 0, r);
-            g.lineStyle({ width: 0.8, color: BRASS, alpha: 0.3 }).drawCircle(0, 0, r - 9);
-            for (let i = 0; i < 120; i++) {
-                const a = i / 120 * Math.PI * 2, long = i % 10 === 0, mid = i % 5 === 0;
-                const l = long ? 9 : mid ? 6 : 3.5;
-                g.lineStyle({ width: long ? 1.4 : 0.8, color: BRASS, alpha: long ? 0.5 : 0.3 })
-                    .moveTo(Math.cos(a) * r, Math.sin(a) * r).lineTo(Math.cos(a) * (r - l), Math.sin(a) * (r - l));
-                // Знаки на обод: ромб, точка, черта — по очереди
-                if (long) {
-                    const k = (i / 10) % 3, x = Math.cos(a) * (r + 10), y = Math.sin(a) * (r + 10);
-                    g.lineStyle({ width: 1.1, color: BRASS, alpha: 0.5 });
-                    if (k === 0) g.drawPolygon([x, y - 4, x + 3, y, x, y + 4, x - 3, y]);
-                    else if (k === 1) g.beginFill(BRASS, 0.5).drawCircle(x, y, 1.8).endFill();
-                    else g.drawCircle(x, y, 3.2);
-                }
-            }
+            g.lineStyle({ width: 0.8, color: BRASS, alpha: 0.3 }).drawCircle(0, 0, r - 13);
         });
         this.outpostRing = ring(RINGS.outposts, (g, r) => {
             g.lineStyle({ width: 2.2, color: BRASS, alpha: 0.38 }).drawCircle(0, 0, r);
@@ -485,13 +545,107 @@ export class WebStage {
                 g.beginFill(BRASS, i % 6 === 0 ? 0.55 : 0.28).drawCircle(Math.cos(a) * r, Math.sin(a) * r, i % 6 === 0 ? 2 : 1.1).endFill();
             }
         });
-        this.core = ring(RINGS.core, (g, r) => {
-            g.lineStyle({ width: 1.2, color: BOSS_RED, alpha: 0.45 }).drawCircle(0, 0, r);
-            for (let i = 0; i < 8; i++) {
-                const a = i / 8 * Math.PI * 2;
-                g.lineStyle({ width: 1.2, color: BOSS_RED, alpha: 0.45 }).moveTo(Math.cos(a) * r, Math.sin(a) * r).lineTo(Math.cos(a) * (r + 7), Math.sin(a) * (r + 7));
-            }
+        this.core = null;
+    }
+
+    /**
+     * Часы этажа на ободе (всё — снаружи поля, щелчки проходят насквозь): гравированная шкала — по шагу на крупную
+     * риску; пройденная часть раскалена (латунь в тишине, жар после); указатель — снаружи обода; медальоны ступеней —
+     * за ободом (пройденные горят, следующий тлеет). Вокруг Босса — сегменты-ступени.
+     */
+    #drawClock(center, half, boss) {
+        if (!boss) return;
+        const clock = new PIXI.Container();
+        clock.position.set(center.x, center.y);
+        clock.eventMode = 'passive';
+        this.rings.addChild(clock);
+        // Полный круг — шаг последней ступени: дальше Босс в полной силе и считать нечего (указатель встаёт наверху)
+        const last = boss.stages.at(-1)?.at ?? boss.calm + 1, R0 = RINGS.rim * half, N = Math.max(last, 4);
+        const shown = Math.min(boss.ticks, N), full = boss.ticks >= N && boss.stages.length > 0;
+        boss = { ...boss, ticks: shown };
+        const ang = t => -Math.PI / 2 + (t / N) * Math.PI * 2;
+        this.clock = { N, ang, R0, center, boss, full };
+        const arc = (g, t0, t1, r) => { const a0 = ang(t0), a1 = ang(Math.max(t0, t1)); g.arc(0, 0, r, a0, a1); };
+        // Жар под пройденной шкалой
+        const heat = new PIXI.Graphics();
+        heat.lineStyle({ width: 18, color: 0xe2b060, alpha: 0.3 }); arc(heat, 0, Math.min(boss.ticks, boss.calm), R0 - 6);
+        if (boss.ticks > boss.calm) { heat.moveTo(Math.cos(ang(boss.calm)) * (R0 - 6), Math.sin(ang(boss.calm)) * (R0 - 6)); heat.lineStyle({ width: 24, color: 0xff4a20, alpha: 0.6 }); arc(heat, boss.calm, boss.ticks, R0 - 6); }
+        heat.filters = [new PIXI.BlurFilter(8)];
+        clock.addChild(heat);
+        // Раскалённая линия по ободу — чёткая, поверх жара
+        const hot = new PIXI.Graphics();
+        hot.lineStyle({ width: 2.5, color: 0xf2c98a, alpha: 0.95 }); arc(hot, 0, Math.min(boss.ticks, boss.calm), R0);
+        if (boss.ticks > boss.calm) { hot.moveTo(Math.cos(ang(boss.calm)) * R0, Math.sin(ang(boss.calm)) * R0); hot.lineStyle({ width: 3, color: 0xff7a3a, alpha: 1 }); arc(hot, boss.calm, boss.ticks, R0); }
+        clock.addChild(hot);
+        this.hotLine = hot;
+        // Круг замкнулся — весь обод горит и медленно дышит
+        if (full) {
+            const ring = new PIXI.Graphics();
+            ring.lineStyle({ width: 26, color: 0xff3a1a, alpha: 0.5 }).drawCircle(0, 0, R0 - 4);
+            ring.filters = [new PIXI.BlurFilter(10)];
+            clock.addChildAt(ring, 0);
+            this.fullRing = ring;
+        } else this.fullRing = null;
+        // Шкала: 5 рисок на шаг, крупная — каждый шаг
+        const scale = new PIXI.Graphics();
+        for (let i = 0; i < N * 5; i++) {
+            const t = i / 5, a = ang(t), step = i % 5 === 0, l = step ? 11 : 5, passed = t <= boss.ticks;
+            const k = Math.min(1, Math.max(0, (t - boss.calm) / Math.max(1, boss.every * boss.stages.length)));
+            const col = !passed ? 0x5a5045 : t < boss.calm ? 0xe2b874 : mixc(0xff9a50, 0xff3a1a, k);
+            scale.lineStyle({ width: step ? 2.6 : 1.4, color: col, alpha: passed ? 1 : 0.6, cap: 'round' })
+                .moveTo(Math.cos(a) * R0, Math.sin(a) * R0).lineTo(Math.cos(a) * (R0 - l), Math.sin(a) * (R0 - l));
+        }
+        clock.addChild(scale);
+        // Указатель — латунная метка снаружи обода, с угольком у шкалы
+        const pointer = new PIXI.Container();
+        const pg = new PIXI.Graphics();
+        pg.beginFill(0xc9a063).lineStyle({ width: 1.2, color: 0x5a4020 }).drawPolygon([R0 + 2, 0, R0 + 15, 8, R0 + 27, 6, R0 + 27, -6, R0 + 15, -8]).endFill();
+        const ember = new PIXI.Graphics();
+        ember.beginFill(0xff8a50, 1).drawCircle(R0 - 2, 0, 5).endFill();
+        ember.filters = [new PIXI.BlurFilter(3)];
+        pointer.addChild(ember, pg);
+        const fromTicks = Math.min(this.prev?.bossTicks ?? boss.ticks, N);
+        pointer.rotation = ang(fromTicks);
+        clock.addChild(pointer);
+        this.pointer = { g: pointer, from: ang(fromTicks), to: ang(boss.ticks), start: performance.now() };
+        // Медальоны ступеней за ободом
+        this.medals = [];
+        this.medalBox = [];
+        boss.stages.forEach((st, i) => {
+            const a = ang(st.at), on = i < boss.stage, next = i === boss.stage, rr = R0 + 44, mr = Math.max(13, this.R * 0.7);
+            const m = new PIXI.Container();
+            m.position.set(Math.cos(a) * rr, Math.sin(a) * rr);
+            const g = new PIXI.Graphics();
+            g.lineStyle({ width: 1.5, color: on ? 0xffb070 : 0x6b5634, alpha: 1 }).moveTo(Math.cos(a) * -(rr - R0), Math.sin(a) * -(rr - R0)).lineTo(Math.cos(a) * -mr, Math.sin(a) * -mr);
+            if (on) { const glow = new PIXI.Graphics(); glow.beginFill(0xff4a20, 0.4).drawCircle(0, 0, mr + 7).endFill(); glow.filters = [new PIXI.BlurFilter(6)]; m.addChild(glow); }
+            g.beginFill(on ? 0x6a1408 : 0x1e1a17).lineStyle({ width: on ? 2 : 1.4, color: on ? 0xffb070 : next ? 0xc86a40 : 0x6b5634 }).drawCircle(0, 0, mr).endFill();
+            const icon = new PIXI.Text(glyph(st.icon), { fontFamily: FA, fontWeight: '900', fontSize: Math.round(mr * 0.85), fill: on ? 0xffe0c8 : next ? 0xc88a6a : 0x6b5f52 });
+            icon.anchor.set(0.5);
+            m.addChild(g, icon);
+            m.eventMode = 'static';
+            m.cursor = 'help';
+            m.hitArea = new PIXI.Circle(0, 0, mr + 2);
+            const screen = { x: center.x + m.position.x, y: center.y + m.position.y };
+            m.on('pointerover', () => this.onHover?.({ medal: true, label: st.name, text: st.text, on, next, toNext: boss.toNext, gm: boss.gm, at: st.at }, screen, mr));
+            m.on('pointerout', () => this.onHover?.(null));
+            clock.addChild(m);
+            if (next) this.medals.push(g);
+            (this.medalBox ??= [])[i] = m;
         });
+        this.heartGlow = null;
+        this.heartFx = null;
+        // Новая ступень с прошлого раза — волна от Босса по фону и удар
+        if (this.prev && (this.prev.bossStage ?? boss.stage) < boss.stage) {
+            const k = boss.stage - 1, medal = this.medalBox[k];
+            const flash = new PIXI.Graphics(), sparks = new PIXI.Graphics(), seg = new PIXI.Graphics();
+            flash.filters = [new PIXI.BlurFilter(6)]; seg.filters = [new PIXI.BlurFilter(4)];
+            clock.addChild(seg, sparks, flash);
+            const from = medal ? { x: medal.position.x, y: medal.position.y } : { x: 0, y: -R0 };
+            const R = { range: (a, b) => a + Math.random() * (b - a) };
+            const embers = Array.from({ length: 14 }, () => ({ d: R.range(0, 0.25), s: R.range(0.7, 1.3), off: R.range(-1, 1) * R0 * 0.18 }));
+            this.ignite = { start: performance.now(), medal, from, flash, sparks, seg, k, embers };
+            playWeb('stage');
+        }
     }
 
     /** Щелчок: первый — выбрать (кристалл загорается), второй по тому же — шаг */
@@ -611,12 +765,73 @@ export class WebStage {
         for (const m of this.tendrils) m.shader.uniforms.uTime = t;
         for (const shader of this.trails ?? []) shader.uniforms.uTime = t;
         // Кольца вращаются медленно, в разные стороны
-        if (this.rim) this.rim.rotation = t * 0.012;
         if (this.outpostRing) this.outpostRing.rotation = -t * 0.02;
         if (this.innerRing) this.innerRing.rotation = t * 0.035;
-        if (this.core) this.core.rotation = -t * 0.06;
         const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
         for (const { glow, data } of this.nodes.values()) if (data.state === 'reachable' && !data.visited) glow.alpha = 0.25 + 0.3 * pulse;
+        if (this.pointer) {
+            const k = Math.min(1, (performance.now() - this.pointer.start) / 900), e = 1 - (1 - k) ** 3;
+            this.pointer.g.rotation = this.pointer.from + (this.pointer.to - this.pointer.from) * e;
+        }
+        const stage = this.model?.boss?.stage ?? 0;
+        if (this.bossEye && !this.bossEye.lid.destroyed) {
+            const e = this.bossEye, now = performance.now();
+            const k = Math.max(0, Math.min(1, (now - e.start) / 1100)), ease = 1 - (1 - k) ** 3;
+            const open = e.from + (e.to - e.from) * ease;
+            // Моргание: раз в несколько секунд, 0.18 с; во сне — веко чуть «дышит»
+            let blink = 0;
+            if (open > 0.04) {
+                const b = (now - e.blinkAt) / 180;
+                if (b >= 0 && b <= 1) blink = Math.sin(b * Math.PI);
+                if (b > 1) e.blinkAt = now + 2500 + Math.random() * 5000;
+            }
+            this.#drawEye(open, blink);
+            const lv = open;
+            // Кристалл с пробуждением краснеет: от тёмного пепельно-бурого до яркого алого
+            e.gem.tint = mixc(0x3c2a28, 0xffffff, Math.min(1, lv));
+            e.inner.alpha = (0.08 + 0.55 * lv) * (e.full ? 0.75 + 0.25 * Math.sin(t * 3.2) : 0.9 + 0.1 * Math.sin(t * 1.7));
+            const sk = (now - e.sheenAt) / 900, r0 = e.r;
+            e.sheen.clear();
+            if (sk >= 0 && sk <= 1) {
+                const x = -1.3 * r0 + sk * 2.6 * r0;
+                e.sheen.beginFill(0xffffff, 0.35 * Math.sin(sk * Math.PI) * (0.4 + 0.6 * lv)).drawPolygon([x - 0.12 * r0, -1.3 * r0, x + 0.12 * r0, -1.3 * r0, x - 0.4 * r0, 1.3 * r0, x - 0.64 * r0, 1.3 * r0]).endFill();
+            } else if (sk > 1) e.sheenAt = now + 3500 + Math.random() * 3000;
+            e.aura.alpha = e.full ? 0.65 + 0.35 * Math.sin(t * 3.2) : 0.12 + 0.45 * lv * (0.85 + 0.15 * Math.sin(t * (1.4 + lv * 2)));
+            e.aura.scale.set(e.full ? 1.15 + 0.12 * Math.sin(t * 3.2) : 1);
+        }
+        if (this.fullRing && !this.fullRing.destroyed) this.fullRing.alpha = 0.6 + 0.4 * Math.sin(t * 1.1);
+        for (const g of this.medals ?? []) g.alpha = 0.7 + 0.3 * Math.sin(t * 2.2);
+        if (this.ignite?.flash.destroyed) this.ignite = null;
+        if (this.ignite) {
+            const fx = this.ignite, T = (performance.now() - fx.start) / 1000;
+            const clamp = v => Math.max(0, Math.min(1, v));
+            // Медальон вспыхивает и подпрыгивает (0–0.5 с)
+            const m1 = clamp(T / 0.5);
+            if (fx.medal) fx.medal.scale.set(1 + 0.45 * Math.sin(m1 * Math.PI));
+            fx.flash.clear();
+            if (m1 < 1) fx.flash.beginFill(0xffc080, 0.8 * (1 - m1)).drawCircle(fx.from.x, fx.from.y, 18 + 26 * m1).endFill();
+            // Искры летят от медальона к Боссу по дуге (0.2–1.1 с)
+            fx.sparks.clear();
+            for (const e of fx.embers) {
+                const k = clamp((T - 0.2 - e.d) / (0.7 * e.s)); if (k <= 0 || k >= 1) continue;
+                const u = 1 - k, cx = fx.from.x * 0.4 + e.off, cy = fx.from.y * 0.4 - e.off;
+                const x = u * u * fx.from.x + 2 * u * k * cx, y = u * u * fx.from.y + 2 * u * k * cy;
+                fx.sparks.beginFill(0xffd9a0, 1 - k * 0.5).drawCircle(x, y, 2.4).endFill();
+                fx.sparks.beginFill(0xff6a30, 0.35).drawCircle(x, y, 6).endFill();
+            }
+            // Кристалл Босса вспыхивает, когда искры долетают, и остывает (0.9–2.0 с)
+            const s1 = clamp((T - 0.9) / 1.1), br = this.bossEye?.r ?? 20;
+            fx.seg.clear();
+            if (T > 0.9 && s1 < 1) fx.seg.beginFill(0xffe0c0, 0.7 * (1 - s1)).drawPolygon(crystal(br * (1.15 + 0.4 * s1))).endFill();
+            // Босс вздрагивает (0.9–1.3 с)
+            const boss = [...this.nodes.values()].find(v => v.data.type === 'boss');
+            if (boss) {
+                if (!fx.bossPos) fx.bossPos = { x: boss.node.position.x, y: boss.node.position.y };
+                const q = clamp((T - 0.9) / 0.4), amp = q > 0 && q < 1 ? 4 * (1 - q) : 0;
+                boss.node.position.set(fx.bossPos.x + Math.sin(T * 90) * amp, fx.bossPos.y + Math.cos(T * 70) * amp * 0.6);
+            }
+            if (T > 2.3) { fx.flash.destroy(); fx.sparks.destroy(); fx.seg.destroy(); if (fx.medal) fx.medal.scale.set(1); this.ignite = null; }
+        }
         // Искры бегут по нитям хода
         for (const s of this.sparks) {
             const k = ((t * 0.45 + s.phase) % 1);

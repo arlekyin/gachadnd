@@ -61,7 +61,15 @@ export function webModel(map) {
     }
     const rank = { open: 2, familiar: 1 };
     edges.sort((x, y) => (rank[x.cls] ?? 0) - (rank[y.cls] ?? 0));
-    return { nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], next: web.devourer && map.currentNodeId && game.user.isGM ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
+    // Босс: часы этажа и ступени — для обода астролябии, сердца и карточки
+    const ticks = web.ticks ?? 0, stages = activeStages();
+    const boss = {
+        ticks, calm: WEB.CALM, every: WEB.EVERY, stage: webStage(ticks), toNext: ticksToNextStage(ticks), gm: game.user.isGM,
+        // Шаг, на котором ступень набирается — как в ticksToNextStage (web-graph.js)
+        stages: stages.map((st, i) => ({ ...st, at: i ? WEB.CALM + i * WEB.EVERY : WEB.CALM + 1 })),
+        reward: webStage(ticks), purple: webStage(ticks) >= stages.length && stages.length > 0
+    };
+    return { boss, nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], next: web.devourer && map.currentNodeId && game.user.isGM ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
 }
 const currentMoves = map => webMoves(map);
 
@@ -148,7 +156,8 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         return Object.assign(context, {
             hasBoard: true,
             web: {
-                ticks, stage, toNext: ticksToNextStage(ticks), calm: Math.max(0, WEB.CALM - ticks), eaten: (map.web?.eaten ?? []).length,
+                ticks, stage, toNext: ticksToNextStage(ticks), calm: Math.max(0, WEB.CALM - ticks), eaten: (map.web?.eaten ?? []).length, every: WEB.EVERY,
+                mood: ['Босс спит', 'Босс ворочается во сне', 'Босс проснулся', 'Босс в ярости', 'Босс в полной силе'][Math.min(4, Math.round((stage / Math.max(1, activeStages().length)) * 4))],
                 stages: activeStages().map((s, i) => ({ ...s, on: i < stage })), devourer: !!map.web?.devourer, max: activeStages().length
             },
             mode: this.mode,
@@ -209,8 +218,9 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         // Паутина — левее середины своей части экрана (справа край слоя тает), во всю высоту
         this.stage.app.resize();
         const W = this.element.clientWidth, H = this.element.clientHeight;
-        const size = Math.round(Math.min(H * 0.86, W * 0.64));
-        this.stage.update({ ...this.model, size, center: { x: Math.max(size / 2 + 24, W * 0.35), y: H * 0.53 } });
+        // Обод с медальонами ступеней выходит за поле на ~60 px — паутина ужата так, чтобы они помещались
+        const size = Math.round(Math.min((H - 150) / 1.05, W * 0.6));
+        this.stage.update({ ...this.model, size, center: { x: Math.max(size * 0.525 + 80, W * 0.36), y: H * 0.52 } });
     }
 
     /**
@@ -226,7 +236,23 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
     #tooltip(n, p, r) {
         const tip = this.element?.querySelector('.gd-wo-tip');
         if (!tip) return;
-        if (!n) { tip.hidden = true; return; }
+        if (!n) { tip.hidden = true; tip.classList.remove('boss'); return; }
+        const boss = this.model?.boss;
+        // Медальон ступени и сам Босс — карточка Босса; игрокам — образ, Мастеру — числа
+        if (n.medal || (n.type === 'boss' && boss)) {
+            const esc = v => foundry.utils.escapeHTML(String(v ?? ''));
+            const mood = ['Босс спит', 'Босс ворочается во сне', 'Босс проснулся', 'Босс в ярости', 'Босс в полной силе'][Math.min(4, boss.stage)];
+            const rows = boss.stages.map((st, i) => `<div class="st ${i < boss.stage ? 'on' : ''}"><i class="fas ${st.icon}"></i><b>${esc(st.name)}</b><span>${esc(st.text)}</span></div>`).join('');
+            const reward = boss.reward ? `<div class="rw">Добыча с Босса: <b>+${boss.reward} крист.</b>${boss.purple ? ', один фиолетовый' : ''}</div>` : '<div class="rw">Каждая ступень — ещё кристалл в добыче Босса</div>';
+            const next = boss.toNext ? (boss.gm ? `Через ${boss.toNext} шаг. — ${esc(boss.stages[boss.stage]?.name)}` : boss.toNext <= 2 ? 'Босс вот-вот наберёт силу' : '') : '';
+            tip.innerHTML = `<b>${n.medal ? esc(n.label) : 'Босс этажа'}</b><small>${mood}</small>${rows}${reward}${next ? `<div class="nx"><i class="fas fa-hourglass-half"></i> ${next}</div>` : ''}${boss.gm ? `<div class="gm">Мастеру: шаг ${boss.ticks} · тишина ${boss.calm} · ступень каждые ${boss.every}</div>` : ''}`;
+            tip.classList.add('boss');
+            tip.style.left = `${p.x}px`;
+            tip.style.top = `${p.y - r - 14}px`;
+            tip.hidden = false;
+            return;
+        }
+        tip.classList.remove('boss');
         const state = n.eaten ? 'съеден: награды нет, вход — прорыв' : n.touched ? 'тронут Пожирателем' : n.state === 'visited' ? 'пройден' : n.state === 'reachable' ? 'можно за этот шаг' : n.state === 'current' ? 'здесь отряд' : '';
         tip.innerHTML = `<b>${n.label}</b>${state ? `<small>${state}</small>` : ''}`;
         tip.style.left = `${p.x}px`;
@@ -255,7 +281,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
 
     /** Для проверок: что нарисовано */
     stageInfo() {
-        return { nodes: this.stage?.nodes.size ?? 0, open: this.model?.edges.filter(e => e.cls === 'open' || e.cls === 'familiar').length ?? 0, edges: this.model?.edges.length ?? 0, tendrils: this.stage?.tendrils.length ?? 0, legs: this.stage?.lastLegs ?? 0, bursts: this.stage?.biteCount ?? 0, familiar: this.stage?.familiar?.length ?? 0, current: this.model?.nodes.filter(n => n.state === 'current').length ?? 0, reachable: this.model?.nodes.filter(n => n.state === 'reachable').length ?? 0 };
+        return { medals: this.stage?.medalBox?.length ?? 0, eye: !!this.stage?.bossEye, nodes: this.stage?.nodes.size ?? 0, open: this.model?.edges.filter(e => e.cls === 'open' || e.cls === 'familiar').length ?? 0, edges: this.model?.edges.length ?? 0, tendrils: this.stage?.tendrils.length ?? 0, legs: this.stage?.lastLegs ?? 0, bursts: this.stage?.biteCount ?? 0, familiar: this.stage?.familiar?.length ?? 0, current: this.model?.nodes.filter(n => n.state === 'current').length ?? 0, reachable: this.model?.nodes.filter(n => n.state === 'reachable').length ?? 0 };
     }
 }
 

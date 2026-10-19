@@ -3246,3 +3246,16 @@
 .gachadnd-dock .gd-abil, .gachadnd-dock .gd-abil img { width: 40px; height: 40px; }
 .gachadnd-dock .gd-dock-detail { left: calc(72px + var(--dock-content, 600px) + 40px); top: 96px; width: 340px; font-size: 13.5px; }
 .gachadnd-dock .gd-dock-pop { width: 320px; font-size: 13.5px; }
+
+/* Карточка Босса паутины (наведение на Босса и медальоны ступеней) */
+.gachadnd-web-overlay .gd-wo-tip.boss { width: 300px; white-space: normal; text-align: left; border-top-color: #c8322a; padding: 10px 14px; }
+.gachadnd-web-overlay .gd-wo-tip.boss > b { font-family: 'Modesto Condensed', Georgia, serif; font-weight: 400; font-size: 20px; color: #f0d6cf; }
+.gachadnd-web-overlay .gd-wo-tip.boss .st { display: grid; grid-template-columns: 20px 1fr; gap: 0 8px; margin-top: 6px; opacity: 0.45; }
+.gachadnd-web-overlay .gd-wo-tip.boss .st.on { opacity: 1; }
+.gachadnd-web-overlay .gd-wo-tip.boss .st i { color: #e0533f; padding-top: 3px; text-align: center; }
+.gachadnd-web-overlay .gd-wo-tip.boss .st b { font-weight: 400; color: #f2ecdf; }
+.gachadnd-web-overlay .gd-wo-tip.boss .st span { grid-column: 2; font-size: 12px; color: #b9b0a2; }
+.gachadnd-web-overlay .gd-wo-tip.boss .rw { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 179, 71, 0.25); font-size: 12.5px; color: #cfc8b9; }
+.gachadnd-web-overlay .gd-wo-tip.boss .rw b { color: #ffcf8a; font-weight: 400; }
+.gachadnd-web-overlay .gd-wo-tip.boss .nx { margin-top: 6px; font-size: 12px; color: #e0a090; }
+.gachadnd-web-overlay .gd-wo-tip.boss .gm { margin-top: 6px; font-size: 11px; color: #7f786d; }

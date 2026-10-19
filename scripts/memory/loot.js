@@ -172,13 +172,20 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
             .flatMap(a => a.items.filter(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active))
             .reduce((sum, i) => sum + (Number(i.flags[MODULE_ID].loot_bonus) || 0), 0);
 
+        // Подключённые системы добавляют кристаллы до броска (Лабиринт — за ступени Босса паутины):
+        // plan.extra — сколько ещё, plan.rarities — редкость для первых из них (остальные — обычный бросок)
+        const plan = { roomType, extra: 0, rarities: [], lines: [] };
+        Hooks.callAll(HOOKS.lootPlanned, plan);
+        dropsCount += Math.max(0, plan.extra);
+        const planned = [...plan.rarities];
+
         // Мягкая гарантия считается только для бросков без фильтра редкости
         const pity = { miss: 0, red: 0, ...game.settings.get(MODULE_ID, 'lootPity') };
         const near = template.requiredTag ? [] : nearTags();
         const drops = [];
         for (let i = 0; i < dropsCount; i++) {
             let targetRarity = rarityFilter;
-            if (rarityFilter === 'any') targetRarity = rollRarity(template.bonusRoll, template.excludeOrange, pity);
+            if (rarityFilter === 'any') targetRarity = planned.shift() ?? rollRarity(template.bonusRoll, template.excludeOrange, pity);
 
             const hint = near.length && Math.random() < NEAR_TAG_CHANCE ? near[Math.floor(Math.random() * near.length)] : null;
             const crystal = (hint && await randomCrystalWithTag(targetRarity, hint)) || await randomCrystal(targetRarity, template.requiredTag);
@@ -189,7 +196,7 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
         if (rarityFilter === 'any') await game.settings.set(MODULE_ID, 'lootPity', { miss: pity.miss, red: pity.red });
 
         // Подключённые системы могут забрать кристалл до показа (Лабиринт — плата натравленному Пожирателю)
-        const roll = { roomType, drops, lines: [] };
+        const roll = { roomType, drops, lines: [...plan.lines] };
         Hooks.callAll(HOOKS.lootRolled, roll);
 
         // Выпадение у всех: фиолетовый — вспышка, красный — сцена; распределение — после неё

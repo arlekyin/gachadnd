@@ -32,6 +32,7 @@ export const HOOKS = {
     preChangeSkill: 'gachadnd.preChangeSkill',
     queryRest: 'gachadnd.queryRest',
     terminalSkillView: 'gachadnd.terminalSkillView',
+    lootPlanned: 'gachadnd.lootPlanned',
     lootRolled: 'gachadnd.lootRolled',
     lootGenerated: 'gachadnd.lootGenerated',
     restChanged: 'gachadnd.restChanged'

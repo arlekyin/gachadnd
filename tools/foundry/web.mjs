@@ -58,20 +58,21 @@ const shape = {
     bossLinks: m.nodes.find(n => n.id === 'boss').next.every(id => id.startsWith('a')),
     deadEnds: m.nodes.filter(n => n.next.length === 1).length,
     connected: await ev(async () => (await gdt.mod('labyrinth/web-graph.js')).connected(canvas.scene.getFlag('gachadnd', 'floorMap').nodes)),
+    pockets: await ev(async () => (await gdt.mod('labyrinth/web-graph.js')).pockets(canvas.scene.getFlag('gachadnd', 'floorMap').nodes)),
     mode2: await ev(() => game.settings.get('gachadnd', 'mapMode'))
 };
-check('сеть: 30–40 узлов, всё связано, внутрь — только через Заставы, к Боссу — из внутренней зоны, есть тупики', shape.mode === 'web' && shape.count >= 30 && shape.count <= 40 && shape.connected && shape.gate && shape.outposts && shape.bossLinks && shape.deadEnds >= 2 && shape.mode2 === 'web', JSON.stringify(shape));
+check('сеть: 30–40 узлов, всё связано, внутрь — только через Заставы, к Боссу — из внутренней зоны, есть тупики', shape.mode === 'web' && !shape.pockets && shape.count >= 30 && shape.count <= 40 && shape.connected && shape.gate && shape.outposts && shape.bossLinks && shape.deadEnds >= 2 && shape.mode2 === 'web', JSON.stringify(shape));
 const drawn = await ev(() => {
     const el = document.getElementById('gachadnd-web-overlay');
     const info = foundry.applications.instances.get('gachadnd-web-overlay')?.stageInfo() ?? {};
     return {
         overlay: !!el, window: !!document.getElementById('gachadnd-map-terminal'), canvas: !!el?.querySelector('canvas.gd-wo-canvas'),
         nodes: info.nodes, lines: info.edges,
-        stages: el?.querySelectorAll('.gd-wo-stages i').length, clock: el?.querySelector('.gd-wo-clock')?.textContent.replace(/\s+/g, ' ').trim(),
+        stages: info.medals, eye: info.eye, clock: el?.querySelector('.gd-wo-clock')?.textContent.replace(/\s+/g, ' ').trim(),
         reachable: info.reachable
     };
 });
-check('паутина — слой вместо окна: все узлы и пути, 4 ступени Босса, часы; вход — любой узел внешней зоны', drawn.overlay && drawn.canvas && !drawn.window && drawn.nodes === shape.count && drawn.lines > shape.count - 2 && drawn.stages === 4 && /Шаг 0/.test(drawn.clock) && drawn.reachable === shape.zones.outer, JSON.stringify(drawn));
+check('паутина — слой вместо окна: все узлы и пути, 4 медальона ступеней на ободе, глаз Босса, часы; вход — любой узел внешней зоны', drawn.overlay && drawn.canvas && !drawn.window && drawn.nodes === shape.count && drawn.lines > shape.count - 2 && drawn.stages === 4 && drawn.eye && /Шаг 0/.test(drawn.clock) && drawn.reachable === shape.zones.outer, JSON.stringify(drawn));
 await f.shot('web-1-drawn');
 // Появление: Туман слева, кристаллы, нити — кадры по ходу
 await ev(async () => { await foundry.applications.instances.get('gachadnd-web-overlay').close(); await new Promise(r => setTimeout(r, 300)); });
@@ -225,6 +226,20 @@ let r = await fight(8);
 check('Босс в тишине (шаг 8): ступеней нет, «Босс спокоен»', !r.ids.length && r.calm, JSON.stringify(r));
 r = await fight(15);
 check('шаг 15 — 2 ступени: Глушитель и Крайний спит', r.ids.join() === 'muffle,sleepy' && r.max === 30, JSON.stringify(r));
+// Награда за ступени: каждая — ещё кристалл в добыче Босса, все — один фиолетовый
+const reward = await ev(async () => {
+    const out = {};
+    for (const ticks of [8, 15, 19]) {
+        const mp = foundry.utils.deepClone(canvas.scene.getFlag('gachadnd', 'floorMap'));
+        mp.currentNodeId = 'boss'; mp.web.ticks = ticks;
+        await canvas.scene.setFlag('gachadnd', 'floorMap', mp);
+        const plan = { roomType: 'boss', extra: 0, rarities: [], lines: [] };
+        Hooks.callAll('gachadnd.lootPlanned', plan);
+        out[ticks] = { extra: plan.extra, purple: plan.rarities.includes('purple') };
+    }
+    return out;
+});
+check('награда за ступени Босса: 0 → +0, 2 → +2, 4 → +4 и один фиолетовый', reward[8].extra === 0 && reward[15].extra === 2 && !reward[15].purple && reward[19].extra === 4 && reward[19].purple, JSON.stringify(reward));
 r = await fight(17);
 check('шаг 17 — 3 ступени: ещё +25% ПЗ на бой, после боя — снова 30', r.ids.length === 2 && r.max === 38 && r.after === 30, JSON.stringify(r));
 

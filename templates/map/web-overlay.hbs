@@ -4,11 +4,15 @@
     <header class="gd-wo-top">
         <div class="gd-wo-title">Паутина <span>Этаж {{floorRoman}}</span></div>
         {{#if web}}
-        <div class="gd-wo-clock" data-tooltip="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые 2 шага.">
+        {{!-- Числа — Мастеру; игрокам — образ: часы на ободе и глаз Босса говорят сами --}}
+        {{#if isGM}}
+        <div class="gd-wo-clock" data-tooltip="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые {{web.every}} шага. Видит только Мастер.">
             <i class="fas fa-hourglass-half"></i> Шаг {{web.ticks}} ·
             {{#if web.calm}}тишина ещё {{web.calm}}{{else}}{{#if web.toNext}}до ступени Босса {{web.toNext}}{{else}}Босс в полной силе{{/if}}{{/if}}{{#if web.eaten}} · съедено {{web.eaten}}{{/if}}
         </div>
-        <div class="gd-wo-stages"><span>Босс</span>{{#each web.stages}}<i class="fas {{icon}} {{#if on}}on{{/if}}" data-tooltip="{{name}}: {{text}}"></i>{{/each}}</div>
+        {{else}}
+        <div class="gd-wo-clock"><i class="fas fa-eye"></i> {{web.mood}}</div>
+        {{/if}}
         {{/if}}
     </header>
     <div class="gd-wo-buttons">

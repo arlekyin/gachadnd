@@ -128,6 +128,16 @@ export const SOUNDS = {
         whoosh(ctx, out, t + 0.2, { from: 900, to: 140, len: 1.3, peak: 0.24, q: 0.5, a: 0.3 });
         gong(ctx, out, t, { freq: 73.4, decay: 1.6, peak: 0.09 });
     },
+    /** Босс набрал ступень: глубокий удар в грудь и долгий тёмный гул латуни */
+    stage(ctx, out, t) {
+        const sub = osc(ctx, 'sine', 62);
+        sub.frequency.setValueAtTime(62, t);
+        sub.frequency.exponentialRampToValueAtTime(30, t + 0.8);
+        env(ctx, sub, t, { a: 0.008, peak: 0.45, d: 1.1 }).connect(out);
+        run([sub], t, 1.2);
+        knock(ctx, out, t, { freq: 90, drop: 0.5, len: 0.25, peak: 0.25, cutoff: 400, click: 0.05 });
+        gong(ctx, out, t + 0.05, { freq: 55, decay: 2.6, peak: 0.16 });
+    },
     /** Узел встаёт на место: тихий глухой стук штифта о латунь, чуть разной высоты */
     pop(ctx, out, t, k = Math.random()) {
         knock(ctx, out, t, { freq: 240 + k * 120, len: 0.08, peak: 0.1, cutoff: 700, click: 0.025 });

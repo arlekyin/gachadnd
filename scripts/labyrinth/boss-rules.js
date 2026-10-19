@@ -15,6 +15,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { HOOKS as MEMORY_HOOKS } from "../memory/memory-api.js";
 import { isActiveGM } from "../core/socket.js";
 import { hint } from "../core/prefs.js";
 import { onRenderChatMessage } from "../core/chat-hooks.js";
@@ -237,4 +238,17 @@ Hooks.on('deleteCombat', async combat => {
     await roll.toMessage({ speaker: ChatMessage.getSpeaker({ alias: 'Лабиринт' }), flavor: `Элита оставляет следы: к4${roll.total === 1 ? ' — шрам' : ''}` });
     if (roll.total !== 1) return;
     await grantScar(party[Math.floor(Math.random() * party.length)], { reason: 'Элита оставила шрам' });
+});
+
+// Награда за ступени Босса паутины: каждая набранная ступень — ещё один кристалл в добыче Босса; если набраны
+// все — один из них фиолетовый. Жадный отряд рискует сильнее, но и уносит больше
+Hooks.on(MEMORY_HOOKS.lootPlanned, plan => {
+    if (plan.roomType !== 'boss' || currentNodeType() !== MAP_DATA.NODE_BOSS) return;
+    const map = mapScene()?.getFlag(MODULE_ID, 'floorMap');
+    if (!isWeb(map)) return;
+    const stage = webStage(map.web?.ticks ?? 0);
+    if (!stage) return;
+    plan.extra += stage;
+    if (stage >= activeStages().length) plan.rarities.push('purple');
+    plan.lines.push(`<div style="text-align: center; margin-top: 8px; color: #e8a49c;"><i class="fas fa-skull"></i> Босс набрал ступеней: ${stage} — в добыче ещё ${stage} крист.${stage >= activeStages().length ? ', один из них фиолетовый' : ''}.</div>`);
 });
