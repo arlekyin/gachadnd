@@ -268,7 +268,8 @@ export function nextStepToward(map, from, to) {
 }
 
 /** Скорость Пожирателя по Запаху отряда: Охота — 1, сильнее на 4 — 2, на 8 — 3 */
-export const speedFor = (value, hunt) => (value >= hunt + 8 ? 3 : value >= hunt + 4 ? 2 : 1);
+/** Скорость Пожирателя по Насыщению: 0–1 — 1 узел за шаг, 2–3 — 2, 4–5 — 3. Запах решает только, выйдет ли он */
+export const speedFor = satiety => 1 + Math.floor(Math.max(0, Math.min(5, Number(satiety) || 0)) / 2);
 
 // Съесть можно всё, кроме Босса и запечатанных Застав
 const canEat = (map, id) => !sealed(map, id);
@@ -279,7 +280,7 @@ const canEat = (map, id) => !sealed(map, id);
  * @param {object} map   карта (будет изменена)
  * @param {object} o     scent — Запах отряда { value, state }; hunt — порог Охоты этажа
  */
-export function advanceWeb(map, { scent, hunt }) {
+export function advanceWeb(map, { scent, satiety = 0 }) {
     const web = map.web;
     const before = webStage(web.ticks);
     web.ticks++;
@@ -308,7 +309,7 @@ export function advanceWeb(map, { scent, hunt }) {
         const far = (pool.some(apart) ? pool.filter(apart) : pool).sort((a, b) => reach(b) - reach(a))[0];
         if (far) { web.devourer = far.id; web.trail = [far.id]; result.spawned = true; eat(far.id); }
     } else if (web.devourer && party) {
-        for (let s = 0; s < speedFor(scent.value, hunt); s++) {
+        for (let s = 0; s < speedFor(satiety); s++) {
             const step = nextStepToward(map, web.devourer, party);
             if (!step) break;
             stepOnto(map, step, eaten, eat);

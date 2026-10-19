@@ -10,6 +10,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { scentThresholds, partyScent } from "./anchor.js";
+import { getSatiety } from "./devourer-state.js";
 import { getFloor } from "./economy.js";
 import { buildConnectedWeb, speedFor, advanceWeb as advance, WEB, BOSS_STAGES } from "./web-graph.js";
 
@@ -64,8 +65,8 @@ export function generateWebGraph({ look, types }) {
     };
 }
 
-/** Скорость Пожирателя по Запаху отряда на этом этаже */
-export const devourerSpeed = (scent = partyScent(), floor = getFloor()) => speedFor(scent.value, scentThresholds(floor).hunt);
+/** Скорость Пожирателя на паутине — по его Насыщению (Запах решает только, выйдет ли он) */
+export const devourerSpeed = () => speedFor(getSatiety());
 
 /** Тик часов этажа после шага отряда (Мастер): Запах и Охота — по отряду и этажу */
-export const advanceWeb = (map, { scent = partyScent(), floor = getFloor() } = {}) => advance(map, { scent, hunt: scentThresholds(floor).hunt });
+export const advanceWeb = (map, { scent = partyScent() } = {}) => advance(map, { scent, satiety: getSatiety() });

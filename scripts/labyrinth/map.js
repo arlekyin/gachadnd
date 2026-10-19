@@ -584,7 +584,7 @@ async function stepWeb(mapData, nodeData) {
         await say('Нюх Пожирателя', `<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>Прорыв:</strong> ${eaten ? 'отряд ступил в съеденный узел' : 'Пожиратель настиг отряд'}. Нажмите «Здесь» в подвале карты и выберите точку на сцене.</div>`, true);
         if (getOmen() !== 'here') await setOmen('1');
     } else if (!fed) {
-        const omen = omenFor(mapData, devourerSpeed(scent));
+        const omen = omenFor(mapData, devourerSpeed());
         if (getOmen() !== 'here' && omen !== getOmen()) await setOmen(omen);
     }
 }

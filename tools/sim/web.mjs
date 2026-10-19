@@ -16,6 +16,8 @@ WEB.PAUSE = arg('pause', WEB.PAUSE);
 WEB.TOUCH = arg('touch', WEB.TOUCH);
 WEB.SPREAD = arg('spread', WEB.SPREAD);
 const HUNT = 6 + 3 * floor;
+// Насыщение Пожирателя — его скорость на карте (по умолчанию на середине предела этажа)
+const SATIETY = arg('satiety', Math.min(5, Math.floor((floor + 1) / 2)));
 const GAIN = HUNT / 5;            // Охота примерно за 5 боёв: вес кристаллов растёт с этажом
 const rnd = Math.random;
 
@@ -56,7 +58,7 @@ function simulate(greed) {
             if (t === 'mob' || t === 'elite' || t === 'outpost' || t === 'boss') { fights++; smell += GAIN * (0.45 + rnd() * 1.1); }
             else if (t === 'event') smell += rnd() * 1.5;
         }
-        const tick = advanceWeb(map, { scent: scent(), hunt: HUNT });
+        const tick = advanceWeb(map, { scent: scent(), satiety: SATIETY });
         // После прорыва отряд теряет кристаллы (Брюхо, Огрызки) и поглощает часть добычи — Запах вдвое ниже
         if (eaten || tick.caught) { breaches++; devourerLeaves(map); smell *= 0.5; }
     }
@@ -66,7 +68,7 @@ function simulate(greed) {
 
 const lines = [];
 const log = s => { lines.push(s); console.log(s); };
-log(`Паутина: этаж ${floor} (Охота от ${HUNT}); запас тишины ${WEB.CALM}, ступень Босса за ${WEB.EVERY} тика; тронутый съедается через ${WEB.TOUCH}; пауза ${WEB.PAUSE}; знакомые тропы — ${WEB.RUN}; прогонов ${runs}`);
+log(`Паутина: этаж ${floor} (Охота от ${HUNT}, Насыщение ${SATIETY}); запас тишины ${WEB.CALM}, ступень Босса за ${WEB.EVERY} тика; тронутый съедается через ${WEB.TOUCH}; пауза ${WEB.PAUSE}; знакомые тропы — ${WEB.RUN}; прогонов ${runs}`);
 log('');
 log('жадность | узлов | тиков | боёв | ступень Босса (0/1/2/3+)        | прорывов | съедено | дошли');
 for (let greed = 0; greed <= 6; greed++) {

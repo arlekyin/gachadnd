@@ -18,6 +18,7 @@ import { pulseView } from "./pulse.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
 import { addSatiety, getSatiety, satietyCap } from "./devourer-state.js";
 import { startBreach } from "./breach.js";
+import { getSatiety as satietyNow } from "./devourer-state.js";
 import { isWeb, webMoves, isEaten, touchedSet, nextStepToward, webStage, ticksToNextStage, activeStages, BOSS_STAGES, WEB } from "./web-map.js";
 import { WebStage } from "./web-stage.js";
 
@@ -69,7 +70,7 @@ export function webModel(map) {
         stages: stages.map((st, i) => ({ ...st, at: i ? WEB.CALM + i * WEB.EVERY : WEB.CALM + 1 })),
         reward: webStage(ticks), purple: webStage(ticks) >= stages.length && stages.length > 0
     };
-    return { boss, nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], devourer: web.devourer ?? null, next: web.devourer && map.currentNodeId ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
+    return { boss, nodes, edges, trail: web.devourer ? (web.trail ?? []) : [], devourer: web.devourer ?? null, satiety: satietyNow(), speed: 1 + Math.floor(Math.min(5, satietyNow()) / 2), next: web.devourer && map.currentNodeId ? nextStepToward(map, web.devourer, map.currentNodeId) : null };
 }
 const currentMoves = map => webMoves(map);
 
@@ -253,6 +254,12 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             return;
         }
         tip.classList.remove('boss');
+        if (this.model?.devourer === n.id) {
+            const m = this.model, sat = ['голоден', 'сыт едва', 'сыт', 'насытился', 'обожрался', 'раздут'][Math.min(5, m.satiety)];
+            tip.innerHTML = `<b>Пожиратель</b><small>${sat} · ${m.speed === 1 ? 'идёт 1 узел за шаг' : `идёт ${m.speed} узла за шаг`}${game.user.isGM ? ` · Насыщение ${m.satiety}` : ''}</small><small>${n.label}: съеден</small>`;
+            tip.style.left = `${p.x}px`; tip.style.top = `${p.y - r - 14}px`; tip.hidden = false;
+            return;
+        }
         const state = n.eaten ? 'съеден: награды нет, вход — прорыв' : n.touched ? 'тронут Пожирателем' : n.state === 'visited' ? 'пройден' : n.state === 'reachable' ? 'можно за этот шаг' : n.state === 'current' ? 'здесь отряд' : '';
         tip.innerHTML = `<b>${n.label}</b>${state ? `<small>${state}</small>` : ''}`;
         tip.style.left = `${p.x}px`;

@@ -15,7 +15,7 @@ await install(page);
 const ids = await scene(page, { hero: { level: 5 }, enemies: [{ name: 'Босс', x: 9, y: 5 }] });
 const [bossId] = ids.enemies;
 const since = f.log.length;
-const saved = await ev(() => Object.fromEntries(['runFloor', 'mapMode', 'floorSceneId', 'devourerOmen', 'effects', 'webCalm', 'webEvery', 'webStages'].map(k => [k, game.settings.get('gachadnd', k)])));
+const saved = await ev(() => Object.fromEntries(['runFloor', 'mapMode', 'floorSceneId', 'devourerOmen', 'effects', 'webCalm', 'webEvery', 'webStages', 'devourerSatiety'].map(k => [k, game.settings.get('gachadnd', k)])));
 await ev(async ({ hero, boss }) => {
     Object.defineProperty(game.actors.get(hero), 'hasPlayerOwner', { get: () => true, configurable: true });
     await game.actors.get(boss).update({ 'system.details.cr': 5 });
@@ -144,7 +144,8 @@ const stepFresh = () => ev(async () => {
     return id;
 });
 
-// ---------- Пожиратель: Запах в Охоте — выходит на край и идёт к отряду
+// ---------- Пожиратель: Запах в Охоте — выходит на край; скорость — по Насыщению (2 → 2 узла за шаг)
+await ev(() => game.settings.set('gachadnd', 'devourerSatiety', 2));
 await ev(async hero => {
     const inv = await gdt.mod('memory/inventory.js');
     for (let i = 0; i < 5; i++) await inv.giveCrystal(game.actors.get(hero), { skillName: 'Красная бочка' });
@@ -159,7 +160,7 @@ await click(await stepFresh());
 m = await map();
 const d1 = await ev(async () => { const w = await gdt.mod('labyrinth/web-map.js'); const mp = canvas.scene.getFlag('gachadnd', 'floorMap'); return mp.web.devourer ? w.distance(mp, mp.web.devourer, mp.currentNodeId) : 0; });
 // Заставы не съедаются: шаг Пожирателя на Заставу съеденных не прибавляет
-check('Пожиратель идёт к отряду (скорость 2 — Запах на 4 выше Охоты) и съедает узлы на пути', d1 <= d0 && m.web.eaten.length >= 1 && (m.web.eaten.length >= 2 || m.nodes.find(n => n.id === m.web.devourer)?.zone === 'outpost') && Array.isArray(m.web.touched), JSON.stringify({ d0, d1, eaten: m.web.eaten, touched: m.web.touched }));
+check('Пожиратель идёт к отряду (Насыщение 2 — 2 узла за шаг) и съедает узлы на пути', d1 <= d0 && m.web.eaten.length >= 1 && (m.web.eaten.length >= 2 || m.nodes.find(n => n.id === m.web.devourer)?.zone === 'outpost') && Array.isArray(m.web.touched), JSON.stringify({ d0, d1, eaten: m.web.eaten, touched: m.web.touched }));
 const bitten = await ev(() => foundry.applications.instances.get('gachadnd-web-overlay').stageInfo());
 check('Пожиратель: новые съеденные узлы вспыхивают и обрастают прядями', bitten.bursts >= 1 && bitten.tendrils >= 2, JSON.stringify(bitten));
 await ev(async () => {
@@ -264,7 +265,7 @@ const gmMoves = await ev(async () => {
     mp.visitedNodes = [...new Set([...mp.visitedNodes, ...mp.nodes.filter(n => n.zone === 'outpost').map(n => n.id)])];
     mp.web = { ...mp.web, devourer: null, eaten: [], touched: [], trail: [] };
     await canvas.scene.setFlag('gachadnd', 'floorMap', mp);
-    const far = mp.nodes.filter(n => n.zone === 'outer').sort((a, b) => w.devourerDistance(mp, b.id, mp.currentNodeId) - w.devourerDistance(mp, a.id, mp.currentNodeId))[0].id;
+    const far = mp.nodes.filter(n => n.zone === 'outer' && Number.isFinite(w.devourerDistance(mp, n.id, mp.currentNodeId))).sort((a, b) => w.devourerDistance(mp, b.id, mp.currentNodeId) - w.devourerDistance(mp, a.id, mp.currentNodeId))[0].id;
     await mapMod.gmDevourer(far);
     const placed = canvas.scene.getFlag('gachadnd', 'floorMap').web;
     const d0 = w.devourerDistance(canvas.scene.getFlag('gachadnd', 'floorMap'), far, mp.currentNodeId);
