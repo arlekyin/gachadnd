@@ -2,7 +2,8 @@
  * Генератор арен — отрисовка планировки в картинку (2D canvas, в браузере)
  *
  * Земля — бесшовные текстуры, смешанные по маскам с рваными краями; вода — поверх дна; предметы — спрайты с
- * мягкой падающей тенью (свет сверху слева); в конце — настроение (ночь, туман, порча, кровь).
+ * мягкой падающей тенью (свет сверху слева); затем свет — одно солнечное место, лес по краям темнее, тени
+ * холодные, свет тёплый; в конце — настроение (ночь, туман, порча, кровь).
  * Пока арта нет, текстуры и спрайты рисуются здесь же в рисованном стиле: крупные пятна, мазок, тонкий тёмный
  * контур; положите картинки в assets/battlemap/<биом>/ (имена — docs/battlemap-assets.md) — подставятся они.
  *
@@ -285,9 +286,9 @@ function drawVignette(ctx, o, art, cell, tuftArt, seed) {
     const w = o.w * cell, h = o.h * cell, k = Math.min(w / img.width, h / img.height), dw = img.width * k, dh = img.height * k;
     const x = o.x * cell - dw / 2, y = o.y * cell - dh / 2;
     const g = ctx.createRadialGradient(o.x * cell, o.y * cell, Math.min(dw, dh) * 0.25, o.x * cell, o.y * cell, Math.max(dw, dh) * 0.6);
-    g.addColorStop(0, 'rgba(20,24,10,0.35)'); g.addColorStop(1, 'rgba(20,24,10,0)');
+    g.addColorStop(0, `rgba(${SHADE},0.35)`); g.addColorStop(1, `rgba(${SHADE},0)`);
     ctx.fillStyle = g; ctx.fillRect(x - cell, y - cell, dw + 2 * cell, dh + 2 * cell);
-    ctx.save(); ctx.filter = `brightness(0) blur(${cell * 0.1}px)`; ctx.globalAlpha = 0.3; ctx.drawImage(img, x + cell * 0.12, y + cell * 0.15, dw, dh); ctx.restore();
+    ctx.save(); ctx.filter = `blur(${cell * 0.1}px)`; ctx.globalAlpha = 0.3; ctx.drawImage(silhouette(img), x + cell * 0.12, y + cell * 0.15, dw, dh); ctx.restore();
     ctx.drawImage(img, x, y, dw, dh);
     if (o.name === 'bridge') return;
     for (let i = 0; tuftArt.length && i < o.w * o.h * 0.9; i++) {
@@ -296,14 +297,54 @@ function drawVignette(ctx, o, art, cell, tuftArt, seed) {
     }
 }
 
-/** Рамка карты: края темнее — взгляд держится в центре, как на готовых картах (там по краю обычно лес и скалы) */
-function frame(ctx, W, H, cell) {
-    const d = cell * 2.4;
-    for (const [x0, y0, x1, y1] of [[0, 0, d, 0], [W, 0, W - d, 0], [0, 0, 0, d], [0, H, 0, H - d]]) {
-        const g = ctx.createLinearGradient(x0, y0, x1, y1);
-        g.addColorStop(0, 'rgba(18,20,10,0.42)'); g.addColorStop(1, 'rgba(18,20,10,0)');
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+// Цвет тени: холодный тёмно-синий, а не чёрный и не бурый — тень меняет оттенок, а не только яркость
+const SHADE = '20,30,58';
+
+/** Силуэт картинки цветом тени (для падающих теней) */
+function silhouette(img) {
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const l = c.getContext('2d');
+    l.drawImage(img, 0, 0); l.globalCompositeOperation = 'source-in'; l.fillStyle = `rgb(${SHADE})`; l.fillRect(0, 0, c.width, c.height);
+    return c;
+}
+
+// ---------- Палитра биома: арт перекрашивается при сборке, сами картинки не меняются
+// Лес — как у готовых карт: зелень не оливковая, а настоящая (тон сдвинут к зелёному), кроны светлее,
+// тропа светлая и кремовая, а не рыжая. Ключ — начало имени картинки
+const PALETTES = {
+    forest: {
+        'ground-grass': 'hue-rotate(20deg) saturate(1.15) brightness(1.12)',
+        'ground-forest-floor': 'hue-rotate(18deg) saturate(1.1) brightness(1.3)',
+        'ground-path': 'sepia(0.35) saturate(0.8) brightness(1.24)',
+        'ground-mud': 'saturate(0.85) brightness(1.05)',
+        tree: 'hue-rotate(22deg) saturate(1.12) brightness(1.3) contrast(1.06)',
+        pine: 'hue-rotate(18deg) saturate(1.1) brightness(1.3) contrast(1.06)',
+        bush: 'hue-rotate(20deg) saturate(1.12) brightness(1.22)',
+        reeds: 'hue-rotate(16deg) brightness(1.12)',
+        'scatter-tufts': 'hue-rotate(20deg) saturate(1.1) brightness(1.12)',
+        'scatter-ferns': 'hue-rotate(20deg) saturate(1.1) brightness(1.12)'
     }
+};
+const recolored = new WeakMap();
+
+/** Арт в палитре биома (копия на холсте; одна на картинку и фильтр) */
+function inPalette(art, biome) {
+    const table = PALETTES[biome];
+    if (!table) return art;
+    const out = {};
+    for (const [name, img] of Object.entries(art)) {
+        const key = Object.keys(table).find(k => name.startsWith(k));
+        if (!key) { out[name] = img; continue; }
+        const cache = recolored.get(img) ?? new Map();
+        recolored.set(img, cache);
+        if (!cache.has(table[key])) {
+            const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+            const l = c.getContext('2d'); l.filter = table[key]; l.drawImage(img, 0, 0);
+            cache.set(table[key], c);
+        }
+        out[name] = cache.get(table[key]);
+    }
+    return out;
 }
 
 // ---------- Отрисовка
@@ -313,6 +354,7 @@ function frame(ctx, W, H, cell) {
  * @param {object} o     cell — пикселей в клетке; mood — day|night|fog|rot|blood; art — { [имя]: Image } готовые картинки
  */
 export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
+    art = inPalette(art, plan.biome ?? 'forest');
     const W = plan.cols * cell, H = plan.rows * cell;
     const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
@@ -368,6 +410,7 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
     }
 
     clouds(ctx, W, H, cell, seed);
+    canopyShadow(ctx, plan, W, H, cell);
     const rotMask = mood === 'rot' ? rotGround(ctx, { W, H, cell, seed, art }) : null;
     scatter(ctx, plan, cell, seed, art);
 
@@ -400,14 +443,14 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
         // Посадка: пятно затенения прямо под предметом — он стоит на земле, а не лежит поверх
         if (GROUND_SHADE[o.kind]) {
             const rr = r * GROUND_SHADE[o.kind] * k0, g = ctx.createRadialGradient(px + rr * 0.15, py + rr * 0.2, rr * 0.3, px + rr * 0.15, py + rr * 0.2, rr * 1.15);
-            g.addColorStop(0, 'rgba(20,24,10,0.55)'); g.addColorStop(1, 'rgba(20,24,10,0)');
+            g.addColorStop(0, `rgba(${SHADE},0.55)`); g.addColorStop(1, `rgba(${SHADE},0)`);
             ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px + rr * 0.15, py + rr * 0.2, rr * 1.15, 0, 6.28); ctx.fill();
         }
         // Падающая тень: свет сверху слева — тень вправо вниз, мягкая
         const off = SHADOW[o.kind] * cell;
         if (off) {
-            ctx.save(); ctx.filter = `brightness(0) blur(${cell * 0.08}px)`; ctx.globalAlpha = 0.45;
-            ctx.drawImage(spr, px - size / 2 + off, py - size / 2 + off * 1.15); ctx.restore();
+            ctx.save(); ctx.filter = `blur(${cell * 0.08}px)`; ctx.globalAlpha = 0.45;
+            ctx.drawImage(silhouette(spr), px - size / 2 + off, py - size / 2 + off * 1.15); ctx.restore();
         }
         ctx.drawImage(spr, px - size / 2, py - size / 2);
         // Трава и мелочь заходят на подножие камней, пней и брёвен — они «врастают» в землю
@@ -419,7 +462,7 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
         }
     }
 
-    frame(ctx, W, H, cell);
+    light(ctx, plan, { W, H, cell, mood, seed });
     grade(ctx, plan, { W, H, cell, mood, seed, M, art, rotMask });
     return canvas;
 }
@@ -431,9 +474,95 @@ function clouds(ctx, W, H, cell, seed) {
     for (let i = 0; i < Math.round((W * H) / (cell * cell * 6)); i++) {
         const x = R.range(0, W), y = R.range(0, H), r = cell * R.range(1.5, 4), light = R() < 0.5;
         const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, light ? 'rgba(255,245,200,0.10)' : 'rgba(30,40,15,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        g.addColorStop(0, light ? 'rgba(255,240,190,0.10)' : `rgba(${SHADE},0.10)`); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.28); ctx.fill();
     }
+}
+
+// ---------- Свет: одно солнечное место, лес по краям темнее, общая тень крон
+
+// Сколько кроны закрывают свет
+const CANOPY = { tree: 1, pine: 0.9, bush: 0.4, deadtree: 0.3 };
+
+/** Солнечное место: самое открытое ближе к середине — туда смотрит глаз, там обычно и бой */
+function sunSpot(plan) {
+    const block = plan.objects.filter(o => CANOPY[o.kind] || o.kind === 'boulder' || o.kind === 'ruin' || o.kind === 'vignette');
+    let best = null;
+    for (let y = 1.5; y < plan.rows - 1.5; y += 0.5) for (let x = 1.5; x < plan.cols - 1.5; x += 0.5) {
+        let open = 6;
+        for (const o of block) open = Math.min(open, Math.hypot(o.x - x, o.y - y) - o.r);
+        const off = Math.hypot((x - plan.cols / 2) / plan.cols, (y - plan.rows / 2) / plan.rows);
+        const score = open - off * 7;
+        if (!best || score > best.score) best = { x, y, score, open: Math.max(1, open) };
+    }
+    return best ?? { x: plan.cols / 2, y: plan.rows / 2, open: 2 };
+}
+
+/** Маска крон в ¼ размера, размытая: кроны заслоняют свет — по ней тень на земле и сумрак чащи */
+function canopyMask(plan, W, H, cell, { grow = 1, shift = 0, blur = 0.5, alpha = 1 } = {}) {
+    const q = 4, c = document.createElement('canvas'); c.width = Math.ceil(W / q); c.height = Math.ceil(H / q);
+    const l = c.getContext('2d');
+    l.filter = `blur(${(cell * blur) / q}px)`;
+    l.fillStyle = '#000';
+    for (const o of plan.objects) {
+        if (!CANOPY[o.kind]) continue;
+        l.globalAlpha = CANOPY[o.kind] * alpha;
+        l.beginPath(); l.arc((o.x * cell + shift) / q, (o.y * cell + shift * 1.15) / q, (o.r * cell * grow) / q, 0, 6.28); l.fill();
+    }
+    return c;
+}
+
+/** Залить маску цветом и положить умножением — холодное затемнение без грязи */
+function multiplyMask(ctx, mask, W, H, color, alpha) {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const l = c.getContext('2d');
+    l.imageSmoothingQuality = 'high'; l.drawImage(mask, 0, 0, W, H);
+    l.globalCompositeOperation = 'source-in'; l.fillStyle = color; l.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = alpha; ctx.drawImage(c, 0, 0); ctx.restore();
+}
+
+/** Общая тень крон на земле — до предметов, свет сверху слева: тень сдвинута вправо вниз, большая и мягкая */
+function canopyShadow(ctx, plan, W, H, cell) {
+    multiplyMask(ctx, canopyMask(plan, W, H, cell, { grow: 1.1, shift: cell * 0.6, blur: 0.6 }), W, H, 'rgb(84,128,166)', 0.7);
+}
+
+/**
+ * После предметов: чаща темнее и холоднее, края карты уходят в сумрак, на открытом месте — тёплое солнечное
+ * пятно и редкие блики сквозь листву. Ночью солнца нет — остаются сумрак и холод
+ */
+function light(ctx, plan, { W, H, cell, mood, seed }) {
+    const R = rng(`light|${seed}`), sun = sunSpot(plan), sx = sun.x * cell, sy = sun.y * cell;
+    // Чаща: где кроны гуще — там темнее (одиночное дерево почти не трогается)
+    multiplyMask(ctx, canopyMask(plan, W, H, cell, { grow: 1.5, blur: 1.4, alpha: 0.35 }), W, H, 'rgb(96,132,170)', 0.55);
+    // Края: от солнечного места к краям — холодный сумрак
+    const far = Math.hypot(Math.max(sx, W - sx), Math.max(sy, H - sy));
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, far);
+    g.addColorStop(0, 'rgb(255,255,255)'); g.addColorStop(0.45, 'rgb(255,255,255)'); g.addColorStop(0.8, 'rgb(214,224,238)'); g.addColorStop(1, 'rgb(160,178,206)');
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+    if (mood === 'night') return;
+    // Солнце: тёплое пятно на самом открытом месте; где на землю падает тень крон — его нет, край пятна
+    // повторяет кроны (как свет в просвете леса, а не дымка)
+    const r = cell * Math.min(10, Math.max(6, sun.open * 2.6));
+    const sunLayer = document.createElement('canvas'); sunLayer.width = W; sunLayer.height = H;
+    const sl = sunLayer.getContext('2d'), sg = sl.createRadialGradient(sx, sy, 0, sx, sy, r);
+    sg.addColorStop(0, 'rgba(255,222,150,0.75)'); sg.addColorStop(0.5, 'rgba(255,222,150,0.4)'); sg.addColorStop(1, 'rgba(255,222,150,0)');
+    sl.fillStyle = sg; sl.fillRect(0, 0, W, H);
+    sl.globalCompositeOperation = 'destination-out'; sl.globalAlpha = 0.6; sl.imageSmoothingQuality = 'high';
+    sl.drawImage(canopyMask(plan, W, H, cell, { grow: 1.05, shift: cell * 0.6, blur: 0.7 }), 0, 0, W, H);
+    ctx.save(); ctx.globalCompositeOperation = 'soft-light'; ctx.drawImage(sunLayer, 0, 0);
+    ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.22; ctx.drawImage(sunLayer, 0, 0); ctx.restore();
+    // Блики сквозь листву: тёплые пятна на открытых клетках у края крон
+    const crowns = plan.objects.filter(o => CANOPY[o.kind] >= 0.9);
+    ctx.save(); ctx.globalCompositeOperation = 'soft-light';
+    for (let i = 0, n = Math.round((plan.cols * plan.rows) / 30); i < n * 6 && crowns.length; i++) {
+        const x = R.range(1, plan.cols - 1), y = R.range(1, plan.rows - 1);
+        let d = 9; for (const o of crowns) d = Math.min(d, Math.hypot(o.x - x, o.y - y) - o.r);
+        if (d < 0.2 || d > 1.6 || R() > 0.3) continue;
+        const rr = cell * R.range(0.5, 1.2), bg = ctx.createRadialGradient(x * cell, y * cell, 0, x * cell, y * cell, rr);
+        bg.addColorStop(0, 'rgba(255,226,140,0.5)'); bg.addColorStop(1, 'rgba(255,226,140,0)');
+        ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x * cell, y * cell, rr, 0, 6.28); ctx.fill();
+    }
+    ctx.restore();
 }
 
 // ---------- Россыпь: пучки травы, камешки, веточки — гуще у краёв (тропа, берег, перелески, подножия)
