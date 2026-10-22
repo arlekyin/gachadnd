@@ -143,23 +143,44 @@ async function open({ width = 1600, height = 900, headless = !args().headed, slo
         if (m.type() === 'error' || (m.type() === 'warning' && /gachadnd/i.test(t))) console.log('  ›', m.type(), t);
     });
 
-    await page.goto(`${URL}/join`);
-    // Выбор пользователя: v13 — name="userid", v14 — name="userId"
-    const select = 'select[name="userid"], select[name="userId"]';
-    await page.waitForSelector(select, { timeout: 60000 });
-    const userId = await page.$eval(select, (el, name) => [...el.options].find(o => o.textContent.trim() === name)?.value, USER);
-    if (!userId) throw new Error(`Нет пользователя «${USER}» на странице входа`);
-    await page.selectOption(select, userId);
-    await page.fill('input[name="password"]', PASSWORD);
-    await Promise.all([page.waitForURL(/\/game/, { timeout: 60000 }), page.click('button[name="join"]')]);
-    await page.waitForFunction(() => window.game?.ready, null, { polling: 250, timeout: 120000 });
-    // Слой анимаций модуля и сцена иногда дорисовываются после ready
-    await page.waitForTimeout(1500);
+    await login(page, USER);
 
     // Журнал пишется в state.log: под раннером connect() подменяет его на журнал каждой проверки
     return Object.defineProperty({
         session: { page, browser, shot: name => page.screenshot({ path: path.join(OUT, `${name}.png`) }) }
     }, 'log', { get: () => state.log, set: value => { state.log = value; } });
+}
+
+/** Вход в мир под пользователем: страница входа, выбор, пароль, ожидание game.ready */
+async function login(page, user, password = PASSWORD) {
+    await page.goto(`${URL}/join`);
+    // Выбор пользователя: v13 — name="userid", v14 — name="userId"
+    const select = 'select[name="userid"], select[name="userId"]';
+    await page.waitForSelector(select, { timeout: 60000 });
+    const userId = await page.$eval(select, (el, name) => [...el.options].find(o => o.textContent.trim() === name)?.value, user);
+    if (!userId) throw new Error(`Нет пользователя «${user}» на странице входа`);
+    await page.selectOption(select, userId);
+    await page.fill('input[name="password"]', password);
+    await Promise.all([page.waitForURL(/\/game/, { timeout: 60000 }), page.click('button[name="join"]')]);
+    await page.waitForFunction(() => window.game?.ready, null, { polling: 250, timeout: 120000 });
+    // Слой анимаций модуля и сцена иногда дорисовываются после ready
+    await page.waitForTimeout(1500);
+}
+
+/**
+ * Второй вход в тот же мир — под другим пользователем, рядом с Мастером: свой контекст браузера (своя
+ * сессия), своя страница. В тестовом мире без паролей: Claude_player (игрок), Claude_trusted (доверенный),
+ * Claude_assistant (помощник Мастера). Проверки со стороны игрока: что он видит, что уходит Мастеру.
+ * @returns {{ page, log, shot, close }}
+ */
+export async function joinAs(f, user) {
+    const context = await f.browser.newContext({ viewport: { width: 1600, height: 900 } });
+    const page = await context.newPage();
+    const log = [];
+    page.on('pageerror', e => { log.push(`pageerror: ${e.message}`); console.log(`ОШИБКА СТРАНИЦЫ (${user})`, e.message); });
+    page.on('console', m => { if (m.type() === 'error' || /gachadnd/i.test(m.text())) log.push(`${m.type()}: ${m.text()}`); });
+    await login(page, user, '');
+    return { page, log, shot: name => page.screenshot({ path: path.join(OUT, `${name}.png`) }), close: () => context.close() };
 }
 
 /**

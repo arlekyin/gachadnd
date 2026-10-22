@@ -244,6 +244,38 @@ export async function use(page, actorId, itemId, { select = {}, timeout = 6000 }
 }
 
 /** Бой: участники по порядку инициативы (первый — самый высокий), бой начат */
+/**
+ * Способности класса из компендиумов dnd5e — для Огранки: черты класса (по английскому имени, они не
+ * переведены) и заклинания (по идентификатору: имена переведены). caster — класс с ячейками заклинаний.
+ * @returns {Promise<Object<string, string>>} { имя или идентификатор: id предмета }
+ */
+export async function classKit(page, actorId, { features = [], spells = [], caster = null } = {}) {
+    return page.evaluate(async ({ actorId, features, spells, caster }) => {
+        const actor = game.actors.get(actorId);
+        const out = {};
+        if (caster) await actor.createEmbeddedDocuments('Item', [{
+            name: caster.name, type: 'class',
+            system: { identifier: caster.identifier, levels: caster.levels ?? 8, hd: { denomination: 'd8' }, spellcasting: { progression: 'full', ability: caster.ability ?? 'wis' } }
+        }]);
+        const featPack = game.packs.get('dnd5e.classfeatures'), spellPack = game.packs.get('dnd5e.spells');
+        const featIndex = await featPack?.getIndex(), spellIndex = await spellPack?.getIndex({ fields: ['system.identifier'] });
+        const docs = [];
+        for (const name of features) { const e = featIndex?.find(x => x.name === name); if (e) docs.push([name, (await featPack.getDocument(e._id)).toObject()]); }
+        for (const id of spells) {
+            const e = spellIndex?.find(x => x.system?.identifier === id);
+            if (!e) continue;
+            const data = (await spellPack.getDocument(e._id)).toObject();
+            // Всегда готово: и по-старому (preparation), и по-новому (method / prepared)
+            foundry.utils.mergeObject(data, { system: { preparation: { mode: 'always', prepared: true }, method: 'spell', prepared: 2 } });
+            docs.push([id, data]);
+        }
+        // Порядок созданных предметов не гарантирован — ключ в флаге
+        const made = await actor.createEmbeddedDocuments('Item', docs.map(([key, d]) => foundry.utils.mergeObject(d, { flags: { gdt: { kit: key } } })));
+        made.forEach(item => { out[item.flags.gdt.kit] = item.id; });
+        return out;
+    }, { actorId, features, spells, caster });
+}
+
 export async function combat(page, sceneId, actorIds) {
     return page.evaluate(async ({ sceneId, actorIds }) => {
         const s = game.scenes.get(sceneId);
