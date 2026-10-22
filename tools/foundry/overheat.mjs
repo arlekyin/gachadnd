@@ -142,6 +142,9 @@ await page.evaluate(({ hero, rech }) => game.actors.get(hero).items.get(rech).up
 const hp0 = await hp();
 await page.evaluate(() => gdt.mark());
 u = await use(OVER, { timeout: 3000 });
+// Использование идёт после окна dnd5e и броска цены 2к6 — дождаться, пока свой заряд потратится
+await page.waitForFunction(({ hero, id }) => game.actors.get(hero).items.get(id)?.system.uses.spent === 1, { hero, id: OVER }, { timeout: 10000 }).catch(() => {});
+await page.evaluate(() => gdt.settle(700));
 console.log('   окна:', u.windows.join('; ') || 'нет', '| use() →', u.result);
 r = await state(RECHARGE);
 const o = await state(OVER);

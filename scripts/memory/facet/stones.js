@@ -21,7 +21,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
-import { onRenderChatMessage } from "../../core/chat-hooks.js";
+import { onRenderChatMessage, messageItem, messageActivity } from "../../core/chat-hooks.js";
 import { blast, around, inCircle, tokenOf, esc, boom, centerOf, isDead } from "../skills/blast/common.js";
 import { STONES, TAG_COLORS, isFacetable, stonesFor } from "./facet.js";
 
@@ -274,7 +274,7 @@ async function payBlood(message, actor) {
     if (key && actor.getFlag(MODULE_ID, 'facetPaid') === key) return ui.notifications.warn('Плата кровью — раз за ход.');
     if (key) await actor.setFlag(MODULE_ID, 'facetPaid', key);
     await message.setFlag(MODULE_ID, 'facetPaidHere', true);
-    await payHp(actor, levelOf(actor), `Плата кровью — ${message.getAssociatedItem?.()?.name ?? ''}`);
+    await payHp(actor, levelOf(actor), `Плата кровью — ${messageItem(message)?.name ?? ''}`);
 }
 
 // ==========================================
@@ -324,7 +324,7 @@ onRenderChatMessage((message, html) => {
     if (!html?.querySelector) return;
     bindStoneButtons(message, html);
     if (html.querySelector('.gd-facet-line') || (message.type !== 'usage' && message.getFlag?.('dnd5e', 'messageType') !== 'usage')) return;
-    const activity = message.getAssociatedActivity?.() ?? null;
+    const activity = messageActivity(message);
     const stones = activity ? stonesFor(activity) : [];
     if (!stones.length) return;
     const actor = activity.item.actor;

@@ -9,7 +9,7 @@
 
 import { MODULE_ID } from "../../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
-import { onRenderChatMessage } from "../../../core/chat-hooks.js";
+import { onRenderChatMessage, messageItem } from "../../../core/chat-hooks.js";
 import { feetBetween } from "../light/flash.js";
 import { esc, centerOf } from "../light/common.js";
 
@@ -166,7 +166,7 @@ export async function settleSave({ actorUuid, total }) {
 const ROLL_BUTTONS = '[data-action="rollDamage"], [data-action="rollSave"], [data-action="rollAttack"], [data-action="placeTemplate"]';
 onRenderChatMessage((message, html) => {
     if (!html?.querySelectorAll) return;
-    const item = message.getAssociatedItem?.() ?? null;
+    const item = messageItem(message);
     if (!blastKind(item)) return;
     html.querySelectorAll(ROLL_BUTTONS).forEach(b => b.remove());
 });
