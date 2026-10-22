@@ -20,18 +20,15 @@
  * сцене, как импакт-кадры Roblox: фильтр сцены делает её контрастной ч/б и рассекает по линии
  * шаблона навыка (половины разъезжаются вдоль неё), токены удара — силуэты с обводкой, камера
  * делает рывок к точке удара; поверх — разрез и полосы от него. Второй кадр — инверсия.
- * fists — удар Сайтамы (impact-knock.js): камера к нему и цели, вдох, рывок, кадр света и молний,
- * пять кулаков (impact-fists.js), разлёт за целью и её отлёт на 30 футов. Кадр идёт после любого
- * применённого урона взведённого навыка, а не только решающего.
+ * fists — удар Сайтамы: камера к нему и цели, вдох, рывок, кадр света и молний, пять кулаков, разлёт
+ * за целью и её отлёт на 30 футов. Анимацию играет отдельный модуль impact-frames (api.launch), если он
+ * установлен; без него — только отлёт, он правило навыка. Кадр идёт после любого применённого урона
+ * взведённого навыка, а не только решающего.
  * Значки состояний токенов (череп, кровотечение) в снимок сцены не попадают.
  */
 
 import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
-import { playFists, prepareFists } from "./impact-fists.js";
-import { knockback, playSaitama } from "./impact-knock.js";
-import "./impact-sound.js";
-import { playCue, duckScene } from "../../cutscene/audio.js";
 import { hideTokenMarks, stageFilter } from "../../cutscene/stage.js";
 import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
 import { stowWindows } from "../../cutscene/windows.js";
@@ -85,15 +82,6 @@ export function registerImpactSettings() {
         range: { min: 1, max: 30, step: 1 },
         default: 1
     });
-    game.settings.register(MODULE_ID, 'impactSoundFolder', {
-        name: 'Папка звуков импакт-кадров',
-        hint: 'Своя озвучка удара Сайтамы: файлы approach, inhale, lunge, contact, punch, punchFinal, fly, land, ok (.ogg). Пусто — звуки синтезируются в браузере.',
-        scope: 'world',
-        config: false,
-        type: String,
-        filePicker: 'folder',
-        default: ''
-    });
     game.settings.register(MODULE_ID, 'impactSound', {
         name: 'Звук импакт-кадра',
         hint: 'Путь к звуковому файлу, например modules/gachadnd/assets/sounds/explosion.ogg. Пусто — взрыв синтезируется в браузере.',
@@ -107,16 +95,6 @@ export function registerImpactSettings() {
 // ==========================================
 // ВЗВОД И РЕЗУЛЬТАТ
 // ==========================================
-
-// Рисунки кулаков и шейдер волн — заранее: после загрузки мира, когда браузер свободен, и после
-// смены размера окна. Тогда первый удар не ждёт подготовки
-Hooks.once('ready', () => {
-    if (!fxOn()) return;
-    const warm = () => prepareFists().catch(error => console.warn(`${MODULE_ID} | рисунки кулаков`, error));
-    setTimeout(warm, 3000);
-    let resized = null;
-    window.addEventListener('resize', () => { clearTimeout(resized); resized = setTimeout(warm, 1500); });
-});
 
 // Взведённые ультимейты: { actorId, art, until }. Взвод рассылается всем — урон обычно применяет Мастер
 const armed = new Map();
@@ -140,9 +118,52 @@ onSocket('impactArm', message => arm(message));
 
 function arm({ actorId, art, style = null, tokenId, line = null }) {
     armed.set(actorId, { art, style, tokenId, line, until: Date.now() + ARM_MS });
-    // Рисунки кулаков — пока бросают урон, а не в момент удара
-    if (style === 'fists') prepareFists().catch(error => console.warn(`${MODULE_ID} | рисунки кулаков`, error));
     trace(`взведён ${game.actors.get(actorId)?.name ?? actorId}${style ? ` (${style})` : ''}, ждёт урона ${ARM_MS / 60000} мин${tokenId ? '' : '; токена на сцене нет'}`);
+}
+
+/**
+ * Куда отлетает цель: по прямой от нанёсшего удар на feet футов, до первой стены.
+ * Считается там, где применён урон, и рассылается всем вместе с кадром.
+ * @returns {{tokenId, casterId, x, y, reach, from: {x, y}, to: {x, y}}|null}  x, y — новый левый верхний угол токена; reach — полная дальность.
+ */
+export function knockback(casterId, targetId, feet) {
+    const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
+    const dims = canvas?.dimensions;
+    if (!caster || !target || !dims?.distance) {
+        console.info(`${MODULE_ID} | импакт: отлёта не будет — ${!caster ? 'нет токена нанёсшего удар на сцене' : !target ? 'нет токена цели на сцене' : 'у сцены нет масштаба'}`);
+        return null;
+    }
+    const a = caster.center, b = target.center;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return null;
+    dx /= len; dy /= len;
+    const reach = feet * dims.size / dims.distance;
+    let end = { x: b.x + dx * reach, y: b.y + dy * reach };
+    // Стена на пути: цель останавливается за полклетки до неё
+    try {
+        const hit = globalThis.CONFIG?.Canvas?.polygonBackends?.move?.testCollision?.({ x: b.x, y: b.y }, end, { type: 'move', mode: 'closest' });
+        if (hit) {
+            const d = Math.hypot(hit.x - b.x, hit.y - b.y), k = Math.max(0, d - dims.size / 2) / (d || 1);
+            end = { x: b.x + (hit.x - b.x) * k, y: b.y + (hit.y - b.y) * k };
+        }
+    } catch (error) {
+        console.warn(`${MODULE_ID} | проверка стен при отлёте`, error);
+    }
+    const doc = target.document;
+    const w = doc.width * dims.size, h = doc.height * dims.size;
+    // Новое место — по сетке, в пределах сцены
+    let corner = { x: end.x - w / 2, y: end.y - h / 2 };
+    try {
+        if (canvas.grid.getSnappedPoint) corner = canvas.grid.getSnappedPoint(corner, { mode: globalThis.CONST?.GRID_SNAPPING_MODES.TOP_LEFT_VERTEX });
+        else if (canvas.grid.getSnappedPosition) corner = canvas.grid.getSnappedPosition(corner.x, corner.y);
+    } catch { /* без сетки — как есть */ }
+    const rect = dims.sceneRect ?? dims.rect;
+    if (rect) {
+        corner.x = Math.min(Math.max(corner.x, rect.x), rect.x + rect.width - w);
+        corner.y = Math.min(Math.max(corner.y, rect.y), rect.y + rect.height - h);
+    }
+    return { tokenId: targetId, casterId, x: corner.x, y: corner.y, reach, from: { x: b.x, y: b.y }, to: { x: corner.x + w / 2, y: corner.y + h / 2 } };
 }
 
 // Шаблон-линия → отрезок в координатах сцены: от начала шаблона по его направлению на его длину
@@ -203,9 +224,26 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
         knock: style === 'fists' ? knockback(casterId, tokenId(actor), KNOCK_FEET) : null
     };
     if (style === 'fists' && !casterId) trace('у нанёсшего удар не было токена на сцене при использовании навыка');
+    if (style === 'fists') return strikeSaitama(data);
     emit('impactFrame', data);
     playImpact(data);
 });
+
+/** Модуль кадров удара, если включён */
+const frames = () => game.modules.get('impact-frames')?.active ? game.modules.get('impact-frames').api ?? null : null;
+
+/**
+ * Удар Сайтамы: анимацию играет модуль impact-frames у всех, цель переносит Мастер. Без модуля — только
+ * отлёт: он правило навыка. Взвод снимается у всех
+ */
+function strikeSaitama({ sceneId, tokens, knock, disarm }) {
+    emit('impactFrame', { disarm, skip: true });
+    if (!knock) return trace('отлёта нет: не вычислена точка (см. выше)');
+    const api = frames();
+    if (api?.launch) return api.launch({ casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, move: true, everyone: true });
+    trace('модуль impact-frames не включён — только отлёт цели');
+    moveKnocked(sceneId, knock);
+}
 
 // Рухнул слой памяти Пожирателя (Мастер отметил заряд особенности «Слои памяти»)
 Hooks.on('updateItem', (item, changes) => {
@@ -220,7 +258,7 @@ Hooks.on('updateItem', (item, changes) => {
 
 onSocket('impactFrame', message => {
     if (message.disarm) armed.delete(message.disarm);
-    playImpact(message);
+    if (!message.skip) playImpact(message);
 });
 
 // ==========================================
@@ -805,10 +843,14 @@ export function impactTest(style = 'fists', { move = false, everyone = false } =
     const data = {
         art: caster.actor?.img ?? caster.document.texture.src, style, sceneId: canvas.scene.id, point, tokens: [caster.id, target.id],
         line: style === 'slash' ? tokenLine(caster.id, point) : null,
-        knock: style === 'fists' ? knockback(caster.id, target.id, KNOCK_FEET) : null,
-        dry: !move
+        knock: style === 'fists' ? knockback(caster.id, target.id, KNOCK_FEET) : null
     };
     trace(`проверка ${style ?? 'кадра'}: ${caster.name} → ${target.name}${move ? ', с переносом цели' : ''}`);
+    if (style === 'fists') {
+        const api = frames();
+        if (!api?.launch) return ui.notifications.warn('Удар Сайтамы показывает модуль Impact Frames — включите его в мире.');
+        return api.launch({ casterId: caster.id, targetId: target.id, knock: data.knock, move, everyone });
+    }
     if (everyone) emit('impactFrame', data);
     return playImpact(data);
 }
@@ -889,12 +931,25 @@ function stopPlaying() {
 
 let playId = 0;
 
-export async function playImpact({ art, style = null, sceneId, point, tokens, line = null, knock = null, dry = false }) {
-    // Отлёт — правило навыка, а не украшение: Мастер переносит цель, даже если кадры у него выключены
-    if (style === 'fists' && knock && (playing || !fxOn())) {
-        trace(playing ? 'предыдущий кадр ещё идёт — только перенос цели' : 'импакт-кадры выключены в настройках — только перенос цели');
-        return dry ? null : moveKnocked(sceneId, knock);
-    }
+/**
+ * Отлёт по-настоящему: Мастер переносит цель на место приземления. Прозрачность, которую сцена удара
+ * задала токену, возвращается и без Мастера — через 2 с или сразу после переноса
+ */
+function moveKnocked(sceneId, knock) {
+    const restore = () => {
+        const token = canvas?.tokens?.get(knock.tokenId);
+        if (token?.mesh && token.mesh.gdAlpha !== undefined) { token.mesh.alpha = token.mesh.gdAlpha; delete token.mesh.gdAlpha; }
+        try { token?.renderFlags?.set({ refreshState: true }); } catch { /* старый движок — достаточно прозрачности */ }
+    };
+    setTimeout(restore, 2000);
+    if (game.users.activeGM?.id !== game.user.id) return;
+    const doc = game.scenes.get(sceneId)?.tokens.get(knock.tokenId);
+    doc?.update({ x: knock.x, y: knock.y }, { animate: false })
+        .then(restore)
+        .catch(error => console.warn(`${MODULE_ID} | отлёт цели`, error));
+}
+
+export async function playImpact({ art, style = null, sceneId, point, tokens, line = null }) {
     if (playing) return trace('предыдущий кадр ещё идёт — этот пропущен');
     if (!fxOn()) return trace('импакт-кадры выключены в настройках клиента');
     startPlaying();
@@ -907,37 +962,6 @@ export async function playImpact({ art, style = null, sceneId, point, tokens, li
         cleanupImpact();
         stopPlaying();
     }, WATCHDOG_MS * slowFactor);
-    if (style === 'fists') {
-        const calm = fxCalm();
-        const slow = fxSlow();
-        // Звуки моментов: синтез или файлы из папки звуков (impact-sound.js)
-        const onCue = (name, options = {}) => {
-            if (!soundOn()) return;
-            playCue(name, { volume: sfxVolume(), folder: game.settings.get(MODULE_ID, 'impactSoundFolder'), ...options });
-        };
-        const onHit = (final, index, pan) => onCue(final ? 'punchFinal' : 'punch', { index, pan });
-        // Музыка и звуки сцены — тише на время удара
-        const unduck = soundOn() ? duckScene() : () => {};
-        try {
-            const fists = (quick = false) => playFists({ calm, slow, onHit, quick });
-            if (!knock) { trace('отлёта нет: не вычислена точка (см. выше) — только кулаки'); await fists(); }
-            else if (!canvas?.ready || canvas.scene?.id !== sceneId) { trace('у вас открыта другая сцена — только кулаки'); await fists(); }
-            else if (!(await playSaitama({
-                casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, calm, slow,
-                hideMarks: hideTokenMarks, between: () => fists(true), onCue
-            }))) {
-                trace('токен цели не найден на сцене — только кулаки');
-                await fists();
-            }
-        } catch (error) {
-            console.error(`${MODULE_ID} | импакт-кадр`, error);
-            cleanupImpact();
-        }
-        unduck();
-        if (id === playId) stopPlaying();
-        if (knock) dry ? setTimeout(cleanupImpact, 100) : moveKnocked(sceneId, knock);
-        return;
-    }
     // Разрез — в самой сцене; без сцены кадр собирается по-старому
     if (style === 'slash' && line) {
         try {

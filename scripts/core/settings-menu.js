@@ -22,7 +22,7 @@ export const MENUS = {
     soundsMenu: {
         label: 'Звуки и эффекты', icon: 'fas fa-volume-high', restricted: false,
         hint: 'Звуки Терминала и их файлы, звук импакт-кадров, тема героя, замедление кадров, звуки паутины.',
-        keys: ['soundsEnabled', 'soundsVolume', 'sound_equip', 'sound_unequip', 'sound_merge', 'impactSoundFolder', 'impactSound', 'auraTheme', 'auraMusicVolume', 'impactSlow', 'webSounds']
+        keys: ['soundsEnabled', 'soundsVolume', 'sound_equip', 'sound_unequip', 'sound_merge', 'impactSound', 'auraTheme', 'auraMusicVolume', 'impactSlow', 'webSounds']
     },
     hintsMenu: {
         label: 'Подсказки Мастеру', icon: 'fas fa-ear-listen', restricted: true,
