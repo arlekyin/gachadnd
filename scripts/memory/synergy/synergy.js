@@ -288,7 +288,7 @@ export async function updateActorSynergies(actor) {
         }
 
         if (effectsToDelete.length > 0) {
-            await actor.deleteEmbeddedDocuments("ActiveEffect", effectsToDelete);
+            await deleteAlive(actor, "ActiveEffect", effectsToDelete);
             console.log(`[GachaDND] Удалены старые эффекты:`, effectsToDelete.length);
         }
 
@@ -333,7 +333,7 @@ export async function updateActorSynergies(actor) {
 
         if (itemsToDelete.length > 0) {
             await rememberSpent(actor, itemsToDelete.map(id => actor.items.get(id)).filter(Boolean));
-            await actor.deleteEmbeddedDocuments("Item", itemsToDelete);
+            await deleteAlive(actor, "Item", itemsToDelete);
         }
 
         const itemsToCreate = [];
@@ -520,8 +520,20 @@ export async function syncCombatChanges(actor, endedCombatId = null) {
         changes: item.flags[MODULE_ID].combat_changes,
         flags: { [MODULE_ID]: { combat_source: item.id } }
     }));
-    if (toDelete.length) await actor.deleteEmbeddedDocuments('ActiveEffect', toDelete);
+    if (toDelete.length) await deleteAlive(actor, 'ActiveEffect', toDelete);
     if (toCreate.length) await actor.createEmbeddedDocuments('ActiveEffect', toCreate);
+}
+
+/**
+ * Удалить вложенные документы, которые ещё есть. Начало боя у персонажа игрока пересчитывает синергии
+ * и эффекты «в бою» в несколько потоков (правило Босса, эффекты боя): удалённое другим потоком — не ошибка
+ */
+async function deleteAlive(actor, type, ids) {
+    const collection = type === 'Item' ? actor.items : actor.effects;
+    const alive = ids.filter(id => collection.has(id));
+    if (!alive.length) return;
+    try { await actor.deleteEmbeddedDocuments(type, alive); }
+    catch (error) { if (!/does not exist/.test(error?.message ?? '')) throw error; }
 }
 
 function isActiveGM() {
