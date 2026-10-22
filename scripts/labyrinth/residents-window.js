@@ -17,6 +17,7 @@ import {
 import { partyActors } from "./horsemen.js";
 import { wealth } from "./economy.js";
 import { isCrystalItem } from "../memory/inventory.js";
+import { echoInfo } from "../memory/echo/echo.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ID = 'gachadnd-residents';
@@ -57,6 +58,7 @@ export class ResidentsWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             cellTake: ResidentsWindow.#onCellTake,
             cleanse: ResidentsWindow.#onCleanse,
             cool: ResidentsWindow.#onCool,
+            hush: ResidentsWindow.#onHush,
             scar: ResidentsWindow.#onScar,
             bait: ResidentsWindow.#onBait
         }
@@ -235,11 +237,14 @@ export class ResidentsWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         const skills = actor.items.filter(i => cleansable(i) && !flagsOf(i).scar);
         const cost = cleansePrice(actor);
         const hot = heated(actor);
+        const echo = echoInfo(actor) ?? { value: 0 };
         return `<div class="gd-res-split">
             <div><h4><i class="fas fa-scissors"></i> Очистка — ${cost} зм</h4><small>Половина цены магазина; следующие Очистки не дорожают.</small>
                 <div class="gd-res-list">${skills.map(i => `<button type="button" data-action="cleanse" data-id="${i.id}" style="--r:${RARITY_COLOR[flagsOf(i).rarity] ?? '#ccc'}">${esc(i.name)}</button>`).join('') || '<small>очищать нечего</small>'}</div></div>
             <div><h4><i class="fas fa-snowflake"></i> Остудить — ${price('cool', actor)} зм</h4><small>Снимает перегрев и блок со всех навыков персонажа.</small>
                 <div class="gd-res-list">${hot.length ? `${hot.map(i => `<span class="gd-res-chip hot">${esc(i.name)}</span>`).join('')}<button type="button" data-action="cool">Остудить</button>` : '<small>перегрева нет</small>'}</div>
+                <h4><i class="fas fa-wave-square"></i> Унять эхо — ${price('hush', actor)} зм</h4><small>Эхо в ноль: шёпоты, Видение и наплыв стихают. Голос и прочитанные воспоминания остаются.</small>
+                <div class="gd-res-list">${echo.value || echo.full ? `<span class="gd-res-chip echo" style="--echo:${echo.color}"><i class="fas ${echo.icon}"></i> эхо ${echo.value}/${echo.max}${echo.title ? ` · ${esc(echo.title)}` : ''}</span><button type="button" data-action="hush">Унять</button>` : '<small>эхо молчит</small>'}</div>
                 ${scars.length ? `<h4><i class="fas fa-heart-crack"></i> Залечить шрам — ${price('scar', actor)} зм</h4><small>Шрам уходит из Памяти, слот свободен.</small>
                 <div class="gd-res-list">${scars.map(i => `<button type="button" data-action="scar" data-id="${i.id}">${esc(i.name)}</button>`).join('')}</div>` : ''}</div></div>`;
     }
@@ -285,6 +290,7 @@ export class ResidentsWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         if (ok) request({ op: 'cleanse', actorId: this.handId, itemId: target.dataset.id });
     }
     static #onCool() { request({ op: 'cool', actorId: this.handId }); }
+    static #onHush() { request({ op: 'hush', actorId: this.handId }); }
     static #onScar(event, target) { request({ op: 'scar', actorId: this.handId, itemId: target.dataset.id }); }
     static #onBait(event, target) { request({ op: 'bait', actorId: this.handId, itemId: target.dataset.id }); }
 }

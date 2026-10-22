@@ -34,7 +34,7 @@ const COMMON = ['gray', 'green', 'blue'];
 export const LOTS = {
     copy: { name: 'Чужая память', price: 5, icon: 'fa-clone', text: 'копия навыка товарища' },
     devour: { name: 'Натравить Пожирателя', price: 6, icon: 'fa-paw', text: 'однажды он придёт за вашими врагами' },
-    echo: { name: 'Эхо Босса', price: 7, icon: 'fa-crown', text: 'однажды он встанет на вашу сторону' },
+    echo: { name: 'Отголосок Босса', price: 7, icon: 'fa-crown', text: 'однажды он встанет на вашу сторону' },
     fuse: { name: 'Сплав', price: 9, icon: 'fa-link', text: 'два навыка — одна память, один слот' }
 };
 
@@ -288,9 +288,9 @@ async function grant(lot, params, deal) {
         await updateActorSynergies(actor);
         return `${esc(actor.name)}: «${esc(a.name)}» и «${esc(b.name)}» сплавлены — один слот на двоих.`;
     }
-    // Эхо Босса и Натравить Пожирателя — на следующий этаж: отметка у отряда, вызывает Мастер
+    // Отголосок Босса и Натравить Пожирателя — на следующий этаж: отметка у отряда, вызывает Мастер
     const boons = foundry.utils.deepClone(game.settings.get(MODULE_ID, 'moonBoons') ?? []);
-    // Эхо помнит Босса этого боя; при вызове Мастер может выбрать другого
+    // Отголосок помнит Босса этого боя; при вызове Мастер может выбрать другого
     boons.push({ type: lot, floor: (deal.floor ?? getFloor()) + 1, used: false, ...(lot === 'echo' ? { boss: findBoss() } : {}) });
     await game.settings.set(MODULE_ID, 'moonBoons', boons);
     return lot === 'echo'

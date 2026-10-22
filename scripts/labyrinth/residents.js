@@ -9,7 +9,8 @@
  *   Ростовщик     — ячейки: кристалл в ячейке не пахнет, достать его можно в любой момент этажа вне боя.
  *                   До 3 ячеек на отряд, каждая следующая дороже. Вернувшись в Якорь, он кладёт то, что
  *                   не забрали, в Хранилище хозяина, и ячейки закрываются.
- *   Знахарь       — Очистка за полцены (не повышает цену следующих) и сброс перегрева навыков персонажа.
+ *   Знахарь       — Очистка за полцены (не повышает цену следующих), сброс перегрева навыков персонажа
+ *                   и «унять эхо»: эхо в ноль, Видение на полную после «заглушить» тоже снимается.
  *   Приманщик     — приманка из кристалла (синий и выше): первый прорыв Охоты Пожиратель тратит на неё —
  *                   съедает, Насыщение +1, отряд не трогает. Одна приманка за раз.
  *
@@ -27,6 +28,7 @@ import { isCrystalItem } from "../memory/inventory.js";
 import { getStash } from "../memory/stash.js";
 import { heatOf } from "../memory/overheat.js";
 import { addSatiety } from "./devourer-state.js";
+import { echoOf, setEcho } from "../memory/echo/echo.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 export const ANCHOR_OPENED = 'gachadnd.anchorOpened';
@@ -41,7 +43,7 @@ export const RESIDENTS = {
 };
 
 // Цены — доля Базы этажа
-export const PRICES = { smith: 0.6, chart: 0.4, cell: 0.3, cool: 0.3, bait: 0.5, scar: 0.3 };
+export const PRICES = { smith: 0.6, chart: 0.4, cell: 0.3, cool: 0.3, bait: 0.5, scar: 0.3, hush: 0.4 };
 export const LIMITS = { chart: 2, cells: 3 };
 const BAIT_RARITIES = ['blue', 'purple', 'red', 'orange'];
 // Обычные навыки: уникальные (фиолетовые и красные) и всадники не перековываются
@@ -340,6 +342,16 @@ async function performOp({ op, userId, ...data }) {
         if (!(await charge(userId, actor, cost))) return;
         await actor.updateEmbeddedDocuments('Item', hot.map(i => ({ _id: i.id, [`flags.${MODULE_ID}.heat`]: { ...heatOf(i), extra: 0, locked: false } })));
         return chat('healer', `Остудил <strong>${esc(actor.name)}</strong>: ${hot.map(i => `«${esc(i.name)}»`).join(', ')} — перегрев снят (${cost} зм).`);
+    }
+    if (op === 'hush') {
+        if (!need('healer') || !inAnchor()) return;
+        const e = echoOf(actor);
+        if (!e.value && !e.full) return deny(`${actor.name}: эхо и так молчит.`);
+        const cost = price('hush', actor);
+        if (!(await charge(userId, actor, cost))) return;
+        // Голос и прочитанные воспоминания остаются: эхо стихает, история — нет
+        await setEcho(actor, { value: 0, full: false, surge: null, foresee: null });
+        return chat('healer', `Унял эхо <strong>${esc(actor.name)}</strong>: голоса прежних владельцев стихли (${cost} зм).`);
     }
 
     if (op === 'bait') {

@@ -84,6 +84,48 @@ const hone = await ev(async hero => {
 }, ids.hero);
 check('Набить руку: 4 удара — зарубки, пятый — критический, счёт обнулён', hone.crits.join() === 'false,false,false,false,true' && hone.counter === 0, JSON.stringify(hone));
 
+// ---------- Счётчики понятны: точки на значке, «+1 зарубка» над токеном, строка на пороге; правило — в карточке
+// навыка на панели Памяти, а не подсказкой у токена (она закрывала клетки)
+const ui = await ev(async hero => {
+    const actor = game.actors.get(hero);
+    const skill = actor.items.find(x => x.name === 'Набить руку');
+    const token = canvas.tokens.placeables.find(t => t.actor?.id === hero);
+    if (game.paused) game.togglePause(false, { broadcast: true });
+    const floats = [];
+    const orig = canvas.interface.createScrollingText.bind(canvas.interface);
+    canvas.interface.createScrollingText = (p, text, o) => { floats.push(text); return orig(p, text, o); };
+    const badge = () => token.children.find(c => c.name === 'gdLivingBadge')?.children.map(c => c.text).join('|') ?? '';
+    const empty = badge();
+    const before = game.messages.size;
+    await skill.setFlag('gachadnd', 'counter', 3); await gdt.settle(); await new Promise(r => setTimeout(r, 200));
+    const three = badge();
+    await skill.setFlag('gachadnd', 'counter', 4); await gdt.settle(); await new Promise(r => setTimeout(r, 1100));
+    const msg = game.messages.contents.slice(before).find(m => /рука набита/i.test(m.content));
+    Hooks.callAll('hoverToken', token, true);
+    const tip = !!document.querySelector('.gd-counter-tip');
+    // Терминал: на пластине навыка — точки, при наведении в панели подробностей — правило целиком
+    await game.gachadnd.openTerminal(actor); await new Promise(r => setTimeout(r, 1500));
+    const dock = foundry.applications.instances.get('gachadnd-dock')?.element;
+    const card = dock?.querySelector(`.gd-plate[data-item-id="${skill.id}"]`);
+    card?.dispatchEvent(new PointerEvent('pointerenter')); await new Promise(r => setTimeout(r, 600));
+    const cardState = card?.querySelector('.gd-cnt')?.textContent ?? null;
+    const popText = dock?.querySelector('.gd-t-detail .gd-t-meta .cnt')?.textContent.replace(/\s+/g, ' ').trim() ?? null;
+    card?.dispatchEvent(new PointerEvent('pointerleave'));
+    canvas.interface.createScrollingText = orig;
+    return { empty, three, floats, whisper: !!msg && msg.whisper.length > 0, tip, cardState, popText };
+}, ids.hero);
+check('счётчик: пустой не висит, 3 из 4 — точки ●●●○, над токеном «+1 зарубка»', ui.empty === '' && /⚒ ●●●○/.test(ui.three) && ui.floats.some(t => /\+1 ⚒ зарубка/.test(t)), JSON.stringify(ui));
+check('порог: шёпот «рука набита» владельцу и Мастеру, над токеном — та же строка', ui.whisper && ui.floats.some(t => /рука набита/.test(t)), JSON.stringify(ui));
+check('наведение на токен: подсказки нет — клетки вокруг свободны', !ui.tip, JSON.stringify(ui.tip));
+check('Терминал: на пластине «⚒ ●●●●», при наведении — правило целиком в панели подробностей', ui.cardState === '⚒ ●●●●' && /каждое попадание оружием/.test(ui.popText ?? ''), JSON.stringify({ card: ui.cardState, pop: ui.popText }));
+await page.waitForTimeout(400);
+await f.shot('living-counters-dock');
+await ev(() => foundry.applications.instances.get('gachadnd-dock')?.close());
+await ev(async hero => {
+    Hooks.callAll('hoverToken', canvas.tokens.placeables.find(t => t.actor?.id === hero), false);
+    await game.actors.get(hero).items.find(x => x.name === 'Набить руку').setFlag('gachadnd', 'counter', 0);
+}, ids.hero);
+
 // ---------- Третий раз — за правду
 await skills(page, ids.hero, ['Третий раз — за правду']);
 const third = await ev(async hero => {
@@ -97,6 +139,20 @@ const third = await ev(async hero => {
     return { ready, advantage: r.hasAdvantage ?? /kh/.test(r.formula), after: actor.items.find(x => x.name === 'Третий раз — за правду').flags.gachadnd.counter };
 }, ids.hero);
 check('Третий раз: два провала — счёт 2, следующий спасбросок с преимуществом, счёт обнулён', third.ready === 2 && third.advantage && third.after === 0, JSON.stringify(third));
+const pair = await ev(async hero => {
+    const actor = game.actors.get(hero), token = canvas.tokens.placeables.find(t => t.actor?.id === hero);
+    await actor.items.find(x => x.name === 'Набить руку').setFlag('gachadnd', 'counter', 2);
+    await actor.items.find(x => x.name === 'Третий раз — за правду').setFlag('gachadnd', 'counter', 1);
+    await gdt.settle(); await new Promise(r => setTimeout(r, 300));
+    const box = token.children.find(c => c.name === 'gdLivingBadge'), kids = box?.children ?? [];
+    const out = { texts: kids.map(c => c.text), ys: kids.map(c => Math.round(c.y)), width: Math.round(box?.width ?? 0), tokenW: Math.round(token.w), bottom: Math.round((box?.y ?? 0) + (box?.height ?? 0)) };
+    await canvas.animatePan({ x: token.center.x, y: token.center.y, scale: 1.4, duration: 0 });
+    return out;
+}, ids.hero);
+check('два счётчика — одной строкой над токеном, не шире клетки', pair.texts.length === 2 && pair.ys[0] === pair.ys[1] && pair.width <= pair.tokenW && pair.bottom <= 8, JSON.stringify(pair));
+await page.waitForTimeout(300);
+await f.shot('living-counters-pair');
+await ev(async hero => { const a = game.actors.get(hero); for (const n of ['Набить руку', 'Третий раз — за правду']) await a.items.find(x => x.name === n).setFlag('gachadnd', 'counter', 0); }, ids.hero);
 
 // ---------- Обратный отсчёт и Тлеющий уголь (в бою)
 const sk = await skills(page, ids.hero, ['Обратный отсчёт', 'Тлеющий уголь', 'Реактивная тяга', 'Кровавый бастион']);
@@ -138,6 +194,20 @@ const ember = await ev(async ({ minion, hero }) => {
     return { after, radius: m.emberRadius(skill), card: card?.content.match(/Радиус пламени — (\d+)/)?.[1] };
 }, { minion: minionId, hero: ids.hero });
 check('Тлеющий уголь: убийство огнём +1; 6 убийств — радиус 15', ember.after === 1 && ember.radius === 15 && ember.card === '15', JSON.stringify(ember));
+
+// ---------- Сводка в первом бою сессии
+const sessionSummary = await ev(async () => {
+    const m = await gdt.mod('memory/skills/living/badges.js');
+    m.resetSummary();
+    const before = game.messages.size;
+    Hooks.callAll('combatStart', game.combat, {});
+    await new Promise(r => setTimeout(r, 600));
+    const msg = game.messages.contents.slice(before).find(x => /Копится/.test(x.content));
+    return { text: msg?.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() ?? null, whisper: msg?.whisper.length ?? 0 };
+});
+check('первый бой сессии: шёпот «Копится» — уголь с радиусом', /Копится/.test(sessionSummary.text ?? '') && /Тлеющий уголь — радиус 15/.test(sessionSummary.text ?? '') && sessionSummary.whisper > 0, JSON.stringify(sessionSummary));
+await ev(() => { const el = [...document.querySelectorAll('#chat-log .chat-message, .chat-log .message')].findLast(x => /Копится/.test(x.textContent)); el?.scrollIntoView(); ui.chat?.renderPopout?.(); });
+await f.shot('living-summary');
 
 // ---------- Реактивная тяга: героя ход, отошёл на 15 футов
 const jet = await ev(async ({ hero, boss }) => {

@@ -21,6 +21,7 @@ import { startBreach } from "./breach.js";
 import { getSatiety as satietyNow } from "./devourer-state.js";
 import { isWeb, webMoves, isEaten, touchedSet, nextStepToward, webStage, ticksToNextStage, activeStages, BOSS_STAGES, WEB } from "./web-map.js";
 import { WebStage } from "./web-stage.js";
+import { fogLayer } from "./fog-layer.js";
 import { editHistory, undoEdit, linkNodes, unlinkNodes, moveParty, eatNode, cleanNode, shiftClock } from "./web-edit.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -113,12 +114,11 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             omen: (event, target) => (target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)),
             satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер'),
             devourerGone: () => devourerGone('по решению Мастера'),
-            // Терминал открывается на том же месте: тот же Туман, другой цвет
+            // Терминал — вкладка того же слоя: Туман остаётся, меняется содержимое
+            // Токен выбирать не нужно: свой персонаж или первый подконтрольный, дальше — листалка в Терминале
             terminal: async function () {
-                const actor = canvas.tokens?.controlled[0]?.actor ?? game.user.character ?? game.actors.find(a => a.type === 'character' && a.hasPlayerOwner);
-                if (!actor) return ui.notifications.warn('Выберите персонажа или токен на сцене.');
-                await this.close({ instant: true });
-                return game.gachadnd.openTerminal(actor);
+                await this.close({ handoff: true });
+                return game.gachadnd.openTerminal();
             },
             // Удержание узла: шаг отряда, Пожиратель на узел или новое содержимое узла
             mode: function (event, target) { this.mode = this.mode === target.dataset.mode ? null : target.dataset.mode; this.linkFrom = null; return this.render(); },
@@ -224,8 +224,12 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _onFirstRender(context, options) {
         super._onFirstRender(context, options);
-        this.element.classList.add('gd-wo-opening');
-        setTimeout(() => this.element?.classList.remove('gd-wo-opening'), 1100);
+        // Туман уже есть — пришли с другой вкладки (Терминал): без появления, только смена содержимого
+        this.handoff = fogLayer.visible;
+        const cls = this.handoff ? 'gd-swap-in' : 'gd-wo-opening';
+        this.element.classList.add(cls);
+        setTimeout(() => this.element?.classList.remove(cls), this.handoff ? 450 : 1100);
+        fogLayer.show({ center: [0.35, 0.5], radius: 0.4, z: parseInt(getComputedStyle(this.element).zIndex) || 50 });
         // Esc: сначала выход из режима правки, затем закрытие
         this.escape = event => {
             if (event.key !== 'Escape' || event.target.closest?.('input, select, textarea')) return;
@@ -246,6 +250,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             this.stage = new WebStage(canvas, {
                 canStep: () => game.user.isGM,
                 resizeTo: this.element,
+                fog: fogLayer,
                 onStep: (id, held) => {
                     if (!game.user.isGM) return ui.notifications.info('Отряд ведёт Мастер — скажите ему, куда идти.');
                     if (!held) return;
@@ -259,6 +264,8 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                 },
                 onHover: (n, p, r) => this.#tooltip(n, p, r)
             });
+            // Со вкладки — астролябия сразу на месте, без долгого появления
+            if (this.handoff) this.stage.introPending = false;
             // Выбран кристалл — подсказка, что второй щелчок ведёт отряд
             this.stage.onSelect = n => {
                 // Нити: первый узел запоминается, второй — связать или разорвать
@@ -334,14 +341,28 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         tip.hidden = false;
     }
 
-    /** Закрытие — с обратной анимацией: паутина рассасывается, подписи и Туман уезжают влево */
+    /**
+     * Закрытие — с обратной анимацией: паутина рассасывается, подписи уезжают влево, Туман уползает.
+     * handoff — переход на другую вкладку слоя: содержимое быстро уходит, Туман остаётся ей
+     */
     async close(options = {}) {
+        if (options.handoff) {
+            if (this.rendered && !this.closing) {
+                this.closing = true;
+                this.element.classList.add('gd-swap-out');
+                this.element.style.pointerEvents = 'none';
+                await new Promise(r => setTimeout(r, fogLayer.still ? 0 : 180));
+            }
+            fogLayer.handoff();
+            return super.close({ ...options, animate: false });
+        }
         if (this.stage && this.rendered && !this.closing && !options.instant) {
             this.closing = true;
             this.element.classList.add('gd-wo-closing');
             this.element.style.pointerEvents = 'none';
+            setTimeout(() => fogLayer.hide(), fogLayer.still ? 0 : 850);
             await this.stage.outro();
-        }
+        } else fogLayer.hide();
         return super.close(options);
     }
 

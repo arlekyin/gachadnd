@@ -6,7 +6,7 @@
 //   node tools/foundry/run.mjs light-auto blast-fire     — только они, затем песочница
 import { args, closeShared } from './harness.mjs';
 
-export const ALL = ['settings', 'overheat', 'aura', 'light', 'light-auto', 'light-zones', 'light-big', 'blast-fire', 'blast-boom', 'windows', 'deal', 'knack', 'names', 'boons', 'residents', 'chronicle', 'events', 'devourer', 'living', 'web', 'dock', 'arena'];
+export const ALL = ['settings', 'overheat', 'aura', 'light', 'light-auto', 'light-zones', 'light-big', 'blast-fire', 'blast-boom', 'windows', 'deal', 'knack', 'names', 'boons', 'residents', 'chronicle', 'events', 'devourer', 'living', 'web', 'dock', 'arena', 'echo'];
 
 const names = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const list = names.length ? names : ALL;

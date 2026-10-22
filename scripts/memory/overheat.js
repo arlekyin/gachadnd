@@ -207,6 +207,8 @@ export async function overheat(item, levels) {
         if (!burned) continue;
         if (undeletable) await item.update({ [`flags.${MODULE_ID}.heat.locked`]: true });
         else await item.delete();
+        // Эхо: сгоревшая оболочка звучит громче (echo/echo.js)
+        Hooks.callAll('gachadnd.skillBurned', actor, item);
         return;
     }
 }

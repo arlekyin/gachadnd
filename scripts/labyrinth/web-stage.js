@@ -7,7 +7,8 @@
  * искра. Выбор узла — щелчок (кристалл загорается), второй щелчок — шаг: фонарь перелетает по нити.
  * Пройденный кристалл потух и треснул; съеденное Пожирателем обвивают чёрно-бирюзовые пряди.
  *
- * new WebStage(canvas, { onStep, canStep, onHover, resizeTo }) → stage.update(model) → stage.destroy().
+ * new WebStage(canvas, { onStep, canStep, onHover, resizeTo, fog }) → stage.update(model) → stage.destroy().
+ * fog — общий Туман под холстом (fog-layer.js): тогда своего Тумана нет, отсвет сдвигается к астролябии.
  * model = { center: {x, y}, size, nodes: [{ id, x, y, type, color, icon, label, state, tier, visited, eaten, touched, labeled }],
  *           edges: [{ a, b, cls }], trail: [id…], next: id|null }
  */
@@ -27,7 +28,7 @@ float noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2
 float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }`;
 
 // Туман: клубится медленно; у центра — отсвет; к правому краю и углам тает клубами. Палитра — униформы:
-// у карты сизый с латунью (FOG_MAP), у Терминала — бирюзовая туманность с фиолетовыми прожилками
+// сизый с латунью (FOG_MAP) — общий Туман карты и Терминала (fog-layer.js)
 export const FOG = `precision mediump float;
 varying vec2 vUv; uniform float uTime; uniform float uAspect; uniform vec2 uCenter; uniform float uRadius; uniform float uSlide;
 uniform vec3 uLow; uniform vec3 uHigh; uniform vec3 uGlow; uniform vec3 uVein;
@@ -129,9 +130,8 @@ const ribbon = (pts, w, scale) => {
     return geometry;
 };
 
-/** Палитры Тумана: карта и Терминал занимают одну область, отличаются только цветом */
+/** Палитра общего Тумана карты и Терминала */
 export const FOG_MAP = { uLow: [0.03, 0.04, 0.05], uHigh: [0.15, 0.17, 0.19], uGlow: [0.16, 0.1, 0.035], uVein: [0, 0, 0] };
-export const FOG_TERMINAL = { uLow: [0.025, 0.055, 0.065], uHigh: [0.09, 0.25, 0.26], uGlow: [0.0, 0.11, 0.11], uVein: [0.17, 0.02, 0.22] };
 
 export const quad = (w, h) => new PIXI.Geometry()
     .addAttribute('aVertexPosition', [0, 0, w, 0, w, h, 0, h], 2)
@@ -176,11 +176,14 @@ const AMBER = 0xffb347, EMBER = 0xff8a1e, DIM_AMBER = 0x8a6230, BRASS = 0xb8925a
 const RINGS = { rim: 1.05, outposts: 0.62, inner: 0.35, core: 0.13 };
 
 export class WebStage {
-    constructor(canvas, { onStep, canStep, onHover, resizeTo = window } = {}) {
+    constructor(canvas, { onStep, canStep, onHover, resizeTo = window, fog = null } = {}) {
         this.onStep = onStep; this.canStep = canStep; this.onHover = onHover;
         this.app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1, resizeTo });
         this.time = 0;
-        this.fog = new PIXI.Mesh(quad(1, 1), PIXI.Shader.from(VERT, FOG, { uTime: 0, uAspect: 1, uCenter: [0.35, 0.5], uRadius: 0.4, uSlide: 1.5, ...FOG_MAP }));
+        this.shared = fog;
+        // Общий Туман — под холстом; здесь от него остаётся только щелчок мимо узлов
+        if (fog) { this.fog = new PIXI.Container(); this.fog.hitArea = new PIXI.Rectangle(0, 0, 1, 1); }
+        else this.fog = new PIXI.Mesh(quad(1, 1), PIXI.Shader.from(VERT, FOG, { uTime: 0, uAspect: 1, uCenter: [0.35, 0.5], uRadius: 0.4, uSlide: 1.5, ...FOG_MAP }));
         // Первое появление: Туман слева, потом кристаллы, потом нити между ними
         this.introPending = true;
         this.fog.eventMode = 'static';
@@ -214,7 +217,8 @@ export class WebStage {
         this.model = model;
         const { width: W, height: H } = this.app.screen;
         this.fog.scale.set(W, H);
-        Object.assign(this.fog.shader.uniforms, { uAspect: W / H, uCenter: [model.center.x / W, model.center.y / H], uRadius: model.size / 2 / H });
+        if (this.shared) this.shared.focus([model.center.x / W, model.center.y / H], model.size / 2 / H);
+        else Object.assign(this.fog.shader.uniforms, { uAspect: W / H, uCenter: [model.center.x / W, model.center.y / H], uRadius: model.size / 2 / H });
         for (const layer of [this.rings, this.lines, this.glows, this.lantern, this.nodesLayer, this.fogLayer, this.labels]) layer.removeChildren().forEach(c => c.destroy({ children: true }));
         const prev = this.prev ?? null;
         this.nodes.clear();
@@ -732,7 +736,7 @@ export class WebStage {
         const clamp = v => Math.max(0, Math.min(1, v));
         const ease = k => 1 - (1 - k) ** 3;
         const back = k => 1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2;
-        this.fog.shader.uniforms.uSlide = -0.1 + 1.6 * ease(clamp(T / 800));
+        if (!this.shared) this.fog.shader.uniforms.uSlide = -0.1 + 1.6 * ease(clamp(T / 800));
         this.rings.alpha = ease(clamp((T - 250) / 700));
         for (const [id, { node, base, x }] of this.nodes) {
             const k = clamp((T - 450 - Math.min(1, x) * 650) / 320);
@@ -767,7 +771,7 @@ export class WebStage {
             for (const layer of [this.rings, this.glows, this.fogLayer, this.labels, this.lantern]) layer.alpha = 1;
             for (const sp of this.sparks) sp.g.visible = true;
             for (const mesh of this.lines.children) if (mesh instanceof PIXI.Mesh) mesh.alpha = 1;
-            this.fog.shader.uniforms.uSlide = 1.5;
+            if (!this.shared) this.fog.shader.uniforms.uSlide = 1.5;
         }
     }
 
@@ -807,7 +811,7 @@ export class WebStage {
         }
         this.rings.alpha = 1 - ease(clamp((T - 750) / 400));
         // Туман уползает влево рваным краем
-        this.fog.shader.uniforms.uSlide = 1.5 - 1.6 * ease(clamp((T - 850) / 650));
+        if (!this.shared) this.fog.shader.uniforms.uSlide = 1.5 - 1.6 * ease(clamp((T - 850) / 650));
         if (T > 1550) {
             const { resolve } = this.leaving;
             this.leaving = null;
@@ -821,7 +825,7 @@ export class WebStage {
         const t = this.time;
         if (this.left) return;
         if (this.intro) this.#introFrame(this.still ? this.intro.start + 99999 : performance.now());
-        this.fog.shader.uniforms.uTime = t;
+        if (!this.shared) this.fog.shader.uniforms.uTime = t;
         for (const m of this.tendrils) m.shader.uniforms.uTime = t * (m.speed ?? 1);
         for (const shader of this.trails ?? []) shader.uniforms.uTime = t;
         for (const l of this.devLines ?? []) {

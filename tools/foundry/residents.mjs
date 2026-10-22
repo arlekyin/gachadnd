@@ -140,6 +140,13 @@ await op({ op: 'cleanse', actorId: hero, itemId: b });
 check('Знахарь: Очистка за полцены, счётчик Очисток не растёт', !(await ev(({ hero, b }) => !!game.actors.get(hero).items.get(b), { hero, b }))
     && before - await gold() === 25 && (await ev(hero => game.actors.get(hero).getFlag('gachadnd', 'shop_cleanses') ?? 0, hero)) === cleanses, `${before - await gold()} зм`);
 
+await ev(hero => game.gachadnd.echo.set(game.actors.get(hero), { value: 10, full: true, tags: { 'кровь': 10 } }), hero);
+before = await gold();
+await op({ op: 'hush', actorId: hero });
+const hushed = await ev(hero => game.gachadnd.echo.state(game.actors.get(hero)), hero);
+check('Знахарь: «унять эхо» — эхо в ноль, Видение на полную снято, голос остался; 0,4 Базы', hushed.value === 0 && !hushed.full && hushed.tags['кровь'] === 10 && before - await gold() === 40, JSON.stringify(hushed));
+await ev(hero => game.actors.get(hero).unsetFlag('gachadnd', 'echo'), hero);
+
 // ---------- Приманщик
 // Кристаллы в сумке сейчас (взятый из ячейки создан заново — с новым id)
 const bag = await ev(hero => game.actors.get(hero).items.filter(i => i.flags.gachadnd?.is_crystal_item).map(i => ({ id: i.id, name: i.name, rarity: i.flags.gachadnd.rarity })), hero);

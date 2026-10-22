@@ -6,7 +6,7 @@
 export { MODULE_ID } from "./core/constants.js";
 import { MODULE_ID } from "./core/constants.js";
 import { MemoryTerminal } from "./memory/terminal/terminal.js";
-import { TerminalDock } from "./dock/dock.js";
+import { TerminalDock, defaultTerminalActor } from "./dock/dock.js";
 // Генератор арен (прототип): game.gachadnd.arena.generate()
 import "./arena/arena.js";
 import { GachaLootTerminal, registerLootSettings } from "./memory/loot.js";
@@ -38,6 +38,7 @@ import "./memory/skills/light/index.js";
 import "./memory/skills/blast/index.js";
 import "./memory/skills/knack/index.js";
 import "./memory/skills/living/index.js";
+import "./memory/echo/index.js";
 import { registerAuraSettings } from "./memory/skills/aura-fx.js";
 import { registerPrefs, migratePrefs } from "./core/prefs.js";
 import { registerSettingsMenus } from "./core/settings-menu.js";
@@ -69,16 +70,17 @@ Hooks.once('init', () => {
         // Проверка импакт-кадра без навыка и урона: выделенный токен бьёт цель (T)
         impactTest,
         openTerminal: (actor) => {
-            const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
-            if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
+            // Без выбора — выбранный токен, свой персонаж или первый подконтрольный (dock.js)
+            const targetActor = actor || defaultTerminalActor();
+            if (!targetActor) return ui.notifications.warn("⚠️ У вас нет персонажа — Терминал открыть не для кого.");
             // Терминал — панель модуля слева (dock/dock.js); старое окно — game.gachadnd.openTerminalWindow
             return TerminalDock.open(targetActor);
         },
         toggleTerminal: (actor) => {
-            const targetActor = actor || canvas.tokens?.controlled[0]?.actor || game.user?.character;
+            const targetActor = actor || defaultTerminalActor();
             const open = foundry.applications.instances?.get('gachadnd-dock');
             if (open?.rendered && (!targetActor || open.actor?.id === targetActor.id)) return open.close();
-            if (!targetActor) return ui.notifications.warn("⚠️ Выберите персонажа или токен на сцене.");
+            if (!targetActor) return ui.notifications.warn("⚠️ У вас нет персонажа — Терминал открыть не для кого.");
             return TerminalDock.open(targetActor);
         },
         openTerminalWindow: (actor) => {

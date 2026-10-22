@@ -1,68 +1,106 @@
 /**
- * Gacha Roguelike dnd5e — Панель модуля слева: Терминал Тумана
+ * Gacha Roguelike dnd5e — Терминал Тумана: вкладка общего слоя слева (вместе с картой-паутиной)
  *
- * Вне боя — полная панель на левой части экрана (та же область и тот же Туман, что у паутины, но бирюзовая
- * туманность): сверху экипированное, в центре созвездие сборки (теги — звёзды, ступени — кольца, связки 2+2 —
- * нити со способностью на нити), внизу вся Память. Наведение на карту — описание рядом и предпросмотр: какие
- * ступени и связки она включит. Щелчок — подробно справа, двойной щелчок — надеть или снять.
- * В бою панель сама сворачивается в узкую полосу рядом с инструментами Foundry: навыки с зарядами, связки,
- * ступени тегов; щелчок по навыку — использовать.
+ * Вне боя — Сборка в общем Тумане (labyrinth/fog-layer.js), языком Паутины: латунь, дым, камни. Навыки — пластины
+ * с камнем цвета редкости и знаком главного тега; надетые горят, Память тлеет. Щелчок — надеть или снять;
+ * наведение — навык в латунной панели подробностей и предпросмотр: какие ступени синергий сдвинутся.
+ * На пластине слева вверху — чем используется (как в Baldur's Gate 3: круг — действие, треугольник — бонусное,
+ * кольцо со стрелкой — реакция, звезда — особое), справа — заряды ромбами; перегрев — треснувший камень и «заём».
+ * Правила Босса: заглушённый тег перечёркнут, спящий навык подёрнут лунной дымкой.
+ * В бою — панель над хотбаром: навыки и способности синергий кнопками (щелчок — использовать), пассивные свёрнуты.
+ * Вкладки (Терминал, паутина, Хранилище) — кнопки в углу, как у паутины; при смене вкладки Туман остаётся.
  *
  * Логика (данные, экипировка, слияние, заряды, расширения) — от Терминала (memory/terminal/terminal.js),
- * здесь — только вид. Вкладка «Карта» открывает паутину (или окно карты рядами) на том же месте.
+ * здесь — только вид.
  */
 
 import { MODULE_ID } from "../core/constants.js";
 import { MemoryTerminal } from "../memory/terminal/terminal.js";
-import { isMemorySkill, isInCombat } from "../memory/synergy/synergy.js";
-import { duoProgress, DUO_THRESHOLD, DUO_SOURCE } from "../memory/synergy/duo-links.js";
+import { isMemorySkill, isInCombat, isAwake, occupiesSlot } from "../memory/synergy/synergy.js";
+import { DUO_SOURCE } from "../memory/synergy/duo-links.js";
+import { SYNERGIES } from "../memory/synergy/synergy-tiers.js";
 import { heatable, heatOf } from "../memory/overheat.js";
 import { StashWindow } from "../memory/stash.js";
-import { VERT, FOG, FOG_TERMINAL, quad } from "../labyrinth/web-stage.js";
 import { playWeb } from "../labyrinth/web-sound.js";
+import { fogLayer } from "../labyrinth/fog-layer.js";
+import { mapScene } from "../labyrinth/scene-travel.js";
+import { isWeb } from "../labyrinth/web-map.js";
+import { ruleOf, hasRule, BOSS_RULES } from "../labyrinth/boss-rules.js";
+import { counterInfo } from "../memory/skills/living/badges.js";
+import { echoInfo, gmWhisper, voiceWhisper } from "../memory/echo/echo.js";
+import { setPeek, peekActor } from "../memory/echo/vision.js";
 
 const ID = 'gachadnd-dock';
 const TEMPLATES = 'modules/gachadnd/templates/dock';
-const PARTS_LIST = ['backdrop', 'banner', 'deck', 'feature', 'side'];
+const PARTS_LIST = ['banner', 'deck', 'feature', 'side'];
 
-/** Знаки тегов в созвездии */
+/** Знаки тегов */
 export const TAG_ICONS = {
     'разум': 'fa-brain', 'проклятье': 'fa-ghost', 'аномалия': 'fa-atom', 'движение': 'fa-person-running',
     'память': 'fa-scroll', 'щит': 'fa-shield-halved', 'кровь': 'fa-droplet', 'взрыв': 'fa-burst',
     'сталь': 'fa-khanda', 'казнь': 'fa-skull', 'огонь': 'fa-fire', 'яд': 'fa-flask', 'свет': 'fa-sun'
 };
-const ROMAN = ['', 'I', 'II', 'III'];
-const RARITY_LABEL = { gray: 'серый', green: 'зелёный', blue: 'синий', purple: 'фиолетовый', red: 'красный', orange: 'оранжевый' };
-const tierOf = count => Math.floor(Math.min(count, 6) / 2);
+const RARITY = {
+    gray: ['серый', '#a9b1b0'], green: ['зелёный', '#5fd16e'], blue: ['синий', '#4aa3ff'],
+    purple: ['фиолетовый', '#b57bff'], red: ['красный', '#ff5a54'], orange: ['оранжевый', '#ff9a3c']
+};
+// Чем используется: значок-форма и слово
+const KIND = { a: 'действие', b: 'бонусное действие', r: 'реакция', s: 'особое', p: 'пассивный' };
+const PERIOD = { sr: 'до короткого отдыха', lr: 'до долгого отдыха', day: 'до рассвета', turn: 'на ход', round: 'на раунд', combat: 'на бой', encounter: 'на бой' };
 
-/** Туман-подложка: тот же шейдер, что у паутины, бирюзовая палитра */
-class DockFog {
-    constructor(canvas, host) {
-        this.app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, antialias: false, autoDensity: true, resolution: Math.min(1.5, window.devicePixelRatio || 1), resizeTo: host });
-        this.mesh = new PIXI.Mesh(quad(1, 1), PIXI.Shader.from(VERT, FOG, { uTime: 0, uAspect: 1, uCenter: [0.22, 0.45], uRadius: 0.35, uSlide: 1.5, ...FOG_TERMINAL }));
-        this.app.stage.addChild(this.mesh);
-        this.time = Math.random() * 100;
-        this.still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        this.tick = () => {
-            if (!this.still) this.time += this.app.ticker.deltaMS / 1000;
-            const { width: W, height: H } = this.app.screen;
-            this.mesh.scale.set(W, H);
-            Object.assign(this.mesh.shader.uniforms, { uTime: this.time, uAspect: W / H });
-        };
-        this.app.ticker.add(this.tick);
-    }
-    pause() { this.app.ticker.stop(); }
-    start() { this.app.ticker.start(); }
-    destroy() { this.app.ticker.remove(this.tick); this.app.destroy(false, { children: true, texture: true }); }
+/** Чем используется навык: a — действие, b — бонусное, r — реакция, s — особое (по поводу), p — пассивный */
+function kindOf(item) {
+    const acts = item.system?.activities;
+    if (!acts?.size) return 'p';
+    if (item.flags[MODULE_ID]?.trigger) return 's';
+    const type = (acts.contents?.[0] ?? [...acts.values()][0])?.activation?.type;
+    return { action: 'a', bonus: 'b', reaction: 'r' }[type] ?? 's';
 }
+const usesOf = item => {
+    const max = parseInt(item.system?.uses?.max);
+    if (!max) return null;
+    const value = Math.max(0, max - (item.system.uses.spent || 0));
+    return { value, max, pips: Array.from({ length: max }, (_, i) => i < value), period: PERIOD[item.system.uses.recovery?.[0]?.period] ?? '' };
+};
+/** Название действующей ступени тега */
+function tierName(tag, count) {
+    const tiers = SYNERGIES.find(s => s.tag === tag)?.tiers ?? [];
+    return tiers.filter(t => t.count <= count).at(-1)?.name ?? '';
+}
+const tierList = tag => (SYNERGIES.find(s => s.tag === tag)?.tiers ?? []).map(t => ({ count: t.count, name: t.name }));
+/**
+ * Чьи Терминалы листать: игроку — свои персонажи; Мастеру — персонажи игроков (нет их — все персонажи).
+ * Сначала — с навыками Памяти
+ */
+export function terminalActors() {
+    const chars = game.actors.filter(a => a.type === 'character');
+    const list = game.user.isGM
+        ? (chars.some(a => a.hasPlayerOwner) ? chars.filter(a => a.hasPlayerOwner) : chars)
+        : chars.filter(a => a.testUserPermission(game.user, 'OWNER'));
+    const skilled = a => a.items.some(isMemorySkill);
+    return [...list.filter(skilled), ...list.filter(a => !skilled(a))];
+}
+/**
+ * Чей Терминал открыть без явного выбора: выбранный токен (свой персонаж), назначенный персонаж игрока,
+ * иначе первый из листаемых — так игрок попадёт в Терминал и с карты, не выбирая токен
+ */
+export function defaultTerminalActor() {
+    const token = canvas?.tokens?.controlled?.[0]?.actor;
+    if (token?.type === 'character' && (game.user.isGM || token.isOwner)) return token;
+    if (game.user.character) return game.user.character;
+    return terminalActors()[0] ?? null;
+}
+
+/** Бой этого персонажа с правилом Босса */
+const bossRuleFor = actor => ruleOf(game.combats?.find(c => c.started && ruleOf(c) && c.combatants.some(cb => cb.actor?.id === actor.id)));
 
 export class TerminalDock extends MemoryTerminal {
     constructor(actor, options = {}) {
         super(actor, { id: ID, ...options });
         this.filterTag = null;
-        // Режим: полная панель или полоса; auto — свернулась сама из-за боя
-        this.mode = isInCombat(actor) ? 'strip' : 'full';
-        this.autoStrip = this.mode === 'strip';
+        // Режим: Сборка (full) или панель над хотбаром в бою (bar); auto — переключилась сама из-за боя
+        this.mode = isInCombat(actor) ? 'bar' : 'full';
+        this.autoBar = this.mode === 'bar';
     }
 
     static DEFAULT_OPTIONS = {
@@ -70,10 +108,15 @@ export class TerminalDock extends MemoryTerminal {
         window: { frame: false, positioned: false },
         actions: {
             close: function () { return this.close(); },
-            tab: TerminalDock.#onTab,
-            mode: function () { this.mode = this.mode === 'strip' ? 'full' : 'strip'; this.autoStrip = false; return this.render({ force: true }); },
-            nextActor: TerminalDock.#onNextActor,
-            unpin: function () { this.pinned = false; return this.render({ parts: ['feature'] }); },
+            // «tab» в v14 занят встроенным переключателем вкладок ApplicationV2
+            goto: TerminalDock.#onGoto,
+            mode: function () { this.mode = this.mode === 'bar' ? 'full' : 'bar'; this.autoBar = false; return this.render({ force: true }); },
+            prevActor: function () { return TerminalDock.#cycle.call(this, -1); },
+            nextActor: function () { return TerminalDock.#cycle.call(this, 1); },
+            pickActor: function (event, target) { const a = game.actors.get(target.dataset.actorId); if (a && a.id !== this.actor.id) return TerminalDock.open(a, { mode: this.mode, auto: this.autoBar }); },
+            echoWhisper: TerminalDock.#onEchoWhisper,
+            echoPeek: function () { setPeek(this.actor); },
+            useItem: function (event, target) { return this.actor.items.get(target.dataset.itemId)?.use(); },
             filterTag: function (event, target) { this.filterTag = this.filterTag === target.dataset.tag ? null : target.dataset.tag; return this.render({ parts: ['deck', 'side'] }); }
         }
     };
@@ -89,38 +132,18 @@ export class TerminalDock extends MemoryTerminal {
 
     get title() { return `Терминал Тумана: ${this.actor.name}`; }
 
-    /** Открыть панель для персонажа (другой персонаж — панель пересоздаётся) */
-    static async open(actor, { mode } = {}) {
+    /** Открыть Терминал персонажа (другой персонаж — Терминал пересоздаётся) */
+    static async open(actor, { mode, auto = false } = {}) {
         const existing = foundry.applications.instances?.get(ID);
-        if (existing && existing.actor?.id !== actor.id) await existing.close({ instant: true });
+        if (existing && existing.actor?.id !== actor.id) await existing.close({ handoff: true });
         const app = existing?.actor?.id === actor.id ? existing : new TerminalDock(actor);
-        if (mode) { app.mode = mode; app.autoStrip = false; }
+        if (mode) { app.mode = mode; app.autoBar = auto; }
         return app.render({ force: true });
     }
 
     static toggle(actor) {
         const existing = foundry.applications.instances?.get(ID);
         return existing?.rendered ? existing.close() : TerminalDock.open(actor);
-    }
-
-    /**
-     * Раскладка от экрана: ширина содержимого — ~60% области панели; карты — по ширине ряда из 10;
-     * созвездие — вся высота между экипированным и Памятью
-     */
-    #layout(capacity, below = 0) {
-        const right = document.getElementById('ui-right')?.getBoundingClientRect().left;
-        const area = right > window.innerWidth * 0.5 ? right : window.innerWidth;
-        const H = window.innerHeight;
-        const content = Math.round(Math.min(820, Math.max(560, area * 0.6)));
-        const eqW = Math.min(92, Math.floor((content - 9 * 12) / 10)), eqH = Math.round(eqW * 1.43);
-        const memW = Math.min(68, Math.floor((content - 9 * 10) / 10)), memH = Math.round(memW * 1.4);
-        const memRows = Math.max(1, Math.ceil(capacity / 10));
-        const equipTop = 96;
-        const skyTop = equipTop + 22 + eqH + 26;
-        const memBlock = 26 + memRows * (memH + 12);
-        const memTop = H - 24 - memBlock;
-        const skyH = Math.max(240, memTop - skyTop - 34 - below);
-        return { content, eqW, eqH, memW, memH, equipTop, skyTop, memTop, skyH, scale: Math.max(1, Math.min(1.6, Math.min(skyH / 330, content / 620))) };
     }
 
     // ==========================================
@@ -132,18 +155,23 @@ export class TerminalDock extends MemoryTerminal {
         const actor = this.actor;
         const memory = actor.items.filter(isMemorySkill).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
         const equipped = memory.filter(i => i.flags[MODULE_ID].is_active);
-        const emitted = equipped.filter(i => i.flags[MODULE_ID].tagEmitter && i.flags[MODULE_ID].emitted_tag).map(i => i.flags[MODULE_ID].emitted_tag);
+        const emitted = equipped.filter(i => isAwake(i) && i.flags[MODULE_ID].tagEmitter && i.flags[MODULE_ID].emitted_tag).map(i => i.flags[MODULE_ID].emitted_tag);
         const tagsOf = item => {
             const tags = new Set(item.flags[MODULE_ID].tags ?? []);
             if (item.flags[MODULE_ID].is_active && !item.flags[MODULE_ID].tagEmitter) emitted.forEach(t => tags.add(t));
             return [...tags];
         };
+        // Счёт тегов — по надетым и не спящим (спящий навык тегов не даёт)
         const counts = {};
-        for (const item of equipped) for (const t of tagsOf(item)) counts[t] = (counts[t] ?? 0) + 1;
-        const links = await duoProgress(counts);
-        const synergyItems = actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item);
+        for (const item of equipped.filter(isAwake)) for (const t of tagsOf(item)) counts[t] = (counts[t] ?? 0) + 1;
 
-        // Описания всех карт — для карточки при наведении
+        const rule = bossRuleFor(actor);
+        const muffled = hasRule(rule, 'muffle') ? rule.tag : null;
+        const rules = [
+            ...(muffled ? [{ icon: BOSS_RULES.muffle.icon, text: `${BOSS_RULES.muffle.name} · ${muffled}` }] : []),
+            ...(hasRule(rule, 'sleepy') && !rule.woke ? [{ icon: BOSS_RULES.sleepy.icon, text: `${BOSS_RULES.sleepy.name} · до ½ ПЗ Босса` }] : [])
+        ];
+
         const editor = foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor;
         const describe = async doc => {
             const html = doc.system?.description?.value ?? '';
@@ -151,119 +179,99 @@ export class TerminalDock extends MemoryTerminal {
             return editor.enrichHTML(body, { relativeTo: doc, rollData: doc.getRollData?.() });
         };
 
-        // Предпросмотр: что изменит надетая (или снятая) карта
-        const preview = async item => {
-            const on = !item.flags[MODULE_ID].is_active;
-            const next = { ...counts };
-            for (const t of item.flags[MODULE_ID].tags ?? []) next[t] = Math.max(0, (next[t] ?? 0) + (on ? 1 : -1));
-            const lines = [];
-            for (const t of item.flags[MODULE_ID].tags ?? []) {
-                const was = tierOf(counts[t] ?? 0), now = tierOf(next[t] ?? 0);
-                if (now > was) lines.push(`<b>${t} ${next[t]}</b> — ступень ${ROMAN[now]}`);
-                if (now < was) lines.push(`<b>${t} ${next[t]}</b> — теряется ступень ${ROMAN[was]}`);
-            }
-            const after = await duoProgress(next);
-            const gained = after.filter((l, i) => l.ready && !links[i].ready).map(l => l.name);
-            const lost = after.filter((l, i) => !l.ready && links[i].ready).map(l => l.name);
-            gained.forEach(n => lines.push(`связка <b>«${n}»</b> начнёт действовать`));
-            lost.forEach(n => lines.push(`связка <b>«${n}»</b> перестанет действовать`));
-            return { on, text: lines.join(', '), gained, lost };
-        };
-
-        const cardView = async item => {
-            const flags = item.flags[MODULE_ID];
-            const uses = parseInt(item.system?.uses?.max) ? { value: Math.max(0, parseInt(item.system.uses.max) - (item.system.uses.spent || 0)), max: parseInt(item.system.uses.max) } : null;
-            const pv = await preview(item);
+        const plate = item => {
+            const flags = item.flags[MODULE_ID], tags = tagsOf(item), [rarityLabel, color] = RARITY[flags.rarity] ?? RARITY.gray;
+            const heat = heatable(item) ? heatOf(item) : null;
+            const kind = kindOf(item);
             return {
-                id: item.id, name: item.name, img: item.img, equipped: !!flags.is_active,
-                selected: item.id === this.selectedId, rarity: flags.rarity ?? 'gray', rarityLabel: RARITY_LABEL[flags.rarity ?? 'gray'] ?? flags.rarity,
-                tags: tagsOf(item), tagText: tagsOf(item).join(','),
-                dim: !!this.filterTag && !tagsOf(item).includes(this.filterTag),
-                uses, usesText: uses ? `${uses.value}/${uses.max}` : (item.system?.activities?.size ? '∞' : ''),
-                spent: !!uses && !uses.value, hot: heatable(item) && heatOf(item).borrowed > 0,
-                usable: !!flags.is_active && (item.system?.activities?.size ?? 0) > 0,
-                category: flags.category ?? '', desc: await describe(item),
-                preview: pv.text, previewOn: pv.on, gains: pv.gained.join('|'), losses: pv.lost.join('|')
+                id: item.id, name: item.name, color, rarityLabel, tags, tagText: tags.join(','),
+                icon: TAG_ICONS[tags[0]] ?? 'fa-gem', equipped: !!flags.is_active, asleep: !!flags.asleep,
+                selected: item.id === this.selectedId, dim: !!this.filterTag && !tags.includes(this.filterTag),
+                kind, kindLabel: KIND[kind], passive: kind === 'p', uses: usesOf(item),
+                hot: !!heat?.borrowed, locked: !!heat?.locked, counter: counterInfo(item),
+                usable: !!flags.is_active && !flags.asleep && (item.system?.activities?.size ?? 0) > 0
             };
         };
-        const cards = await Promise.all(memory.map(cardView));
-        this.layout = this.#layout(base.capacity, synergyItems.some(i => !String(i.flags[MODULE_ID]?.tagSource ?? '').startsWith(DUO_SOURCE)) ? 70 : 0);
-        const slots = base.ring.absoluteCap;
-        const equippedCards = cards.filter(c => c.equipped);
+        const plates = memory.map(plate);
+        const slotted = equipped.filter(occupiesSlot).length;
+        const free = Math.max(0, base.ring.absoluteCap - slotted);
 
+        // Синергии: тег, ромбы до 6 (зазоры на порогах 2 и 4), действующая ступень
+        const tags = Object.keys(counts);
+        if (muffled && !tags.includes(muffled)) tags.push(muffled);
+        const synergies = tags.sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b, 'ru')).map(tag => {
+            const count = counts[tag] ?? 0;
+            return {
+                tag, count, icon: TAG_ICONS[tag] ?? 'fa-circle', muffled: tag === muffled,
+                pips: Array.from({ length: 6 }, (_, i) => ({ on: i < count, gap: i === 2 || i === 4 })),
+                tier: tierName(tag, count), tiers: JSON.stringify(tierList(tag))
+            };
+        });
+
+        // Способности синергий и связок 2 + 2 — янтарь; откуда: «кровь · ступень II» или «кровь + щит»
+        const ROMAN = ['I', 'II', 'III'];
+        const abilities = await Promise.all(actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item).map(async i => {
+            const source = String(i.flags[MODULE_ID].tagSource ?? ''), duo = source.startsWith(DUO_SOURCE);
+            const pair = duo ? source.slice(DUO_SOURCE.length).split('+') : [];
+            const step = duo ? -1 : tierList(source).findIndex(t => t.name === i.name);
+            return {
+                id: i.id, name: i.name, duo, selected: i.id === this.abilityId,
+                icon: duo ? 'fa-link' : TAG_ICONS[source] ?? 'fa-star', tagIcons: (duo ? pair : [source]).map(t => TAG_ICONS[t] ?? 'fa-circle'),
+                source: duo ? pair.join(' + ') : `${source}${step >= 0 ? ` · ступень ${ROMAN[step]}` : ''}`,
+                kind: kindOf(i), kindLabel: KIND[kindOf(i)], passive: kindOf(i) === 'p', uses: usesOf(i),
+                usable: (i.system?.activities?.size ?? 0) > 0, muffled: !!muffled && (source === muffled || pair.includes(muffled)), desc: await describe(i)
+            };
+        }));
+        // Наведена или выбрана способность — в панели подробностей она, а не навык
+        const ability = abilities.find(a => a.id === this.abilityId) ?? null;
+        if (!ability) this.abilityId = null;
+
+        // Подробности выбранного навыка: знак, состояние, строки «чем, заряды, перегрев»
+        const sel = memory.find(i => i.id === this.selectedId);
+        const selPlate = sel ? plates.find(p => p.id === sel.id) : null;
+        const detail = selPlate ? {
+            icon: selPlate.icon, kind: selPlate.kind, state: `${selPlate.rarityLabel} · ${selPlate.asleep ? 'спит' : selPlate.equipped ? 'надет' : 'в Памяти'}`,
+            meta: [
+                selPlate.tags.length ? `<i class="fas ${selPlate.icon}"></i>${selPlate.tags.join(', ')}` : '',
+                `<span class="gd-ak ${selPlate.kind}"></span>${selPlate.kindLabel}`,
+                selPlate.uses ? `<i class="fas fa-gem"></i>заряды ${selPlate.uses.value} из ${selPlate.uses.max}${selPlate.uses.period ? ` · ${selPlate.uses.period}` : ''}` : '',
+                selPlate.hot ? '<span class="hot"><i class="fas fa-fire"></i>заём — перегрев</span>' : '',
+                selPlate.locked ? '<span class="hot"><i class="fas fa-lock"></i>заблокирован до долгого отдыха</span>' : '',
+                selPlate.counter ? `<span class="cnt"><b>${foundry.utils.escapeHTML(selPlate.counter.state)}</b> ${foundry.utils.escapeHTML(selPlate.counter.rule)}</span>` : ''
+            ].filter(Boolean)
+        } : null;
+
+        // Предел разума: латунное кольцо с гнёздами — естественные и сверх лимита
+        const ring = base.ring, R = 24;
+        const sockets = Array.from({ length: ring.absoluteCap }, (_, i) => {
+            const a = -Math.PI / 2 + i * 2 * Math.PI / ring.absoluteCap;
+            return { x: (32 + R * Math.cos(a)).toFixed(2), y: (32 + R * Math.sin(a)).toFixed(2), on: i < slotted, extra: i >= ring.naturalCap, next: i === slotted };
+        });
+
+        // Листалка героев: у игрока — свои персонажи, у Мастера — персонажи игроков
+        const roster = terminalActors();
+        if (!roster.some(a => a.id === actor.id)) roster.unshift(actor);
         return Object.assign(base, {
             dockActor: { name: actor.name, img: actor.img },
-            strip: this.mode === 'strip',
+            roster: roster.length > 1 ? roster.map(a => ({ id: a.id, name: a.name, img: a.img, on: a.id === actor.id })) : null,
+            bar: this.mode === 'bar',
             isGM: game.user.isGM,
+            echo: echoInfo(actor),
+            echoPeek: peekActor()?.id === actor.id,
+            rules,
             filterTag: this.filterTag,
-            pinned: !!this.pinned,
+            tagFilters: Object.entries(memory.reduce((acc, i) => { for (const t of tagsOf(i)) acc[t] = (acc[t] ?? 0) + 1; return acc; }, {}))
+                .sort((a, b) => b[1] - a[1]).map(([tag, n]) => ({ tag, n, icon: TAG_ICONS[tag] ?? 'fa-circle', on: this.filterTag === tag, muffled: tag === muffled })),
+            equippedPlates: plates.filter(p => p.equipped),
+            memoryPlates: plates.filter(p => !p.equipped),
+            sockets: Array.from({ length: free }),
+            mind: { sockets, filled: slotted, natural: ring.naturalCap, absolute: ring.absoluteCap, over: slotted > ring.naturalCap, extra: ring.absoluteCap > ring.naturalCap },
+            synergies, abilities, ability, detail,
             featureMergeable: !!base.cards?.find(c => c.id === base.feature?.id)?.mergeable,
-            equippedCards,
-            equippedEmpty: Array.from({ length: Math.max(0, Math.min(10, slots) - equippedCards.length) }),
-            memoryCards: cards,
-            memoryEmpty: Array.from({ length: Math.max(0, base.capacity - cards.length) }),
-            sky: this.#sky(counts, links, synergyItems),
-            abilities: await Promise.all(synergyItems.filter(i => !String(i.flags[MODULE_ID]?.tagSource ?? '').startsWith(DUO_SOURCE)).map(async i => ({
-                id: i.id, name: i.name, img: i.img, usable: (i.system?.activities?.size ?? 0) > 0, desc: await describe(i),
-                usesText: parseInt(i.system?.uses?.max) ? `${Math.max(0, parseInt(i.system.uses.max) - (i.system.uses.spent || 0))}/${parseInt(i.system.uses.max)}` : ''
-            }))),
-            tiers: Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([tag, count]) => ({ tag, short: tag.slice(0, 3), icon: TAG_ICONS[tag] ?? 'fa-circle', count, tier: tierOf(count), pips: [0, 1, 2].map(i => i < tierOf(count)) }))
+            barSkills: await Promise.all(plates.filter(p => p.equipped && !p.passive).map(async p => ({ ...p, desc: await describe(actor.items.get(p.id)) }))),
+            barPassive: plates.filter(p => p.equipped && p.passive),
+            topTags: Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tag, n]) => ({ tag, n, icon: TAG_ICONS[tag] ?? 'fa-circle', muffled: tag === muffled }))
         });
-    }
-
-    /**
-     * Созвездие: звёзды тегов по овалу (связанные связкой — рядом), нити связок 2+2 со способностью на нити.
-     * Координаты — в поле 600×330.
-     */
-    #sky(counts, links, synergyItems) {
-        const { content: W, skyH: H, scale: k } = this.layout;
-        const cx = W / 2, cy = H / 2, rx = W / 2 - 64 * k, ry = H / 2 - 52 * k;
-        const shown = links.filter(l => l.have.some(n => n > 0) || l.ready);
-        const tags = new Set(Object.keys(counts));
-        shown.forEach(l => l.duo.forEach(t => tags.add(t)));
-        // Порядок по овалу: цепочкой по связкам, затем остальные по счёту
-        const order = [];
-        const rest = [...tags].sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0));
-        while (rest.length) {
-            let t = rest.shift();
-            order.push(t);
-            for (let partner; (partner = shown.find(l => l.duo.includes(t) && rest.includes(l.duo.find(x => x !== t)))); ) {
-                t = partner.duo.find(x => x !== t);
-                rest.splice(rest.indexOf(t), 1);
-                order.push(t);
-            }
-        }
-        const n = Math.max(1, order.length);
-        const pos = {};
-        order.forEach((t, i) => {
-            const a = -Math.PI * 0.82 + (i / n) * Math.PI * 2;
-            pos[t] = { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry };
-        });
-        const stars = order.map(tag => {
-            const count = counts[tag] ?? 0, tier = tierOf(count), size = Math.round((30 + Math.min(count, 6) * 4) * k);
-            return {
-                tag, icon: TAG_ICONS[tag] ?? "fa-circle", count, tier, size, x: pos[tag].x, y: pos[tag].y, top: pos[tag].y - size / 2,
-                cls: [count ? 'lit' : 'dim', this.filterTag === tag && 'filter'].filter(Boolean).join(' '),
-                note: count ? `${count}${tier ? ` · ступень ${ROMAN[tier]}` : ''}${tier < 3 ? ` · до ${ROMAN[tier + 1]} ещё ${(tier + 1) * 2 - count}` : ''}` : '0',
-                rings: [1, 2, 3].map(i => ({ r: size / 2 + (4 + i * 6) * k, on: tier >= i, next: tier + 1 === i }))
-            };
-        });
-        const threads = shown.map(l => {
-            const [a, b] = l.duo.map(t => pos[t]);
-            // Узел нити — к центру созвездия; контрольная точка кривой — так, чтобы нить проходила через узел
-            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-            const kx = mx + (cx - mx) * 0.32, ky = my + (cy - my) * 0.32;
-            const missing = l.duo.reduce((s, t, i) => s + Math.max(0, DUO_THRESHOLD - l.have[i]), 0);
-            const state = l.ready ? 'ready' : missing <= 1 ? 'near' : 'far';
-            const item = l.ready ? synergyItems.find(i => i.name === l.name) : null;
-            return {
-                name: l.name, img: l.img, state, tags: l.duo.join(','), duo: l.duo,
-                path: `M${a.x.toFixed(1)} ${a.y.toFixed(1)} Q ${(2 * kx - mx).toFixed(1)} ${(2 * ky - my).toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`,
-                x: kx, y: ky, itemId: item?.id ?? '', usable: !!item && (item.system?.activities?.size ?? 0) > 0,
-                note: l.ready ? 'действует' : `не хватает: ${l.duo.map((t, i) => (l.have[i] < DUO_THRESHOLD ? `${DUO_THRESHOLD - l.have[i]} ${t}` : '')).filter(Boolean).join(', ')}`
-            };
-        });
-        return { width: W, height: H, stars, threads, scale: k };
     }
 
     // ==========================================
@@ -274,91 +282,156 @@ export class TerminalDock extends MemoryTerminal {
         super._onFirstRender(context, options);
         this.escape = event => { if (event.key === 'Escape' && !event.target.closest?.('input, select, textarea') && this.mode === 'full') this.close(); };
         document.addEventListener('keydown', this.escape);
-        // Щелчок по карте закрепляет подробности справа (сам выбор — действие Терминала)
-        this.element.addEventListener('click', event => { if (event.target.closest('.gd-dcard[data-item-id]')) this.pinned = true; }, true);
-        this.element.classList.add('gd-dock-opening');
-        setTimeout(() => this.element?.classList.remove('gd-dock-opening'), 900);
+        // Правый щелчок по пластине — лист навыка
+        this.element.addEventListener('contextmenu', event => {
+            const node = event.target.closest('[data-item-id].gd-plate, [data-item-id].gd-act');
+            if (!node) return;
+            event.preventDefault();
+            this.actor.items.get(node.dataset.itemId)?.sheet?.render(true);
+        });
+        // Туман уже есть — пришли с другой вкладки (паутина): без появления, только смена содержимого
+        const handoff = fogLayer.visible;
+        const cls = handoff ? 'gd-swap-in' : 'gd-t-opening';
+        this.element.classList.add(cls);
+        setTimeout(() => this.element?.classList.remove(cls), handoff ? 450 : 1100);
     }
 
     _onRender(context, options) {
         super._onRender(context, options);
-        this.element.classList.toggle('strip', this.mode === 'strip');
-        const L = this.layout;
-        if (L) for (const [key, value] of Object.entries({ content: L.content, 'eq-w': L.eqW, 'eq-h': L.eqH, 'mem-w': L.memW, 'mem-h': L.memH, 'equip-top': L.equipTop, 'sky-top': L.skyTop, 'mem-top': L.memTop, 'sky-h': L.skyH })) this.element.style.setProperty(`--dock-${key}`, `${value}px`);
-        if (L) this.element.style.setProperty('--dock-k', L.scale);
+        this.element.classList.toggle('bar', this.mode === 'bar');
         this.#fit();
-        if (this.mode === 'full') {
-            const canvas = this.element.querySelector('canvas.gd-dock-fog');
-            if (canvas && !this.fog) this.fog = new DockFog(canvas, this.element);
-            else if (canvas && this.fog && this.fog.app.view !== canvas) canvas.replaceWith(this.fog.app.view);
-        } else if (this.fog) { this.fog.destroy(); this.fog = null; }
+        // Туман — только у Сборки; панель боя живёт без него
+        if (this.mode === 'full') fogLayer.show({ center: [0.2, 0.42], radius: 0.36, z: parseInt(getComputedStyle(this.element).zIndex) || 50 });
+        else fogLayer.hide();
         this.#bindHover();
     }
 
-    /** Полная панель — до боковой панели справа; полоса — сразу за инструментами Foundry */
+    /** Сборка — левая часть экрана до боковой панели; панель боя — над хотбаром, по его середине */
     #fit() {
         const el = this.element;
-        if (this.mode === 'strip') {
-            const controls = document.getElementById('scene-controls') ?? document.getElementById('controls');
-            const left = controls ? Math.round(controls.getBoundingClientRect().right + 6) : 70;
-            Object.assign(el.style, { left: `${left}px`, right: 'auto', width: '78px' });
+        if (this.mode === 'bar') {
+            const hot = document.getElementById('hotbar')?.getBoundingClientRect();
+            const mid = hot?.width ? hot.left + hot.width / 2 : window.innerWidth / 2;
+            Object.assign(el.style, { left: `${Math.round(mid)}px`, right: 'auto', top: 'auto', bottom: `${Math.round(hot?.height ? window.innerHeight - hot.top + 10 : 80)}px`, width: '' });
             return;
         }
         const right = document.getElementById('ui-right')?.getBoundingClientRect().left;
-        Object.assign(el.style, { left: '0px', width: '', right: right > window.innerWidth * 0.5 ? `${Math.max(0, window.innerWidth - right)}px` : '0px' });
+        Object.assign(el.style, { left: '0px', top: '0px', bottom: '0px', width: '', right: right > window.innerWidth * 0.5 ? `${Math.max(0, window.innerWidth - right)}px` : '0px' });
     }
 
-    /** Наведение: карточка рядом с картой; связи подсвечиваются (тег ↔ карты ↔ связки) */
+    /**
+     * Наведение на пластину: подробности — в латунную панель (последний навык под мышью остаётся),
+     * предпросмотр — у синергий меняются ромбы и ступень, у Предела разума загорается гнездо
+     */
     #bindHover() {
         const el = this.element;
-        const pop = el.querySelector('.gd-dock-pop');
-        if (!pop) return;
-        const show = (target, html) => {
-            pop.innerHTML = html;
-            pop.hidden = false;
-            const r = target.getBoundingClientRect(), host = el.getBoundingClientRect();
-            const w = pop.offsetWidth, h = pop.offsetHeight;
-            let x = r.right - host.left + 12, y = r.top - host.top - 8;
-            if (this.mode === 'full' && x + w > host.width - 8) x = r.left - host.left - w - 12;
-            y = Math.max(8, Math.min(y, window.innerHeight - host.top - h - 8));
-            Object.assign(pop.style, { left: `${x}px`, top: `${y}px` });
+        const rows = () => [...el.querySelectorAll('.gd-syn-row[data-tag]')];
+        const reset = () => {
+            el.querySelectorAll('.gd-syn-row.preview').forEach(r => r.remove());
+            for (const row of rows()) {
+                row.classList.remove('up', 'down');
+                row.querySelectorAll('.gd-pp u').forEach((u, i) => { u.classList.toggle('on', i < Number(row.dataset.count)); u.classList.remove('add', 'lose'); });
+                const nx = row.querySelector('.gd-nx b'); if (nx) nx.textContent = row.dataset.tier ?? '';
+            }
+            el.querySelector('.gd-mind')?.classList.remove('preview', 'preview-off');
+            el.querySelector('.gd-syn-head b')?.replaceChildren();
         };
-        const hide = () => { pop.hidden = true; el.querySelectorAll('.preview, .soon, .lose, .hl').forEach(n => n.classList.remove('preview', 'soon', 'lose', 'hl')); };
+        const preview = node => {
+            reset();
+            if (node.dataset.asleep) return;
+            const on = !node.dataset.equipped, delta = on ? 1 : -1;
+            el.querySelector('.gd-mind')?.classList.add(on ? 'preview' : 'preview-off');
+            const head = el.querySelector('.gd-syn-head b');
+            if (head) head.textContent = `${on ? 'если надеть' : 'если снять'} «${node.dataset.name}»`;
+            for (const tag of (node.dataset.tags ?? '').split(',').filter(Boolean)) {
+                let row = rows().find(r => r.dataset.tag === tag);
+                if (!row && on) {
+                    // Новый тег — временная строка внизу
+                    row = el.querySelector('.gd-syn-row[data-template]')?.cloneNode(true);
+                    if (!row) continue;
+                    row.removeAttribute('data-template');
+                    row.hidden = false;
+                    row.querySelector('i').className = `fas ${TAG_ICONS[tag] ?? 'fa-circle'}`;
+                    row.classList.add('preview');
+                    Object.assign(row.dataset, { tag, count: '0', tier: '', tiers: '[]' });
+                    row.querySelector('.gd-tn').textContent = tag;
+                    el.querySelector('.gd-syn-list')?.append(row);
+                }
+                if (!row) continue;
+                const was = Number(row.dataset.count), now = Math.max(0, was + delta);
+                row.classList.add(on ? 'up' : 'down');
+                row.querySelectorAll('.gd-pp u').forEach((u, i) => {
+                    if (on && i === was) u.classList.add('add');
+                    if (!on && i === now) u.classList.add('lose');
+                });
+                const tiers = JSON.parse(row.dataset.tiers || '[]');
+                const name = tiers.filter(t => t.count <= now).at(-1)?.name ?? '';
+                const nx = row.querySelector('.gd-nx b');
+                if (nx) nx.textContent = name;
+            }
+        };
         const fresh = selector => [...el.querySelectorAll(selector)].filter(node => !node.dataset.bound && (node.dataset.bound = '1'));
-        fresh('[data-pop]').forEach(node => {
+        fresh('.gd-plate[data-item-id]').forEach(node => {
+            node.addEventListener('pointerenter', () => {
+                playWeb('hover', null, { throttle: 70 });
+                preview(node);
+                if (this.selectedId === node.dataset.itemId && !this.abilityId) return;
+                this.selectedId = node.dataset.itemId;
+                this.abilityId = null;
+                el.querySelectorAll('.gd-ability.sel').forEach(p => p.classList.remove('sel'));
+                el.querySelectorAll('.gd-plate.sel').forEach(p => p.classList.remove('sel'));
+                node.classList.add('sel');
+                clearTimeout(this.featureTimer);
+                this.featureTimer = setTimeout(() => this.render({ parts: ['feature'] }), 60);
+            });
+            node.addEventListener('pointerleave', reset);
+        });
+        // Способность синергии: наведение или щелчок — она в панели подробностей (применить — кнопкой там)
+        const showAbility = node => {
+            if (this.abilityId === node.dataset.abilityId) return;
+            this.abilityId = node.dataset.abilityId;
+            el.querySelectorAll('.gd-plate.sel, .gd-ability.sel').forEach(p => p.classList.remove('sel'));
+            node.classList.add('sel');
+            clearTimeout(this.featureTimer);
+            this.featureTimer = setTimeout(() => this.render({ parts: ['feature'] }), 60);
+        };
+        fresh('.gd-ability[data-ability-id]').forEach(node => {
+            node.addEventListener('pointerenter', () => { playWeb('hover', null, { throttle: 70 }); showAbility(node); });
+            node.addEventListener('click', () => showAbility(node));
+        });
+        // Панель боя: карточка навыка над кнопкой
+        const pop = el.querySelector('.gd-bar-pop');
+        fresh('.gd-act[data-pop]').forEach(node => {
             node.addEventListener('pointerenter', () => {
                 const tpl = el.querySelector(`template[data-pop-for="${node.dataset.pop}"]`);
-                if (!tpl) return;
-                show(node, tpl.innerHTML);
-                playWeb('hover', null, { throttle: 70 });
-                // Предпросмотр карты: её теги и связки, которые она включит или выключит
-                const tags = (node.dataset.tags ?? '').split(',').filter(Boolean);
-                tags.forEach(t => el.querySelectorAll(`.gd-star[data-tag="${t}"]`).forEach(s => s.classList.add('preview')));
-                (node.dataset.gains ?? '').split('|').filter(Boolean).forEach(n => el.querySelectorAll(`.gd-thread[data-name="${CSS.escape(n)}"], .gd-knot[data-name="${CSS.escape(n)}"]`).forEach(s => s.classList.add('soon')));
-                (node.dataset.losses ?? '').split('|').filter(Boolean).forEach(n => el.querySelectorAll(`.gd-thread[data-name="${CSS.escape(n)}"], .gd-knot[data-name="${CSS.escape(n)}"]`).forEach(s => s.classList.add('lose')));
+                if (!pop || !tpl) return;
+                pop.innerHTML = tpl.innerHTML;
+                pop.hidden = false;
+                const r = node.getBoundingClientRect(), host = el.getBoundingClientRect();
+                pop.style.left = `${Math.max(0, r.left - host.left - 20)}px`;
             });
-            node.addEventListener('pointerleave', hide);
+            node.addEventListener('pointerleave', () => { if (pop) pop.hidden = true; });
         });
-        // Звезда: подсвечены карты с этим тегом и связки, которым он нужен
-        fresh('.gd-star[data-tag]').forEach(star => {
-            star.addEventListener('pointerenter', () => {
-                const t = star.dataset.tag;
-                el.querySelectorAll('.gd-dcard[data-tags]').forEach(c => { if (c.dataset.tags.split(',').includes(t)) c.classList.add('hl'); });
-                el.querySelectorAll('.gd-thread, .gd-knot').forEach(k => { if ((k.dataset.tags ?? '').split(',').includes(t)) k.classList.add('hl'); });
-            });
-            star.addEventListener('pointerleave', hide);
-        });
-        // Щелчок по навыку в полосе — использовать; по связке — её способность
-        [...el.querySelectorAll('[data-use]')].filter(node => !node.dataset.useBound && (node.dataset.useBound = '1')).forEach(node => node.addEventListener('click', event => {
-            event.stopPropagation();
-            this.actor.items.get(node.dataset.use)?.use();
-        }));
+    }
+
+    /** Закрытие: содержимое уходит, Туман уползает. handoff — переход на другую вкладку, Туман остаётся ей */
+    async close(options = {}) {
+        if (this.rendered && !this.closing && this.mode === 'full' && !options.instant) {
+            this.closing = true;
+            this.element.classList.add(options.handoff ? 'gd-swap-out' : 'gd-t-closing');
+            this.element.style.pointerEvents = 'none';
+            if (!options.handoff) fogLayer.hide();
+            await new Promise(r => setTimeout(r, fogLayer.still ? 0 : options.handoff ? 180 : 400));
+        }
+        if (options.handoff) fogLayer.handoff();
+        else if (this.mode === 'full') fogLayer.hide();
+        return super.close({ ...options, animate: false });
     }
 
     _onClose(options) {
         document.removeEventListener('keydown', this.escape);
-        this.fog?.destroy();
-        this.fog = null;
+        clearTimeout(this.featureTimer);
+        this.closing = false;
         return super._onClose(options);
     }
 
@@ -366,33 +439,55 @@ export class TerminalDock extends MemoryTerminal {
     // ДЕЙСТВИЯ
     // ==========================================
 
-    static async #onTab(event, target) {
-        const tab = target.dataset.tab;
+    static async #onGoto(event, target) {
+        const tab = target.dataset.goto;
         if (tab === 'map') {
-            await this.close({ instant: true });
+            // Паутина — вкладка того же слоя; карта рядами — отдельное окно, Туман уходит
+            const web = isWeb(mapScene()?.getFlag(MODULE_ID, 'floorMap'));
+            await this.close(web ? { handoff: true } : {});
             return game.gachadnd?.openMapTerminal?.();
         }
         if (tab === 'stash') return StashWindow.open(this.actor);
     }
 
-    // Мастер листает персонажей отряда
-    static async #onNextActor() {
-        const party = game.actors.filter(a => a.type === 'character' && (a.hasPlayerOwner || game.user.isGM) && a.items.some(isMemorySkill));
-        if (!party.length) return;
-        const i = party.findIndex(a => a.id === this.actor.id);
-        const next = party[(i + 1) % party.length];
-        if (next.id !== this.actor.id) return TerminalDock.open(next, { mode: this.mode });
+    // Мастер шепчет игроку голосом его эха: своя строка или строка самого голоса
+    static async #onEchoWhisper() {
+        const actor = this.actor, title = echoInfo(actor)?.title || 'голос';
+        const result = await foundry.applications.api.DialogV2.wait({
+            window: { title: `Шепнуть голосом: ${actor.name}` },
+            content: `<p>Строка придёт игроку как реплика «${foundry.utils.escapeHTML(title)}» — тем же оформлением; он не отличит её от модуля.</p>
+                <textarea name="line" rows="3" style="width:100%" placeholder="Подсказка, соблазн, ложь…"></textarea>`,
+            buttons: [
+                { action: 'own', label: 'Шепнуть', icon: 'fas fa-comment-dots', default: true, callback: (event, button) => button.form.elements.line.value.trim() },
+                { action: 'random', label: 'Строку голоса', icon: 'fas fa-dice' }
+            ],
+            rejectClose: false
+        });
+        if (result === 'random') return voiceWhisper(actor, 'use', { force: true });
+        if (result && result !== 'own') return gmWhisper(actor, result);
+    }
+
+    // Листалка героев: соседний по кругу
+    static #cycle(step) {
+        const list = terminalActors();
+        if (list.length < 2) return;
+        const i = list.findIndex(a => a.id === this.actor.id);
+        const next = list[((i < 0 ? 0 : i + step) % list.length + list.length) % list.length];
+        if (next.id !== this.actor.id) return TerminalDock.open(next, { mode: this.mode, auto: this.autoBar });
     }
 }
 
-// Бой начался — панель сворачивается в полосу; кончился — разворачивается обратно, если свернулась сама
+// Бой начался — Сборка становится панелью над хотбаром; кончился — снова Сборка, если переключилась сама
 const dock = () => foundry.applications.instances?.get(ID);
 function syncCombat() {
     const app = dock();
     if (!app?.rendered) return;
     const fighting = isInCombat(app.actor);
-    if (fighting && app.mode === 'full') { app.mode = 'strip'; app.autoStrip = true; app.render({ force: true }); }
-    else if (!fighting && app.mode === 'strip' && app.autoStrip) { app.mode = 'full'; app.autoStrip = false; app.render({ force: true }); }
+    if (fighting && app.mode === 'full') { app.mode = 'bar'; app.autoBar = true; app.render({ force: true }); }
+    else if (!fighting && app.mode === 'bar' && app.autoBar) { app.mode = 'full'; app.autoBar = false; app.render({ force: true }); }
+    else app.render({ parts: ['banner', 'deck', 'side'] });
 }
+// Мастер начал или перестал смотреть экран игрока — подпись кнопки
+Hooks.on('gachadnd.echoPeek', () => { const app = dock(); if (app?.rendered) app.render({ parts: ['banner'] }); });
 for (const hook of ['combatStart', 'createCombatant', 'deleteCombatant', 'deleteCombat', 'updateCombat']) Hooks.on(hook, () => setTimeout(syncCombat, 50));
 window.addEventListener('resize', foundry.utils.debounce(() => dock()?.rendered && dock().render(), 250));

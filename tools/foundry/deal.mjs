@@ -2,7 +2,7 @@
 // Карта этажа на тестовой сцене, отряд на узле Босса. Окно у Мастера: три лота, жертвы кладутся щелчком
 // по карте навыка и жетонам тела, вес и фаза луны, забрать жертву, печать с выбором получателя.
 // Проверяется списание (навык сгорел, Кость Хитов, максимум ПЗ, слот Памяти, кристалл Хранилища, золото)
-// и лоты: Чужая память, Сплав (один слот, сгорают вместе), Эхо Босса (отметка), отказ без потерь.
+// и лоты: Чужая память, Сплав (один слот, сгорают вместе), Отголосок Босса (отметка), отказ без потерь.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, PREFIX } from './fixtures.mjs';
 
@@ -195,7 +195,7 @@ const burned = await ev(async ({ hero, name }) => {
 }, { hero: ids.hero, name: party.heroSkills[1] });
 check('Сплав: одна половина сгорела — сгорела и вторая', !burned.includes(party.heroSkills[1]) && !burned.includes(party.heroSkills[2]), burned.join(', '));
 
-// ---------- 4. Эхо Босса: отметка у отряда на следующий этаж
+// ---------- 4. Отголосок Босса: отметка у отряда на следующий этаж
 await ev(() => game.settings.set('gachadnd', 'moonBoons', []));
 await forceLots(['copy', 'echo', 'fuse'], 'echo');
 await ev(() => game.gachadnd.openDeal());
@@ -212,7 +212,7 @@ await wait(1500);
 const boons = await ev(() => game.settings.get('gachadnd', 'moonBoons'));
 const allyAfter = await ev(ally => ({ hp: game.actors.get(ally).system.attributes.hp.max, effect: game.actors.get(ally).effects.some(e => e.name === 'Луна: забранная плоть') }), party.ally);
 check('максимум ПЗ по классам: −5 эффектом «Луна: забранная плоть»', allyAfter.effect && allyAfter.hp === allyHp - 5, `${allyHp} → ${allyAfter.hp}`);
-check('Эхо Босса: отметка на следующий этаж', boons.length === 1 && boons[0].type === 'echo' && boons[0].floor === 2 && !boons[0].used, JSON.stringify(boons));
+check('Отголосок Босса: отметка на следующий этаж', boons.length === 1 && boons[0].type === 'echo' && boons[0].floor === 2 && !boons[0].used, JSON.stringify(boons));
 await wait(3500);
 
 // ---------- 5. Отказ: жертвы остаются при отряде

@@ -182,41 +182,14 @@ export async function updateActorSynergies(actor) {
             if (updates.length) await item.updateEmbeddedDocuments('ActiveEffect', updates);
         }
 
-        // --- А. МАТЕМАТИКА ПЕРЕГРУЗКИ ---
-        const naturalCap = naturalSlotCap(actor);
-        const activeCount = activeItems.filter(occupiesSlot).length;
-
-        const overloadCount = activeCount - naturalCap;
-        const overloadEffectName = "Системная перегрузка (Киберпсихоз)";
-        let existingOverload = actor.effects.find(e => e.flags?.[MODULE_ID]?.is_system_effect);
-
-        if (overloadCount > 0) {
-            const statPenalty = overloadCount * -2;
-            const hpPenalty = -overloadCount * level;
-            const effectData = {
-                name: overloadEffectName,
-                img: "icons/svg/hazard.svg",
-                icon: "icons/svg/hazard.svg", // Дублируем для V11+
-                description: `<p>Критический перегруз памяти! Штраф <strong>${statPenalty}</strong> к Интеллекту, Мудрости и Харизме и <strong>${hpPenalty}</strong> к максимуму ПЗ.</p>`,
-                origin: actor.uuid,
-                disabled: false,
-                changes: [
-                    { key: "system.abilities.int.value", mode: 2, value: statPenalty },
-                    { key: "system.abilities.wis.value", mode: 2, value: statPenalty },
-                    { key: "system.abilities.cha.value", mode: 2, value: statPenalty },
-                    { key: "system.attributes.hp.bonuses.overall", mode: 2, value: String(hpPenalty) }
-                ],
-                flags: { [MODULE_ID]: { is_system_effect: true } }
-            };
-
-            if (existingOverload) await existingOverload.update(effectData);
-            else await actor.createEmbeddedDocuments("ActiveEffect", [effectData]);
-        } else if (existingOverload) {
-            await existingOverload.delete();
-        }
+        // --- А. ПЕРЕГРУЗКИ БОЛЬШЕ НЕТ ---
+        // Слоты сверх естественного лимита платят эхом (memory/echo/echo.js): +1 в начале боя за слот.
+        // Эффект прежней перегрузки, если остался у персонажа, снимается
+        const oldOverload = actor.effects.find(e => e.flags?.[MODULE_ID]?.is_system_effect);
+        if (oldOverload) await oldOverload.delete();
 
         // --- Б. РАСЧЁТ СИНЕРГИЙ И НАВЫКОВ ---
-        // Спящие навыки занимают слот (перегрузка выше), но тегов не дают
+        // Спящие навыки занимают слот, но тегов не дают
         const awakeItems = activeItems.filter(isAwake);
         const emittedTags = [];
         awakeItems.forEach(item => {

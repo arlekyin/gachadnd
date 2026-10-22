@@ -85,7 +85,7 @@ Hooks.once('init', () => {
         scar: (actor, kind = null) => requestScar(actor, { kind, reason: 'Мастер' }),
         // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
         openDeal: () => DealWindow.open(),
-        // Дары луны в бою (Мастер, по просьбе отряда): Эхо Босса и натравленный Пожиратель
+        // Дары луны в бою (Мастер, по просьбе отряда): Отголосок Босса и натравленный Пожиратель
         callEcho: options => callEcho(options),
         callDevourer: options => callDevourer(options),
         // Жильцы Якоря: окно (focus — чей прилавок: smith, cartographer, broker, healer, lurer) и поселить (Мастер)

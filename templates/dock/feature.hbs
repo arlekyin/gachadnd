@@ -1,29 +1,46 @@
-<div class="gd-dock-feature">
-    {{#unless strip}}{{#if pinned}}{{#with feature}}
-    <article class="gd-dock-detail" style="--rarity: {{color}}">
-        <button type="button" class="gd-dock-detail-close" data-action="unpin" data-tooltip="Скрыть"><i class="fas fa-xmark"></i></button>
-        <div class="gd-dock-detail-card {{#if equipped}}equipped{{/if}}" data-action="openSheet" data-item-id="{{id}}" data-tooltip="Открыть лист навыка" style="background-image: url('{{img}}')">{{#if ranked}}<b>{{rank}}</b>{{/if}}</div>
-        <h2>{{name}}</h2>
-        <div class="gd-pop-chips">{{#each chips}}<span class="{{cls}}" {{#if color}}style="--chip: {{color}}"{{/if}}>{{text}}</span>{{/each}}</div>
-        {{#if drawback}}<div class="gd-dock-drawback"><strong>Штраф:</strong> {{{drawback}}}</div>{{/if}}
-        {{#each notes}}<div class="{{cls}}">{{text}}</div>{{/each}}
-        <div class="gd-pop-text">{{{body}}}</div>
+<div class="gd-t-feature">
+    {{#unless bar}}{{#if ability}}{{#with ability}}
+    {{!-- Способность синергии — та же латунная панель, камень янтарный --}}
+    <article class="gd-t-detail ability" style="--r: #f0a52a">
+        <div class="gd-t-detail-hd">
+            <span class="gd-gem glow gd-gem-amber"><i class="fas {{icon}}"></i></span>
+            <h3>{{name}}<small>{{#if duo}}связка · {{else}}синергия · {{/if}}{{source}}</small></h3>
+        </div>
+        <div class="gd-t-meta">
+            <span><span class="gd-ak {{kind}}"></span>{{kindLabel}}</span>
+            {{#if uses}}<span><i class="fas fa-gem"></i>заряды {{uses.value}} из {{uses.max}}{{#if uses.period}} · {{uses.period}}{{/if}}</span>{{/if}}
+            {{#if muffled}}<span class="hot"><i class="fas fa-volume-xmark"></i>заглушено Боссом</span>{{/if}}
+        </div>
+        <div class="gd-t-text">{{{desc}}}</div>
+        <div class="gd-t-acts">
+            {{#if usable}}<button type="button" class="main" data-action="useItem" data-item-id="{{id}}"><i class="fas fa-play"></i> Использовать</button>{{/if}}
+            <button type="button" data-action="openSheet" data-item-id="{{id}}"><i class="fas fa-file-lines"></i> Лист</button>
+        </div>
+    </article>
+    {{/with}}{{else}}{{#with feature}}
+    {{!-- Подробности навыка — латунная панель прибора: последний навык под мышью --}}
+    <article class="gd-t-detail" style="--r: {{color}}">
+        <div class="gd-t-detail-hd">
+            <span class="gd-gem glow"><i class="fas {{../detail.icon}}"></i></span>
+            <h3>{{name}}{{#if ranked}} <em>{{rank}}</em>{{/if}}<small>{{../detail.state}}</small></h3>
+        </div>
+        <div class="gd-t-meta">{{#each ../detail.meta}}<span>{{{this}}}</span>{{/each}}</div>
+        {{#if drawback}}<div class="gd-t-drawback"><b>Штраф:</b> {{{drawback}}}</div>{{/if}}
+        {{#each notes}}<div class="gd-t-note {{cls}}">{{text}}</div>{{/each}}
+        <div class="gd-t-text">{{{body}}}</div>
         {{#if hiddenRanks}}
-        <div class="gd-dock-ranks"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер
-            {{#each hiddenRanks}}<div><strong>Ранг {{label}}:</strong> {{text}}</div>{{/each}}
+        <div class="gd-t-ranks"><i class="fas fa-eye-slash"></i> Скрытые ранги — видит только Мастер
+            {{#each hiddenRanks}}<div><b>Ранг {{label}}:</b> {{text}}</div>{{/each}}
         </div>
         {{/if}}
-        <dl class="gd-dock-stats">{{#each stats}}<dt>{{label}}</dt><dd>{{{html}}}</dd>{{/each}}</dl>
-        <div class="gd-dock-actions">
-            <button type="button" class="{{#if equipped}}off{{else}}on{{/if}}" data-action="toggleEquip" data-item-id="{{id}}">{{#if equipped}}<i class="fas fa-power-off"></i> Снять{{else}}<i class="fas fa-bolt"></i> Надеть{{/if}}</button>
-            {{#if canUse}}<button type="button" data-action="use" data-item-id="{{id}}"><i class="fas fa-dice-d20"></i> Использовать</button>{{/if}}
+        <div class="gd-t-acts">
+            <button type="button" class="main" data-action="toggleEquip" data-item-id="{{id}}">{{#if equipped}}<i class="fas fa-arrow-down"></i> Снять{{else}}<i class="fas fa-arrow-up"></i> Надеть{{/if}}</button>
+            {{#if canUse}}<button type="button" data-action="use" data-item-id="{{id}}"><i class="fas fa-play"></i> Использовать</button>{{/if}}
             {{#if ../featureMergeable}}<button type="button" data-action="forge" data-item-id="{{id}}"><i class="fas fa-hammer"></i> Слить</button>{{/if}}
             {{#each extensions}}<button type="button" data-action="extension" data-index="{{index}}" data-tooltip="{{title}}"><i class="{{icon}}"></i> {{label}}</button>{{/each}}
             {{#if gm.personal}}<button type="button" data-action="editPersonal" data-item-id="{{id}}" data-tooltip="Видит и меняет только Мастер"><i class="fas fa-feather"></i> Личный эффект</button>{{/if}}
+            <button type="button" data-action="openSheet" data-item-id="{{id}}"><i class="fas fa-file-lines"></i> Лист</button>
         </div>
-        {{#if ../glossary.length}}
-        <div class="gd-dock-glossary">{{#each ../glossary}}<div class="{{#if accent}}accent{{/if}}"><b>{{title}}</b> {{{text}}}</div>{{/each}}</div>
-        {{/if}}
     </article>
     {{/with}}{{/if}}{{/unless}}
 </div>

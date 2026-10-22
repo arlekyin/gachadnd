@@ -1,14 +1,14 @@
 /**
- * Gacha Roguelike dnd5e — Дары луны в бою: Эхо Босса и Натравить Пожирателя
+ * Gacha Roguelike dnd5e — Дары луны в бою: Отголосок Босса и Натравить Пожирателя
  *
  * Лоты Сделки луны, которые срабатывают на следующем этаже (отметки в настройке moonBoons: { type, floor,
  * used, boss }). Когда начинается бой на этом этаже, Мастер получает шёпот с кнопками — нажимает их,
  * когда отряд просит. Решает Мастер, модуль делает рутину:
- *   Эхо Босса — копия Босса встаёт рядом с позвавшим, ходит сразу после него и рассыпается, когда её ход
+ *   Отголосок Босса — копия Босса встаёт рядом с позвавшим, ходит сразу после него и рассыпается, когда её ход
  *     закончится. Ведёт её Мастер. Копия своя: раны Босса на ней не сказываются и наоборот.
  *   Натравить Пожирателя — прорыв (та же катсцена), Пожиратель на стороне отряда два своих хода бьёт
  *     врагов и уходит. Из добычи этого боя он уносит один случайный кристалл (настройка moonTithe).
- * Конец боя убирает и Эхо, и Пожирателя.
+ * Конец боя убирает и Отголосок, и Пожирателя.
  */
 
 import { MODULE_ID } from "../core/constants.js";
@@ -94,37 +94,37 @@ function placeNear(token, w, h) {
     return { x: token.x + token.width * size, y: token.y };
 }
 
-/** Окно Мастера: кто позвал и чьё Эхо */
+/** Окно Мастера: кто позвал и чей Отголосок */
 async function askEcho(combat, boon) {
     const party = partyCombatants(combat);
     if (!party.length) return null;
     const cr = a => Number(a.system?.details?.cr) || 0;
     const bosses = game.actors.filter(a => a.type === 'npc' && a.getFlag(MODULE_ID, 'creature') !== 'devourer').sort((a, b) => cr(b) - cr(a) || a.name.localeCompare(b.name));
-    if (!bosses.length) { ui.notifications.warn('Эхо Босса: в мире нет актёров-НИП.'); return null; }
+    if (!bosses.length) { ui.notifications.warn('Отголосок Босса: в мире нет актёров-НИП.'); return null; }
     const current = party.some(c => c.id === combat.combatant?.id) ? combat.combatant.id : party[0].id;
     const bossId = bosses.some(a => a.id === boon.boss?.id) ? boon.boss.id : bosses[0].id;
     const options = (list, selected, label) => list.map(x => `<option value="${x.id}"${x.id === selected ? ' selected' : ''}>${esc(label(x))}</option>`).join('');
     return foundry.applications.api.DialogV2.prompt({
-        window: { title: 'Эхо Босса', icon: 'fas fa-crown' },
+        window: { title: 'Отголосок Босса', icon: 'fas fa-crown' },
         content: `<div class="form-group"><label>Кто зовёт</label><select name="caller">${options(party, current, c => c.name)}</select></div>
-            <div class="form-group"><label>Чьё Эхо</label><select name="boss">${options(bosses, bossId, a => `${a.name} (ПО ${a.system?.details?.cr ?? '—'})`)}</select></div>
-            <p class="hint">Эхо ходит сразу после позвавшего и рассыпается, когда его ход закончится.</p>`,
+            <div class="form-group"><label>Чей Отголосок</label><select name="boss">${options(bosses, bossId, a => `${a.name} (ПО ${a.system?.details?.cr ?? '—'})`)}</select></div>
+            <p class="hint">Отголосок ходит сразу после позвавшего и рассыпается, когда его ход закончится.</p>`,
         ok: { label: 'Позвать', icon: 'fas fa-crown', callback: (event, button) => ({ callerId: button.form.elements.caller.value, bossId: button.form.elements.boss.value }) },
         rejectClose: false
     });
 }
 
 /**
- * Позвать Эхо Босса — Мастер, в идущем бою. Без параметров — окно выбора.
+ * Позвать Отголосок Босса — Мастер, в идущем бою. Без параметров — окно выбора.
  * @param {object} [o]  callerId — участник боя (персонаж), bossId — актёр мира
  * @returns {Promise<TokenDocument|null>}
  */
 export async function callEcho({ callerId = null, bossId = null } = {}) {
-    if (!game.user.isGM) { ui.notifications.warn('Эхо Босса зовёт Мастер — по просьбе отряда.'); return null; }
+    if (!game.user.isGM) { ui.notifications.warn('Отголосок Босса зовёт Мастер — по просьбе отряда.'); return null; }
     const combat = game.combat;
-    if (!combat?.started) { ui.notifications.warn('Эхо Босса: бой не идёт.'); return null; }
+    if (!combat?.started) { ui.notifications.warn('Отголосок Босса: бой не идёт.'); return null; }
     const found = availableBoon('echo');
-    if (!found) { ui.notifications.warn('Эхо Босса: у отряда нет этого дара на этом этаже.'); return null; }
+    if (!found) { ui.notifications.warn('Отголосок Босса: у отряда нет этого дара на этом этаже.'); return null; }
     if (!callerId || !bossId) {
         const choice = await askEcho(combat, found.boon);
         if (!choice) return null;
@@ -132,13 +132,13 @@ export async function callEcho({ callerId = null, bossId = null } = {}) {
     }
     const caller = combat.combatants.get(callerId);
     const boss = game.actors.get(bossId);
-    if (!caller?.token || !boss) { ui.notifications.warn('Эхо Босса: нет позвавшего или Босса.'); return null; }
+    if (!caller?.token || !boss) { ui.notifications.warn('Отголосок Босса: нет позвавшего или Босса.'); return null; }
 
     const proto = boss.prototypeToken;
     const at = placeNear(caller.token, proto.width ?? 1, proto.height ?? 1);
     const data = (await boss.getTokenDocument(at)).toObject();
     Object.assign(data, {
-        name: `Эхо: ${boss.name}`, actorLink: false, hidden: false, alpha: 0.85,
+        name: `Отголосок: ${boss.name}`, actorLink: false, hidden: false, alpha: 0.85,
         disposition: CONST.TOKEN_DISPOSITIONS.FRIENDLY
     });
     data.texture = { ...data.texture, tint: ECHO_TINT };
@@ -149,8 +149,8 @@ export async function callEcho({ callerId = null, bossId = null } = {}) {
     const initiative = Number.isFinite(caller.initiative) ? Math.round((caller.initiative - 0.001) * 1000) / 1000 : null;
     await combat.createEmbeddedDocuments('Combatant', [{ tokenId: token.id, sceneId: token.parent.id, actorId: boss.id, initiative }]);
     await spendBoon(found.index);
-    logChronicle('echo', `Эхо: ${boss.name}`);
-    await card(`<i class="fas fa-crown"></i> <strong>Эхо Босса.</strong> Рядом с <strong>${esc(caller.name)}</strong> встаёт ${esc(boss.name)} — бледный, как отражение в воде. Один ход сразу после позвавшего, и он рассыпется.`);
+    logChronicle('echo', `Отголосок: ${boss.name}`);
+    await card(`<i class="fas fa-crown"></i> <strong>Отголосок Босса.</strong> Рядом с <strong>${esc(caller.name)}</strong> встаёт ${esc(boss.name)} — бледный, как отражение в воде. Один ход сразу после позвавшего, и он рассыпется.`);
     return token;
 }
 
@@ -214,7 +214,7 @@ Hooks.on('combatTurnChange', async (combat, prior, current) => {
     const flags = token?.flags?.[MODULE_ID];
     if (flags?.echo) {
         await vanish(token, combat);
-        await card(`<i class="fas fa-crown"></i> Эхо ${esc(token.actor?.name ?? 'Босса')} рассыпается лунной пылью.`);
+        await card(`<i class="fas fa-crown"></i> Отголосок ${esc(token.actor?.name ?? 'Босса')} рассыпается лунной пылью.`);
     } else if (flags?.moonDevourer) {
         const turns = (flags.moonDevourer.turns ?? 0) + 1;
         if (turns < DEVOURER_TURNS) return token.update({ [`flags.${MODULE_ID}.moonDevourer.turns`]: turns });
@@ -237,7 +237,7 @@ Hooks.on('combatStart', async () => {
     const echo = availableBoon('echo'), devour = availableBoon('devour');
     if (!echo && !devour) return;
     const buttons = [
-        echo ? `<button type="button" data-gd-boon="echo"><i class="fas fa-crown"></i> Позвать Эхо Босса${echo.boon.boss ? ` (${esc(echo.boon.boss.name)})` : ''}</button>` : '',
+        echo ? `<button type="button" data-gd-boon="echo"><i class="fas fa-crown"></i> Позвать Отголосок Босса${echo.boon.boss ? ` (${esc(echo.boon.boss.name)})` : ''}</button>` : '',
         devour ? `<button type="button" data-gd-boon="devour"><i class="fas fa-paw"></i> Натравить Пожирателя</button>` : ''
     ].join('');
     await card(`<i class="fas fa-moon"></i> <strong>Дары луны</strong> на этом этаже — по одному разу. Нажмите, когда отряд попросит.<div class="gd-moon-boon-buttons">${buttons}</div>`, { whisper: true });

@@ -1,7 +1,7 @@
 // Дары луны в бою в настоящей Foundry: node tools/foundry/boons.mjs [--headed]
-// Отметки Сделки на текущем этаже, бой: шёпот Мастеру с кнопками; Эхо Босса встаёт рядом с позвавшим, ходит
+// Отметки Сделки на текущем этаже, бой: шёпот Мастеру с кнопками; Отголосок Босса встаёт рядом с позвавшим, ходит
 // сразу после него, своё (раны не переходят на Босса), рассыпается после своего хода; Пожиратель — прорыв на
-// стороне отряда, два хода и уходит, из следующей добычи уносит один кристалл; конец боя убирает Эхо.
+// стороне отряда, два хода и уходит, из следующей добычи уносит один кристалл; конец боя убирает Отголосок.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene, combat, PREFIX } from './fixtures.mjs';
 
@@ -31,7 +31,7 @@ await ev(async ({ bossId, PREFIX }) => {
 const boss = await ev(async () => (await gdt.mod('labyrinth/moon-boons.js')).findBoss());
 check('Сделка: Босс боя — самый опасный враг на сцене', boss?.id === bossId, JSON.stringify(boss));
 const none = await ev(() => game.gachadnd.callEcho({ callerId: 'x', bossId: 'y' }));
-check('без дара Эхо не зовётся', none === null);
+check('без дара Отголосок не зовётся', none === null);
 
 await ev(b => game.settings.set('gachadnd', 'moonBoons', [
     { type: 'echo', floor: 1, used: false }, { type: 'echo', floor: 2, used: false, boss: b }, { type: 'devour', floor: 2, used: false }
@@ -48,7 +48,7 @@ const whisper = await ev(() => {
 });
 check('начало боя: шёпот Мастеру с двумя кнопками', whisper?.whisper && whisper.buttons.join() === 'echo,devour', JSON.stringify(whisper));
 
-// ---------- Эхо Босса
+// ---------- Отголосок Босса
 const echo = await ev(async ({ hero, bossId }) => {
     const c = game.combat;
     const caller = c.combatants.find(x => x.actorId === hero);
@@ -63,24 +63,24 @@ const echo = await ev(async ({ hero, bossId }) => {
         used: game.settings.get('gachadnd', 'moonBoons').map(b => b.used).join()
     };
 }, { hero: ids.hero, bossId });
-check('Эхо: копия Босса рядом с позвавшим, на стороне отряда', /^Эхо: GD-тест: Босс$/.test(echo.name) && echo.friendly && echo.near, JSON.stringify(echo));
-check('Эхо: ходит сразу после позвавшего', echo.after, echo.order.join(' → '));
-check('Эхо: дар этого этажа потрачен, прошлого — нет', echo.used === 'false,true,false', echo.used);
+check('Отголосок: копия Босса рядом с позвавшим, на стороне отряда', /^Отголосок: GD-тест: Босс$/.test(echo.name) && echo.friendly && echo.near, JSON.stringify(echo));
+check('Отголосок: ходит сразу после позвавшего', echo.after, echo.order.join(' → '));
+check('Отголосок: дар этого этажа потрачен, прошлого — нет', echo.used === 'false,true,false', echo.used);
 const own = await ev(async bossId => {
     const token = canvas.scene.tokens.find(t => t.flags.gachadnd?.echo);
     await token.actor.update({ 'system.attributes.hp.value': 5 });
     return { echo: token.actor.system.attributes.hp.value, boss: game.actors.get(bossId).system.attributes.hp.value };
 }, bossId);
-check('Эхо своё: раны Эха не у Босса', !echo.linked && own.echo === 5 && own.boss === 30, JSON.stringify(own));
+check('Отголосок свой: его раны не у Босса', !echo.linked && own.echo === 5 && own.boss === 30, JSON.stringify(own));
 const off = await ev(() => [...document.querySelectorAll('[data-gd-boon="echo"]')].every(b => b.disabled));
-check('кнопка Эха в шёпоте погасла', off);
+check('кнопка Отголоска в шёпоте погасла', off);
 
 const turn = () => ev(async () => { await game.combat.nextTurn(); await new Promise(r => setTimeout(r, 1500)); await gdt.settle(); return { name: game.combat.combatant?.name, echo: canvas.scene.tokens.filter(t => t.flags.gachadnd?.echo).length }; });
 let t = await turn();
-check('ход Эха: оно ещё на месте', /^Эхо/.test(t.name) && t.echo === 1, JSON.stringify(t));
+check('ход Отголоска: он ещё на месте', /^Отголосок/.test(t.name) && t.echo === 1, JSON.stringify(t));
 t = await turn();
-const dust = await ev(() => ({ chat: game.messages.contents.some(m => m.content.includes('рассыпается')), fighter: game.combat.combatants.some(c => /^Эхо/.test(c.name)) }));
-check('ход Эха закончился — рассыпалось, из боя убрано', t.echo === 0 && !dust.fighter && dust.chat, JSON.stringify({ ...t, ...dust }));
+const dust = await ev(() => ({ chat: game.messages.contents.some(m => m.content.includes('рассыпается')), fighter: game.combat.combatants.some(c => /^Отголосок/.test(c.name)) }));
+check('ход Отголоска закончился — рассыпался, из боя убран', t.echo === 0 && !dust.fighter && dust.chat, JSON.stringify({ ...t, ...dust }));
 
 // ---------- Натравить Пожирателя
 const dev = await ev(async () => {
@@ -127,7 +127,7 @@ check('добыча после Пожирателя: одного кристал
 l = await loot();
 check('следующая добыча — целиком', l.got === 3 && !l.taken, JSON.stringify(l));
 
-// ---------- Конец боя убирает Эхо
+// ---------- Конец боя убирает Отголосок
 await ev(async b => {
     await game.settings.set('gachadnd', 'moonBoons', [{ type: 'echo', floor: 2, used: false, boss: b }]);
     const caller = game.combat.combatants.find(c => c.actor?.type === 'character');
@@ -136,7 +136,7 @@ await ev(async b => {
     await new Promise(r => setTimeout(r, 1800));
     await gdt.settle();
 }, boss);
-check('конец боя: Эхо убрано со сцены', await ev(() => !canvas.scene.tokens.some(t => t.flags.gachadnd?.echo || t.flags.gachadnd?.moonDevourer)));
+check('конец боя: Отголосок убран со сцены', await ev(() => !canvas.scene.tokens.some(t => t.flags.gachadnd?.echo || t.flags.gachadnd?.moonDevourer)));
 
 await ev(async s => {
     await game.settings.set('gachadnd', 'runFloor', s.floor);
