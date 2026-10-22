@@ -1,4 +1,27 @@
 <div class="gd-t-deck">
+    {{#if facetPage}}
+    {{!-- Огранка: оружие и категории способностей строками с тремя гнёздами; у выбранной — её камни --}}
+    <div class="gd-t-grid gd-o-list">
+        {{#each facet.groups}}
+        <div class="gd-t-div">{{label}}</div>
+        {{#each rows}}
+        <div class="gd-o-row {{#if selected}}sel{{/if}}" data-action="facetPick" data-where="{{where}}">
+            <span class="gd-o-who">{{#each imgs}}<img src="{{this}}" alt="">{{/each}}</span>
+            <span class="gd-o-name"><b>{{name}}</b><small>{{sub}}</small></span>
+            <span class="gd-o-socks">{{#each socks}}{{#if id}}<span class="gd-gem {{#if dark}}dull{{else}}glow{{/if}}" style="--r: {{color}}" data-tooltip="{{name}}"><i class="fas {{icon}}"></i></span>{{else}}<span class="gd-o-sock"></span>{{/if}}{{/each}}</span>
+        </div>
+        {{#if selected}}
+        <div class="gd-o-card">
+            {{#each socks}}{{#if id}}
+            <div class="gd-o-ln {{#if dark}}dark{{/if}}"><span class="gd-gem {{#unless dark}}glow{{/unless}}" style="--r: {{color}}"><i class="fas {{icon}}"></i></span><span><b>{{name}}</b> — {{text}}</span>{{#if removable}}<button type="button" data-action="facetRemove" data-where="{{where}}" data-stone="{{id}}" data-tooltip="Вынуть"><i class="fas fa-xmark"></i></button>{{/if}}</div>
+            {{else}}<div class="gd-o-ln"><span class="gd-o-sock"></span></div>{{/if}}{{/each}}
+        </div>
+        {{/if}}
+        {{/each}}
+        {{/each}}
+        {{#if facet.empty}}<div class="gd-t-empty">У персонажа нет способностей класса с действием.</div>{{/if}}
+    </div>
+    {{else}}
     {{#unless bar}}
     {{!-- Теги Памяти — фильтр: щелчок — только карты с этим тегом --}}
     <div class="gd-t-tags">
@@ -15,6 +38,7 @@
     <div class="gd-t-empty">Память пуста. Кристаллы выпадают после боёв и продаются в Магазине — поглотите кристалл из инвентаря, чтобы навык появился здесь.</div>
     {{/if}}
     {{/unless}}
+    {{/if}}
 </div>
 
 {{#*inline "plate"}}

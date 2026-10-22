@@ -43,7 +43,7 @@
     {{else}}
     {{!-- Сборка: заголовок, Предел разума и эхо, кнопки вкладок как у паутины --}}
     <header class="gd-t-top">
-        <div class="gd-t-title">Терминал<span>{{dockActor.name}} · Память</span></div>
+        <div class="gd-t-title">Терминал<span>{{dockActor.name}} · {{#if facetPage}}Огранка{{else}}Память{{/if}}</span></div>
         {{#if rules.length}}<div class="gd-t-rules">{{#each rules}}<span><i class="fas {{icon}}"></i>{{text}}</span>{{/each}}</div>{{/if}}
     </header>
     <div class="gd-t-stats">
@@ -65,7 +65,8 @@
         {{/if}}
     </div>
     <div class="gd-t-buttons">
-        <button type="button" class="on" data-tooltip="Терминал Тумана"><i class="fas fa-brain"></i></button>
+        <button type="button" class="{{#unless facetPage}}on{{/unless}}" data-action="page" data-page="build" data-tooltip="Терминал Тумана: навыки"><i class="fas fa-brain"></i></button>
+        <button type="button" class="{{#if facetPage}}on{{/if}}" data-action="page" data-page="facet" data-tooltip="Огранка: способности класса"><i class="fas fa-gem"></i></button>
         <button type="button" data-action="goto" data-goto="map" data-tooltip="Карта этажа"><i class="fas fa-circle-nodes"></i></button>
         <button type="button" data-action="goto" data-goto="stash" data-tooltip="Хранилище"><i class="fas fa-box-archive"></i></button>
         <span class="gap"></span>

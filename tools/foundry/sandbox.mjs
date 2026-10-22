@@ -3,7 +3,7 @@
 // экипированы проверяемые навыки, врагами, союзником, стенами, тайными дверями и фонарём, готовит
 // бой (не начатый) и оставляет журнал «как проверять». Проверки (префикс «GD-тест») её не трогают.
 import { connect } from './harness.mjs';
-import { install, skills } from './fixtures.mjs';
+import { install, skills, classKit } from './fixtures.mjs';
 
 export const SANDBOX = 'GD-песочница';
 
@@ -33,6 +33,10 @@ const HEROES = [
     // Эхо: у каждого — свой голос и эхо уже на Видении; echo — что выставить, slots — сдвиг естественного лимита
     { name: 'Эхо: кровь', x: 10, y: 6, level: 6, skills: ['Кровавая цена', 'Бензопила', 'Берсерк', 'Без пощады'], echo: { value: 11, tags: { 'кровь': 11 } } },
     { name: 'Эхо: разум', x: 11, y: 10, level: 6, skills: ['Переговорщик', 'Между небом и землёй', 'Счётчик ауры'], echo: { value: 9, tags: { 'разум': 9 } }, slots: -7 },
+    // Огранка: у воина огонь II, кровь I, взрыв I; у жреца кровь II, огонь I, взрыв I — столько камней тега можно вставить.
+    // Воин — оружие и черты класса, жрец — заклинания всех категорий; камни вставлены для примера
+    { name: 'Огранка: воин', x: 9, y: 8, level: 8, skills: ['Хлопушка', 'Тлеющий уголь', 'Раскалённый клинок', 'Феникс', 'Обратный отсчёт', 'Берсерк', 'Жажда боя'] },
+    { name: 'Огранка: жрец', x: 9, y: 9, level: 8, skills: ['Кровавая цена', 'Бензопила', 'Берсерк', 'Жажда боя', 'Хлопушка', 'Обратный отсчёт'] },
     { name: 'Эхо: аномалия', x: 12, y: 7, level: 6, skills: ['Часы с кукушкой', 'Должник', 'Желудок хроноискателя'], echo: { value: 10, tags: { 'аномалия': 10 } } }
 ];
 const OTHERS = [
@@ -115,6 +119,15 @@ const GUIDE = `
 <li><strong>Кровавый бастион</strong> — поставьте Союзника рядом и нанесите Живому урон: кнопка в шёпоте даёт союзнику временные ПЗ.</li>
 <li><strong>Шрамы</strong> — макрос <code>game.gachadnd.scar(game.actors.getName('GD-песочница: Живой'))</code>: шрам займёт слот, снять его нельзя.</li>
 <li><strong>Правило Босса</strong> — в бою: <code>game.gachadnd.bossRule('muffle')</code> или <code>'sleepy'</code>.</li>
+</ul>
+<h3>Огранка — «Огранка: воин» и «Огранка: жрец»</h3>
+<ul>
+<li>Терминал → кнопка с камнем. Слева — оружие и категории способностей (Удар, Волна, Лечение, Усиление, Реакция) строками с тремя гнёздами; щелчок по строке — под ней её камни, крестик — вынуть. Справа — камни тегов: ромбы — сколько можно вставить, горят — вставлены. Щелчок по камню вставляет его в выбранную строку; неподходящие гаснут.</li>
+<li><strong>Воин</strong> (огонь II, кровь I, взрыв I): Топор — Плата кровью и Перекидка; Удар (Divine Smite) — Раскат и Сквозь.</li>
+<li><strong>Жрец</strong> (кровь II, огонь I, взрыв I): Лечение — Переливание и Разлёт; Волна — Мина; Удар (Fire Bolt) — В долг.</li>
+<li>В бою: нацельтесь и бросьте урон или лечение — карточки покажут, кому ещё досталось. Перекидка с несколькими кандидатами — кнопки с именами. Мина — кнопки «Заложить» (щелчок по точке в 30 футах; войдите туда токеном врага) и «Сразу». Раскат и долг — в начале следующего хода героя. Плата кровью — кнопка в карточке способности.</li>
+<li>Снимите навык тега — его камни погаснут (последние вставленные), наденьте — вернутся. В бою огранку менять нельзя.</li>
+<li>Со стороны игрока: войдите как Claude_player и дайте ему владение героем — Терминал откроется без выбранного токена.</li>
 </ul>
 <h3>Эхо — три героя с голосами</h3>
 <p>Под шкалой эха в Терминале у Мастера две кнопки: <strong>«Шепнуть»</strong> — своя строка придёт игроку голосом (или «Строку голоса» — случайная из голоса) и <strong>«Его экран»</strong> — Видение этого героя у вас на экране, как видит игрок; вверху плашка «Экран: …» с кнопкой «Вернуть свой». Унять эхо можно у Знахаря в Якоре.</p>
@@ -201,6 +214,20 @@ await page.evaluate(async ({ heroes, list, SANDBOX }) => {
     }
     await game.actors.getName(`${SANDBOX}: Враг 2`)?.update({ 'system.attributes.hp.value': 15 });
 }, { heroes: ids.heroes, list: HEROES, SANDBOX });
+
+// Огранка: воину — второе оружие и черты класса (Лечение, Усиление); жрецу — заклинания всех форм
+await page.evaluate(hero => game.actors.get(hero).createEmbeddedDocuments('Item', [{ name: 'Топор', type: 'weapon', img: 'icons/weapons/axes/axe-broad-black.webp', system: { type: { value: 'martialM' }, damage: { base: { number: 1, denomination: 8, types: ['slashing'] } }, equipped: true, proficient: 1 } }]), ids.heroes['Огранка: воин']);
+await classKit(page, ids.heroes['Огранка: воин'], { features: ['Second Wind', 'Action Surge', 'Rage', 'Divine Smite'] });
+await classKit(page, ids.heroes['Огранка: жрец'], {
+    caster: { name: 'Жрец', identifier: 'cleric', ability: 'wis' },
+    spells: ['fire-bolt', 'sacred-flame', 'burning-hands', 'thunderwave', 'cure-wounds', 'healing-word', 'bless', 'hellish-rebuke', 'shield']
+});
+await page.evaluate(async ({ warrior, cleric }) => {
+    const { placeStone } = await import('/modules/gachadnd/scripts/memory/facet/facet.js');
+    const w = game.actors.get(warrior), c = game.actors.get(cleric), axe = w.items.find(i => i.name === 'Топор');
+    for (const [actor, where, id] of [[w, axe.id, 'pay'], [w, axe.id, 'hop'], [w, 'strike', 'echo'], [w, 'strike', 'through'],
+        [c, 'heal', 'transfuse'], [c, 'heal', 'spread'], [c, 'wave', 'mine'], [c, 'strike', 'debt']]) await placeStone(actor, where, id);
+}, { warrior: ids.heroes['Огранка: воин'], cleric: ids.heroes['Огранка: жрец'] });
 
 // Мяснику — что швырять (Рандомная хрень): неэкипированные клинки в сумке
 await page.evaluate(hero => game.actors.get(hero).createEmbeddedDocuments('Item', [

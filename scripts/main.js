@@ -39,6 +39,7 @@ import "./memory/skills/blast/index.js";
 import "./memory/skills/knack/index.js";
 import "./memory/skills/living/index.js";
 import "./memory/echo/index.js";
+import "./memory/facet/index.js";
 import { registerAuraSettings } from "./memory/skills/aura-fx.js";
 import { registerPrefs, migratePrefs } from "./core/prefs.js";
 import { registerSettingsMenus } from "./core/settings-menu.js";

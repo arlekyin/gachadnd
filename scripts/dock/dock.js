@@ -29,6 +29,7 @@ import { ruleOf, hasRule, BOSS_RULES } from "../labyrinth/boss-rules.js";
 import { counterInfo } from "../memory/skills/living/badges.js";
 import { echoInfo, gmWhisper, voiceWhisper } from "../memory/echo/echo.js";
 import { setPeek, peekActor } from "../memory/echo/vision.js";
+import { FACET_TAGS, CATEGORIES, STONES, TAG_STONES, TAG_COLORS, SLOTS, facetState, isFacetable, formsOf, placeStone, removeStone } from "../memory/facet/facet.js";
 
 const ID = 'gachadnd-dock';
 const TEMPLATES = 'modules/gachadnd/templates/dock';
@@ -100,6 +101,9 @@ export class TerminalDock extends MemoryTerminal {
         this.filterTag = null;
         // Режим: Сборка (full) или панель над хотбаром в бою (bar); auto — переключилась сама из-за боя
         this.mode = isInCombat(actor) ? 'bar' : 'full';
+        // Страница Сборки: навыки (build) или Огранка (facet)
+        this.page = 'build';
+        this.facetWhere = null;
         this.autoBar = this.mode === 'bar';
     }
 
@@ -117,6 +121,15 @@ export class TerminalDock extends MemoryTerminal {
             echoWhisper: TerminalDock.#onEchoWhisper,
             echoPeek: function () { setPeek(this.actor); },
             useItem: function (event, target) { return this.actor.items.get(target.dataset.itemId)?.use(); },
+            page: function (event, target) { this.page = target.dataset.page; return this.render({ parts: ['banner', 'deck', 'feature', 'side'] }); },
+            facetPick: function (event, target) { this.facetWhere = target.dataset.where; return this.render({ parts: ['deck', 'side'] }); },
+            facetStone: async function (event, target) {
+                if (this.facetWhere && await placeStone(this.actor, this.facetWhere, target.dataset.stone)) playWeb('select');
+            },
+            facetRemove: async function (event, target) {
+                event.stopPropagation();
+                if (await removeStone(this.actor, target.dataset.where, target.dataset.stone)) playWeb('select');
+            },
             filterTag: function (event, target) { this.filterTag = this.filterTag === target.dataset.tag ? null : target.dataset.tag; return this.render({ parts: ['deck', 'side'] }); }
         }
     };
@@ -251,7 +264,10 @@ export class TerminalDock extends MemoryTerminal {
         // Листалка героев: у игрока — свои персонажи, у Мастера — персонажи игроков
         const roster = terminalActors();
         if (!roster.some(a => a.id === actor.id)) roster.unshift(actor);
+        // Огранка: грани по тегам и способности класса с гнёздами
+        const facet = this.page === 'facet' && this.mode !== 'bar' ? this.#facetView(actor) : null;
         return Object.assign(base, {
+            facetPage: !!facet, facet,
             dockActor: { name: actor.name, img: actor.img },
             roster: roster.length > 1 ? roster.map(a => ({ id: a.id, name: a.name, img: a.img, on: a.id === actor.id })) : null,
             bar: this.mode === 'bar',
@@ -272,6 +288,48 @@ export class TerminalDock extends MemoryTerminal {
             barPassive: plates.filter(p => p.equipped && p.passive),
             topTags: Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tag, n]) => ({ tag, n, icon: TAG_ICONS[tag] ?? 'fa-circle', muffled: tag === muffled }))
         });
+    }
+
+    /**
+     * Вкладка «Огранка»: оружие и категории способностей класса строками с тремя гнёздами (категория без
+     * способностей не показывается), шкатулка — камни тегов со ступенью. Выбранная строка — куда вставит щелчок
+     * по камню; камни, которым она не подходит, гаснут
+     */
+    #facetView(actor) {
+        const state = facetState(actor);
+        const locked = isInCombat(actor);
+        const all = actor.items.filter(isFacetable);
+        const weapons = all.filter(i => i.type === 'weapon').sort((a, b) => (b.system.equipped ? 1 : 0) - (a.system.equipped ? 1 : 0));
+        const abilities = all.filter(i => i.type !== 'weapon');
+        const rows = [
+            ...weapons.map(w => ({ where: w.id, kind: 'weapon', name: w.name, sub: /R$/.test(w.system.type?.value ?? '') ? 'дальнобойное' : 'рукопашное', imgs: [w.img] })),
+            ...Object.entries(CATEGORIES).map(([key, cat]) => {
+                const members = abilities.filter(i => formsOf(i).includes(key));
+                return members.length ? { where: key, kind: key, name: cat.label, sub: members.map(i => i.name).join(', '), imgs: members.slice(0, 3).map(i => i.img) } : null;
+            }).filter(Boolean)
+        ];
+        if (!rows.some(r => r.where === this.facetWhere)) this.facetWhere = rows[0]?.where ?? null;
+        const sel = rows.find(r => r.where === this.facetWhere);
+        const label = where => rows.find(r => r.where === where)?.name ?? '';
+        const look = id => ({ id, name: STONES[id].name, text: STONES[id].text, color: TAG_COLORS[STONES[id].tag], icon: TAG_ICONS[STONES[id].tag] });
+        const view = row => {
+            const placed = state.placements.filter(p => p.where === row.where);
+            const socks = Array.from({ length: SLOTS }, (_, i) => placed[i] ? { ...look(placed[i].id), dark: !placed[i].active, where: row.where, removable: !locked } : {});
+            return { ...row, selected: row.where === this.facetWhere, socks };
+        };
+        const groups = [
+            { label: 'Оружие', rows: rows.filter(r => r.kind === 'weapon').map(view) },
+            { label: 'Способности', rows: rows.filter(r => r.kind !== 'weapon').map(view) }
+        ].filter(g => g.rows.length);
+        const box = FACET_TAGS.filter(tag => state.grains[tag] > 0 || state.placed[tag] > 0).map(tag => ({
+            tag, icon: TAG_ICONS[tag], color: TAG_COLORS[tag],
+            pips: Array.from({ length: state.grains[tag] }, (_, i) => i < state.used[tag]),
+            stones: TAG_STONES[tag].map(id => {
+                const at = state.where[id];
+                return { ...look(id), used: at ? label(at.where) : '', locked: !at && state.placed[tag] >= state.grains[tag], fits: !!sel && STONES[id].fits.includes(sel.kind) };
+            })
+        }));
+        return { locked, groups, box, empty: !rows.length };
     }
 
     // ==========================================

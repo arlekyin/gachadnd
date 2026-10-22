@@ -1,4 +1,5 @@
 <div class="gd-t-feature">
+    {{#if facetPage}}{{else}}
     {{#unless bar}}{{#if ability}}{{#with ability}}
     {{!-- Способность синергии — та же латунная панель, камень янтарный --}}
     <article class="gd-t-detail ability" style="--r: #f0a52a">
@@ -43,4 +44,5 @@
         </div>
     </article>
     {{/with}}{{/if}}{{/unless}}
+    {{/if}}
 </div>

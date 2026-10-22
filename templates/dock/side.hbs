@@ -1,4 +1,20 @@
 <div class="gd-t-side">
+    {{#if facetPage}}
+    {{!-- Шкатулка: камни тегов со ступенью; ромбы — сколько можно вставить, горят — вставлены --}}
+    <div class="gd-syn-head">Камни</div>
+    {{#each facet.box}}
+    <div class="gd-o-tag" style="--c: {{color}}"><i class="fas {{icon}}"></i> {{tag}} <span class="gd-o-pips">{{#each pips}}<u class="{{#if this}}on{{/if}}"></u>{{/each}}</span></div>
+    <div class="gd-o-stones">
+        {{#each stones}}
+        <div class="gd-o-stone {{#if used}}used{{/if}} {{#if locked}}locked{{/if}} {{#if fits}}fits{{else}}nofit{{/if}}" data-action="facetStone" data-stone="{{id}}">
+            <span class="gd-gem {{#if used}}dull{{/if}}" style="--r: {{color}}"><i class="fas {{icon}}"></i></span>
+            <span><b>{{name}}{{#if used}} <em>· {{used}}</em>{{/if}}</b><small>{{text}}</small></span>
+        </div>
+        {{/each}}
+    </div>
+    {{else}}<div class="gd-o-tag">Камней пока нет.</div>{{/each}}
+    {{#if facet.locked}}<div class="gd-f-lock"><i class="fas fa-lock"></i> Бой — огранку не меняют</div>{{/if}}
+    {{else}}
     {{#unless bar}}
     <div class="gd-syn-head">Синергии <b></b></div>
     <div class="gd-syn-list">
@@ -27,4 +43,5 @@
     </div>
     {{/if}}
     {{/unless}}
+    {{/if}}
 </div>
