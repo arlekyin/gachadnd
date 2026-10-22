@@ -346,8 +346,11 @@ const rules = await ev(async ({ hero, scene, boss }) => {
     const asleep = actor.items.filter(i => i.flags.gachadnd?.asleep?.bossRule).map(i => i.name);
     const mutedAfter = key ? (actor.getFlag('gachadnd', 'counts') ?? {})[key] : null;
     await game.actors.get(boss).update({ 'system.attributes.hp.value': 14 });
+    // Пробуждение — в хуке Мастера после обновления ПЗ: под нагрузкой полного прогона оно бывает дольше settle
+    const sleeping = () => actor.items.filter(i => i.flags.gachadnd?.asleep?.bossRule).length;
+    for (let i = 0; i < 50 && sleeping(); i++) await gdt.sleep(100);
     await gdt.settle();
-    const woke = actor.items.filter(i => i.flags.gachadnd?.asleep?.bossRule).length;
+    const woke = sleeping();
     await combat.delete();
     await gdt.settle();
     return { tag: muffle?.tag, muted: key ? counts[key] : 'нет ключа', announced, asleep, mutedAfter, woke };
