@@ -14,6 +14,7 @@ import { RiskWindow, registerRiskSettings } from "./risk.js";
 import { registerEconomySettings } from "./economy.js";
 import { addTokenTools } from "../core/controls.js";
 import { NewRunWindow, startRun } from "./new-run.js";
+import { encounterApi } from "./encounters.js";
 import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
 import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
 import { PortalWindow } from "./portal.js";
@@ -97,6 +98,8 @@ Hooks.once('init', () => {
         // Событие на узле «Событие» — дневник у всех (Мастер); просмотр события без последствий
         // Новый забег: окно Мастера; startRun — без окна ({ mode, length, anchor })
         newRun: () => NewRunWindow.open(),
+        // Встречи на боевых узлах: состав, бюджет, предложение Мастеру
+        encounters: encounterApi,
         startRun: options => startRun(options),
         openEvent: () => EventWindow.open(),
         previewEvent: id => EventWindow.preview(id)

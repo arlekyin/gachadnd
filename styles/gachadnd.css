@@ -3479,3 +3479,7 @@
 .gachadnd-new-run .gd-nr-row input[type="number"] { width: 52px; }
 .gachadnd-new-run footer button { width: 100%; }
 .gd-new-run-card p { margin: 6px 0 0; }
+/* Встреча на боевом узле (labyrinth/encounters.js): состав списком и кнопки */
+.gd-enc-card p { margin: 4px 0; }
+.gd-enc-card ul { margin: 4px 0 6px; padding-left: 18px; }
+.gd-enc-card small { opacity: .7; }

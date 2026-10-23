@@ -10,7 +10,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
-import { layout, connected, startCells, VIGNETTES } from "./layout.js";
+import { layout, connected, startCells, passable, VIGNETTES } from "./layout.js";
 import { paint } from "./paint.js";
 
 const CELL = 140;
@@ -119,7 +119,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
 
     // Одна сцена «Арена» — перестраивается на каждый бой, мир не пухнет
     const data = {
-        name: 'Арена', width: cols * CELL, height: rows * CELL, padding: 0.05,
+        name: 'Арена', width: cols * CELL, height: rows * CELL, padding: 0,
         grid: { size: CELL, distance: 5, units: 'ft', type: 1, alpha: 0.12 },
         background: { src }, tokenVision: true, weather: WEATHER[mood] ?? '',
         environment: { darknessLevel: 0, globalLight: { enabled: true } },
@@ -139,13 +139,22 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     await scene.createEmbeddedDocuments('Wall', wallsOf(plan));
     await scene.createEmbeddedDocuments('AmbientLight', lightsOf(plan, mood));
 
-    // Токены: отряд у левой кромки, враги у правой
+    // Токены: отряд у левой кромки, враги у правой. Существо крупнее клетки занимает w×w клеток: место — где все
+    // они проходимы и свободны, иначе большие токены налезают друг на друга
+    const open = passable(plan), taken = new Set();
+    const fits = (x, y, w) => {
+        for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) if (!open[y + dy]?.[x + dx] || taken.has(`${x + dx},${y + dy}`)) return false;
+        return true;
+    };
     const place = async (ids, side) => {
         const actors = ids.map(id => game.actors.get(id)).filter(Boolean);
-        const cells = startCells(plan, side, actors.length);
+        const cells = startCells(plan, side, plan.cols * plan.rows);
         const tokens = [];
-        for (const [i, actor] of actors.entries()) {
-            const cell = cells[i]; if (!cell) break;
+        for (const actor of actors) {
+            const w = Math.max(1, Math.round(actor.prototypeToken?.width || 1));
+            const cell = cells.find(c => fits(c.x, c.y, w));
+            if (!cell) break;
+            for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) taken.add(`${cell.x + dx},${cell.y + dy}`);
             const t = await actor.getTokenDocument({ x: cell.x * CELL, y: cell.y * CELL });
             tokens.push(t.toObject());
         }

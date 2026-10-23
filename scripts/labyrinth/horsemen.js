@@ -224,6 +224,8 @@ export async function onNodeEntered(type) {
         }
     }
     await syncWarEffects();
+    // Вход на узел — другим частям Лабиринта (встречи на боевых узлах, encounters.js)
+    Hooks.callAll('gachadnd.nodeEntered', type);
 }
 
 function cleansedWarHolder() {
