@@ -4,7 +4,7 @@
  * Отряд — персонажи с игроками (как везде в модуле, partyActors): уровень каждого; не 1 — предупреждение,
  * решает Мастер. Карта — ряды или паутина, длина рядов. Якорь — без сцены, простая сцена или своя.
  * «Начать»: сцена «Лабиринт: этаж 1» — тёмная подложка, этаж 1 начерчен на ней, Якорь открыт (у игроков —
- * Алтарь), у Мастера — «Как вести забег», в чат всем — карточка со ссылкой на правила «Забег».
+ * Алтарь), у Мастера — «Первый забег», в чат всем — карточка со ссылкой на «Памятку».
  * Старая карта остаётся на своей сцене.
  *
  * При первом запуске модуля в мире Мастеру — шёпот с кнопкой «Новый забег» (подсказка hintWelcome).
@@ -22,8 +22,8 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const WINDOW_ID = 'gachadnd-new-run';
 // Подложки новых сцен: тёмная бирюза Тумана; у Якоря — светлее, под куполом
 const FLOOR_COLOR = '#0c1416', ANCHOR_COLOR = '#132a2b';
-// Главы правил: Мастеру — «Как вести забег», игрокам — «Забег»
-const GUIDES = { gm: ['gacha-gm', 'Как вести забег'], player: ['gacha-rules', 'Забег'] };
+// Страницы правил: Мастеру — «Первый забег», игрокам — «Памятка»
+const GUIDES = { gm: ['gacha-gm', 'Первый забег'], player: ['gacha-rules', 'Памятка'] };
 
 const levelOf = actor => Number(actor?.system?.details?.level) || 0;
 
@@ -121,7 +121,7 @@ export async function startRun({ mode = 'rows', length = 11, anchor = 'none' } =
         speaker: ChatMessage.getSpeaker({ alias: 'Лабиринт' }),
         content: `<div class="gd-scent-chat gd-new-run-card"><i class="fas fa-flag-checkered"></i> <strong>Забег начинается.</strong>
             Отряд под куполом Якоря; за его границей — первый этаж Лабиринта.
-            ${playerGuide ? `<p>Как устроен забег: @UUID[${playerGuide}]{Забег}</p>` : ''}</div>`
+            ${playerGuide ? `<p>Главное о забеге: @UUID[${playerGuide}]{Памятка}</p>` : ''}</div>`
     });
     Hooks.callAll('gachadnd.runStarted', { floor, anchor: anchorDoc });
     return { floor, anchor: anchorDoc };

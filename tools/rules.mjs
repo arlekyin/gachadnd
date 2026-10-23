@@ -9,6 +9,7 @@
  *   {{economy}}    — золото, кристаллы и услуги по этажам 1–10 (значения по умолчанию)
  *   {{risks}}      — встроенные испытания Риска
  *   {{horsemen}}   — всадники Погибели
+ * Ссылка на страницу любого из двух журналов — [[Название страницы]] или [[Название страницы|текст]].
  */
 
 import fs from 'fs';
@@ -162,6 +163,20 @@ function makeGenerators({ items, risks, synergyDictionary }) {
 
 export function buildRules({ srcDir, distDir, items, risks, stableId, synergyDictionary }) {
     const generators = makeGenerators({ items, risks, synergyDictionary });
+    // Названия страниц обоих журналов → UUID: для ссылок [[…]] между страницами
+    const pageUuids = new Map();
+    for (const journal of JOURNALS) {
+        const dir = path.join(srcDir, journal.dir);
+        if (!fs.existsSync(dir)) continue;
+        for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+            const title = fs.readFileSync(path.join(dir, file), 'utf8').match(/^#\s+(.+)$/m)?.[1]?.trim() ?? path.basename(file, '.md');
+            pageUuids.set(title, `Compendium.gachadnd.${journal.pack}.JournalEntry.${stableId('rules', journal.pack)}.JournalEntryPage.${stableId('rules', journal.pack, file)}`);
+        }
+    }
+    const pageLinks = html => html.replace(/\[\[(.+?)(?:\|(.+?))?\]\]/g, (match, title, label) => {
+        if (!pageUuids.has(title)) throw new Error(`ссылка на неизвестную страницу [[${title}]]`);
+        return `@UUID[${pageUuids.get(title)}]{${label ?? title}}`;
+    });
     const built = [];
     for (const journal of JOURNALS) {
         const dir = path.join(srcDir, journal.dir);
@@ -174,7 +189,7 @@ export function buildRules({ srcDir, distDir, items, risks, stableId, synergyDic
             const pageId = stableId('rules', journal.pack, file);
             let content;
             try {
-                content = markdown(body, generators);
+                content = pageLinks(markdown(body, generators));
             } catch (e) {
                 throw new Error(`rules/${journal.dir}/${file}: ${e.message}`);
             }

@@ -1,6 +1,7 @@
 // Новый забег в настоящей Foundry: node tools/foundry/newrun.mjs [--headed]
 // Приветствие Мастеру при первом запуске с кнопкой; окно — отряд с уровнями (не 1 — предупреждение), режим карты,
-// Якорь; «Начать» — сцена этажа с начерченным этажом 1, простая сцена Якоря, Якорь открыт, карточка в чат.
+// Якорь; «Начать» — сцена этажа с начерченным этажом 1, простая сцена Якоря, Якорь открыт, карточка в чат
+// со ссылкой на «Памятку», у Мастера — «Первый забег». Страницы ссылаются на главы правил ([[…]] в src/rules).
 // В конце созданные сцены удаляются, настройки — как были.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install } from './fixtures.mjs';
@@ -72,14 +73,31 @@ const run = await ev(async () => {
         floor: floor?.name, remembered: game.settings.get('gachadnd', 'floorSceneId') === floor?.id, nodes: map?.nodes?.length ?? 0, rows: map ? Math.max(...map.nodes.map(x => x.row ?? x.layer ?? 0)) + 1 : 0,
         runFloor: game.settings.get('gachadnd', 'runFloor'), anchor: anchor?.name, anchorSetting: game.settings.get('gachadnd', 'anchorSceneId') === anchor?.id,
         anchorOpen: game.settings.get('gachadnd', 'anchorOpen'), here: canvas.scene?.id === anchor?.id,
-        card: !!card, link: /@UUID\[Compendium\.gachadnd\.gacha-rules/.test(card?.content ?? '') || /content-link/.test(card?.content ?? ''),
-        guide: [...foundry.applications.instances.values()].some(a => /Справочник Мастера|Как вести забег/.test(a.title ?? '')) || Object.values(ui.windows).some(a => /Справочник Мастера|Как вести забег/.test(a.title ?? ''))
+        card: !!card, link: /@UUID\[Compendium\.gachadnd\.gacha-rules[^\]]*\]\{Памятка\}|content-link[^>]*>[^<]*Памятка/.test(card?.content ?? ''),
+        guide: (sheet => sheet ? { page: sheet.document.pages.get(sheet.pageId ?? sheet.options?.pageId)?.name ?? null, text: /Шесть шагов/.test(sheet.element?.textContent ?? '') } : null)(
+            [...foundry.applications.instances.values()].find(a => /Справочник Мастера/.test(a.title ?? '')))
     };
 });
 check('«Начать»: сцена «Лабиринт: этаж 1» — сцена карты, на ней начерчен этаж 1', run.floor === 'Лабиринт: этаж 1' && run.remembered && run.nodes > 5 && run.runFloor === 1, JSON.stringify(run));
 check('простая сцена Якоря создана и выбрана в настройке; Якорь открыт, отряд перенесён на неё', run.anchor === 'Якорь' && run.anchorSetting && run.anchorOpen && run.here, JSON.stringify(run));
-check('в чат — «Забег начинается» со ссылкой на правила; у Мастера открыт «Как вести забег»', run.card && run.link && run.guide, JSON.stringify(run));
+check('в чат — «Забег начинается» со ссылкой на «Памятку»; у Мастера открыт «Первый забег»', run.card && run.link && run.guide?.page === 'Первый забег' && run.guide.text, JSON.stringify(run));
 await f.shot('newrun-2-started');
+
+// ---------- Страницы: ссылки на главы правил не битые
+const pages = await ev(async () => {
+    const out = {};
+    for (const [pack, name] of [['gacha-gm', 'Первый забег'], ['gacha-rules', 'Памятка']]) {
+        const [entry] = await game.packs.get(`gachadnd.${pack}`).getDocuments();
+        const page = entry.pages.find(p => p.name === name);
+        const html = await foundry.applications.ux.TextEditor.implementation.enrichHTML(page?.text?.content ?? '');
+        const div = document.createElement('div'); div.innerHTML = html;
+        const links = [...div.querySelectorAll('a.content-link')];
+        out[name] = { first: entry.pages.contents.sort((a, b) => a.sort - b.sort)[0]?.name, links: links.length, broken: div.querySelectorAll('a.broken').length };
+    }
+    return out;
+});
+check('«Первый забег» и «Памятка» — первые страницы журналов, ссылки на главы целые',
+    Object.entries(pages).every(([name, p]) => p.first === name && p.links >= 4 && !p.broken), JSON.stringify(pages));
 
 // ---------- Уборка: сцены забега, герой, настройки — как были
 await ev(async saved => {
