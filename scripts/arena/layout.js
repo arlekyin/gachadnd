@@ -354,6 +354,23 @@ export function connected(plan) {
     return false;
 }
 
+/** Клетки, до которых отряд доходит от своей кромки: враги встают только на них, а не в замкнутых карманах */
+export function reachable(plan) {
+    const grid = passable(plan);
+    const { cols, rows, zones } = plan;
+    const seen = new Set(), queue = [];
+    for (let y = Math.ceil(zones.party.y0); y < zones.party.y1; y++) if (grid[y]?.[0]) { queue.push([0, y]); seen.add(`0,${y}`); }
+    while (queue.length) {
+        const [x, y] = queue.shift();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x + dx, ny = y + dy, k = `${nx},${ny}`;
+            if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || seen.has(k) || !grid[ny][nx]) continue;
+            seen.add(k); queue.push([nx, ny]);
+        }
+    }
+    return seen;
+}
+
 /** Стартовые клетки: отряд — у левой кромки, враги — у правой, на проходимых клетках */
 export function startCells(plan, side, count) {
     const grid = passable(plan), z = plan.zones[side], cells = [];

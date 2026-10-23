@@ -20,6 +20,7 @@ npx playwright install chromium
 | Команда | Что проверяет | Результат в `tools/stand/out/` |
 |---|---|---|
 | `node tools/stand/omen.mjs` | предвестия Пожирателя: все стадии шейдера | `omen_<off\|3\|2\|1\|here>.png` |
+| `node tools/stand/arena.mjs [day,rot,…] [--seed=proto]` | генератор арен без Foundry: планировка и картинка настроений — для быстрой правки рисунка | `arena_<настроение>.png` |
 | `node tools/stand/breach.mjs` | катсцена прорыва Пожирателя | `breach_<мс>.png` |
 | `node tools/stand/loot.mjs` | выпадение кристаллов: красная сцена (`--rarity=purple` — вспышка краёв) | `loot_<редкость>_<мс>.png` |
 | `node tools/stand/portal.mjs` | открытие портала в Предел: круг раскручивается, кристаллы сгорают, туман Предела закрывает экран; `--travel` — со сменой сцены, туман ждёт дорисовки | `portal_<мс>.png` |

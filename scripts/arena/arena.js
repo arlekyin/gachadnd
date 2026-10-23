@@ -4,13 +4,16 @@
  * Планировка (layout.js) → картинка (paint.js) → загрузка в мир → одна сцена «Арена» перестраивается на каждый бой:
  * фон, стены из планировки (стволы, валуны, руины, брёвна; кроны — ограниченный обзор), «живая муть» над водой и
  * в перелесках (тусклые тёмные источники с анимацией «призрак», как в готовых наборах), свет друз Тумана,
- * погода по настроению; отряд — у левой кромки, враги — у правой.
+ * погода по настроению; отряд — у левой кромки, враги — строем у правой: ближний бой впереди, стрелки сзади,
+ * вожак в глубине по центру; у Монстров стая иногда заходит с флангов.
  *
  * game.gachadnd.arena.generate({ seed, mood, cols, rows, party: [actorId…], enemies: [actorId…], encounter })
+ * encounter: { node: 'mob'|'elite'|'outpost'|'boss', leader: actorId, ranged: 0–1 } — схему и строй выбирает по нему;
+ * ranged без значения — по атакам врагов
  */
 
 import { MODULE_ID } from "../core/constants.js";
-import { layout, connected, startCells, passable, VIGNETTES } from "./layout.js";
+import { layout, connected, startCells, passable, reachable, rng, VIGNETTES } from "./layout.js";
 import { paint } from "./paint.js";
 
 const CELL = 140;
@@ -78,6 +81,38 @@ function wallsOf(plan) {
     return walls;
 }
 
+/** Стрелок: атак издали не меньше, чем вблизи (активности атаки dnd5e) */
+function isRanged(actor) {
+    let near = 0, far = 0;
+    for (const item of actor?.items ?? []) for (const a of item.system?.activities?.contents ?? []) {
+        if (a.type !== 'attack') continue;
+        if (a.attack?.type?.value === 'ranged') far++;
+        else near++;
+    }
+    return far > 0 && far >= near;
+}
+
+/**
+ * Строй врагов: роль → клетки по порядку предпочтения. Ближний бой — в 4–7 клетках от правой кромки, стрелки —
+ * у самой кромки, вожак — между ними по центру, фланг — у верхнего и нижнего края на 55–72% ширины.
+ * Только клетки, до которых отряд доходит
+ */
+function formation(plan) {
+    const { cols, rows } = plan, cy = (plan.zones.enemies.y0 + plan.zones.enemies.y1) / 2;
+    const reach = [...reachable(plan)].map(k => k.split(',').map(Number)).map(([x, y]) => ({ x, y }));
+    const band = (x0, x1, tx, ty) => reach.filter(c => c.x >= x0 && c.x <= x1).sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty));
+    const fx0 = Math.round(cols * 0.55), fx1 = Math.round(cols * 0.72), fx = (fx0 + fx1) / 2;
+    return {
+        melee: band(cols - 7, cols - 4, cols - 5.5, cy),
+        ranged: band(cols - 3, cols - 1, cols - 1.5, cy),
+        leader: band(cols - 4, cols - 2, cols - 3, cy),
+        flankTop: band(fx0, fx1, fx, 1.5),
+        flankBottom: band(fx0, fx1, fx, rows - 2.5),
+        // Запас — вся правая половина, от кромки к центру
+        any: band(Math.floor(cols / 2), cols - 1, cols - 2, cy)
+    };
+}
+
 /** Свет: «живая муть» в перелесках, друзы Тумана (над водой свет пока не ставим — вылезал за края сцены) */
 function lightsOf(plan, mood) {
     const lights = [];
@@ -105,6 +140,8 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     if (!game.user.isGM) return ui.notifications.warn('Арену собирает Мастер.');
     // Планировка: если путь от отряда к врагам перекрыт — другой сид
     const art = await loadArt(biome);
+    const foes = enemies.map(id => game.actors.get(id)).filter(Boolean);
+    encounter = { ...encounter, ranged: encounter.ranged ?? (foes.length ? foes.filter(isRanged).length / foes.length : undefined) };
     const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
     let plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme });
     for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme });
@@ -123,46 +160,69 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
         grid: { size: CELL, distance: 5, units: 'ft', type: 1, alpha: 0.12 },
         background: { src }, tokenVision: true, weather: WEATHER[mood] ?? '',
         environment: { darknessLevel: 0, globalLight: { enabled: true } },
-        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows }
+        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null }
+    };
+    // v14 держит фон в уровне сцены. Уровень — раньше сцены: смена фона уровня сама перерисовывает арену у всех, кто
+    // на ней, и тогда перерисовка одна — уже с новым фоном (сцена следом меняет только флаги и погоду)
+    const setLevel = async scene => {
+        const level = scene.levels?.contents?.[0];
+        if (level && level.background?.src !== src) await level.update({ 'background.src': src });
     };
     let scene = game.scenes.find(s => s.getFlag(MODULE_ID, FLAG));
+    // Кто уже стоит на арене, у того смена фона перерисует её: большая картинка грузится 5–8 секунд, и всё это время
+    // на экране снимок прошлой арены. Ждать конца перерисовки — подписка до смены фона, иначе её можно пропустить
+    const redrawn = scene && canvas.scene?.id === scene.id ? new Promise(resolve => Hooks.once('canvasReady', resolve)) : null;
     if (scene) {
         await scene.deleteEmbeddedDocuments('Wall', scene.walls.map(w => w.id));
         await scene.deleteEmbeddedDocuments('AmbientLight', scene.lights.map(l => l.id));
         await scene.deleteEmbeddedDocuments('Token', scene.tokens.map(t => t.id));
+        await setLevel(scene);
         await scene.update(data);
-    } else scene = await Scene.create(foundry.utils.expandObject(data));
-    // v14 держит фон в уровне сцены — подстраховка, если поле background не перенеслось
-    const level = scene.levels?.contents?.[0];
-    if (level && level.background?.src !== src) await level.update({ 'background.src': src });
+    } else {
+        scene = await Scene.create(foundry.utils.expandObject(data));
+        await setLevel(scene);
+    }
 
     await scene.createEmbeddedDocuments('Wall', wallsOf(plan));
     await scene.createEmbeddedDocuments('AmbientLight', lightsOf(plan, mood));
 
-    // Токены: отряд у левой кромки, враги у правой. Существо крупнее клетки занимает w×w клеток: место — где все
-    // они проходимы и свободны, иначе большие токены налезают друг на друга
+    // Токены. Существо крупнее клетки занимает w×w клеток: место — где все они проходимы и свободны, иначе большие
+    // токены налезают друг на друга
     const open = passable(plan), taken = new Set();
     const fits = (x, y, w) => {
         for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) if (!open[y + dy]?.[x + dx] || taken.has(`${x + dx},${y + dy}`)) return false;
         return true;
     };
-    const place = async (ids, side) => {
-        const actors = ids.map(id => game.actors.get(id)).filter(Boolean);
-        const cells = startCells(plan, side, plan.cols * plan.rows);
-        const tokens = [];
-        for (const actor of actors) {
-            const w = Math.max(1, Math.round(actor.prototypeToken?.width || 1));
-            const cell = cells.find(c => fits(c.x, c.y, w));
-            if (!cell) break;
-            for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) taken.add(`${cell.x + dx},${cell.y + dy}`);
-            const t = await actor.getTokenDocument({ x: cell.x * CELL, y: cell.y * CELL });
-            tokens.push(t.toObject());
-        }
-        if (tokens.length) await scene.createEmbeddedDocuments('Token', tokens);
+    const tokenAt = async (actor, cells) => {
+        const w = Math.max(1, Math.round(actor.prototypeToken?.width || 1));
+        const cell = cells.find(c => fits(c.x, c.y, w));
+        if (!cell) return null;
+        for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) taken.add(`${cell.x + dx},${cell.y + dy}`);
+        return (await actor.getTokenDocument({ x: cell.x * CELL, y: cell.y * CELL })).toObject();
     };
-    await place(party, 'party');
-    await place(enemies, 'enemies');
-    if (view) await scene.view();
+    const tokens = [];
+    // Отряд — у левой кромки
+    const partyCells = startCells(plan, 'party', plan.cols * plan.rows);
+    for (const actor of party.map(id => game.actors.get(id)).filter(Boolean)) {
+        const t = await tokenAt(actor, partyCells);
+        if (t) tokens.push(t);
+    }
+    // Враги — строем: вожак, стрелки, ближний бой; у Монстров от трёх бойцов ближнего боя — треть заходит с флангов
+    const cells = formation(plan), R = rng(`${plan.seed}|formation`);
+    const roles = foes.map((actor, i) => ({ actor, role: encounter.leader && actor.id === encounter.leader && !foes.slice(0, i).some(a => a.id === actor.id) ? 'leader' : isRanged(actor) ? 'ranged' : 'melee' }));
+    const melee = roles.filter(r => r.role === 'melee');
+    const flank = encounter.node === 'mob' && melee.length >= 3 && R() < 0.4;
+    if (flank) melee.slice(-Math.max(1, Math.floor(melee.length / 3))).forEach((r, i) => { r.role = i % 2 ? 'flankBottom' : 'flankTop'; });
+    const order = { leader: 0, ranged: 1, melee: 2, flankTop: 3, flankBottom: 3 };
+    for (const { actor, role } of roles.sort((a, b) => order[a.role] - order[b.role])) {
+        const t = await tokenAt(actor, cells[role]) ?? await tokenAt(actor, cells.any);
+        if (t) tokens.push(t);
+    }
+    if (tokens.length) await scene.createEmbeddedDocuments('Token', tokens);
+    plan.formation = { flank, roles: roles.map(r => r.role) };
+    // Бой начинается уже на новой картинке
+    if (redrawn) await Promise.race([redrawn, new Promise(resolve => setTimeout(resolve, 20000))]);
+    else if (view) await scene.view();
     return { scene, plan };
 }
 

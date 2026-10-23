@@ -12,7 +12,8 @@
  * её заменяет, новая — добавляет стаю. Строка — монстр (SRD, свой актёр мира или из другого компендиума)
  * или текст с именем монстра SRD.
  *
- * Кнопки: «На арену» — генератор арен (arena/arena.js) строит поле, отряд слева, враги справа; «На эту сцену» —
+ * Кнопки: «На арену» — генератор арен (arena/arena.js) строит поле по узлу и состоянию этажа (arenaFor): размер
+ * и схема — по узлу, настроение — по порче узла, ступеням Босса и биому, враги — строем; «На эту сцену» —
  * враги в нескольких клетках от отряда; «Другой состав»; «Сам» — модуль ничего не ставит. Монстры
  * импортируются в мир один раз (папка «Лабиринт: монстры») и ставятся отдельными токенами. Бой создаётся
  * с участниками, начинает его и бросает инициативу Мастер. Шёпот — отключаемая подсказка hintEncounters.
@@ -24,6 +25,8 @@ import { onRenderChatMessage } from "../core/chat-hooks.js";
 import { partyActors } from "./horsemen.js";
 import { BIOMES, currentBiome } from "./biomes.js";
 import { getFloor } from "./economy.js";
+import { mapScene } from "./scene-travel.js";
+import { webStage, isEaten, touchedSet } from "./web-graph.js";
 
 const PACK = 'dnd5e.monsters';
 const TABLES = `${MODULE_ID}.gacha-tables`;
@@ -37,6 +40,10 @@ const NODES = {
     outpost: { label: 'Застава', tier: 2, scale: 1, plus: 1, leader: 0.5, name: 'тяжёлая, на уровень выше' },
     boss: { label: 'Босс', tier: 2, scale: 1.25, plus: 0, leader: 0.6, name: 'тяжёлая с запасом' }
 };
+// Арена по узлу: размер в клетках (крупнее бой — шире поле)
+const ARENA_SIZE = { mob: [24, 18], elite: [28, 20], outpost: [28, 20], boss: [30, 22] };
+const SCHEME_NAMES = { glade: 'поляна', edge: 'опушка', thicket: 'чаща', swamp: 'топь', ruins: 'руины', crossing: 'переправа', hill: 'холм' };
+const MOOD_NAMES = { day: 'день', night: 'ночь', fog: 'туман', rot: 'порча', blood: 'кровь' };
 const FRACTION_XP = { 0: 10, 0.125: 25, 0.25: 50, 0.5: 100 };
 export const xpOfCr = cr => (cr < 1 ? FRACTION_XP[cr] ?? 10 : CONFIG.DND5E.CR_EXP_LEVELS?.[cr] ?? 0);
 const levelOf = actor => Math.max(1, Number(actor?.system?.details?.level) || 1);
@@ -163,12 +170,29 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
 // ШЁПОТ МАСТЕРУ
 // ==========================================
 
+/**
+ * Арена для встречи по состоянию этажа. Настроение: узел тронут или съеден Пожирателем — порча; Босс набрал
+ * ступени — кровь на всех боях этажа; город — ночь; иначе день. Близость самого Пожирателя на картинку не
+ * ложится — её показывают предвестия поверх любой сцены
+ */
+export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_ID, 'floorMap') } = {}) {
+    const here = map?.web ? map.currentNodeId : null;
+    const [mood, why] = here && (isEaten(map, here) || touchedSet(map).has(here)) ? ['rot', 'узел тронут Пожирателем']
+        : webStage(map?.web?.ticks ?? 0) > 0 ? ['blood', 'Босс набрал ступени']
+        : enc.biome === 'town' ? ['night', 'город в глуши']
+        : ['day', null];
+    const [cols, rows] = ARENA_SIZE[enc.type] ?? [28, 20];
+    const leader = NODES[enc.type]?.leader ? enemies[0] ?? null : null;
+    return { biome: 'forest', mood, why, cols, rows, encounter: { node: enc.type, leader } };
+}
+
 function cardHtml(enc, state = 'wait') {
     const node = NODES[enc.type];
     const list = enc.creatures.map(m => `<li>${m.count > 1 ? `${m.count} × ` : ''}${m.name} <small>(опасность ${m.cr < 1 ? `1/${Math.round(1 / m.cr)}` : m.cr})</small></li>`).join('');
     const buttons = state === 'wait'
         ? `<div class="gd-stone-buttons"><button type="button" data-gd-enc="arena"><i class="fas fa-mountain-sun"></i> На арену</button><button type="button" data-gd-enc="here"><i class="fas fa-location-dot"></i> На эту сцену</button><button type="button" data-gd-enc="reroll"><i class="fas fa-dice"></i> Другой состав</button><button type="button" data-gd-enc="skip">Сам</button></div>`
-        : `<p><em>${state === 'skip' ? 'Мастер собирает бой сам.' : 'Враги на поле — бой создан, инициатива за Мастером.'}</em></p>`;
+        : `<p><em>${state === 'skip' ? 'Мастер собирает бой сам.' : 'Враги на поле — бой создан, инициатива за Мастером.'}</em></p>`
+            + (enc.arena ? `<p><small>Арена: ${SCHEME_NAMES[enc.arena.scheme] ?? enc.arena.scheme}, ${MOOD_NAMES[enc.arena.mood] ?? enc.arena.mood}${enc.arena.why ? ` — ${enc.arena.why}` : ''}${enc.arena.flank ? '; часть стаи заходит с флангов' : ''}.</small></p>` : '');
     return `<div class="gd-scent-chat gd-enc-card"><i class="fas fa-skull-crossbones"></i> <strong>${node.label}: ${enc.group}</strong>
         <p>Сила — ${node.name}: ${enc.xp} из ${enc.budget} опыта.</p><ul>${list}</ul>${buttons}</div>`;
 }
@@ -266,14 +290,17 @@ async function resolve(message, action) {
     await message.update({ [`flags.${MODULE_ID}.encounter.state`]: 'placing' });
     try {
         const enemies = await worldActors(enc);
-        let scene;
+        let scene, arena = null;
         if (action === 'arena') {
             const generate = game.gachadnd?.arena?.generate;
-            ({ scene } = await generate({ biome: 'forest', mood: enc.biome === 'town' ? 'night' : 'day', party: partyActors().map(a => a.id), enemies }));
+            const { why, ...options } = arenaFor(enc, enemies);
+            let plan;
+            ({ scene, plan } = await generate({ ...options, party: partyActors().map(a => a.id), enemies }));
+            arena = { scheme: plan.scheme, mood: options.mood, why, flank: !!plan.formation?.flank };
             await scene.activate();
         } else scene = await placeHere(enemies);
         await makeCombat(scene);
-        await message.update({ content: cardHtml(enc, 'placed'), [`flags.${MODULE_ID}.encounter.state`]: 'placed' });
+        await message.update({ content: cardHtml({ ...enc, arena }, 'placed'), [`flags.${MODULE_ID}.encounter.state`]: 'placed', [`flags.${MODULE_ID}.encounter.arena`]: arena });
     } catch (error) {
         await message.update({ [`flags.${MODULE_ID}.encounter.state`]: 'wait' });
         throw error;
@@ -293,4 +320,4 @@ onRenderChatMessage((message, html) => {
     });
 });
 
-export const encounterApi = { build: buildEncounter, offer: offerEncounter, budget: budgetFor, packs: packsOf, resolve };
+export const encounterApi = { build: buildEncounter, offer: offerEncounter, budget: budgetFor, packs: packsOf, arena: arenaFor, resolve };

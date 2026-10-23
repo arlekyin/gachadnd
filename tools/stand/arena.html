@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;background:#111">
+<img id="out" style="display:block;width:100vw">
+<script type="module">
+import { layout, VIGNETTES } from '/scripts/arena/layout.js';
+import { paint } from '/scripts/arena/paint.js';
+// Картинки биома — как loadArt в arena.js: имя файла без расширения
+const load = files => Promise.all(files.map(src => new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve([src.split('/').pop().replace(/\.[^.]+$/, ''), img]);
+    img.onerror = () => resolve(null);
+    img.src = src;
+}))).then(list => Object.fromEntries(list.filter(Boolean)));
+window.render = async ({ files, mood, seed = 'proto', cols = 28, rows = 20 }) => {
+    const art = await load(files);
+    const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
+    const plan = layout({ cols, rows, seed, biome: 'forest', vignettes });
+    const canvas = paint(plan, { cell: 140, mood, art });
+    document.getElementById('out').src = canvas.toDataURL('image/jpeg', 0.85);
+    await new Promise(r => setTimeout(r, 300));
+    return plan.scheme;
+};
+window.ready = true;
+</script></body></html>

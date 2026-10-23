@@ -461,6 +461,8 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
     clouds(ctx, W, H, cell, seed);
     canopyShadow(ctx, plan, W, H, cell);
     const rotMask = mood === 'rot' ? rotGround(ctx, { W, H, cell, seed, art }) : null;
+    // Жилы порчи — по земле, под предметами и кронами
+    if (mood === 'rot') rotVeins(ctx, { W, H, cell, seed });
     scatter(ctx, plan, cell, seed, art, M.riverbed);
 
     // Предметы: снизу вверх по высоте — плоское, камни, кусты, кроны
@@ -727,8 +729,8 @@ function rotGround(ctx, { W, H, cell, seed, art }) {
     const m = mask.getContext('2d'), img = m.createImageData(mw, mh);
     for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
         const ex = Math.min(x, mw - x) / mw, ey = Math.min(y, mh - y) / mh, edge = Math.min(ex, ey);
-        const v = n((x * 8) / cell * 0.3, (y * 8) / cell * 0.3, 4) - edge * 2.4;
-        const a = Math.max(0, Math.min(1, (v - 0.12) * 3.2));
+        const v = n((x * 8) / cell * 0.3, (y * 8) / cell * 0.3, 4) - edge * 1.5;
+        const a = Math.max(0, Math.min(1, (v - 0.06) * 3.2));
         const o = (y * mw + x) * 4; img.data[o + 3] = a * 255;
     }
     m.putImageData(img, 0, 0);
@@ -755,6 +757,41 @@ function rotGround(ctx, { W, H, cell, seed, art }) {
     return mask;
 }
 
+/**
+ * Жилы порчи: от краёв вглубь поля ветвятся тёмные прожилки с бирюзовым отсветом — как у съеденных узлов на паутине.
+ * Середина поля остаётся чище: жилы слабеют и тоньшают к ней
+ */
+function rotVeins(ctx, { W, H, cell, seed }) {
+    const R = rng(`veins|${seed}`);
+    const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+    const l = layer.getContext('2d');
+    l.lineCap = 'round'; l.strokeStyle = 'rgba(14,40,38,0.9)';
+    const vein = (x, y, angle, width, steps, depth) => {
+        for (let i = 0; i < steps && width > 1; i++) {
+            angle += R.range(-0.3, 0.3);
+            const nx = x + Math.cos(angle) * cell * 0.32, ny = y + Math.sin(angle) * cell * 0.32;
+            l.lineWidth = width; l.beginPath(); l.moveTo(x, y); l.lineTo(nx, ny); l.stroke();
+            x = nx; y = ny; width *= 0.95;
+            if (depth < 2 && R() < 0.12) vein(x, y, angle + R.pick([-1, 1]) * R.range(0.5, 1.1), width * 0.7, Math.round(steps * 0.5), depth + 1);
+        }
+    };
+    const count = Math.round((W + H) / (cell * 2.2));
+    for (let i = 0; i < count; i++) {
+        // Старт — на кромке, курс — к середине с разбросом
+        const side = R.int(0, 3), t = R();
+        const [x, y] = [[t * W, 0], [W, t * H], [t * W, H], [0, t * H]][side];
+        const angle = Math.atan2(H / 2 - y, W / 2 - x) + R.range(-0.6, 0.6);
+        vein(x, y, angle, cell * R.range(0.06, 0.1), R.int(10, 22), 0);
+    }
+    // Отсвет: размытая копия жил бирюзой поверх, потом сами жилы
+    const glow = document.createElement('canvas'); glow.width = W; glow.height = H;
+    const g = glow.getContext('2d');
+    g.filter = `blur(${cell * 0.08}px)`; g.drawImage(layer, 0, 0); g.filter = 'none';
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = 'rgba(46,200,190,0.35)'; g.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.drawImage(glow, 0, 0); ctx.restore();
+    ctx.save(); ctx.globalAlpha = 0.85; ctx.drawImage(layer, 0, 0); ctx.restore();
+}
+
 function grade(ctx, plan, { W, H, cell, mood, seed, M, art = {}, rotMask = null }) {
     const R = rng(`mood|${mood}|${seed}`);
     const regrade = filter => { const c = document.createElement('canvas'); c.width = W; c.height = H; const l = c.getContext('2d'); l.drawImage(ctx.canvas, 0, 0); ctx.save(); ctx.filter = filter; ctx.drawImage(c, 0, 0); ctx.restore(); };
@@ -770,8 +807,9 @@ function grade(ctx, plan, { W, H, cell, mood, seed, M, art = {}, rotMask = null 
         for (let i = 0; i < 26; i++) blot(R.range(0, W), R.range(0, H), cell * R.range(2, 5), 'rgba(225,230,228,0.32)', 'rgba(225,230,228,0)');
     }
     if (mood === 'rot') {
-        // Всё блекнет; внутри порчи и предметы темнеют и холодеют — гниль на них тоже
-        regrade('saturate(0.7) brightness(0.9)');
+        // Цвета уходят в мёртвую бирюзу, как у предвестий; внутри порчи и предметы темнеют и холодеют — гниль на них тоже
+        regrade('saturate(0.5) brightness(0.97)');
+        ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#c3ddd7'; ctx.fillRect(0, 0, W, H); ctx.restore();
         if (rotMask) {
             const c = document.createElement('canvas'); c.width = W; c.height = H;
             const l = c.getContext('2d');

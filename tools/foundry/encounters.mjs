@@ -2,7 +2,8 @@
 // Бюджет опыта dnd5e 2024 по узлу и уровням отряда; стаи — случайные таблицы (компендиум, таблица мира заменяет
 // и добавляет); состав из одной стаи биома;
 // вход на узел — шёпот Мастеру с составом и кнопками; «Другой состав» меняет стаю; «На эту сцену» ставит врагов
-// и создаёт бой с отрядом; «На арену» строит арену с отрядом и врагами. В конце всё созданное убирается.
+// и создаёт бой с отрядом; «На арену» строит арену по узлу и состоянию этажа (размер, настроение), враги строем:
+// вожак в глубине, стрелки сзади, ближний бой впереди, у Монстров — фланги. В конце всё созданное убирается.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene } from './fixtures.mjs';
 
@@ -140,14 +141,58 @@ const arena = await ev(async ({ party, crew }) => {
     for (let i = 0; i < 60 && msg.getFlag('gachadnd', 'encounter').state !== 'placed'; i++) await sleep(500);
     const sc = game.scenes.find(s => s.getFlag('gachadnd', 'arena'));
     const combat = game.combats.find(c => c.scene?.id === sc?.id);
-    return { scene: sc?.id, want: enc.creatures.reduce((s, m) => s + m.count, 0), tokens: sc?.tokens.size, partyIn: party.filter(id => sc?.tokens.some(t => t.actorId === id)).length, combatants: combat?.combatants.size ?? 0, active: game.scenes.active?.id === sc?.id };
+    // Строй: клетки токенов по видам (имя актёра)
+    const g = sc.grid.size, at = {};
+    for (const t of sc.tokens) (at[party.includes(t.actorId) ? 'party' : t.actor?.getFlag('gachadnd', 'encounterSource')?.split('.').pop()] ??= []).push({ x: Math.round(t.x / g), y: Math.round(t.y / g) });
+    const flag = sc.getFlag('gachadnd', 'arena');
+    return { cols: flag.cols, rows: flag.rows, node: flag.node, at, card: game.messages.get(msg.id).content.match(/Арена:[^<]*/)?.[0] ?? null, scene: sc?.id, want: enc.creatures.reduce((s, m) => s + m.count, 0), tokens: sc?.tokens.size, partyIn: party.filter(id => sc?.tokens.some(t => t.actorId === id)).length, combatants: combat?.combatants.size ?? 0, active: game.scenes.active?.id === sc?.id };
 }, { party, crew });
 const arenaLayout = await layoutOf(arena.scene);
 check('«На арену»: без полей у сцены; токены и стены внутри карты, крупные не налезают', arenaLayout.padding === 0 && !arenaLayout.outside && !arenaLayout.walls && !arenaLayout.overlaps && arenaLayout.big === 5, JSON.stringify(arenaLayout));
 check('«На арену»: арена с отрядом слева и врагами справа, бой со всеми', arena.tokens === arena.want + arena.partyIn && arena.partyIn >= 1 && arena.combatants === arena.tokens && arena.active, JSON.stringify(arena));
+// Босс: поле 30×22; крокодил-вожак в глубине у правой кромки, пауки (паутина — атака издали) сзади, зомби впереди
+const [croc, spider, zombie] = crew.map(c => c.id);
+const meanX = list => (list ?? []).reduce((s, c) => s + c.x, 0) / Math.max(1, (list ?? []).length);
+check('«На арену» Босса: поле 30×22, отряд у левой кромки, враги — в правой половине', arena.cols === 30 && arena.rows === 22 && arena.node === 'boss'
+    && arena.at.party.every(c => c.x <= 4) && [croc, spider, zombie].every(k => arena.at[k]?.every(c => c.x >= arena.cols / 2)), JSON.stringify(arena.at));
+check('строй: вожак в глубине, стрелки сзади, ближний бой впереди; в карточке — схема и настроение арены',
+    Math.max(...arena.at[croc].map(c => c.x)) >= arena.cols - 4 && meanX(arena.at[zombie]) < meanX(arena.at[spider]) && /Арена: .+, (день|ночь|туман|порча|кровь)/.test(arena.card ?? ''), JSON.stringify({ at: arena.at, card: arena.card }));
 await ev(async () => { canvas.tokens.releaseAll(); await canvas.animatePan({ x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2, scale: Math.min(innerWidth / canvas.dimensions.width, innerHeight / canvas.dimensions.height) * 0.95, duration: 0 }); canvas.walls.activate(); });
 await page.waitForTimeout(1500);
 await f.shot('encounters-3-arena');
+
+// ---------- Настроение арены по состоянию этажа и размер по узлу
+const moods = await ev(async () => {
+    const api = game.gachadnd.encounters, omen = await gdt.mod('labyrinth/omen.js');
+    const pick = a => `${a.mood} ${a.cols}x${a.rows}`;
+    const out = { swamp: pick(api.arena({ type: 'mob', biome: 'swamp' })), town: pick(api.arena({ type: 'elite', biome: 'town' })) };
+    await omen.setOmen('1');
+    out.near = pick(api.arena({ type: 'mob', biome: 'town' }));
+    await omen.setOmen('off');
+    // Паутина: бой на тронутом и на съеденном узле — порча; ступень Босса — кровь
+    const web = (extra, ticks = 0) => ({ mode: 'web', currentNodeId: 'n1', visitedNodes: ['n1'], nodes: [{ id: 'n1', next: [] }], web: { ticks, eaten: [], touched: [], ...extra } });
+    out.touched = pick(api.arena({ type: 'mob', biome: 'swamp' }, [], { map: web({ touched: [['n1', 2]] }) }));
+    out.eaten = pick(api.arena({ type: 'mob', biome: 'swamp' }, [], { map: web({ eaten: ['n1'] }) }));
+    out.stage = pick(api.arena({ type: 'mob', biome: 'swamp' }, [], { map: web({}, 99) }));
+    return out;
+});
+check('настроение арены: лес днём, город ночью; Пожиратель рядом картинку не меняет (это предвестия); тронутый и съеденный узел — порча, ступень Босса — кровь; Монстры 24×18, Элита 28×20',
+    moods.swamp === 'day 24x18' && moods.town === 'night 28x20' && moods.near === 'night 24x18' && moods.touched === 'rot 24x18' && moods.eaten === 'rot 24x18' && moods.stage === 'blood 24x18', JSON.stringify(moods));
+
+// ---------- Монстры: шесть зомби — треть стаи заходит с флангов (сид, на котором фланг выпадает)
+const flank = await ev(async ({ party, zombie }) => {
+    const L = await gdt.mod('arena/layout.js');
+    let i = 0;
+    while (L.rng(`flank${i}|formation`)() >= 0.4) i++;
+    const actor = game.actors.find(a => a.getFlag('gachadnd', 'encounterSource')?.endsWith(zombie));
+    const { scene, plan } = await game.gachadnd.arena.generate({ seed: `flank${i}`, cols: 24, rows: 18, encounter: { node: 'mob' }, party: party.slice(0, 1), enemies: Array(6).fill(actor.id), view: false });
+    const g = scene.grid.size;
+    const foes = scene.tokens.filter(t => t.actorId === actor.id).map(t => ({ x: Math.round(t.x / g), y: Math.round(t.y / g) }));
+    return { flank: plan.formation?.flank, roles: plan.formation?.roles, foes };
+}, { party, zombie });
+const flankers = flank.foes.filter(c => c.x >= 12 && c.x <= 18 && (c.y <= 4 || c.y >= 13));
+check('Монстры: стая из шести — двое заходят с флангов (сверху и снизу), остальные строем у правой кромки',
+    flank.flank && flank.foes.length === 6 && flankers.length === 2 && flank.foes.filter(c => !flankers.includes(c) && c.x >= 16).length === 4, JSON.stringify(flank));
 
 // ---------- Уборка: бои, токены врагов, спутники, монстры
 await ev(async ({ party, scene }) => {
