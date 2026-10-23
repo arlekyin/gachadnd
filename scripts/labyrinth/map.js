@@ -346,19 +346,29 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
  * @param {HTMLElement} element  где искать поля
  */
 export async function drawFloorFrom(element) {
+    return drawFloor({
+        length: parseInt(element.querySelector('[name="length"]')?.value) || 11,
+        mode: element.querySelector('[name="mode"]')?.value === 'web' ? 'web' : 'rows',
+        floor: parseInt(element.querySelector('[name="floor"]')?.value) || null
+    });
+}
+
+/**
+ * Начертить этаж (Мастер). Режим — ряды или паутина (web-map.js), выбор запоминается; этаж — по умолчанию
+ * следующий, если по прошлой карте уже ходили. Карта чертится на сцене scene, иначе на текущей
+ * (на сцене Якоря — на сцене этажа); сцена запоминается. fresh — новый забег: Летописи прошлого этажа нет.
+ * @param {{ length?: number, mode?: 'rows'|'web', floor?: number|null, scene?: Scene, fresh?: boolean }} [options]
+ */
+export async function drawFloor({ length = 11, mode = 'rows', floor = null, scene = null, fresh = false } = {}) {
     if (!game.user.isGM) return;
-    const length = parseInt(element.querySelector('[name="length"]')?.value) || 11;
-    // Режим карты: ряды (как всегда) или паутина — второй режим (web-map.js); выбор запоминается
-    const mode = element.querySelector('[name="mode"]')?.value === 'web' ? 'web' : 'rows';
+    mode = mode === 'web' ? 'web' : 'rows';
     await game.settings.set(MODULE_ID, 'mapMode', mode);
-    // Номер нового этажа забега — из поля; по умолчанию следующий, если по прошлой карте уже ходили
-    const floor = Math.max(1, parseInt(element.querySelector('[name="floor"]')?.value) || getFloor());
+    floor = Math.max(1, floor || getFloor());
     // Прошлый этаж — для Летописи (chronicle.js): она идёт у всех, если по старой карте ходили
-    const oldMap = mapScene()?.getFlag(MODULE_ID, 'floorMap') ?? null;
+    const oldMap = fresh ? null : mapScene()?.getFlag(MODULE_ID, 'floorMap') ?? null;
     const oldFloor = getFloor();
     await game.settings.set(MODULE_ID, 'runFloor', floor);
-    // Карта чертится на текущей сцене (на сцене Якоря — на сцене этажа), сцена запоминается
-    const scene = sceneForNewMap();
+    scene ??= sceneForNewMap();
     if (scene) {
         const newMap = mode === 'web'
             ? generateWebGraph({ look: type => ({ label: MAP_DATA.LABELS[type], icon: MAP_DATA.ICONS[type], color: MAP_DATA.COLORS[type] }), types: buildContentTypes })
@@ -369,6 +379,7 @@ export async function drawFloorFrom(element) {
         await rememberFloorScene(scene);
         Hooks.callAll('gachadnd.floorDrawn', { oldMap, oldFloor, newMap, newFloor: floor });
     }
+    return scene;
 }
 
 /**

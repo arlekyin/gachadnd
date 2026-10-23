@@ -3462,3 +3462,20 @@
 .gd-stone-buttons { display: flex; flex-wrap: wrap; }
 .gd-stone-buttons button.on { border-color: #f0a52a; box-shadow: 0 0 6px rgba(240,165,42,.5); }
 .gd-stone-gem { display: inline-block; width: 9px; height: 10px; margin: 0 3px 0 2px; vertical-align: -1px; background: var(--r); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+
+/* Новый забег (labyrinth/new-run.js): одно окно Мастера — отряд, карта, Якорь */
+.gachadnd-new-run .window-content { padding: 0; }
+.gachadnd-new-run .gd-nr { display: grid; gap: 12px; padding: 14px 16px; }
+.gachadnd-new-run h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; border: 0; }
+.gachadnd-new-run h3 i { width: 18px; color: #c58a1a; }
+.gachadnd-new-run .gd-nr-party { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.gachadnd-new-run .gd-nr-party li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; }
+.gachadnd-new-run .gd-nr-party img { width: 28px; height: 28px; border: 0; border-radius: 50%; object-fit: cover; }
+.gachadnd-new-run .gd-nr-party span { font-size: 12px; opacity: .75; }
+.gachadnd-new-run .gd-nr-party li.warn span { color: #d9822b; opacity: 1; }
+.gachadnd-new-run .gd-nr-warn { margin: 0; color: #d9822b; }
+.gachadnd-new-run .gd-nr-note { margin: 4px 0 0; font-size: 12px; opacity: .75; }
+.gachadnd-new-run .gd-nr-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.gachadnd-new-run .gd-nr-row input[type="number"] { width: 52px; }
+.gachadnd-new-run footer button { width: 100%; }
+.gd-new-run-card p { margin: 6px 0 0; }

@@ -68,7 +68,7 @@ m = await openMenu('soundsMenu');
 check('Звуки и эффекты: 10 полей у Мастера (со звуками паутины; звуки удара Сайтамы — в модуле impact-frames)', m.fields === 10, JSON.stringify(m));
 await ev(() => gdt.menuApp.close());
 m = await openMenu('hintsMenu');
-check('Подсказки Мастеру: 6 переключателей (Запах, атмосфера, Пульс, дары луны, счётчики, правило Босса)', m.fields === 6, JSON.stringify(m));
+check('Подсказки Мастеру: 7 переключателей (Запах, атмосфера, Пульс, дары луны, счётчики, правило Босса, приветствие)', m.fields === 7, JSON.stringify(m));
 await page.uncheck(`#${m.id} input[name="gachadnd.hintPulse"]`);
 await page.click(`#${m.id} button[type="submit"]`);
 await wait(800);

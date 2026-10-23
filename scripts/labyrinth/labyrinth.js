@@ -13,6 +13,7 @@ import { ShopWindow } from "./shop.js";
 import { RiskWindow, registerRiskSettings } from "./risk.js";
 import { registerEconomySettings } from "./economy.js";
 import { addTokenTools } from "../core/controls.js";
+import { NewRunWindow, startRun } from "./new-run.js";
 import { EventRewardsWindow, offerEventRewards, expireFloorSlots } from "./rewards.js";
 import { registerAnchorSettings, setAnchor, isAnchorOpen, partyScent } from "./anchor.js";
 import { PortalWindow } from "./portal.js";
@@ -94,6 +95,9 @@ Hooks.once('init', () => {
         // Летопись этажа у себя (показ, без рассылки): { oldMap, oldFloor, newMap, newFloor, marks }
         playChronicle: data => playChronicle(data),
         // Событие на узле «Событие» — дневник у всех (Мастер); просмотр события без последствий
+        // Новый забег: окно Мастера; startRun — без окна ({ mode, length, anchor })
+        newRun: () => NewRunWindow.open(),
+        startRun: options => startRun(options),
         openEvent: () => EventWindow.open(),
         previewEvent: id => EventWindow.preview(id)
     });
@@ -116,6 +120,13 @@ Hooks.on('getSceneControlButtons', (controls) => {
         button: true,
         onClick: () => ResidentsWindow.open('broker')
     }] : []), ...(game.user?.isGM ? [{
+        name: 'gachadnd-new-run',
+        title: 'Новый забег (Мастер)',
+        icon: 'fas fa-flag-checkered',
+        visible: true,
+        button: true,
+        onClick: () => NewRunWindow.open()
+    }, {
         name: 'gachadnd-anchor',
         title: 'Якорь: открыть или закрыть хаб (Мастер)',
         icon: 'fas fa-anchor',
