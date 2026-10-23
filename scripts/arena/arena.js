@@ -4,7 +4,8 @@
  * Планировка (layout.js) → картинка (paint.js) → загрузка в мир → одна сцена «Арена» перестраивается на каждый бой:
  * фон, стены из планировки (стволы, валуны, руины, брёвна; кроны — ограниченный обзор), «живая муть» над водой и
  * в перелесках (тусклые тёмные источники с анимацией «призрак», как в готовых наборах), свет друз Тумана,
- * погода по настроению; отряд — у левой кромки, враги — строем у правой: ближний бой впереди, стрелки сзади,
+ * погода по настроению; ночью — настоящая темнота: светят только друзы Тумана и святилище, видит тёмное зрение;
+ * вода, топь и подлесок — трудная местность (регионы dnd5e); отряд — у левой кромки, враги — строем у правой: ближний бой впереди, стрелки сзади,
  * вожак в глубине по центру; у Монстров стая иногда заходит с флангов.
  *
  * game.gachadnd.arena.generate({ seed, mood, cols, rows, party: [actorId…], enemies: [actorId…], encounter })
@@ -22,6 +23,14 @@ const FLAG = 'arena';
 const MURK = { day: '#0f2a24', night: '#0a1426', fog: '#1d2422', rot: '#062420', blood: '#3f0d0d' };
 const WEATHER = { fog: 'fog' };
 const WALL = { NONE: 0, LIMITED: 10, NORMAL: 20 };
+// Ночь: темнота сцены без общего света — светят только источники на поле (в футах)
+const NIGHT = { darkness: 0.6, pulse: { dim: 25, bright: 10 }, crystal: { dim: 25, bright: 8 } };
+// Трудная местность: регион на вид — тип dnd5e и цвет (виден Мастеру на слое регионов)
+const TERRAIN = {
+    water: { name: 'Вода', type: 'liquid', color: '#3a7fa8' },
+    mire: { name: 'Топь', type: 'mud', color: '#6b5a2e' },
+    brush: { name: 'Подлесок', type: 'plants', color: '#4f8a3a' }
+};
 
 const filePicker = () => foundry.applications?.apps?.FilePicker?.implementation ?? FilePicker;
 
@@ -49,23 +58,26 @@ function wallsOf(plan) {
             walls.push({ c: [x + Math.cos(a) * r, y + Math.sin(a) * r, x + Math.cos(b) * r, y + Math.sin(b) * r].map(v => Math.round(v)), ...flags });
         }
     };
+    // Видимость — для игрока: стволы, камни, пни и брёвна держат только шаг (иначе поле в чёрных дырах и клиньях
+    // теней); кроны нарисованы сверху и взгляд не режут. Крупное — «ограниченный обзор»: за ним не видно, а сам
+    // предмет не чернеет (одну такую стену взгляд проходит). Сплошные стены — только у руин
     const solid = { move: WALL.NORMAL, sight: WALL.NORMAL, light: WALL.NORMAL, sound: WALL.NONE };
     const low = { move: WALL.NORMAL, sight: WALL.LIMITED, light: WALL.LIMITED, sound: WALL.NONE };
-    const canopy = { move: WALL.NONE, sight: WALL.LIMITED, light: WALL.NONE, sound: WALL.NONE };
+    const step = { move: WALL.NORMAL, sight: WALL.NONE, light: WALL.NONE, sound: WALL.NONE };
     for (const o of plan.objects) {
         const x = o.x * CELL, y = o.y * CELL, r = o.r * CELL;
         if (['tree', 'pine', 'deadtree'].includes(o.kind)) {
-            ring(x, y, CELL * 0.28, 6, solid);
-            if (o.kind !== 'deadtree') ring(x, y, r * 0.72, 10, canopy);
-        } else if (o.kind === 'boulder' || o.kind === 'pillar') ring(x, y, r * 0.8, 8, solid);
-        else if (o.kind === 'rock') ring(x, y, r * 0.75, 6, low);
-        else if (o.kind === 'stump') ring(x, y, r * 0.8, 6, { ...low, sight: WALL.NONE, light: WALL.NONE });
+            ring(x, y, CELL * 0.28, 6, step);
+        } else if (o.kind === 'boulder' || o.kind === 'pillar') ring(x, y, r * 0.8, 8, low);
+        else if (o.kind === 'rock') ring(x, y, r * 0.75, 6, step);
+        else if (o.kind === 'stump') ring(x, y, r * 0.8, 6, step);
         else if (o.kind === 'log') {
             const dx = Math.cos(o.rot) * r, dy = Math.sin(o.rot) * r;
-            walls.push({ c: [x - dx, y - dy, x + dx, y + dy].map(Math.round), ...low });
+            walls.push({ c: [x - dx, y - dy, x + dx, y + dy].map(Math.round), ...step });
         } else if (o.kind === 'vignette') {
             const v = VIGNETTES[o.name];
-            for (const [cx, cy, r] of v.circles) ring(x + cx * CELL, y + cy * CELL, r * CELL, 8, solid);
+            // Мелкие круги (камни, очаг) и круг со светом внутри (святилище) держат только шаг, крупные — обзор
+            for (const [cx, cy, r] of v.circles) ring(x + cx * CELL, y + cy * CELL, r * CELL, 8, r < 0.9 || v.lights.length ? step : low);
             for (const [cx, cy, w, h] of v.rects) {
                 const x0 = x + (cx - w / 2) * CELL, y0 = y + (cy - h / 2) * CELL, x1 = x0 + w * CELL, y1 = y0 + h * CELL;
                 for (const c of [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]]) walls.push({ c: c.map(Math.round), ...low });
@@ -113,21 +125,53 @@ function formation(plan) {
     };
 }
 
+/**
+ * Трудная местность: вода ручья (лента вдоль русла), топь озерец, подлесок — кусты и камыш. По региону на вид, форм
+ * сколько угодно; поведение — «Трудная местность» dnd5e (тип учитывает, кто его не замечает), без dnd5e — двойная цена
+ */
+function regionsOf(plan) {
+    const px = v => Math.round(v * CELL);
+    const circle = (x, y, r) => ({ type: 'circle', x: px(x), y: px(y), radius: px(r) });
+    const shapes = { water: [], mire: [], brush: [] };
+    const { stream, pools = [] } = plan.terrain;
+    if (stream) {
+        // Лента: точки одного берега, затем другого в обратном порядке (unshift пары сохраняет порядок x, y)
+        const pts = stream.path.filter((_, i) => i % 2 === 0), left = [], right = [];
+        pts.forEach((p, i) => {
+            const q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
+            const dx = q.x - o.x, dy = q.y - o.y, l = Math.hypot(dx, dy) || 1, w = stream.width / 2;
+            left.push(px(p.x - (dy / l) * w), px(p.y + (dx / l) * w));
+            right.unshift(px(p.x + (dy / l) * w), px(p.y - (dx / l) * w));
+        });
+        shapes.water.push({ type: 'polygon', points: [...left, ...right] });
+    }
+    for (const p of pools) shapes.mire.push(circle(p.x, p.y, p.r * 0.9));
+    for (const o of plan.objects) if (o.kind === 'bush' || o.kind === 'reeds') shapes.brush.push(circle(o.x, o.y, Math.max(0.5, o.r)));
+    const dnd = !!CONFIG.RegionBehavior?.dataModels?.['dnd5e.difficultTerrain'];
+    return Object.entries(shapes).filter(([, list]) => list.length).map(([kind, list]) => ({
+        name: TERRAIN[kind].name, color: TERRAIN[kind].color, shapes: list,
+        behaviors: [dnd
+            ? { name: 'Трудная местность', type: 'dnd5e.difficultTerrain', system: { types: [TERRAIN[kind].type] } }
+            : { name: 'Трудная местность', type: 'modifyMovementCost', system: { difficulties: Object.fromEntries(Object.keys(CONFIG.Token.movement?.actions ?? { walk: 1 }).map(a => [a, 2])) } }],
+        flags: { [MODULE_ID]: { terrain: kind } }
+    }));
+}
+
 /** Свет: «живая муть» в перелесках, друзы Тумана (над водой свет пока не ставим — вылезал за края сцены) */
 function lightsOf(plan, mood) {
-    const lights = [];
-    const murk = (x, y, dim) => lights.push({
+    const lights = [], night = mood === 'night';
+    const murk = (x, y, dim) => night || lights.push({
         x: Math.round(x * CELL), y: Math.round(y * CELL), walls: true,
         config: { dim, bright: 0, color: MURK[mood] ?? MURK.day, alpha: 0.5, luminosity: 0.5, attenuation: 0.5, coloration: 1, animation: { type: 'ghost', speed: 3, intensity: 3 } }
     });
     for (const p of plan.terrain.patches.filter(p => p.type === 'forest')) if (p.x > 0 && p.y > 0 && p.x < plan.cols && p.y < plan.rows) murk(p.x, p.y, p.r * 4);
     for (const o of plan.objects.filter(o => o.kind === 'vignette')) for (const l of VIGNETTES[o.name].lights) lights.push({
         x: Math.round((o.x + l.x) * CELL), y: Math.round((o.y + l.y) * CELL), walls: true,
-        config: { dim: l.dim, bright: l.bright, color: l.color, alpha: 0.5, luminosity: 0.5, attenuation: 0.6, coloration: 1, animation: { type: l.animation, speed: 3, intensity: 4 } }
+        config: { dim: night ? NIGHT[l.animation]?.dim ?? l.dim : l.dim, bright: night ? NIGHT[l.animation]?.bright ?? l.bright : l.bright, color: l.color, alpha: 0.5, luminosity: 0.5, attenuation: 0.6, coloration: 1, animation: { type: l.animation, speed: 3, intensity: 4 } }
     });
     for (const o of plan.objects.filter(o => o.kind === 'crystal')) lights.push({
         x: Math.round(o.x * CELL), y: Math.round(o.y * CELL), walls: true,
-        config: { dim: 10, bright: 3, color: '#2ee6d6', alpha: 0.45, luminosity: 0.5, attenuation: 0.6, coloration: 1, animation: { type: 'pulse', speed: 2, intensity: 3 } }
+        config: { dim: night ? NIGHT.crystal.dim : 10, bright: night ? NIGHT.crystal.bright : 3, color: '#2ee6d6', alpha: 0.45, luminosity: 0.5, attenuation: 0.6, coloration: 1, animation: { type: 'pulse', speed: 2, intensity: 3 } }
     });
     return lights;
 }
@@ -143,8 +187,9 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     const foes = enemies.map(id => game.actors.get(id)).filter(Boolean);
     encounter = { ...encounter, ranged: encounter.ranged ?? (foes.length ? foes.filter(isRanged).length / foes.length : undefined) };
     const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
-    let plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme });
-    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme });
+    const night = mood === 'night';
+    let plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme, night });
+    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme, night });
     const canvas = paint(plan, { cell: CELL, mood, art });
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.9));
     const dir = `worlds/${game.world.id}/gachadnd-arena`;
@@ -159,7 +204,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
         name: 'Арена', width: cols * CELL, height: rows * CELL, padding: 0,
         grid: { size: CELL, distance: 5, units: 'ft', type: 1, alpha: 0.12 },
         background: { src }, tokenVision: true, weather: WEATHER[mood] ?? '',
-        environment: { darknessLevel: 0, globalLight: { enabled: true } },
+        environment: mood === 'night' ? { darknessLevel: NIGHT.darkness, globalLight: { enabled: false } } : { darknessLevel: 0, globalLight: { enabled: true } },
         [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null }
     };
     // v14 держит фон в уровне сцены. Уровень — раньше сцены: смена фона уровня сама перерисовывает арену у всех, кто
@@ -176,6 +221,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
         await scene.deleteEmbeddedDocuments('Wall', scene.walls.map(w => w.id));
         await scene.deleteEmbeddedDocuments('AmbientLight', scene.lights.map(l => l.id));
         await scene.deleteEmbeddedDocuments('Token', scene.tokens.map(t => t.id));
+        await scene.deleteEmbeddedDocuments('Region', scene.regions.map(r => r.id));
         await setLevel(scene);
         await scene.update(data);
     } else {
@@ -185,6 +231,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
 
     await scene.createEmbeddedDocuments('Wall', wallsOf(plan));
     await scene.createEmbeddedDocuments('AmbientLight', lightsOf(plan, mood));
+    await scene.createEmbeddedDocuments('Region', regionsOf(plan));
 
     // Токены. Существо крупнее клетки занимает w×w клеток: место — где все они проходимы и свободны, иначе большие
     // токены налезают друг на друга

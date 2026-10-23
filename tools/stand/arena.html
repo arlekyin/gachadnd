@@ -14,7 +14,7 @@ const load = files => Promise.all(files.map(src => new Promise(resolve => {
 window.render = async ({ files, mood, seed = 'proto', cols = 28, rows = 20 }) => {
     const art = await load(files);
     const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
-    const plan = layout({ cols, rows, seed, biome: 'forest', vignettes });
+    const plan = layout({ cols, rows, seed, biome: 'forest', vignettes, night: mood === 'night' });
     const canvas = paint(plan, { cell: 140, mood, art });
     document.getElementById('out').src = canvas.toDataURL('image/jpeg', 0.85);
     await new Promise(r => setTimeout(r, 300));

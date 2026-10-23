@@ -5,7 +5,7 @@
  * деревья по краям и перелескам, руины — стены и укрытие. Всё в клетках (дробные координаты). Из планировки
  * потом получаются и картинка (paint.js), и стены со светом (arena.js).
  *
- * layout({ cols, rows, seed, biome, encounter }) → { cols, rows, seed, terrain: { path, stream, ford, patches },
+ * layout({ cols, rows, seed, biome, encounter, night }) → { cols, rows, seed, terrain: { path, stream, ford, patches },
  *   objects: [{ kind, x, y, r, rot, variant }], zones: { party, enemies }, cover }
  */
 
@@ -88,7 +88,8 @@ export function pickScheme(R, encounter = {}) {
  * where: hero — центр интереса (средняя треть), side — у края; schemes — в каких схемах уместна.
  */
 export const VIGNETTES = {
-    campfire: { w: 4, h: 4, where: 'side', circles: [[0, 0, 0.45]], rects: [], lights: [{ x: 0, y: 0, dim: 6, bright: 2.5, color: '#ff9a3c', animation: 'torch' }] },
+    // Костёр нарисован потушенным — зола и камни, без света
+    campfire: { w: 4, h: 4, where: 'side', circles: [[0, 0, 0.45]], rects: [], lights: [] },
     wagon: { w: 5, h: 3, where: 'side', circles: [], rects: [[0, 0, 3.6, 1.6]], lights: [] },
     shrine: { w: 4, h: 4, where: 'hero', circles: [[0, 0, 1]], rects: [], lights: [{ x: 0, y: 0, dim: 8, bright: 2, color: '#2ee6d6', animation: 'pulse' }] },
     stones: { w: 6, h: 6, where: 'hero', circles: Array.from({ length: 7 }, (_, i) => [Math.cos((i / 7) * 6.283) * 2.3, Math.sin((i / 7) * 6.283) * 2.3, 0.4]), rects: [], lights: [] },
@@ -97,7 +98,7 @@ export const VIGNETTES = {
     bridge: { w: 2, h: 5, where: 'water', circles: [], rects: [], lights: [] }
 };
 
-export function layout({ cols = 28, rows = 20, seed = 'arena', biome = 'forest', encounter = {}, scheme = null, vignettes = Object.keys(VIGNETTES) } = {}) {
+export function layout({ cols = 28, rows = 20, seed = 'arena', biome = 'forest', encounter = {}, scheme = null, vignettes = Object.keys(VIGNETTES), night = false } = {}) {
     const R = rng(`${seed}|${biome}`);
     scheme ??= pickScheme(R, encounter);
     const ranged = encounter.ranged ?? 0.3;          // доля стрелков: больше укрытий и длинных линий
@@ -292,10 +293,11 @@ export function layout({ cols = 28, rows = 20, seed = 'arena', biome = 'forest',
             objects.push({ kind: 'lilypad', x: s.p.x + s.nx * d + R.range(-0.3, 0.3), y: s.p.y + s.ny * d + R.range(-0.3, 0.3), r: R.range(...OBJECTS.lilypad.r), rot: R.range(0, 6.28), variant: R.int(1, 3) });
         }
     }
-    // Кристаллы Тумана — одна-две друзы
-    for (let tries = 0, made = 0; tries < 200 && made < R.int(1, 2); tries++) {
+    // Кристаллы Тумана — одна-две друзы; ночью три-пять: в темноте светят только они и костры
+    const druses = night ? R.int(3, 5) : R.int(1, 2);
+    for (let tries = 0, made = 0; tries < (night ? 800 : 300) && made < druses; tries++) {
         const x = R.range(2, cols - 2), y = R.range(2, rows - 2), r = R.range(...OBJECTS.crystal.r);
-        if (!free(x, y, r, 0.4) || inZone(x, y, 1)) continue;
+        if (!free(x, y, r, night ? 0.1 : 0.4) || inZone(x, y, 1)) continue;
         place('crystal', x, y, { r }); made++;
     }
 
