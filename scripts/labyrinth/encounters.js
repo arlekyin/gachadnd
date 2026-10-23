@@ -40,6 +40,9 @@ const NODES = {
     outpost: { label: 'Застава', tier: 2, scale: 1, plus: 1, leader: 0.5, name: 'тяжёлая, на уровень выше' },
     boss: { label: 'Босс', tier: 2, scale: 1.25, plus: 0, leader: 0.6, name: 'тяжёлая с запасом' }
 };
+// Погода на арене: доля боёв узла под погодой (Монстры — никогда, рядовой бой остаётся быстрым)
+const WEATHER_CHANCE = { mob: 0, elite: 0.5, outpost: 1, boss: 1 };
+const WEATHER_NAMES = { rain: 'ливень', fog: 'туман Предела', wind: 'ветер' };
 // Арена по узлу: размер в клетках (крупнее бой — шире поле)
 const ARENA_SIZE = { mob: [24, 18], elite: [28, 20], outpost: [28, 20], boss: [30, 22] };
 const SCHEME_NAMES = { glade: 'поляна', edge: 'опушка', thicket: 'чаща', swamp: 'топь', ruins: 'руины', crossing: 'переправа', hill: 'холм' };
@@ -173,9 +176,10 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
 /**
  * Арена для встречи по состоянию этажа. Настроение: узел тронут или съеден Пожирателем — порча; Босс набрал
  * ступени — кровь на всех боях этажа; город — ночь; иначе день. Близость самого Пожирателя на картинку не
- * ложится — её показывают предвестия поверх любой сцены
+ * ложится — её показывают предвестия поверх любой сцены. Погода — на Элите в половине боёв, на Заставе и Боссе
+ * всегда (галочка hintWeather): ливень, туман или ветер
  */
-export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_ID, 'floorMap') } = {}) {
+export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_ID, 'floorMap'), rnd = Math.random } = {}) {
     const here = map?.web ? map.currentNodeId : null;
     const [mood, why] = here && (isEaten(map, here) || touchedSet(map).has(here)) ? ['rot', 'узел тронут Пожирателем']
         : webStage(map?.web?.ticks ?? 0) > 0 ? ['blood', 'Босс набрал ступени']
@@ -183,7 +187,8 @@ export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_I
         : ['day', null];
     const [cols, rows] = ARENA_SIZE[enc.type] ?? [28, 20];
     const leader = NODES[enc.type]?.leader ? enemies[0] ?? null : null;
-    return { biome: 'forest', mood, why, cols, rows, encounter: { node: enc.type, leader } };
+    const weather = hint('hintWeather') && rnd() < (WEATHER_CHANCE[enc.type] ?? 0) ? pick(Object.keys(WEATHER_NAMES), rnd) : null;
+    return { biome: 'forest', mood, why, cols, rows, weather, encounter: { node: enc.type, leader } };
 }
 
 function cardHtml(enc, state = 'wait') {
@@ -192,7 +197,7 @@ function cardHtml(enc, state = 'wait') {
     const buttons = state === 'wait'
         ? `<div class="gd-stone-buttons"><button type="button" data-gd-enc="arena"><i class="fas fa-mountain-sun"></i> На арену</button><button type="button" data-gd-enc="here"><i class="fas fa-location-dot"></i> На эту сцену</button><button type="button" data-gd-enc="reroll"><i class="fas fa-dice"></i> Другой состав</button><button type="button" data-gd-enc="skip">Сам</button></div>`
         : `<p><em>${state === 'skip' ? 'Мастер собирает бой сам.' : 'Враги на поле — бой создан, инициатива за Мастером.'}</em></p>`
-            + (enc.arena ? `<p><small>Арена: ${SCHEME_NAMES[enc.arena.scheme] ?? enc.arena.scheme}, ${MOOD_NAMES[enc.arena.mood] ?? enc.arena.mood}${enc.arena.why ? ` — ${enc.arena.why}` : ''}${enc.arena.flank ? '; часть стаи заходит с флангов' : ''}.</small></p>` : '');
+            + (enc.arena ? `<p><small>Арена: ${SCHEME_NAMES[enc.arena.scheme] ?? enc.arena.scheme}, ${MOOD_NAMES[enc.arena.mood] ?? enc.arena.mood}${enc.arena.why ? ` — ${enc.arena.why}` : ''}${enc.arena.weather ? `; ${WEATHER_NAMES[enc.arena.weather]}` : ''}${enc.arena.flank ? '; часть стаи заходит с флангов' : ''}.</small></p>` : '');
     return `<div class="gd-scent-chat gd-enc-card"><i class="fas fa-skull-crossbones"></i> <strong>${node.label}: ${enc.group}</strong>
         <p>Сила — ${node.name}: ${enc.xp} из ${enc.budget} опыта.</p><ul>${list}</ul>${buttons}</div>`;
 }
@@ -296,7 +301,7 @@ async function resolve(message, action) {
             const { why, ...options } = arenaFor(enc, enemies);
             let plan;
             ({ scene, plan } = await generate({ ...options, party: partyActors().map(a => a.id), enemies }));
-            arena = { scheme: plan.scheme, mood: options.mood, why, flank: !!plan.formation?.flank };
+            arena = { scheme: plan.scheme, mood: options.mood, why, flank: !!plan.formation?.flank, weather: options.weather };
             await scene.activate();
         } else scene = await placeHere(enemies);
         await makeCombat(scene);

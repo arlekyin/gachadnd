@@ -8,20 +8,22 @@
  * вода, топь и подлесок — трудная местность (регионы dnd5e); отряд — у левой кромки, враги — строем у правой: ближний бой впереди, стрелки сзади,
  * вожак в глубине по центру; у Монстров стая иногда заходит с флангов.
  *
- * game.gachadnd.arena.generate({ seed, mood, cols, rows, party: [actorId…], enemies: [actorId…], encounter })
+ * game.gachadnd.arena.generate({ seed, mood, cols, rows, party: [actorId…], enemies: [actorId…], encounter, weather })
+ * weather — 'rain'|'fog'|'wind' (weather.js): ставится поверх готовой арены, снимается кнопкой Мастера
  * encounter: { node: 'mob'|'elite'|'outpost'|'boss', leader: actorId, ranged: 0–1 } — схему и строй выбирает по нему;
  * ranged без значения — по атакам врагов
  */
 
 import { MODULE_ID } from "../core/constants.js";
-import { layout, connected, startCells, passable, reachable, rng, VIGNETTES } from "./layout.js";
+import { layout, connected, startCells, passable, reachable, rng, ribbon, VIGNETTES } from "./layout.js";
 import { paint } from "./paint.js";
+import { applyWeather, WEATHER } from "./weather.js";
 
 const CELL = 140;
 const FLAG = 'arena';
 // Цвет «живой мути» по настроению
 const MURK = { day: '#0f2a24', night: '#0a1426', fog: '#1d2422', rot: '#062420', blood: '#3f0d0d' };
-const WEATHER = { fog: 'fog' };
+const MOOD_WEATHER = { fog: 'fog' };
 const WALL = { NONE: 0, LIMITED: 10, NORMAL: 20 };
 // Ночь: темнота сцены без общего света — светят только источники на поле (в футах)
 const NIGHT = { darkness: 0.6, pulse: { dim: 25, bright: 10 }, crystal: { dim: 25, bright: 8 } };
@@ -93,6 +95,32 @@ function wallsOf(plan) {
     return walls;
 }
 
+/**
+ * Дождаться, пока арена встанет на экран. Кто уже стоит на арене, у того пересборка перерисовывает её — и не раз:
+ * смена фона, размера, погоды; большая картинка грузится 5–8 секунд, и всё это время на экране снимок прошлой арены
+ * и полупрорисованные регионы. Готово — когда холст готов и полсекунды не начинает новой перерисовки
+ */
+async function settled(sceneId, limit = 30000) {
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const t0 = Date.now();
+    await sleep(300);
+    while (Date.now() - t0 < limit) {
+        if (canvas.scene?.id !== sceneId || !canvas.ready || canvas.loading) { await sleep(200); continue; }
+        let started = false;
+        const id = Hooks.once('canvasInit', () => { started = true; });
+        await sleep(600);
+        Hooks.off('canvasInit', id);
+        if (!started && canvas.ready && !canvas.loading) return;
+    }
+}
+
+/** Тропа и ручей арены для погоды (грязь, разлив): точки через одну, в сотых клетки — флаг сцены не пухнет */
+function terrainOf(plan) {
+    const pts = path => path.filter((_, i) => i % 2 === 0).map(p => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 }));
+    const { path, stream } = plan.terrain;
+    return { path: pts(path), stream: stream ? { path: pts(stream.path), width: Math.round(stream.width * 100) / 100 } : null };
+}
+
 /** Стрелок: атак издали не меньше, чем вблизи (активности атаки dnd5e) */
 function isRanged(actor) {
     let near = 0, far = 0;
@@ -134,22 +162,17 @@ function regionsOf(plan) {
     const circle = (x, y, r) => ({ type: 'circle', x: px(x), y: px(y), radius: px(r) });
     const shapes = { water: [], mire: [], brush: [] };
     const { stream, pools = [] } = plan.terrain;
-    if (stream) {
-        // Лента: точки одного берега, затем другого в обратном порядке (unshift пары сохраняет порядок x, y)
-        const pts = stream.path.filter((_, i) => i % 2 === 0), left = [], right = [];
-        pts.forEach((p, i) => {
-            const q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
-            const dx = q.x - o.x, dy = q.y - o.y, l = Math.hypot(dx, dy) || 1, w = stream.width / 2;
-            left.push(px(p.x - (dy / l) * w), px(p.y + (dx / l) * w));
-            right.unshift(px(p.x + (dy / l) * w), px(p.y - (dx / l) * w));
-        });
-        shapes.water.push({ type: 'polygon', points: [...left, ...right] });
-    }
+    if (stream) shapes.water.push({ type: 'polygon', points: ribbon(stream.path, stream.width).map(px) });
+    // По мосту — сухо: прямоугольник моста вырезан из воды
+    for (const b of plan.objects.filter(o => o.kind === 'vignette' && o.name === 'bridge')) if (stream) shapes.water.push({
+        type: 'rectangle', x: px(b.x), y: px(b.y), width: px(b.w * 0.8), height: px(b.h), anchorX: 0.5, anchorY: 0.5, rotation: Math.toDegrees ? Math.toDegrees(b.rot ?? 0) : ((b.rot ?? 0) * 180) / Math.PI, hole: true
+    });
     for (const p of pools) shapes.mire.push(circle(p.x, p.y, p.r * 0.9));
     for (const o of plan.objects) if (o.kind === 'bush' || o.kind === 'reeds') shapes.brush.push(circle(o.x, o.y, Math.max(0.5, o.r)));
     const dnd = !!CONFIG.RegionBehavior?.dataModels?.['dnd5e.difficultTerrain'];
     return Object.entries(shapes).filter(([, list]) => list.length).map(([kind, list]) => ({
-        name: TERRAIN[kind].name, color: TERRAIN[kind].color, shapes: list,
+        // Заперт: на слое регионов (он открывается и при шаблоне заклинания в v14) не показывается, правило работает
+        name: TERRAIN[kind].name, color: TERRAIN[kind].color, shapes: list, locked: true,
         behaviors: [dnd
             ? { name: 'Трудная местность', type: 'dnd5e.difficultTerrain', system: { types: [TERRAIN[kind].type] } }
             : { name: 'Трудная местность', type: 'modifyMovementCost', system: { difficulties: Object.fromEntries(Object.keys(CONFIG.Token.movement?.actions ?? { walk: 1 }).map(a => [a, 2])) } }],
@@ -180,7 +203,7 @@ function lightsOf(plan, mood) {
  * Собрать арену: новая планировка, картинка, сцена, стены, свет, токены. Только Мастер.
  * @returns {Promise<{ scene, plan }>}
  */
-export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true, scheme = null } = {}) {
+export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true, scheme = null, weather = null } = {}) {
     if (!game.user.isGM) return ui.notifications.warn('Арену собирает Мастер.');
     // Планировка: если путь от отряда к врагам перекрыт — другой сид
     const art = await loadArt(biome);
@@ -203,9 +226,9 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     const data = {
         name: 'Арена', width: cols * CELL, height: rows * CELL, padding: 0,
         grid: { size: CELL, distance: 5, units: 'ft', type: 1, alpha: 0.12 },
-        background: { src }, tokenVision: true, weather: WEATHER[mood] ?? '',
+        background: { src }, tokenVision: true, weather: MOOD_WEATHER[mood] ?? '',
         environment: mood === 'night' ? { darknessLevel: NIGHT.darkness, globalLight: { enabled: false } } : { darknessLevel: 0, globalLight: { enabled: true } },
-        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null }
+        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null, terrain: terrainOf(plan) }
     };
     // v14 держит фон в уровне сцены. Уровень — раньше сцены: смена фона уровня сама перерисовывает арену у всех, кто
     // на ней, и тогда перерисовка одна — уже с новым фоном (сцена следом меняет только флаги и погоду)
@@ -214,16 +237,16 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
         if (level && level.background?.src !== src) await level.update({ 'background.src': src });
     };
     let scene = game.scenes.find(s => s.getFlag(MODULE_ID, FLAG));
-    // Кто уже стоит на арене, у того смена фона перерисует её: большая картинка грузится 5–8 секунд, и всё это время
-    // на экране снимок прошлой арены. Ждать конца перерисовки — подписка до смены фона, иначе её можно пропустить
-    const redrawn = scene && canvas.scene?.id === scene.id ? new Promise(resolve => Hooks.once('canvasReady', resolve)) : null;
+    const viewing = !!scene && canvas.scene?.id === scene.id;
     if (scene) {
         await scene.deleteEmbeddedDocuments('Wall', scene.walls.map(w => w.id));
         await scene.deleteEmbeddedDocuments('AmbientLight', scene.lights.map(l => l.id));
         await scene.deleteEmbeddedDocuments('Token', scene.tokens.map(t => t.id));
         await scene.deleteEmbeddedDocuments('Region', scene.regions.map(r => r.id));
+        await scene.deleteEmbeddedDocuments('Tile', scene.tiles.filter(t => t.getFlag(MODULE_ID, 'weather')).map(t => t.id));
         await setLevel(scene);
-        await scene.update(data);
+        // Погода прошлого боя не переходит в новый
+        await scene.update({ ...data, [`flags.${MODULE_ID}.-=arenaWeather`]: null });
     } else {
         scene = await Scene.create(foundry.utils.expandObject(data));
         await setLevel(scene);
@@ -232,6 +255,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     await scene.createEmbeddedDocuments('Wall', wallsOf(plan));
     await scene.createEmbeddedDocuments('AmbientLight', lightsOf(plan, mood));
     await scene.createEmbeddedDocuments('Region', regionsOf(plan));
+    if (WEATHER[weather]) await applyWeather(scene, weather, { seed: plan.seed });
 
     // Токены. Существо крупнее клетки занимает w×w клеток: место — где все они проходимы и свободны, иначе большие
     // токены налезают друг на друга
@@ -268,8 +292,8 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     if (tokens.length) await scene.createEmbeddedDocuments('Token', tokens);
     plan.formation = { flank, roles: roles.map(r => r.role) };
     // Бой начинается уже на новой картинке
-    if (redrawn) await Promise.race([redrawn, new Promise(resolve => setTimeout(resolve, 20000))]);
-    else if (view) await scene.view();
+    if (!viewing && view) await scene.view();
+    if (viewing || view) await settled(scene.id);
     return { scene, plan };
 }
 

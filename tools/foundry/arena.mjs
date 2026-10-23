@@ -83,6 +83,11 @@ const ford = await ev(async ({ hero, enemies }) => {
     document.querySelectorAll('#notifications li, #notifications .notification').forEach(n => n.remove());
     // Трудная местность: регионы и цена шага поперёк ручья у героя
     const regions = Object.fromEntries(scene.regions.map(r => [r.getFlag('gachadnd', 'terrain'), { shapes: r.shapes.length, behavior: r.behaviors.contents[0]?.type, types: [...(r.behaviors.contents[0]?.system?.types ?? [])] }]));
+    // Слой регионов открыт (как при шаблоне заклинания) — регионов местности не видно, они заперты
+    canvas.regions.activate();
+    await new Promise(r => setTimeout(r, 500));
+    const shown = canvas.regions.placeables.filter(p => p.document.getFlag('gachadnd', 'terrain') && p.isVisible).length;
+    canvas.tokens.activate();
     const mid = plan.terrain.stream.path[Math.floor(plan.terrain.stream.path.length / 2)];
     const inWater = scene.regions.find(r => r.getFlag('gachadnd', 'terrain') === 'water')?.testPoint({ x: mid.x * 140, y: mid.y * 140, elevation: 0 });
     const token = scene.tokens.find(t => t.actorId === hero)?.object;
@@ -93,12 +98,12 @@ const ford = await ev(async ({ hero, enemies }) => {
         const m = token.measureMovementPath(token.createTerrainMovementPath([{ x: x0, y, elevation: 0 }, { x: x1, y, elevation: 0 }]));
         walk = { distance: Math.round(m.distance), cost: Math.round(m.cost) };
     }
-    return { stream: !!plan.terrain.stream, water: water.length, regions, inWater, walk };
+    return { stream: !!plan.terrain.stream, water: water.length, regions, inWater, walk, shown };
 }, { hero: ids.hero, enemies: ids.enemies });
 check('брод: ручей есть, свет над водой не ставится', ford.stream && ford.water === 0, JSON.stringify(ford));
-check('трудная местность: вода ручья и подлесок — регионы «Трудная местность» dnd5e (жидкость, растения); шаг поперёк ручья дороже расстояния',
+check('трудная местность: вода ручья и подлесок — регионы «Трудная местность» dnd5e (жидкость, растения); шаг поперёк ручья дороже расстояния; на открытом слое регионов их не видно',
     ford.regions.water?.behavior === 'dnd5e.difficultTerrain' && ford.regions.water.types.includes('liquid') && ford.regions.brush?.types.includes('plants') && ford.regions.brush.shapes > 5
-    && ford.inWater && ford.walk && ford.walk.cost > ford.walk.distance, JSON.stringify({ regions: ford.regions, inWater: ford.inWater, walk: ford.walk }));
+    && ford.inWater && ford.walk && ford.walk.cost > ford.walk.distance && ford.shown === 0, JSON.stringify({ regions: ford.regions, inWater: ford.inWater, walk: ford.walk, shown: ford.shown }));
 await page.waitForTimeout(1500);
 await f.shot('arena-water');
 // Топь: озерца болота — регион «Топь» (грязь), по кругу на озерцо

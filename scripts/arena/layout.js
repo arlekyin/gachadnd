@@ -227,7 +227,13 @@ export function layout({ cols = 28, rows = 20, seed = 'arena', biome = 'forest',
     };
     const avail = vignettes.filter(n => VIGNETTES[n]);
     // Мост — через ручей, где его пересекает тропа (вместо брода с камнями)
-    if (avail.includes('bridge') && stream && ford && stream.width < 2.5 && R() < 0.6) vplace('bridge', ford.x, ford.y);
+    if (avail.includes('bridge') && stream && ford && stream.width < 2.5 && R() < 0.6) {
+        // Поперёк ручья: картинка моста вытянута по вертикали — поворот на угол течения кладёт её поперёк русла
+        const i = stream.path.reduce((best, p, k) => Math.hypot(p.x - ford.x, p.y - ford.y) < Math.hypot(stream.path[best].x - ford.x, stream.path[best].y - ford.y) ? k : best, 0);
+        const a = stream.path[Math.max(0, i - 2)], b = stream.path[Math.min(stream.path.length - 1, i + 2)];
+        vplace('bridge', ford.x, ford.y);
+        objects.at(-1).rot = Math.atan2(b.y - a.y, b.x - a.x);
+    }
     const heroes = avail.filter(n => VIGNETTES[n].where === 'hero' && !(scheme === 'ruins' && n === 'stones'));
     if (heroes.length && scheme !== 'thicket') {
         const name = R.pick(heroes), v = VIGNETTES[name];
@@ -360,6 +366,22 @@ export function connected(plan) {
         }
     }
     return false;
+}
+
+/**
+ * Лента вдоль кривой — многоугольник [x, y, …] в клетках: точки одного края, затем другого в обратном порядке.
+ * Для регионов воды, грязи и разлива
+ */
+export function ribbon(path, width, every = 2) {
+    const pts = path.filter((_, i) => i % every === 0), left = [], right = [], w = width / 2;
+    pts.forEach((p, i) => {
+        const q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
+        const dx = q.x - o.x, dy = q.y - o.y, l = Math.hypot(dx, dy) || 1;
+        left.push(p.x - (dy / l) * w, p.y + (dx / l) * w);
+        // unshift пары сохраняет порядок x, y
+        right.unshift(p.x + (dy / l) * w, p.y - (dx / l) * w);
+    });
+    return [...left, ...right];
 }
 
 /** Клетки, до которых отряд доходит от своей кромки: враги встают только на них, а не в замкнутых карманах */

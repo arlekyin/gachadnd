@@ -300,6 +300,7 @@ function drawVignette(ctx, o, art, cell, tuftArt, seed) {
     const img = art[`vignette-${o.name}-1`] ?? art[`vignette-${o.name}`];
     if (!img) return;
     const J = rng(`${seed}|vg|${o.x.toFixed(2)}`);
+    if (o.name === 'bridge') return drawBridge(ctx, o, img, cell);
     const w = o.w * cell, h = o.h * cell, k = Math.min(w / img.width, h / img.height), dw = img.width * k, dh = img.height * k;
     const x = o.x * cell - dw / 2, y = o.y * cell - dh / 2;
     const g = ctx.createRadialGradient(o.x * cell, o.y * cell, Math.min(dw, dh) * 0.25, o.x * cell, o.y * cell, Math.max(dw, dh) * 0.6);
@@ -318,6 +319,16 @@ function drawVignette(ctx, o, art, cell, tuftArt, seed) {
         const a = J.range(0, 6.28), rx = dw / 2 * J.range(0.85, 1.05), ry = dh / 2 * J.range(0.85, 1.05), t = J.pick(tuftArt), sz = cell * J.range(0.25, 0.42), kk = sz / Math.max(t.width, t.height);
         ctx.drawImage(t, o.x * cell + Math.cos(a) * rx - (t.width * kk) / 2, o.y * cell + Math.sin(a) * ry - (t.height * kk) / 2, t.width * kk, t.height * kk);
     }
+}
+
+/** Мост — поперёк ручья: картинка повёрнута на угол течения (o.rot), тень падает на воду */
+function drawBridge(ctx, o, img, cell) {
+    const k = Math.min((o.w * cell) / img.width, (o.h * cell) / img.height), dw = img.width * k, dh = img.height * k;
+    ctx.save();
+    ctx.translate(o.x * cell, o.y * cell); ctx.rotate(o.rot ?? 0);
+    ctx.save(); ctx.filter = `blur(${cell * 0.1}px)`; ctx.globalAlpha = 0.35; ctx.drawImage(silhouette(img), -dw / 2 + cell * 0.12, -dh / 2 + cell * 0.15, dw, dh); ctx.restore();
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
 }
 
 // Цвет тени: холодный тёмно-синий, а не чёрный и не бурый — тень меняет оттенок, а не только яркость
