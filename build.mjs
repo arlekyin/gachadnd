@@ -14,6 +14,7 @@ import { validateRisk } from './scripts/labyrinth/risk-schema.js';
 import { validateEvent } from './scripts/labyrinth/event-schema.js';
 import { buildRules } from './tools/rules.mjs';
 import { buildBestiary } from './tools/bestiary.mjs';
+import { buildTables } from './tools/tables.mjs';
 
 const BASE_SRC_DIR = './src/packs/gacha-skills';
 const DIST_DIR = './dist/packs/gacha-skills';
@@ -1005,7 +1006,7 @@ fs.writeFileSync(EVENT_OUT, JSON.stringify(events, null, 2) + '\n', 'utf8');
 
 // Базы компендиумов (LevelDB) полностью собираются из dist: старая база удаляется перед упаковкой,
 // иначе неполная или повреждённая база (например, после git pull) не откроется. Мир должен быть закрыт.
-for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm', 'gacha-bestiary']) {
+for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm', 'gacha-bestiary', 'gacha-tables']) {
     try {
         fs.rmSync(path.join('./packs', pack), { recursive: true, force: true });
     } catch (e) {
@@ -1017,6 +1018,15 @@ for (const pack of ['gacha-skills', 'gacha-rules', 'gacha-gm', 'gacha-bestiary']
 // Бестиарий: существа Лабиринта
 const creatures = buildBestiary({ distDir: './dist/packs', stableId, skills: items.map(({ item }) => item) });
 
+// Таблицы встреч: стаи биомов
+let tables = [];
+try {
+    tables = buildTables({ distDir: './dist/packs', stableId });
+} catch (e) {
+    console.error(`Сборка таблиц встреч остановлена: ${e.message}`);
+    process.exit(1);
+}
+
 // Журналы правил: справочные таблицы генерируются из собранных навыков и испытаний
 let journals = [];
 try {
@@ -1026,4 +1036,4 @@ try {
     process.exit(1);
 }
 
-console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, событий — ${events.length}, существ — ${creatures.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);
+console.log(`Сборка завершена: навыков — ${items.length}, испытаний Риска — ${risks.length}, событий — ${events.length}, существ — ${creatures.length}, таблиц встреч — ${tables.length}, журналов правил — ${journals.map(j => `${j.name} (${j.pages} стр.)`).join(', ') || 'нет'}. База готова к упаковке.`);

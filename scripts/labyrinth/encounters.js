@@ -7,8 +7,10 @@
  * на уровень отряда + 1, Босс — тяжёлая с запасом и вожаком.
  *
  * Состав — из одной стаи биома (болотная нежить, пауки, разбойники…): у Элиты, Заставы и Босса сначала вожак
- * (самый сильный, кто влезает в долю бюджета), остальное — рядовыми. Монстров ищут по английскому имени
- * (originalName), поэтому встречи работают и с переводом компендиума, и без него.
+ * (самый сильный, кто влезает в долю бюджета), остальное — рядовыми по весам строк. Стаи — случайные таблицы
+ * «Встречи: <биом>: <стая>»: из компендиума модуля (src/tables/encounters.yaml), а таблица мира с тем же названием
+ * её заменяет, новая — добавляет стаю. Строка — монстр (SRD, свой актёр мира или из другого компендиума)
+ * или текст с именем монстра SRD.
  *
  * Кнопки: «На арену» — генератор арен (arena/arena.js) строит поле, отряд слева, враги справа; «На эту сцену» —
  * враги в нескольких клетках от отряда; «Другой состав»; «Сам» — модуль ничего не ставит. Монстры
@@ -20,10 +22,12 @@ import { MODULE_ID } from "../core/constants.js";
 import { hint } from "../core/prefs.js";
 import { onRenderChatMessage } from "../core/chat-hooks.js";
 import { partyActors } from "./horsemen.js";
-import { currentBiome } from "./biomes.js";
+import { BIOMES, currentBiome } from "./biomes.js";
 import { getFloor } from "./economy.js";
 
 const PACK = 'dnd5e.monsters';
+const TABLES = `${MODULE_ID}.gacha-tables`;
+const PREFIX = 'Встречи';
 const FOLDER = 'Лабиринт: монстры';
 // Сила встречи по узлу: столбец бюджета (0 — низкая, 1 — средняя, 2 — тяжёлая), запас, прибавка уровня,
 // доля бюджета на вожака (0 — без вожака)
@@ -33,25 +37,6 @@ const NODES = {
     outpost: { label: 'Застава', tier: 2, scale: 1, plus: 1, leader: 0.5, name: 'тяжёлая, на уровень выше' },
     boss: { label: 'Босс', tier: 2, scale: 1.25, plus: 0, leader: 0.6, name: 'тяжёлая с запасом' }
 };
-// Стаи биомов: английские имена SRD. Болото и лес — до Заставы первого этажа, город в глуши — после
-const PACKS_BY_BIOME = {
-    swamp: {
-        'Нежить топей': ['Zombie', 'Skeleton', 'Ghoul', 'Shadow', 'Ghast', "Will-o'-Wisp", 'Ogre Zombie'],
-        'Болотные твари': ['Giant Frog', 'Giant Poisonous Snake', 'Swarm of Insects', 'Crocodile', 'Giant Toad', 'Lizardfolk', 'Giant Constrictor Snake'],
-        'Пауки': ['Giant Wolf Spider', 'Swarm of Spiders', 'Giant Spider', 'Ettercap'],
-        'Звери леса': ['Wolf', 'Boar', 'Panther', 'Black Bear', 'Dire Wolf', 'Brown Bear', 'Giant Boar'],
-        'Лесная нечисть': ['Awakened Shrub', 'Violet Fungus', 'Satyr', 'Dryad', 'Awakened Tree', 'Sea Hag']
-    },
-    town: {
-        'Разбойники': ['Bandit', 'Thug', 'Scout', 'Bandit Captain', 'Berserker'],
-        'Культ': ['Cultist', 'Acolyte', 'Cult Fanatic', 'Priest'],
-        'Крысы': ['Giant Rat', 'Swarm of Rats', 'Wererat'],
-        'Упыри': ['Zombie', 'Ghoul', 'Ghast', 'Specter'],
-        'Гноллы': ['Hyena', 'Gnoll', 'Giant Hyena']
-    }
-};
-PACKS_BY_BIOME.labyrinth = { ...PACKS_BY_BIOME.swamp, ...PACKS_BY_BIOME.town };
-
 const FRACTION_XP = { 0: 10, 0.125: 25, 0.25: 50, 0.5: 100 };
 export const xpOfCr = cr => (cr < 1 ? FRACTION_XP[cr] ?? 10 : CONFIG.DND5E.CR_EXP_LEVELS?.[cr] ?? 0);
 const levelOf = actor => Math.max(1, Number(actor?.system?.details?.level) || 1);
@@ -66,20 +51,69 @@ export function budgetFor(type, party = partyActors()) {
 }
 
 let monsterIndex = null;
-/** Монстры SRD по английскому имени: { name, id, cr, xp } */
+/** Монстры SRD: по английскому имени, русскому имени и id — { key, name, id, uuid, cr, xp } */
 async function monsters() {
     if (monsterIndex) return monsterIndex;
+    monsterIndex = { byName: new Map(), byId: new Map() };
     const pack = game.packs.get(PACK);
-    if (!pack) return (monsterIndex = new Map());
+    if (!pack) return monsterIndex;
     const index = await pack.getIndex({ fields: ['system.details.cr'] });
-    monsterIndex = new Map(index.contents.map(e => {
+    for (const e of index.contents) {
         const cr = Number(e.system?.details?.cr) || 0;
-        return [e.originalName ?? e.name, { key: e.originalName ?? e.name, name: e.name, id: e._id, cr, xp: xpOfCr(cr) }];
-    }));
+        const m = { name: e.name, id: e._id, uuid: `Compendium.${PACK}.Actor.${e._id}`, cr, xp: xpOfCr(cr) };
+        monsterIndex.byId.set(e._id, m);
+        monsterIndex.byName.set(e.originalName ?? e.name, m);
+        monsterIndex.byName.set(e.name, m);
+    }
     return monsterIndex;
 }
 
+/** Строка таблицы → монстр с весом: ссылка на актёра (SRD, мир, другой компендиум) или текст с именем SRD */
+async function memberOf(result, index) {
+    const weight = Math.max(1, Number(result.weight) || 1);
+    // v13+: ссылка строки — documentUuid (у текстовой строки её нет)
+    const uuid = result.type === 'document' ? result.documentUuid : null;
+    if (uuid) {
+        const srd = uuid.startsWith(`Compendium.${PACK}.Actor.`) ? index.byId.get(uuid.split('.').pop()) : null;
+        if (srd) return { ...srd, key: uuid, weight };
+        const actor = await fromUuid(uuid).catch(() => null);
+        if (!(actor instanceof Actor)) return null;
+        const cr = Number(actor.system?.details?.cr) || 0;
+        return { key: uuid, name: actor.name, uuid, cr, xp: xpOfCr(cr), weight };
+    }
+    const srd = index.byName.get(String(result.name ?? result.text ?? '').trim());
+    return srd ? { ...srd, key: srd.uuid, weight } : null;
+}
+
+/**
+ * Стаи биома: [[название, монстры по силе]]. Таблицы компендиума, поверх — таблицы мира с тем же названием и
+ * новые. Нет ни одной таблицы биома (этажи без своего биома) — все таблицы встреч
+ */
+export async function packsOf(biome) {
+    const index = await monsters();
+    const tables = new Map();
+    const pack = game.packs.get(TABLES);
+    for (const t of pack ? await pack.getDocuments() : []) tables.set(t.name, t);
+    for (const t of game.tables.contents) if (t.name.startsWith(`${PREFIX}: `)) tables.set(t.name, t);
+    const prefix = `${PREFIX}: ${BIOMES[biome]?.name ?? BIOMES.labyrinth.name}: `;
+    let mine = [...tables.values()].filter(t => t.name.startsWith(prefix));
+    if (!mine.length) mine = [...tables.values()];
+    const out = [];
+    for (const t of mine) {
+        const members = (await Promise.all(t.results.contents.map(r => memberOf(r, index)))).filter(Boolean).sort((a, b) => a.xp - b.xp);
+        if (members.length) out.push([t.name.split(': ').slice(2).join(': ') || t.name, members]);
+    }
+    return out;
+}
+
 const pick = (list, rnd) => list[Math.floor(rnd() * list.length)];
+// По весам строк таблицы
+const pickWeighted = (list, rnd) => {
+    const total = list.reduce((sum, m) => sum + (m.weight ?? 1), 0);
+    let roll = rnd() * total;
+    for (const m of list) if ((roll -= m.weight ?? 1) < 0) return m;
+    return list.at(-1);
+};
 
 /**
  * Состав встречи: [{ key, name, id, cr, xp, count }], стая, опыт и бюджет. rnd — случайность (для проверок с зерном)
@@ -89,12 +123,9 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
     const node = NODES[type];
     if (!node) return null;
     const budget = budgetFor(type, party);
-    const index = await monsters();
     const maxCount = Math.max(2, party.length + 2);
     // Стая годится, если её слабейший влезает в бюджет, а сильнейшие набирают хотя бы половину
-    const all = Object.entries(PACKS_BY_BIOME[biome] ?? PACKS_BY_BIOME.labyrinth)
-        .map(([group, names]) => [group, names.map(n => index.get(n)).filter(Boolean).sort((a, b) => a.xp - b.xp)])
-        .filter(([, list]) => list.length && list[0].xp <= budget);
+    const all = (await packsOf(biome)).filter(([, list]) => list.length && list[0].xp <= budget);
     const strong = all.filter(([, list]) => (list.filter(m => m.xp <= budget).at(-1)?.xp ?? 0) * maxCount >= budget / 2);
     const groups = strong.length ? strong : all;
     if (!groups.length) return null;
@@ -118,7 +149,7 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
         const same = fits.filter(m => kinds.has(m.key));
         // Не больше трёх видов: третий вид — последний новый
         if (kinds.size >= 3 && !same.length) break;
-        const m = kinds.size >= 2 && same.length ? pick(same, rnd) : pick(fits, rnd);
+        const m = kinds.size >= 2 && same.length ? pickWeighted(same, rnd) : pickWeighted(fits, rnd);
         chosen.push(m); left -= m.xp;
     }
     if (!chosen.length) chosen.push(list[0]);
@@ -160,17 +191,19 @@ Hooks.on('gachadnd.nodeEntered', type => { offerEncounter(type).catch(error => c
 // РАССТАНОВКА
 // ==========================================
 
-/** Монстры встречи — актёры мира: импорт из SRD один раз, папка «Лабиринт: монстры» */
+/** Монстры встречи — актёры мира: свой актёр мира — как есть, из компендиума — импорт один раз (папка «Лабиринт: монстры») */
 async function worldActors(enc) {
-    const pack = game.packs.get(PACK);
     let folder = game.folders.find(f => f.type === 'Actor' && f.name === FOLDER);
-    folder ??= await Folder.create({ name: FOLDER, type: 'Actor', color: '#3a2b2b' });
     const ids = [];
     for (const m of enc.creatures) {
-        const uuid = `Compendium.${PACK}.Actor.${m.id}`;
-        let actor = game.actors.find(a => a.getFlag(MODULE_ID, 'encounterSource') === uuid);
+        const uuid = m.uuid ?? `Compendium.${PACK}.Actor.${m.id}`;
+        let actor = uuid.startsWith('Actor.') ? game.actors.get(uuid.split('.')[1]) : game.actors.find(a => a.getFlag(MODULE_ID, 'encounterSource') === uuid);
         if (!actor) {
-            actor = await game.actors.importFromCompendium(pack, m.id, { folder: folder.id });
+            const [, scope, name, , id] = uuid.split('.');
+            const pack = game.packs.get(`${scope}.${name}`);
+            if (!pack) continue;
+            folder ??= await Folder.create({ name: FOLDER, type: 'Actor', color: '#3a2b2b' });
+            actor = await game.actors.importFromCompendium(pack, id, { folder: folder.id });
             await actor.setFlag(MODULE_ID, 'encounterSource', uuid);
         }
         for (let i = 0; i < m.count; i++) ids.push(actor.id);
@@ -260,4 +293,4 @@ onRenderChatMessage((message, html) => {
     });
 });
 
-export const encounterApi = { build: buildEncounter, offer: offerEncounter, budget: budgetFor, resolve };
+export const encounterApi = { build: buildEncounter, offer: offerEncounter, budget: budgetFor, packs: packsOf, resolve };

@@ -1,5 +1,6 @@
 // Встречи на боевых узлах в настоящей Foundry: node tools/foundry/encounters.mjs [--headed]
-// Бюджет опыта dnd5e 2024 по узлу и уровням отряда; состав из одной стаи биома, все имена стай есть в SRD;
+// Бюджет опыта dnd5e 2024 по узлу и уровням отряда; стаи — случайные таблицы (компендиум, таблица мира заменяет
+// и добавляет); состав из одной стаи биома;
 // вход на узел — шёпот Мастеру с составом и кнопками; «Другой состав» меняет стаю; «На эту сцену» ставит врагов
 // и создаёт бой с отрядом; «На арену» строит арену с отрядом и врагами. В конце всё созданное убирается.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
@@ -57,16 +58,32 @@ const plan = await ev(async party => {
         const e = await enc.build(type, { party: actors, biome });
         out.runs.push({ biome, type, group: e?.group, xp: e?.xp, budget: e?.budget, count: e?.creatures.reduce((s, m) => s + m.count, 0), kinds: e?.creatures.length, leader: e?.creatures[0]?.xp });
     }
-    // Все имена стай нашлись в SRD
-    const index = await game.packs.get('dnd5e.monsters').getIndex();
-    const known = new Set(index.contents.map(e => e.originalName ?? e.name));
-    const src = await (await fetch('/modules/gachadnd/scripts/labyrinth/encounters.js')).text();
-    const block = src.slice(src.indexOf('const PACKS_BY_BIOME'), src.indexOf('PACKS_BY_BIOME.labyrinth'));
-    out.missing = [...block.matchAll(/'([A-Z][^']+)'|"([A-Z][^"]+)"/g)].map(m => m[1] ?? m[2]).filter(n => !known.has(n));
+    // Таблицы встреч компендиума: все строки ведут на монстров
+    const pack = game.packs.get('gachadnd.gacha-tables');
+    const tables = await pack.getDocuments();
+    out.tables = tables.length;
+    out.rows = tables.reduce((s, t) => s + t.results.size, 0);
+    out.resolved = (await enc.packs('swamp')).concat(await enc.packs('town')).reduce((s, [, list]) => s + list.length, 0);
     return out;
 }, party);
 check('бюджет на 4 героев 1 уровня: Монстры 300, Элита 400, Застава 800 (уровень 2), Босс 500', JSON.stringify(plan.budget) === JSON.stringify({ mob: 300, elite: 400, outpost: 800, boss: 500 }), JSON.stringify(plan.budget));
-check('все монстры стай нашлись в SRD dnd5e', !plan.missing.length, plan.missing.join(', '));
+check('компендиум «Gacha: Таблицы встреч»: 10 стай, все строки ведут на монстров SRD', plan.tables === 10 && plan.rows > 40 && plan.resolved === plan.rows, JSON.stringify({ tables: plan.tables, rows: plan.rows, resolved: plan.resolved }));
+
+// ---------- Таблицы мира: та же — заменяет стаю, новая — добавляет
+const own = await ev(async () => {
+    const index = await game.packs.get('dnd5e.monsters').getIndex();
+    const goblin = index.find(e => (e.originalName ?? e.name) === 'Goblin');
+    const made = await RollTable.createDocuments([
+        { name: 'Встречи: Лес и болота: Пауки', formula: '1d1', results: [{ type: 'text', name: 'Zombie', weight: 1, range: [1, 1] }] },
+        { name: 'Встречи: Лес и болота: Мои гоблины', formula: '1d1', results: [{ type: 'document', name: 'Goblin', documentUuid: `Compendium.dnd5e.monsters.Actor.${goblin._id}`, weight: 1, range: [1, 1] }] }
+    ]);
+    const packs = Object.fromEntries((await game.gachadnd.encounters.packs('swamp')).map(([g, list]) => [g, list.map(m => m.uuid.split('.').pop())]));
+    const ids = { zombie: index.find(e => (e.originalName ?? e.name) === 'Zombie')._id, goblin: goblin._id };
+    await RollTable.deleteDocuments(made.map(t => t.id));
+    return { groups: Object.keys(packs), spiders: packs['Пауки'], mine: packs['Мои гоблины'], ids };
+});
+check('таблица мира «Встречи: Лес и болота: Пауки» заменила стаю, новая «Мои гоблины» добавилась',
+    own.spiders?.length === 1 && own.spiders[0] === own.ids.zombie && own.mine?.[0] === own.ids.goblin && own.groups.length === 6, JSON.stringify(own));
 const bad = plan.runs.filter(r => !r.group || r.xp > r.budget || r.xp < r.budget * 0.3 || r.count > 6 || r.kinds > 3);
 check('48 составов (болото и город, 4 узла): в бюджете, не меньше трети, не больше 6 существ и 3 видов', !bad.length, JSON.stringify(bad.slice(0, 3)));
 

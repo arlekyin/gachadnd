@@ -1,0 +1,69 @@
+# Стаи встреч на боевых узлах (scripts/labyrinth/encounters.js). Сборка (npm run build) кладёт их в компендиум
+# «Gacha: Таблицы встреч»: по таблице на стаю, название — «Встречи: <биом>: <стая>»; строки — монстры SRD dnd5e.
+#
+# Биомы — ключи scripts/labyrinth/biomes.js (swamp — Лес и болота, town — Город в глуши).
+# Монстр: name — английское имя в SRD (originalName), srd — id в компендиуме dnd5e.monsters,
+# weight — как часто встаёт рядовым (вожака модуль берёт по силе), img — картинка строки. Мастер правит копию таблицы в мире.
+
+swamp:
+  Нежить топей:
+    - { name: 'Zombie', srd: NAISFPoNNgUCsEyW, weight: 3, img: systems/dnd5e/tokens/undead/Zombie.webp }
+    - { name: 'Skeleton', srd: nU8GN8La8DCt8SDb, weight: 3, img: systems/dnd5e/tokens/undead/Skeleton.webp }
+    - { name: 'Ghoul', srd: OBujQLLPSmlJiZnL, weight: 2, img: systems/dnd5e/tokens/undead/Ghoul.webp }
+    - { name: 'Shadow', srd: QGcQYZbVl4bWzi4E, weight: 2, img: systems/dnd5e/tokens/undead/Shadow.webp }
+    - { name: 'Ghast', srd: IyIybE5t2adMEVUM, weight: 1, img: systems/dnd5e/tokens/undead/Ghast.webp }
+    - { name: 'Will-o''-Wisp', srd: 8KSVpQZyzius93ko, weight: 1, img: systems/dnd5e/tokens/undead/WilloWisp.webp }
+    - { name: 'Ogre Zombie', srd: RenLfmDT2XlbCF4x, weight: 1, img: systems/dnd5e/tokens/undead/OgreZombie.webp }
+  Болотные твари:
+    - { name: 'Giant Frog', srd: kSAi2KRonL4G4JpO, weight: 3, img: systems/dnd5e/tokens/beast/GiantFrog.webp }
+    - { name: 'Giant Poisonous Snake', srd: ZW39DE2zI3TXVYC9, weight: 3, img: systems/dnd5e/tokens/beast/GiantPoisonousSnake.webp }
+    - { name: 'Swarm of Insects', srd: S0zDrv6lbnwWaz9E, weight: 2, img: systems/dnd5e/tokens/beast/SwarmInsects.webp }
+    - { name: 'Crocodile', srd: 8aCTKP5qaBPFOqxM, weight: 2, img: systems/dnd5e/tokens/thumbs/beast/Crocodile.webp }
+    - { name: 'Giant Toad', srd: Ixo5shumxy4I9qyD, weight: 2, img: systems/dnd5e/tokens/beast/GiantToad.webp }
+    - { name: 'Lizardfolk', srd: 57DofLgRQx16ARoc, weight: 2, img: systems/dnd5e/tokens/humanoid/Lizardfolk.webp }
+    - { name: 'Giant Constrictor Snake', srd: NpvwE1feOHyEqAbP, weight: 1, img: systems/dnd5e/tokens/thumbs/beast/GiantConstrictorSnake.webp }
+  Пауки:
+    - { name: 'Giant Wolf Spider', srd: f9JbhBfWucrY2eDA, weight: 3, img: systems/dnd5e/tokens/beast/GiantWolfSpider.webp }
+    - { name: 'Swarm of Spiders', srd: 4udpeEneFSZK9NTB, weight: 2, img: systems/dnd5e/tokens/beast/SwarmSpiders.webp }
+    - { name: 'Giant Spider', srd: v99wOosUJjUgcUNF, weight: 2, img: systems/dnd5e/tokens/beast/GiantSpider.webp }
+    - { name: 'Ettercap', srd: aKt7vFAS1J0x3FQm, weight: 1, img: systems/dnd5e/tokens/monstrosity/Ettercap.webp }
+  Звери леса:
+    - { name: 'Wolf', srd: yawTeS8u2FCfzzZH, weight: 3, img: systems/dnd5e/tokens/beast/Wolf.webp }
+    - { name: 'Boar', srd: lZR4lhNmYSf89s4Q, weight: 3, img: systems/dnd5e/tokens/beast/Boar.webp }
+    - { name: 'Panther', srd: AijNdqMurWxDxUSl, weight: 3, img: systems/dnd5e/tokens/beast/Panther.webp }
+    - { name: 'Black Bear', srd: D5WjGwKskeUT8HXa, weight: 2, img: systems/dnd5e/tokens/beast/BlackBear.webp }
+    - { name: 'Dire Wolf', srd: EYiQZ3rFL25fEJY5, weight: 2, img: systems/dnd5e/tokens/beast/DireWolf.webp }
+    - { name: 'Brown Bear', srd: omcDpBoB69esCXeM, weight: 2, img: systems/dnd5e/tokens/thumbs/beast/BrownBear.webp }
+    - { name: 'Giant Boar', srd: SsuCaF2fIEoDdFA3, weight: 1, img: systems/dnd5e/tokens/thumbs/beast/GiantBoar.webp }
+  Лесная нечисть:
+    - { name: 'Awakened Shrub', srd: gaSTr7DFZJLmgI2J, weight: 3, img: systems/dnd5e/tokens/plant/AwakenedShrub.webp }
+    - { name: 'Violet Fungus', srd: 7EmUVycEASn7SFL0, weight: 2, img: systems/dnd5e/tokens/plant/VioletFungus.webp }
+    - { name: 'Satyr', srd: 8xhuJXYMnlQD7LF6, weight: 2, img: systems/dnd5e/tokens/fey/Satyr.webp }
+    - { name: 'Dryad', srd: KOHVWl5RU9XBR8Jb, weight: 2, img: systems/dnd5e/tokens/fey/Dryad.webp }
+    - { name: 'Awakened Tree', srd: UR2gWLFHmFwG7ReH, weight: 1, img: None }
+    - { name: 'Sea Hag', srd: OQqybZoMeDFn5AFD, weight: 1, img: systems/dnd5e/tokens/fey/SeaHag.webp }
+town:
+  Разбойники:
+    - { name: 'Bandit', srd: n4TEv7inVUkyZviN, weight: 3, img: systems/dnd5e/tokens/humanoid/Bandit.webp }
+    - { name: 'Thug', srd: Cy3A0rsNMPLZozam, weight: 2, img: systems/dnd5e/tokens/humanoid/Thug.webp }
+    - { name: 'Scout', srd: O3ABqI55Ir1du1Xa, weight: 2, img: systems/dnd5e/tokens/humanoid/Scout.webp }
+    - { name: 'Bandit Captain', srd: rb7OJt822wIO52qY, weight: 1, img: systems/dnd5e/tokens/humanoid/BanditCaptain.webp }
+    - { name: 'Berserker', srd: kz1t6xeXVwODpYb2, weight: 1, img: systems/dnd5e/tokens/humanoid/Berserker.webp }
+  Культ:
+    - { name: 'Cultist', srd: qkLNA1lKMMJpxuWg, weight: 3, img: systems/dnd5e/tokens/humanoid/Cultist.webp }
+    - { name: 'Acolyte', srd: CHEUjiYrVM9X0vIT, weight: 2, img: systems/dnd5e/tokens/humanoid/Acolyte.webp }
+    - { name: 'Cult Fanatic', srd: tYfQIxCJT0WaaKmc, weight: 1, img: systems/dnd5e/tokens/humanoid/CultFanatic.webp }
+    - { name: 'Priest', srd: PVD5wRdyO7iCJPs1, weight: 1, img: systems/dnd5e/tokens/humanoid/Priest.webp }
+  Крысы:
+    - { name: 'Giant Rat', srd: q1YJIeIt6rK8fCKn, weight: 3, img: systems/dnd5e/tokens/beast/GiantRat.webp }
+    - { name: 'Swarm of Rats', srd: 8ihbbjkaOFTPbI73, weight: 2, img: systems/dnd5e/tokens/beast/SwarmRats.webp }
+    - { name: 'Wererat', srd: CrnUJhTbkdZjCZsH, weight: 1, img: systems/dnd5e/tokens/humanoid/Wererat.webp }
+  Упыри:
+    - { name: 'Zombie', srd: NAISFPoNNgUCsEyW, weight: 3, img: systems/dnd5e/tokens/undead/Zombie.webp }
+    - { name: 'Ghoul', srd: OBujQLLPSmlJiZnL, weight: 2, img: systems/dnd5e/tokens/undead/Ghoul.webp }
+    - { name: 'Ghast', srd: IyIybE5t2adMEVUM, weight: 1, img: systems/dnd5e/tokens/undead/Ghast.webp }
+    - { name: 'Specter', srd: PuPo4H4Dcxigf0fY, weight: 2, img: systems/dnd5e/tokens/undead/Specter.webp }
+  Гноллы:
+    - { name: 'Hyena', srd: cDr1JtzEV26bP5Ym, weight: 3, img: systems/dnd5e/tokens/beast/Hyena.webp }
+    - { name: 'Gnoll', srd: R2GPY9BhRmmwZwkh, weight: 2, img: systems/dnd5e/tokens/humanoid/Gnoll.webp }
+    - { name: 'Giant Hyena', srd: aAqfEHPiVbhMwZ6j, weight: 1, img: systems/dnd5e/tokens/thumbs/beast/GiantHyena.webp }

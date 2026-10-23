@@ -69,6 +69,17 @@
         "TRUSTED": "NONE",
         "ASSISTANT": "OWNER"
       }
+    },
+    {
+      "name": "gacha-tables",
+      "label": "Gacha: Таблицы встреч",
+      "path": "packs/gacha-tables",
+      "type": "RollTable",
+      "ownership": {
+        "PLAYER": "NONE",
+        "TRUSTED": "NONE",
+        "ASSISTANT": "OWNER"
+      }
     }
   ],
   "relationships": {
