@@ -297,6 +297,26 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     return { scene, plan };
 }
 
+/**
+ * Обход v14: при пересборке арены, на которую смотрят, регион иногда рисуется дважды — первая сетка подсветки
+ * остаётся сиротой и видна белой лентой или кругом поверх поля. Сироты и дубли (живая — последняя) прячутся
+ * у каждого клиента, только на сцене арены
+ */
+function purgeRegionHighlights() {
+    const layer = canvas.regions, box = layer?._highlights;
+    if (!box || !canvas.scene?.getFlag(MODULE_ID, FLAG)) return;
+    const live = new Set(layer.placeables), seen = new Set();
+    for (const mesh of [...box.children].reverse()) {
+        const region = mesh.region;
+        if (region && !region.destroyed && live.has(region) && !seen.has(region)) { seen.add(region); continue; }
+        // Только спрятать: Foundry может ещё обращаться к сетке, уничтоженная роняет перерисовку
+        mesh.visible = false;
+        mesh.renderable = false;
+    }
+}
+const purgeSoon = foundry.utils.debounce(purgeRegionHighlights, 400);
+for (const hook of ['canvasReady', 'createRegion', 'deleteRegion']) Hooks.on(hook, () => purgeSoon());
+
 Hooks.once('ready', () => {
     game.gachadnd = Object.assign(game.gachadnd ?? {}, { arena: { generate: generateArena, layout } });
 });

@@ -65,6 +65,10 @@ for (const mood of ['day', 'night', 'fog', 'rot', 'blood']) {
 // Пересборка подряд: на экране фон этого боя, а не прошлого — ночь темнее дня, следующий за ней туман светлее ночи
 check('пересборка подряд: на экране фон этого боя — ночь темнее дня, туман светлее ночи', lightOf.night < lightOf.day * 0.85 && lightOf.fog > lightOf.night * 1.1, JSON.stringify(lightOf));
 
+// Пять пересборок подряд на глазах у Мастера: подсветка регионов не залипает белыми лентами и кругами (обход v14)
+const highlights = await ev(() => ({ visible: canvas.regions._highlights.children.filter(c => c.visible && c.renderable).length, meshes: canvas.regions._highlights.children.length, regions: canvas.regions.placeables.length }));
+check('пересборки подряд: сирот подсветки регионов нет, видимых сеток нет', highlights.visible === 0, JSON.stringify(highlights));
+
 // Ночь: темнота сцены без общего света, «мути» нет (она бы светила), светят костры, святилища и друзы
 check('ночь — настоящая: темнота 0.6 без общего света, «живой мути» нет; светят три-пять друз (костёр потушен), стены их не запирают; днём — общий свет',
     nightInfo.env === '0.6/без общего' && nightInfo.murk === 0 && nightInfo.lights >= 3 && nightInfo.lit.every(a => a > 0.15) && dayInfo.env === '0/общий свет' && dayInfo.murk > 0, JSON.stringify({ nightInfo, dayInfo }));
