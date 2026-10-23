@@ -80,7 +80,7 @@ function wallsOf(plan) {
             for (const [cx, cy, r] of v.circles) ring(x + cx * CELL, y + cy * CELL, r * CELL, 8, r < 0.9 || v.lights.length ? step : low);
             for (const [cx, cy, w, h] of v.rects) {
                 const x0 = x + (cx - w / 2) * CELL, y0 = y + (cy - h / 2) * CELL, x1 = x0 + w * CELL, y1 = y0 + h * CELL;
-                for (const c of [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]]) walls.push({ c: c.map(Math.round), ...low });
+                for (const c of [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]]) walls.push({ c: c.map(Math.round), ...(v.flat ? step : low) });
             }
         } else if (o.kind === 'ruin') {
             // Как в paint.js: стена вдоль оси и вторая — поперёк, от угла

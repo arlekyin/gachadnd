@@ -1,5 +1,5 @@
 """
-Генератор арен — подготовка арта: python tools/battlemap/prepare.py [биом]
+Генератор арен — подготовка арта: python tools/battlemap/prepare.py [биом] [имена…]
 
 Берёт картинки из assets/battlemap/<биом>/_src/ (как пришли из генератора) и кладёт готовые в assets/battlemap/<биом>/:
 - ground-*      — бесшовная текстура 1024×1024 (стык краёв смешивается со сдвинутой копией);
@@ -14,18 +14,21 @@ from PIL import Image, ImageFilter, ImageChops
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BIOME = sys.argv[1] if len(sys.argv) > 1 else 'forest'
+# Только названные картинки (имя без расширения) — чтобы не пережимать весь биом ради одной замены
+ONLY = set(sys.argv[2:])
 SRC = os.path.join(ROOT, 'assets', 'battlemap', BIOME, '_src')
 OUT = os.path.join(ROOT, 'assets', 'battlemap', BIOME)
 
 
-def background_mask(im, tol=34):
-    """Маска фона: светлые малонасыщенные пиксели, связанные с краем картинки (заливка от краёв)."""
+def background_mask(im, tol=34, sat=28, holes=True):
+    """Маска фона: светлые малонасыщенные пиксели, связанные с краем картинки (заливка от краёв).
+    holes — замкнутые светлые пятна внутри тоже фон (просветы между ветвями)."""
     rgb = im.convert('RGB')
     w, h = rgb.size
     px = rgb.load()
     def is_bg(x, y):
         r, g, b = px[x, y]
-        return min(r, g, b) > 255 - tol and max(r, g, b) - min(r, g, b) < 28
+        return min(r, g, b) > 255 - tol and max(r, g, b) - min(r, g, b) < sat
     bg = bytearray(w * h)
     q = deque()
     for x in range(w):
@@ -40,7 +43,7 @@ def background_mask(im, tol=34):
             if 0 <= nx < w and 0 <= ny < h and not bg[ny * w + nx] and is_bg(nx, ny):
                 bg[ny * w + nx] = 1; q.append((nx, ny))
     # Замкнутые светлые пятна (между ветвями, в просветах) — тоже фон, если они не крошечные
-    for y0 in range(h):
+    for y0 in range(h if holes else 0):
         for x0 in range(w):
             if bg[y0 * w + x0] or not is_bg(x0, y0): continue
             region = [(x0, y0)]; bg[y0 * w + x0] = 2; q.append((x0, y0))
@@ -62,6 +65,19 @@ def cutout(im):
     alpha = ImageChops.invert(bg).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(1.1))
     im.putalpha(alpha)
     return im
+
+
+def cutout_shadowed(im):
+    """Предметы на белом с бледной падающей тенью (голубоватой): белое — прочь, а бледная тень у предмета —
+    полупрозрачной тенью цвета «цвет в альфу», а не белёсой подложкой. Светлое внутри контура не трогается."""
+    # Бледное, связанное с краем (тень), и чисто белые просветы внутри (между обломками и лозой)
+    pale = ImageChops.lighter(background_mask(im, tol=115, sat=70, holes=False), background_mask(im))
+    obj = im.convert('RGBA')
+    obj.putalpha(ImageChops.invert(pale).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(1.1)))
+    obj = dehalo(obj, im)
+    shadow = unwhite(im)
+    shadow.putalpha(ImageChops.multiply(shadow.getchannel('A'), pale).point(lambda v: round(v * 0.75)))
+    return Image.alpha_composite(shadow, obj)
 
 
 def unwhite(im):
@@ -157,6 +173,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     for path in sorted(glob.glob(os.path.join(SRC, '*'))):
         name, _ = os.path.splitext(os.path.basename(path))
+        if ONLY and name not in ONLY: continue
         im = Image.open(path)
         if name.startswith('ground-'):
             seamless(im).save(os.path.join(OUT, f'{name}.webp'), quality=90)
@@ -178,9 +195,16 @@ def main():
             for i, p in enumerate(pieces, 1): fit(p).save(os.path.join(OUT, f'{base}-{i}.webp'), quality=92)
             print('лист вариантов', base, len(pieces), 'шт.')
         elif name.startswith('vignette-'):
-            # Сцена на клочке земли, край которого тает в белое: внутри — непрозрачно, по краю — «цвет в альфу»
             cut = cutout(im)
             inner = cut.getchannel('A').filter(ImageFilter.MinFilter(41)).filter(ImageFilter.GaussianBlur(14))
+            # Без клочка земли — отдельные предметы на белом (очаг, брёвна, обломки статуи): сплошная середина
+            # почти вся съедается сужением, и тогда вырезка — как у предмета, по контуру каждой штуки
+            solid = lambda a: sum(1 for v in a.getdata() if v > 128)
+            if solid(inner) < solid(cut.getchannel('A')) * 0.5:
+                fit(trim(cutout_shadowed(im)), 1400).save(os.path.join(OUT, f'{name}.webp'), quality=92)
+                print('виньетка из предметов', name)
+                continue
+            # Сцена на клочке земли, край которого тает в белое: внутри — непрозрачно, по краю — «цвет в альфу»
             soft = unwhite(im)
             alpha = ImageChops.lighter(inner, soft.getchannel('A'))
             res = Image.composite(im.convert('RGBA'), soft, inner)

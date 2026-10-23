@@ -88,12 +88,14 @@ export function pickScheme(R, encounter = {}) {
  * where: hero — центр интереса (средняя треть), side — у края; schemes — в каких схемах уместна.
  */
 export const VIGNETTES = {
-    // Костёр нарисован потушенным — зола и камни, без света
-    campfire: { w: 4, h: 4, where: 'side', circles: [[0, 0, 0.45]], rects: [], lights: [] },
+    // Костёр нарисован потушенным — зола и камни, без света. ground — пятно земли под виньеткой из отдельных
+    // предметов (без своего клочка земли на картинке): утоптанная земля или лесная подстилка
+    campfire: { w: 4, h: 4, where: 'side', circles: [[0, 0, 0.45]], rects: [], lights: [], ground: 'dirt' },
     wagon: { w: 5, h: 3, where: 'side', circles: [], rects: [[0, 0, 3.6, 1.6]], lights: [] },
     shrine: { w: 4, h: 4, where: 'hero', circles: [[0, 0, 1]], rects: [], lights: [{ x: 0, y: 0, dim: 8, bright: 2, color: '#2ee6d6', animation: 'pulse' }] },
     stones: { w: 6, h: 6, where: 'hero', circles: Array.from({ length: 7 }, (_, i) => [Math.cos((i / 7) * 6.283) * 2.3, Math.sin((i / 7) * 6.283) * 2.3, 0.4]), rects: [], lights: [] },
-    statue: { w: 5, h: 3, where: 'hero', circles: [], rects: [[0, 0, 3.8, 1.3]], lights: [] },
+    // Рыцарь — разбитая статуя лежит на земле: обломки держат шаг, но не взгляд (flat)
+    statue: { w: 5, h: 3, where: 'hero', circles: [], rects: [[0, 0, 3.8, 1.3]], lights: [], flat: true, ground: 'litter' },
     nest: { w: 4, h: 4, where: 'side', circles: [[0, 0, 1.2]], rects: [], lights: [] },
     bridge: { w: 2, h: 5, where: 'water', circles: [], rects: [], lights: [] }
 };
@@ -218,7 +220,11 @@ export function layout({ cols = 28, rows = 20, seed = 'arena', biome = 'forest',
         if (waterDist(x, y) < Math.max(w, h) / 2) return false;
         return !objects.some(o => Math.abs(o.x - x) < w / 2 + o.r + 0.3 && Math.abs(o.y - y) < h / 2 + o.r + 0.3);
     };
-    const vplace = (name, x, y) => objects.push({ kind: 'vignette', name, x, y, r: Math.max(VIGNETTES[name].w, VIGNETTES[name].h) / 2, w: VIGNETTES[name].w, h: VIGNETTES[name].h, rot: 0, variant: 1 });
+    const vplace = (name, x, y) => {
+        const v = VIGNETTES[name];
+        objects.push({ kind: 'vignette', name, x, y, r: Math.max(v.w, v.h) / 2, w: v.w, h: v.h, rot: 0, variant: 1 });
+        if (v.ground) patches.push({ type: v.ground, x, y, r: Math.max(v.w, v.h) * 0.42 });
+    };
     const avail = vignettes.filter(n => VIGNETTES[n]);
     // Мост — через ручей, где его пересекает тропа (вместо брода с камнями)
     if (avail.includes('bridge') && stream && ford && stream.width < 2.5 && R() < 0.6) vplace('bridge', ford.x, ford.y);

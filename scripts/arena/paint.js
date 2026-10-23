@@ -10,7 +10,7 @@
  * paint(plan, { cell, mood, art }) → HTMLCanvasElement
  */
 
-import { rng, distToPath } from "./layout.js";
+import { rng, distToPath, VIGNETTES } from "./layout.js";
 
 // ---------- Шум: бесшовный (на торе) и обычный
 
@@ -91,6 +91,8 @@ function masks(plan, cell, seed) {
     out.forest = make(patch('forest'));
     out.moss = make(patch('moss'));
     out.rock = make(patch('rock'));
+    out.dirt = make(patch('dirt'));
+    out.litter = make(patch('litter'));
     out.path = make((x, y, wob) => edge(distToPath(terrain.path, x, y) + wob * 0.9, 0.85, 0.25));
     // Вода: ручей и озерца — одно поле «расстояние до кромки» (отрицательное — в воде)
     const pools = terrain.pools ?? [];
@@ -306,6 +308,12 @@ function drawVignette(ctx, o, art, cell, tuftArt, seed) {
     ctx.save(); ctx.filter = `blur(${cell * 0.1}px)`; ctx.globalAlpha = 0.3; ctx.drawImage(silhouette(img), x + cell * 0.12, y + cell * 0.15, dw, dh); ctx.restore();
     ctx.drawImage(img, x, y, dw, dh);
     if (o.name === 'bridge') return;
+    // Трава прорастает и между предметами, по краям брёвен и обломков — не наклейка поверх травы; середина
+    // (очаг) — без травы
+    if (VIGNETTES[o.name]?.ground) for (let i = 0; tuftArt.length && i < o.w * o.h * 0.8; i++) {
+        const a = J.range(0, 6.28), d = 0.35 + Math.sqrt(J()) * 0.5, t = J.pick(tuftArt), sz = cell * J.range(0.18, 0.32), kk = sz / Math.max(t.width, t.height);
+        ctx.drawImage(t, o.x * cell + Math.cos(a) * d * dw / 2 - (t.width * kk) / 2, o.y * cell + Math.sin(a) * d * dh / 2 - (t.height * kk) / 2, t.width * kk, t.height * kk);
+    }
     for (let i = 0; tuftArt.length && i < o.w * o.h * 0.9; i++) {
         const a = J.range(0, 6.28), rx = dw / 2 * J.range(0.85, 1.05), ry = dh / 2 * J.range(0.85, 1.05), t = J.pick(tuftArt), sz = cell * J.range(0.25, 0.42), kk = sz / Math.max(t.width, t.height);
         ctx.drawImage(t, o.x * cell + Math.cos(a) * rx - (t.width * kk) / 2, o.y * cell + Math.sin(a) * ry - (t.height * kk) / 2, t.width * kk, t.height * kk);
@@ -375,7 +383,7 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
     const ctx = canvas.getContext('2d');
     const seed = plan.seed;
     // Текстуры: свои картинки (ground-<имя>-1), иначе заглушка; берега — грязь, мох и камень — трава/подстилка
-    const GROUND_ART = { grass: 'grass', forest: 'forest-floor', moss: 'grass', rock: art['ground-rock-1'] ? 'rock' : 'path', path: 'path', mud: 'mud', bank: 'mud', riverbed: 'riverbed' };
+    const GROUND_ART = { grass: 'grass', forest: 'forest-floor', litter: 'forest-floor', dirt: 'path', moss: 'grass', rock: art['ground-rock-1'] ? 'rock' : 'path', path: 'path', mud: 'mud', bank: 'mud', riverbed: 'riverbed' };
     const tex = type => art[`ground-${GROUND_ART[type]}-1`] ?? art[`ground-${type}`] ?? groundTexture(type, seed);
     const M = masks(plan, cell, seed);
 
@@ -384,6 +392,9 @@ export function paint(plan, { cell = 140, mood = 'day', art = {} } = {}) {
     layer(ctx, tex('forest'), M.forest, W, H, 0.95);
     layer(ctx, tex('moss'), M.moss, W, H, 0.8);
     layer(ctx, tex('rock'), M.rock, W, H, 0.9);
+    // Под виньетками из отдельных предметов — своя земля: утоптанная у костра, подстилка под обломками
+    layer(ctx, tex('litter'), M.litter, W, H, 0.9);
+    layer(ctx, tex('dirt'), M.dirt, W, H, 0.8);
     if (M.bank) layer(ctx, tex('bank'), M.bank, W, H);
     // Тропа — с тёмной кромкой (рисованный контур)
     const pathLayer = document.createElement('canvas'); pathLayer.width = W; pathLayer.height = H;
