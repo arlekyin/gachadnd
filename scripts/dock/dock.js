@@ -326,7 +326,7 @@ export class TerminalDock extends MemoryTerminal {
             pips: Array.from({ length: state.grains[tag] }, (_, i) => i < state.used[tag]),
             stones: TAG_STONES[tag].map(id => {
                 const at = state.where[id];
-                return { ...look(id), used: at ? label(at.where) : '', locked: !at && state.placed[tag] >= state.grains[tag], fits: !!sel && STONES[id].fits.includes(sel.kind) };
+                return { ...look(id), used: at ? label(at.where) : '', locked: !at && state.placed[tag] >= state.grains[tag], fits: !!sel };
             })
         }));
         return { locked, groups, box, empty: !rows.length };

@@ -3291,7 +3291,7 @@
 .gachadnd-dock .gd-plate .gd-moon { bottom: 22px; }
 
 /* Синергии — как легенда Паутины: знак, имя, ромбы до порогов, действующая ступень */
-.gachadnd-dock .gd-t-side { position: absolute; left: 620px; top: 150px; width: 380px; }
+.gachadnd-dock .gd-t-side { position: absolute; left: 620px; top: 150px; width: 380px; max-height: calc(100vh - 174px); overflow-y: auto; pointer-events: auto; }
 .gachadnd-dock .gd-syn-head { margin-bottom: 6px; font-size: 12px; letter-spacing: .26em; text-transform: uppercase; color: var(--mute); }
 .gachadnd-dock .gd-syn-head b { margin-left: 10px; color: var(--amber); letter-spacing: .06em; font-weight: 400; }
 .gachadnd-dock .gd-syn-list { display: grid; gap: 7px; }
@@ -3461,6 +3461,9 @@
 .gd-facet-line button, .gd-stone-buttons button { width: auto; height: 24px; margin: 4px 4px 0 0; padding: 0 8px; font-size: 12px; line-height: 22px; }
 .gd-stone-buttons { display: flex; flex-wrap: wrap; }
 .gd-stone-buttons button.on { border-color: #f0a52a; box-shadow: 0 0 6px rgba(240,165,42,.5); }
+.gd-stone-why { line-height: 1.35; }
+.gd-stone-steps { margin: 4px 0 6px; padding-left: 18px; }
+.gd-stone-steps li { margin: 2px 0; }
 .gd-stone-gem { display: inline-block; width: 9px; height: 10px; margin: 0 3px 0 2px; vertical-align: -1px; background: var(--r); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 
 /* Новый забег (labyrinth/new-run.js): одно окно Мастера — отряд, карта, Якорь */

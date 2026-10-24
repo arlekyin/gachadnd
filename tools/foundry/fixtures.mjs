@@ -258,9 +258,14 @@ export async function classKit(page, actorId, { features = [], spells = [], cast
             system: { identifier: caster.identifier, levels: caster.levels ?? 8, hd: { denomination: 'd8' }, spellcasting: { progression: 'full', ability: caster.ability ?? 'wis' } }
         }]);
         const featPack = game.packs.get('dnd5e.classfeatures'), spellPack = game.packs.get('dnd5e.spells');
-        const featIndex = await featPack?.getIndex(), spellIndex = await spellPack?.getIndex({ fields: ['system.identifier'] });
+        const featIndex = await featPack?.getIndex({ fields: ['system.identifier'] }), spellIndex = await spellPack?.getIndex({ fields: ['system.identifier'] });
         const docs = [];
-        for (const name of features) { const e = featIndex?.find(x => x.name === name); if (e) docs.push([name, (await featPack.getDocument(e._id)).toObject()]); }
+        // Черта — по имени или по identifier (компендиум может быть переведён: 'Second Wind' → second-wind)
+        const slug = name => name.toLowerCase().replace(/\s+/g, '-');
+        for (const name of features) {
+            const e = featIndex?.find(x => x.name === name || x.system?.identifier === slug(name));
+            if (e) docs.push([name, (await featPack.getDocument(e._id)).toObject()]);
+        }
         for (const id of spells) {
             const e = spellIndex?.find(x => x.system?.identifier === id);
             if (!e) continue;

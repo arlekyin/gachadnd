@@ -85,15 +85,15 @@ export const isDead = actor => (Number(actor?.system?.attributes?.hp?.value) || 
  * Взрыв — как у способностей dnd5e: модуль не бросает и не применяет урон сам. Карточка в чате: кто
  * задет, кнопка спасброска (бросают цели) и кнопка урона (бросает игрок), Мастер применяет урон лотком
  * dnd5e — защиты цели считает dnd5e, успех спасброска — множитель ½ в лотке. splash — осколки (половина
- * без спасброска), self — владельцу половина. onFail — эффект на провале спасброска: модуль ждёт
+ * без спасброска), self — владельцу половина. lead — подпись задетых вместо «Без спасброска». onFail — эффект на провале спасброска: модуль ждёт
  * спасбросок каждой задетой цели и накладывает его сам (expectSave).
  * @returns {Promise<{ victims: TokenDocument[], message: ChatMessage }>}
  */
-export async function blast({ actor, title, icon = 'fa-burst', victims = [], splash = [], formula, type = 'fire', ability = null, dc = null, half = true, self = null, at = null, note = '', onFail = null, flags = {} }) {
+export async function blast({ actor, title, icon = 'fa-burst', victims = [], splash = [], formula, type = 'fire', ability = null, dc = null, half = true, self = null, at = null, note = '', onFail = null, flags = {}, lead = null }) {
     if (at) boom(at);
     const names = list => esc(list.map(t => t.name).join(', '));
     const lines = [];
-    if (victims.length) lines.push(`<li>${ability ? `Спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}${half ? ' — успех: половина урона' : ' — успех: без урона'}` : 'Без спасброска'}: ${names(victims)}</li>`);
+    if (victims.length) lines.push(`<li>${ability ? `Спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}${half ? ' — успех: половина урона' : ' — успех: без урона'}` : (lead ?? 'Без спасброска')}: ${names(victims)}</li>`);
     if (splash.length) lines.push(`<li>Осколки — половина урона без спасброска: ${names(splash)}</li>`);
     if (self) lines.push(`<li>${esc(self.name)} — половина урона без спасброска</li>`);
     const buttons = [ability && victims.length ? `[[/save ${ability} ${dc}]]` : '', `[[/damage ${formula} ${type}]]`].filter(Boolean).join(' ');

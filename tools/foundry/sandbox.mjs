@@ -36,7 +36,11 @@ const HEROES = [
     // Огранка: у воина огонь II, кровь I, взрыв I; у жреца кровь II, огонь I, взрыв I — столько камней тега можно вставить.
     // Воин — оружие и черты класса, жрец — заклинания всех категорий; камни вставлены для примера
     { name: 'Огранка: воин', x: 9, y: 8, level: 8, skills: ['Хлопушка', 'Тлеющий уголь', 'Раскалённый клинок', 'Феникс', 'Обратный отсчёт', 'Берсерк', 'Жажда боя'] },
-    { name: 'Огранка: жрец', x: 9, y: 9, level: 8, skills: ['Кровавая цена', 'Бензопила', 'Берсерк', 'Жажда боя', 'Хлопушка', 'Обратный отсчёт'] },
+    { name: 'Огранка: жрец', x: 10, y: 9, level: 8, skills: ['Кровавая цена', 'Бензопила', 'Берсерк', 'Жажда боя', 'Хлопушка', 'Обратный отсчёт'] },
+    // Огранка новых тегов: свет I, движение I, сталь I — Луч, Разбег, Выверено в мечах, Рокировка — в Ударе
+    { name: 'Огранка: страж', x: 8, y: 9, level: 8, skills: ['Фотосинтез', 'Ультрафиолет', 'Краб', 'Лунная походка', 'Крушитель мебели', 'Тюремная заточка'] },
+    // Все шесть тегов на ступени I — по камню каждого, собирать самому
+    { name: 'Огранка: мастер', x: 8, y: 8, level: 12, skills: ['Тлеющий уголь', 'Раскалённый клинок', 'Хлопушка', 'Обратный отсчёт', 'Берсерк', 'Жажда боя', 'Фотосинтез', 'Ультрафиолет', 'Краб', 'Лунная походка', 'Крушитель мебели', 'Тюремная заточка'] },
     { name: 'Эхо: аномалия', x: 12, y: 7, level: 6, skills: ['Часы с кукушкой', 'Должник', 'Желудок хроноискателя'], echo: { value: 10, tags: { 'аномалия': 10 } } }
 ];
 const OTHERS = [
@@ -121,12 +125,16 @@ const GUIDE = `
 <li><strong>Шрамы</strong> — макрос <code>game.gachadnd.scar(game.actors.getName('GD-песочница: Живой'))</code>: шрам займёт слот, снять его нельзя.</li>
 <li><strong>Правило Босса</strong> — в бою: <code>game.gachadnd.bossRule('muffle')</code> или <code>'sleepy'</code>.</li>
 </ul>
-<h3>Огранка — «Огранка: воин» и «Огранка: жрец»</h3>
+<h3>Огранка — «Огранка: воин», «жрец», «страж» и «мастер»</h3>
+<p>У всех четверых один набор способностей: оружие — Меч, Топор, Рапира, Кинжал (метательный), Длинный лук со стрелами; черты класса — Second Wind (Лечение), Action Surge и Rage (Усиление), Divine Smite (Удар); заклинания — Огненный снаряд, Направляющий луч, Волшебная стрела (Удар), Священное пламя, Пылающие руки, Громовая волна, Огненный шар (Волна), Исцеление ран, Исцеляющее слово, Массовое исцеляющее слово (Лечение), Благословение, Туманный шаг (Усиление), Щит, Адское возмездие (Реакция). Разница — в тегах навыков, то есть в камнях.</p>
 <ul>
-<li>Терминал → кнопка с камнем. Слева — оружие и категории способностей (Удар, Волна, Лечение, Усиление, Реакция) строками с тремя гнёздами; щелчок по строке — под ней её камни, крестик — вынуть. Справа — камни тегов: ромбы — сколько можно вставить, горят — вставлены. Щелчок по камню вставляет его в выбранную строку; неподходящие гаснут.</li>
+<li>Терминал → кнопка с камнем. Слева — оружие и категории способностей (Удар, Волна, Лечение, Усиление, Реакция) строками с тремя гнёздами; щелчок по строке — под ней её камни, крестик — вынуть. Справа — камни тегов: ромбы — сколько можно вставить, горят — вставлены. Щелчок по камню вставляет его в выбранную строку — любой камень в любое гнездо.</li>
 <li><strong>Воин</strong> (огонь II, кровь I, взрыв I): Топор — Плата кровью и Перекидка; Удар (Divine Smite) — Раскат и Сквозь.</li>
-<li><strong>Жрец</strong> (кровь II, огонь I, взрыв I): Лечение — Переливание и Разлёт; Волна — Мина; Удар (Fire Bolt) — В долг.</li>
+<li><strong>Жрец</strong> (кровь II, огонь I, взрыв I): Лечение — Переливание и Разлёт; Волна — Мина; Удар (Огненный снаряд) — В долг.</li>
+<li><strong>Страж</strong> (свет I, движение I, сталь I): Меч — Луч и Выверено (урон без костей, и всем врагам на линии от героя к цели); Топор — Разбег (отойдите, начните ход и пройдите 20 футов прямо к цели — атака с преимуществом). Переставьте Разбег на Рокировку — в карточке появится кнопка обмена местами с союзником в 15 футах. Правило камня — подсказкой на его имени в строке «Огранка».</li>
+<li><strong>Мастер</strong> (все шесть тегов, ступень I): по камню каждого тега, ничего не вставлено — собирайте сами: например, Луч в Волну (Пылающие руки линией), Выверено в лук, Вспышка в Лечение (Исцеляющее слово всем рядом), Мина в Огненный шар.</li>
 <li>В бою: нацельтесь и бросьте урон или лечение — карточки покажут, кому ещё досталось. Перекидка с несколькими кандидатами — кнопки с именами. Мина — кнопки «Заложить» (щелчок по точке в 30 футах; войдите туда токеном врага) и «Сразу». Раскат и долг — в начале следующего хода героя. Плата кровью — кнопка в карточке способности.</li>
+<li><strong>Броски</strong>: бросьте атаку, потом урон. Промах по цели — карточка «камни не сработали». Попадание — тем, кому достался эффект камня, та же атака против их КД (поставьте Врагу 2 КД 20 — увидите «мимо»). У Волны (Пылающие руки, Огненный шар) — кнопка спасброска в карточке камня. Мина пишет по шагам, как заложить и когда сработает; атака в ней «заморожена».</li>
 <li>Снимите навык тега — его камни погаснут (последние вставленные), наденьте — вернутся. В бою огранку менять нельзя.</li>
 <li>Со стороны игрока: войдите как Claude_player и дайте ему владение героем — Терминал откроется без выбранного токена.</li>
 </ul>
@@ -216,19 +224,37 @@ await page.evaluate(async ({ heroes, list, SANDBOX }) => {
     await game.actors.getName(`${SANDBOX}: Враг 2`)?.update({ 'system.attributes.hp.value': 15 });
 }, { heroes: ids.heroes, list: HEROES, SANDBOX });
 
-// Огранка: воину — второе оружие и черты класса (Лечение, Усиление); жрецу — заклинания всех форм
-await page.evaluate(hero => game.actors.get(hero).createEmbeddedDocuments('Item', [{ name: 'Топор', type: 'weapon', img: 'icons/weapons/axes/axe-broad-black.webp', system: { type: { value: 'martialM' }, damage: { base: { number: 1, denomination: 8, types: ['slashing'] } }, equipped: true, proficient: 1 } }]), ids.heroes['Огранка: воин']);
-await classKit(page, ids.heroes['Огранка: воин'], { features: ['Second Wind', 'Action Surge', 'Rage', 'Divine Smite'] });
-await classKit(page, ids.heroes['Огранка: жрец'], {
-    caster: { name: 'Жрец', identifier: 'cleric', ability: 'wis' },
-    spells: ['fire-bolt', 'sacred-flame', 'burning-hands', 'thunderwave', 'cure-wounds', 'healing-word', 'bless', 'hellish-rebuke', 'shield']
-});
-await page.evaluate(async ({ warrior, cleric }) => {
+// Огранка: всем героям Огранки — один набор: оружие разных видов, черты класса и заклинания на каждую категорию
+// (Удар, Волна, Лечение, Усиление, Реакция) — чтобы любой камень было куда вставить и с чем бросить
+const FACET_HEROES = HEROES.filter(h => h.name.startsWith('Огранка')).map(h => ids.heroes[h.name]);
+const FACET_WEAPONS = [['greataxe', 'Топор'], ['rapier', 'Рапира'], ['longbow', 'Длинный лук'], ['dagger', 'Кинжал'], ['arrow', 'Стрелы']];
+const FACET_SPELLS = ['fire-bolt', 'sacred-flame', 'guiding-bolt', 'magic-missile', 'burning-hands', 'thunderwave', 'fireball',
+    'cure-wounds', 'healing-word', 'mass-healing-word', 'bless', 'misty-step', 'shield', 'hellish-rebuke'];
+for (const hero of FACET_HEROES) {
+    await page.evaluate(async ({ hero, list }) => {
+        // Компендиум может быть переведён — ищем по identifier
+        const pack = game.packs.get('dnd5e.items'), index = await pack.getIndex({ fields: ['system.identifier'] });
+        const docs = [];
+        for (const [key, ru] of list) {
+            const e = index.find(x => x.system?.identifier === key);
+            if (!e) continue;
+            const data = (await pack.getDocument(e._id)).toObject();
+            foundry.utils.mergeObject(data, { name: ru, system: key === 'arrow' ? { quantity: 60 } : { equipped: true, proficient: 1 } });
+            docs.push(data);
+        }
+        await game.actors.get(hero).createEmbeddedDocuments('Item', docs);
+    }, { hero, list: FACET_WEAPONS });
+    await classKit(page, hero, { features: ['Second Wind', 'Action Surge', 'Rage', 'Divine Smite'], caster: { name: 'Жрец', identifier: 'cleric', ability: 'wis' }, spells: FACET_SPELLS });
+}
+// Камни для примера: воин — Топор и Удар, жрец — Лечение, Волна, Удар, страж — Меч и Топор; у мастера пусто — собирать самому
+await page.evaluate(async ({ warrior, cleric, guard }) => {
     const { placeStone } = await import('/modules/gachadnd/scripts/memory/facet/facet.js');
-    const w = game.actors.get(warrior), c = game.actors.get(cleric), axe = w.items.find(i => i.name === 'Топор');
-    for (const [actor, where, id] of [[w, axe.id, 'pay'], [w, axe.id, 'hop'], [w, 'strike', 'echo'], [w, 'strike', 'through'],
-        [c, 'heal', 'transfuse'], [c, 'heal', 'spread'], [c, 'wave', 'mine'], [c, 'strike', 'debt']]) await placeStone(actor, where, id);
-}, { warrior: ids.heroes['Огранка: воин'], cleric: ids.heroes['Огранка: жрец'] });
+    const w = game.actors.get(warrior), c = game.actors.get(cleric), g = game.actors.get(guard);
+    const item = (a, name) => a.items.find(i => i.name === name && i.type === 'weapon').id;
+    for (const [actor, where, id] of [[w, item(w, 'Топор'), 'pay'], [w, item(w, 'Топор'), 'hop'], [w, 'strike', 'echo'], [w, 'strike', 'through'],
+        [c, 'heal', 'transfuse'], [c, 'heal', 'spread'], [c, 'wave', 'mine'], [c, 'strike', 'debt'],
+        [g, item(g, 'Меч'), 'beam'], [g, item(g, 'Меч'), 'steady'], [g, item(g, 'Топор'), 'charge']]) await placeStone(actor, where, id);
+}, { warrior: ids.heroes['Огранка: воин'], cleric: ids.heroes['Огранка: жрец'], guard: ids.heroes['Огранка: страж'] });
 
 // Мяснику — что швырять (Рандомная хрень): неэкипированные клинки в сумке
 await page.evaluate(hero => game.actors.get(hero).createEmbeddedDocuments('Item', [
@@ -260,11 +286,50 @@ await page.evaluate(async hero => {
     await stash.depositCrystal(actor, crystal);
 }, ids.heroes['Перегревщик']);
 
+// Арена: макросы в папке «GD-песочница: арена» — собрать арену с нужным настроением, погодой и схемой
+const ARENA_PAGE = `
+<h2>Арена</h2>
+<p>Макросы — в папке «${SANDBOX}: арена» (вкладка макросов; перетащите на панель). Каждый собирает сцену «Арена» заново
+(30–40 секунд) с отрядом — Светоносцем и Поджигателем — слева и двумя врагами справа, и переводит всех на неё.</p>
+<ul>
+<li><strong>День, ночь, кровь, порча</strong> — картинка и свет. Ночью сцена тёмная, светят друзы; войдите игроком с тёмным зрением и без — видно по-разному.</li>
+<li><strong>Ливень, туман, ветер</strong> — погода. Начните бой: в чат придёт карточка с правилом, у Мастера на ней «Другая погода» и «Снять погоду». Туман сползает в начале каждого раунда; в ветер атака луком — с помехой сама.</li>
+<li><strong>Чаща</strong> — лесистая арена: падают листья. <strong>Топь ночью</strong> — лягушки и сверчки.</li>
+<li><strong>Трудная местность</strong> — вода, топь, подлесок, а под ливнем грязь и разлив: перетащите токен через ручей — линейка посчитает дороже. На слое регионов их не видно.</li>
+<li><strong>Фон</strong> — звук по месту и погоде, играет у всех, выбран токен или нет. Громкость — вкладка плейлистов → «Управление громкостью» → блок Gacha Roguelike (фон арены, Терминал, тема героя, всё). В бою фон стихает.</li>
+<li><strong>Встреча Босса</strong> — шёпот встречи, как на карте: «На арену» соберёт поле по узлу (30 × 22), строй врагов и погоду.</li>
+</ul>`;
+await page.evaluate(async ({ SANDBOX, ARENA_PAGE }) => {
+    const folderName = `${SANDBOX}: арена`;
+    const old = game.folders.filter(f => f.type === 'Macro' && f.name === folderName);
+    for (const f of old) { await Macro.deleteDocuments(game.macros.filter(m => m.folder?.id === f.id).map(m => m.id)); await f.delete(); }
+    const folder = await Folder.create({ name: folderName, type: 'Macro', color: '#2f4a2f' });
+    const party = `['Светоносец', 'Поджигатель'].map(n => game.actors.getName('${SANDBOX}: ' + n)?.id).filter(Boolean)`;
+    const enemies = `['Враг', 'Враг 2'].map(n => game.actors.getName('${SANDBOX}: ' + n)?.id).filter(Boolean)`;
+    const build = opts => `const { scene } = await game.gachadnd.arena.generate({ ${opts}, party: ${party}, enemies: ${enemies} });
+await scene.activate();`;
+    const list = [
+        ['Арена: день', build("mood: 'day'"), 'icons/magic/light/explosion-star-glow-yellow.webp'],
+        ['Арена: ночь', build("mood: 'night'"), 'icons/magic/control/silhouette-hold-change-blue.webp'],
+        ['Арена: кровь', build("mood: 'blood'"), 'icons/magic/death/blood-corruption-vomit-red.webp'],
+        ['Арена: порча', build("mood: 'rot'"), 'icons/magic/unholy/orb-glowing-green.webp'],
+        ['Арена: ливень', build("mood: 'day', weather: 'rain'"), 'icons/magic/water/projectile-water-rings.webp'],
+        ['Арена: туман', build("mood: 'day', weather: 'fog'"), 'icons/magic/air/fog-gas-smoke-swirling-gray.webp'],
+        ['Арена: ветер', build("mood: 'day', weather: 'wind'"), 'icons/magic/air/wind-tornado-wall-blue.webp'],
+        ['Арена: чаща', build("mood: 'day', scheme: 'thicket'"), 'icons/magic/nature/tree-elm-roots-brown.webp'],
+        ['Арена: топь ночью', build("mood: 'night', scheme: 'swamp'"), 'icons/creatures/amphibians/bullfrog-glass-teal.webp'],
+        ['Арена: встреча Босса', "await game.gachadnd.encounters.offer('boss');", 'icons/skills/melee/weapons-crossed-swords-yellow.webp']
+    ];
+    await Macro.createDocuments(list.map(([name, command, img], i) => ({ name, type: 'script', command, img, folder: folder.id, sort: i * 100 })));
+    const journal = game.journal.getName(`${SANDBOX}: как проверять`);
+    await journal?.createEmbeddedDocuments('JournalEntryPage', [{ name: 'Арена', type: 'text', text: { content: ARENA_PAGE } }]);
+}, { SANDBOX, ARENA_PAGE });
+
 const report = await page.evaluate(({ SANDBOX }) => game.actors.filter(a => a.name.startsWith(SANDBOX)).map(a => {
     const memory = a.items.filter(i => i.flags.gachadnd?.skill_name);
     const echo = a.flags.gachadnd?.echo?.value;
     return `${a.name.replace(`${SANDBOX}: `, '')}: ${memory.length ? memory.map(i => i.name).join(', ') : 'без навыков'}${echo ? ` — эхо ${echo}` : ''}`;
 }), { SANDBOX });
-console.log('Песочница готова — сцена «GD-песочница: навыки», журнал «GD-песочница: как проверять»:');
+console.log('Песочница готова — сцена «GD-песочница: навыки», журнал «GD-песочница: как проверять» (страницы «Навыки» и «Арена»), макросы арены — папка «GD-песочница: арена»:');
 for (const line of report) console.log('  ' + line);
 await f.close();
