@@ -18,12 +18,15 @@ import { MODULE_ID } from "../core/constants.js";
 import { layout, connected, startCells, passable, reachable, rng, ribbon, VIGNETTES } from "./layout.js";
 import { paint } from "./paint.js";
 import { applyWeather, WEATHER } from "./weather.js";
+import { setAmbience } from "./ambience.js";
 
 const CELL = 140;
 const FLAG = 'arena';
 // Цвет «живой мути» по настроению
 const MURK = { day: '#0f2a24', night: '#0a1426', fog: '#1d2422', rot: '#062420', blood: '#3f0d0d' };
 const MOOD_WEATHER = { fog: 'fog' };
+// Лесистая арена (деревьев на клетку не меньше) — падающие листья фоном, без погоды
+const LEAFY = 0.07;
 const WALL = { NONE: 0, LIMITED: 10, NORMAL: 20 };
 // Ночь: темнота сцены без общего света — светят только источники на поле (в футах)
 const NIGHT = { darkness: 0.6, pulse: { dim: 25, bright: 10 }, crystal: { dim: 25, bright: 8 } };
@@ -213,8 +216,9 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     const night = mood === 'night';
     let plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme, night });
     for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme, night });
-    const canvas = paint(plan, { cell: CELL, mood, art });
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.9));
+    const picture = paint(plan, { cell: CELL, mood, art });
+    const leafy = plan.objects.filter(o => ['tree', 'pine', 'deadtree'].includes(o.kind)).length / (plan.cols * plan.rows) >= LEAFY;
+    const blob = await new Promise(resolve => picture.toBlob(resolve, 'image/webp', 0.9));
     const dir = `worlds/${game.world.id}/gachadnd-arena`;
     const FP = filePicker();
     await FP.createDirectory('data', dir).catch(() => {});
@@ -226,9 +230,9 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     const data = {
         name: 'Арена', width: cols * CELL, height: rows * CELL, padding: 0,
         grid: { size: CELL, distance: 5, units: 'ft', type: 1, alpha: 0.12 },
-        background: { src }, tokenVision: true, weather: MOOD_WEATHER[mood] ?? '',
+        background: { src }, tokenVision: true, weather: MOOD_WEATHER[mood] ?? (leafy ? 'leaves' : ''),
         environment: mood === 'night' ? { darknessLevel: NIGHT.darkness, globalLight: { enabled: false } } : { darknessLevel: 0, globalLight: { enabled: true } },
-        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null, terrain: terrainOf(plan) }
+        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null, terrain: terrainOf(plan), leaves: leafy && !MOOD_WEATHER[mood] }
     };
     // v14 держит фон в уровне сцены. Уровень — раньше сцены: смена фона уровня сама перерисовывает арену у всех, кто
     // на ней, и тогда перерисовка одна — уже с новым фоном (сцена следом меняет только флаги и погоду)
@@ -256,6 +260,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     await scene.createEmbeddedDocuments('AmbientLight', lightsOf(plan, mood));
     await scene.createEmbeddedDocuments('Region', regionsOf(plan));
     if (WEATHER[weather]) await applyWeather(scene, weather, { seed: plan.seed });
+    else await setAmbience(scene);
 
     // Токены. Существо крупнее клетки занимает w×w клеток: место — где все они проходимы и свободны, иначе большие
     // токены налезают друг на друга

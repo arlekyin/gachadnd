@@ -36,3 +36,6 @@ tools/foundry/out/
 # Звуки паутины для прослушивания: node tools/sound/render.mjs
 tools/sound/out/
 release/
+
+# Скачанные исходники фона арены (готовые .ogg — рядом): python tools/sound/arena.py
+assets/sounds/*/_src/

@@ -23,7 +23,7 @@ const ZIP = path.join(OUT, "gachadnd.zip");
 const INCLUDE = ["module.json", "scripts", "styles", "templates", "packs", "data", "assets", "README.md", "LICENSE", "LICENSE-CONTENT.md"];
 const SKIP = [
     /^packs\/_old_json/, /^packs\/[^/]+\.db$/, /^packs\/[^/]+\/(LOCK|LOG|LOG\.old)$/,
-    /^assets\/battlemap\/weapons\//, /^assets\/bestiary\/devourer\.png$/,
+    /^assets\/battlemap\/weapons\//, /^assets\/bestiary\/devourer\.png$/, /^assets\/.*\/_src\//,
     /^scripts\/synergy-tiers\.js$/
 ];
 

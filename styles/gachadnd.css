@@ -3483,3 +3483,7 @@
 .gd-enc-card p { margin: 4px 0; }
 .gd-enc-card ul { margin: 4px 0 6px; padding-left: 18px; }
 .gd-enc-card small { opacity: .7; }
+
+/* Громкость модуля в «Управление громкостью» (вкладка плейлистов) */
+.global-volume li.gd-volume-head { margin-top: 0.5rem; padding-top: 0.35rem; border-top: 1px solid rgba(255, 255, 255, 0.12); font-size: var(--font-size-12, 12px); opacity: 0.8; }
+.global-volume li.gd-volume input[type="range"] { flex: 2; min-width: 0; }

@@ -73,6 +73,19 @@ check('пересборки подряд: сирот подсветки реги
 check('ночь — настоящая: темнота 0.6 без общего света, «живой мути» нет; светят три-пять друз (костёр потушен), стены их не запирают; днём — общий свет',
     nightInfo.env === '0.6/без общего' && nightInfo.murk === 0 && nightInfo.lights >= 3 && nightInfo.lit.every(a => a > 0.15) && dayInfo.env === '0/общий свет' && dayInfo.murk > 0, JSON.stringify({ nightInfo, dayInfo }));
 
+// Лесистая арена (чаща) — листья фоном; ливень их сменяет, без погоды листья возвращаются
+const leaves = await ev(async ({ hero }) => {
+    const { applyWeather, clearWeather } = await gdt.mod('arena/weather.js');
+    const { scene } = await game.gachadnd.arena.generate({ seed: 'leaf', mood: 'day', scheme: 'thicket', party: [hero], enemies: [], view: false });
+    const out = { calm: scene.weather, flag: scene.getFlag('gachadnd', 'arena').leaves };
+    await applyWeather(scene, 'rain', { seed: 'l' });
+    out.rain = scene.weather;
+    await clearWeather(scene);
+    out.after = scene.weather;
+    return out;
+}, { hero: ids.hero });
+check('лесистая арена: листья фоном; ливень их сменяет, после снятия погоды листья снова', leaves.calm === 'leaves' && leaves.flag && leaves.rain === 'rain' && leaves.after === 'leaves', JSON.stringify(leaves));
+
 // Брод: ручей и камни брода — снимок воды крупно
 const ford = await ev(async ({ hero, enemies }) => {
     const { scene, plan } = await game.gachadnd.arena.generate({ seed: 's1', mood: 'day', scheme: 'crossing', party: [hero], enemies });

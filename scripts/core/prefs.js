@@ -62,8 +62,9 @@ export function registerPrefs() {
     });
     game.settings.register(MODULE_ID, 'volume', {
         name: 'Громкость модуля',
-        hint: 'Общая громкость всех звуков модуля; отдельные — в «Звуки и эффекты». У каждого игрока своя.',
-        scope: 'client', config: true, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 1
+        hint: 'Общая громкость всех звуков модуля; отдельные — в «Звуки и эффекты» и в «Управление громкостью» на вкладке плейлистов. У каждого игрока своя.',
+        scope: 'client', config: true, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 1,
+        onChange: () => Hooks.callAll('gachadnd.volume', 'volume')
     });
     game.settings.register(MODULE_ID, 'gmHints', {
         name: 'Подсказки Мастеру',

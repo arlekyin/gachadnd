@@ -17,6 +17,7 @@ import { MODULE_ID } from "../core/constants.js";
 import { isActiveGM } from "../core/socket.js";
 import { onRenderChatMessage } from "../core/chat-hooks.js";
 import { ribbon, rng } from "./layout.js";
+import { setAmbience } from "./ambience.js";
 
 const CELL = 140;
 const FLAG = 'arenaWeather';
@@ -62,13 +63,16 @@ async function fogTexture() {
 }
 
 /** Убрать погоду: регионы и плитки погоды, эффект сцены, флаг */
-export async function clearWeather(scene) {
+export async function clearWeather(scene, { keepSound = false } = {}) {
     const mine = doc => doc.getFlag(MODULE_ID, 'weather');
     await scene.deleteEmbeddedDocuments('Region', scene.regions.filter(mine).map(r => r.id));
     await scene.deleteEmbeddedDocuments('Tile', scene.tiles.filter(mine).map(t => t.id));
     await scene.deleteEmbeddedDocuments('Wall', scene.walls.filter(mine).map(w => w.id));
     await scene.deleteEmbeddedDocuments('AmbientLight', scene.lights.filter(mine).map(l => l.id));
-    await scene.update({ weather: '', [`flags.${MODULE_ID}.-=${FLAG}`]: null });
+    // Без погоды на лесистой арене снова падают листья
+    await scene.update({ weather: scene.getFlag(MODULE_ID, 'arena')?.leaves ? 'leaves' : '', [`flags.${MODULE_ID}.-=${FLAG}`]: null });
+    // Погода ушла — вернулся фон места
+    if (!keepSound) await setAmbience(scene);
 }
 
 // Стена клочка тумана: не держит шаг, свет и звук; взгляд — «ограниченный» (кольцо из двух таких стен на пути)
@@ -91,7 +95,7 @@ const difficult = (name, color, type, shapes) => ({
  */
 export async function applyWeather(scene, kind, { seed = foundry.utils.randomID(6) } = {}) {
     if (!WEATHER[kind]) return null;
-    await clearWeather(scene);
+    await clearWeather(scene, { keepSound: true });
     const R = rng(`weather|${seed}`), wind = R.int(0, 7);
     const terrain = scene.getFlag(MODULE_ID, 'arena')?.terrain ?? {};
     const px = v => Math.round(v * CELL);
@@ -119,6 +123,7 @@ export async function applyWeather(scene, kind, { seed = foundry.utils.randomID(
         })));
     }
     await scene.update({ weather: WEATHER[kind].effect, [`flags.${MODULE_ID}.${FLAG}`]: { kind, wind } });
+    await setAmbience(scene, kind);
     return { kind, wind };
 }
 

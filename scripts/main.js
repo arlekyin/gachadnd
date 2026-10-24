@@ -9,6 +9,7 @@ import { MemoryTerminal } from "./memory/terminal/terminal.js";
 import { TerminalDock, defaultTerminalActor } from "./dock/dock.js";
 // Генератор арен (прототип): game.gachadnd.arena.generate()
 import "./arena/arena.js";
+import "./core/volume-panel.js";
 import { GachaLootTerminal, registerLootSettings } from "./memory/loot.js";
 import "./core/compendium.js";
 import "./memory/crystal-peek.js";
