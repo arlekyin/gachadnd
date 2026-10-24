@@ -229,7 +229,7 @@ const KNACK_PASSIVE = ['butcher', 'through'];
 // living: <вид> — живые навыки со счётчиком и двойные навыки (scripts/memory/skills/living/<вид>.js);
 // living_max — предел счётчика, меняется по рангам; duo: [тег, тег] — двойной навык: выпадает, только если
 // у кого-то в отряде в Памяти есть навыки обоих тегов; scar: <вид> — шрам (scripts/memory/skills/living/scars.js)
-const LIVING_KINDS = ['hone', 'third', 'countdown', 'ember', 'pyre', 'jet', 'bastion'];
+const LIVING_KINDS = ['hone', 'third', 'countdown', 'ember', 'pyre', 'jet', 'bastion', 'perfection'];
 const LIVING_PASSIVE = ['hone', 'third', 'jet'];
 const SCAR_KINDS = ['voice', 'burn', 'crack'];
 

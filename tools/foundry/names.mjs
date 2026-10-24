@@ -24,7 +24,7 @@ const pack = await ev(async () => {
         'Камехамеха', 'Фус-Ро-Да', "ту'ум", 'Эстус', 'Найт-Сити', 'Сандевистан', 'Хайзенберг', 'Шепард', 'Брейнданс', 'Ведьмач', 'Ведьмак', 'Нейрализатор', 'Фаталити',
         'Уно-', 'Хэнка', 'Fez', 'Ты не пройдёшь', 'Сила скорости', 'тот, кто стучит', 'хуйн', 'Ебаный'];
     const hits = docs.flatMap(d => OLD.filter(o => text(d).includes(o)).map(o => `${d.name}: ${o}`));
-    const NEW = ['Серия обычных ударов', 'Не пройдёшь', 'Пули — это скучно', 'Догони меня... Кирпичи?', 'Партейку?', 'Перспектива', 'Сейв-лоад', "Let's go gambling!"];
+    const NEW = ['Серия обычных ударов', 'Не пройдёшь', 'Пули — это скучно', 'Догони меня... Кирпичи?', 'Партейку?', 'Перспектива', 'Само совершенство', "Let's go gambling!"];
     return {
         hits, missing: NEW.filter(n => !docs.some(d => d.name === n)),
         explicit: docs.filter(d => d.flags.gachadnd?.explicit_name).map(d => `${d.name} → ${d.flags.gachadnd.explicit_name}`).sort()
@@ -32,19 +32,19 @@ const pack = await ev(async () => {
 });
 check('компендиум: нет старых названий и отсылок в названиях и описаниях', !pack.hits.length, pack.hits.join(' | '));
 check('компендиум: новые названия на месте', !pack.missing.length, pack.missing.join(', '));
-check('компендиум: два грубых варианта (18+) у Сейв-лоада и Let\'s go gambling!', pack.explicit.length === 2 && pack.explicit.every(e => /Сейв-лоад →|gambling! →/.test(e)), pack.explicit.join(' | '));
+check('компендиум: два грубых варианта (18+) у Самого совершенства и Let\'s go gambling!', pack.explicit.length === 2 && pack.explicit.every(e => /Само совершенство →|gambling! →/.test(e)), pack.explicit.join(' | '));
 
 // ---------- Старый мир: навыки и кристаллы со старыми названиями
 await ev(async hero => {
     const actor = game.actors.get(hero);
     const inv = await gdt.mod('memory/inventory.js');
     const stash = await gdt.mod('memory/stash.js');
-    for (const n of ['Серия обычных ударов', 'Догони меня... Кирпичи?', 'Сейв-лоад']) await inv.addSkillToMemory(actor, n, { forced: true });
+    for (const n of ['Серия обычных ударов', 'Догони меня... Кирпичи?', 'Само совершенство']) await inv.addSkillToMemory(actor, n, { forced: true });
     await inv.giveCrystal(actor, { skillName: 'Не пройдёшь' });
     await inv.giveCrystal(actor, { skillName: 'Партейку?' });
     // Старые названия, как в мире до переименования (а Сингулярность приписала тег)
     const item = n => actor.items.find(i => i.flags.gachadnd?.skill_name === n);
-    const old = { 'Серия обычных ударов': 'Сайтама', 'Догони меня... Кирпичи?': 'Тетрис', 'Сейв-лоад': 'Давай по новой Миша, всё хуйня', 'Не пройдёшь': 'Гэндальф', 'Партейку?': 'Сыграем... в гвинт?' };
+    const old = { 'Серия обычных ударов': 'Сайтама', 'Догони меня... Кирпичи?': 'Тетрис', 'Само совершенство': 'Давай по новой Миша, всё хуйня', 'Не пройдёшь': 'Гэндальф', 'Партейку?': 'Сыграем... в гвинт?' };
     await actor.updateEmbeddedDocuments('Item', Object.entries(old).map(([n, o]) => {
         const it = item(n);
         const crystal = it.flags.gachadnd.is_crystal_item;
@@ -62,16 +62,16 @@ const sync = () => ev(async () => { await (await gdt.mod('memory/skill-names.js'
 await sync();
 let now = await names();
 check('синхронизация: навыки, кристаллы и Хранилище — новые названия, тег Сингулярности сохранён',
-    now === ['Догони меня... Кирпичи? [огонь]', 'Кристалл: Не пройдёшь', 'Сейв-лоад', 'Серия обычных ударов', 'в Хранилище: Кристалл: Партейку?'].sort().join(' | '), now);
+    now === ['Догони меня... Кирпичи? [огонь]', 'Кристалл: Не пройдёшь', 'Само совершенство', 'Серия обычных ударов', 'в Хранилище: Кристалл: Партейку?'].sort().join(' | '), now);
 
 // ---------- Грубые названия (18+)
 await ev(() => game.settings.set('gachadnd', 'rudeNames', true));
 await ev(() => gdt.settle());
 now = await names();
-check('«Грубые названия» включены — Сейв-лоад показан исходным названием', now.includes('Давай по новой Миша, всё хуйня') && !now.includes('Сейв-лоад'), now);
+check('«Грубые названия» включены — Само совершенство показан исходным названием', now.includes('Давай по новой Миша, всё хуйня') && !now.includes('Само совершенство'), now);
 await ev(() => game.settings.set('gachadnd', 'rudeNames', false));
 await ev(() => gdt.settle());
-check('«Грубые названия» выключены — снова Сейв-лоад', (await names()).includes('Сейв-лоад'), await names());
+check('«Грубые названия» выключены — снова Само совершенство', (await names()).includes('Само совершенство'), await names());
 
 // ---------- Свои названия
 await ev(() => game.settings.set('gachadnd', 'skillNames', 'Серия обычных ударов = Сайтама\nНе пройдёшь = Гэндальф\nнет такого навыка = что-то'));

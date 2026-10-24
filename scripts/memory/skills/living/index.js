@@ -7,6 +7,7 @@ import "./hone.js";
 import "./third.js";
 import "./countdown.js";
 import "./ember.js";
+import "./perfection.js";
 import "./duo.js";
 import "./badges.js";
 import "./scars.js";

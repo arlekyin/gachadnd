@@ -14,8 +14,8 @@ const settle = () => page.evaluate(() => gdt.settle());
 await install(page);
 const ids = await scene(page);
 const hero = ids.hero;
-const S = await skills(page, hero, ['Стена? Какая стена?', 'Перезарядка', 'Оверклокинг', 'Сейв-лоад']);
-const KITTY = S['Стена? Какая стена?'], RECHARGE = S['Перезарядка'], OVER = S['Оверклокинг'], GRAY = S['Сейв-лоад'];
+const S = await skills(page, hero, ['Стена? Какая стена?', 'Перезарядка', 'Оверклокинг', 'Сюжетная броня']);
+const KITTY = S['Стена? Какая стена?'], RECHARGE = S['Перезарядка'], OVER = S['Оверклокинг'], GRAY = S['Сюжетная броня'];
 
 const state = id => page.evaluate(({ hero, id }) => {
     const item = game.actors.get(hero).items.get(id);

@@ -3487,3 +3487,12 @@
 /* Громкость модуля в «Управление громкостью» (вкладка плейлистов) */
 .global-volume li.gd-volume-head { margin-top: 0.5rem; padding-top: 0.35rem; border-top: 1px solid rgba(255, 255, 255, 0.12); font-size: var(--font-size-12, 12px); opacity: 0.8; }
 .global-volume li.gd-volume input[type="range"] { flex: 2; min-width: 0; }
+
+/* Само совершенство: окно огранки */
+.gd-perfection-strokes { list-style: none; margin: 0.4rem 0; padding: 0; }
+.gd-perfection-strokes li { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.4rem; border-radius: 4px; opacity: 0.6; }
+.gd-perfection-strokes li.on { opacity: 1; background: rgba(243, 207, 106, 0.14); color: #f3cf6a; }
+.gd-perfection-strokes li small { flex: 1; opacity: 0.8; }
+.gd-perfection-strokes li button { flex: 0 0 auto; width: auto; padding: 0 0.6rem; line-height: 1.6; }
+.gd-perfection-state, .gd-perfection-note { margin: 0.3rem 0; }
+.gd-perfection-note { font-size: 0.85em; opacity: 0.75; }
