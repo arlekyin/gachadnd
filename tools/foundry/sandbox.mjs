@@ -325,11 +325,60 @@ await scene.activate();`;
     await journal?.createEmbeddedDocuments('JournalEntryPage', [{ name: 'Арена', type: 'text', text: { content: ARENA_PAGE } }]);
 }, { SANDBOX, ARENA_PAGE });
 
+// Обмен: два героя с монетами, вещами и кристаллами; макросы «раздать» (владение и назначение Claude_player и
+// Claude_trusted) и «забрать» — владение не раздаётся само, чтобы не путать проверки со стороны игрока
+const TRADE_PAGE = `
+<h2>Обмен</h2>
+<p>На сцене — «Обмен: Лира» и «Обмен: Борк» с монетами, оружием, зельями и кристаллами. Макрос «Обмен: раздать игрокам» в папке «${SANDBOX}: обмен» отдаёт Лиру Claude_player, Борка — Claude_trusted и назначает их персонажами; «Обмен: забрать» — обратно.</p>
+<ul>
+<li>Войдите двумя игроками (два окна браузера, Claude_player и Claude_trusted, без пароля). Правый щелчок одного по токену другого — окно обмена у обоих.</li>
+<li>Слева — что вы отдаёте: монеты (не больше, чем в кошельке), предметы кнопкой «+» из сумки (над ней — поиск по названию) или перетаскиванием с листа, количество для стопки. Справа — предложение товарища, оно обновляется у вас сразу.</li>
+<li>Нажмите «Согласен» и поменяйте что-нибудь у второго — «Согласен» снимется у обоих. Оба согласны — вещи переехали, в чате запись для всех.</li>
+<li>Мастеру — шёпот «Наблюдать»: окно, где правятся обе стороны, «Провести сейчас» и «Отменить» (подсказка отключается в настройках подсказок).</li>
+<li>Без Мастера в игре обмен тоже проходит: каждый проводит свою половину.</li>
+</ul>`;
+await page.evaluate(async ({ SANDBOX, TRADE_PAGE }) => {
+    const scene = game.scenes.getName(`${SANDBOX}: навыки`), grid = scene.grid.size;
+    const crystal = (name, rarity) => ({ name: `Кристалл: ${name}`, type: 'consumable', img: `modules/gachadnd/assets/icons/skills/${rarity === 'gray' ? 'grey' : rarity}_fog_crystall.webp`, system: { quantity: 1 }, flags: { gachadnd: { is_crystal_item: true, skill_name: name, rarity } } });
+    const mk = (name, gp, items) => Actor.create({
+        name: `${SANDBOX}: Обмен: ${name}`, type: 'character',
+        system: { currency: { pp: 1, gp, ep: 0, sp: 12, cp: 30 }, attributes: { hp: { value: 30, max: 30 } } },
+        prototypeToken: { actorLink: true, disposition: 1, displayName: 30 }
+    }).then(async a => { await a.createEmbeddedDocuments('Item', items); return a; });
+    const lira = await mk('Лира', 80, [
+        { name: 'Кинжал', type: 'weapon', img: 'icons/weapons/daggers/dagger-straight-blue.webp', system: { quantity: 2, equipped: true } },
+        { name: 'Зелье лечения', type: 'consumable', img: 'icons/consumables/potions/potion-tube-corked-red.webp', system: { quantity: 3 } },
+        crystal('Хлопушка', 'green'), crystal('Голос предков', 'blue')
+    ]);
+    const bork = await mk('Борк', 15, [
+        { name: 'Верёвка', type: 'loot', img: 'icons/sundries/survival/rope-wrapped-brown.webp', system: { quantity: 1 } },
+        { name: 'Щит', type: 'equipment', img: 'icons/equipment/shield/heater-steel-worn.webp', system: { quantity: 1 } },
+        crystal('Тлеющий уголь', 'gray')
+    ]);
+    await scene.createEmbeddedDocuments('Token', [lira, bork].map((a, i) => ({ ...a.prototypeToken.toObject(), actorId: a.id, name: a.name, x: (14 + i * 2) * grid, y: 13 * grid })));
+    const folderName = `${SANDBOX}: обмен`;
+    for (const f of game.folders.filter(f => f.type === 'Macro' && f.name === folderName)) { await Macro.deleteDocuments(game.macros.filter(m => m.folder?.id === f.id).map(m => m.id)); await f.delete(); }
+    const folder = await Folder.create({ name: folderName, type: 'Macro', color: '#4a3f2f' });
+    const pair = `const pair = [['Claude_player', '${SANDBOX}: Обмен: Лира'], ['Claude_trusted', '${SANDBOX}: Обмен: Борк']];`;
+    await Macro.createDocuments([
+        { name: 'Обмен: раздать игрокам', type: 'script', img: 'icons/skills/social/trading-justice-scale-yellow.webp', folder: folder.id, sort: 0,
+            command: `${pair}
+for (const [u, a] of pair) { const user = game.users.getName(u), actor = game.actors.getName(a); if (!user || !actor) continue; await actor.update({ [\`ownership.\${user.id}\`]: 3 }); await user.update({ character: actor.id }); }
+ui.notifications.info('Лира — Claude_player, Борк — Claude_trusted.');` },
+        { name: 'Обмен: забрать', type: 'script', img: 'icons/skills/social/trading-justice-scale-gray.webp', folder: folder.id, sort: 100,
+            command: `${pair}
+for (const [u, a] of pair) { const user = game.users.getName(u), actor = game.actors.getName(a); if (!user || !actor) continue; await actor.update({ [\`ownership.\${user.id}\`]: 0 }); if (user.character?.id === actor.id) await user.update({ character: null }); }
+ui.notifications.info('Герои обмена — снова у Мастера.');` }
+    ]);
+    const journal = game.journal.getName(`${SANDBOX}: как проверять`);
+    await journal?.createEmbeddedDocuments('JournalEntryPage', [{ name: 'Обмен', type: 'text', text: { content: TRADE_PAGE } }]);
+}, { SANDBOX, TRADE_PAGE });
+
 const report = await page.evaluate(({ SANDBOX }) => game.actors.filter(a => a.name.startsWith(SANDBOX)).map(a => {
     const memory = a.items.filter(i => i.flags.gachadnd?.skill_name);
     const echo = a.flags.gachadnd?.echo?.value;
     return `${a.name.replace(`${SANDBOX}: `, '')}: ${memory.length ? memory.map(i => i.name).join(', ') : 'без навыков'}${echo ? ` — эхо ${echo}` : ''}`;
 }), { SANDBOX });
-console.log('Песочница готова — сцена «GD-песочница: навыки», журнал «GD-песочница: как проверять» (страницы «Навыки» и «Арена»), макросы арены — папка «GD-песочница: арена»:');
+console.log('Песочница готова — сцена «GD-песочница: навыки», журнал «GD-песочница: как проверять» (страницы «Навыки», «Арена», «Обмен»), макросы — папки «GD-песочница: арена» и «GD-песочница: обмен»:');
 for (const line of report) console.log('  ' + line);
 await f.close();

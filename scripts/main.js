@@ -20,6 +20,7 @@ import { giveCrystal } from "./memory/inventory.js";
 import { registerSocket } from "./core/socket.js";
 import { MemoryAltar, announceRest } from "./memory/altar/memory-altar.js";
 import { StashWindow } from "./memory/stash.js";
+import { offerTrade, trades, TradeWindow } from "./trade/trade.js";
 import { registerDraftSettings, DraftWindow } from "./memory/draft.js";
 import { registerMemorySettings } from "./memory/memory-api.js";
 import { registerTriggerSettings } from "./memory/synergy/triggers.js";
@@ -99,6 +100,8 @@ Hooks.once('init', () => {
         openMemoryAltar: (actor) => MemoryAltar.open(actor),
         // Хранилище кристаллов персонажа (там же, где Алтарь)
         openStash: (actor) => StashWindow.open(actor),
+        // Обмен: game.gachadnd.trade.offer(actor) — как правый щелчок по токену товарища; list() — сделки этого клиента
+        trade: { offer: offerTrade, list: trades, show: id => TradeWindow.show(id) },
         // Окно распределения добычи (если оно идёт)
         openDraft: () => DraftWindow.show(),
         // Головоломка Кирпичей персонажа; уборка всех его блоков со сцены (Мастер)

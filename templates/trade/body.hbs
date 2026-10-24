@@ -1,0 +1,55 @@
+<div class="gd-trade-root">
+    {{#if gone}}<p class="gd-trade-state">Этой сделки уже нет.</p>{{else}}
+    <div class="gd-trade">
+        {{#each columns}}
+        <section class="gd-trade-col {{#if ready}}ready{{/if}}" data-side="{{key}}">
+            <header class="gd-trade-who">
+                <img src="{{img}}" alt="">
+                <div><b>{{name}}</b><small>{{title}}</small></div>
+                {{#if ready}}<span class="gd-trade-ok"><i class="fas fa-check"></i> согласен</span>{{/if}}
+            </header>
+            <div class="gd-trade-coins">
+                {{#each coins}}
+                {{#if ../edit}}<label><input type="number" min="0" max="{{purse}}" step="1" data-coin="{{c}}" value="{{value}}" data-tooltip="В кошельке: {{purse}}"> {{label}}</label>
+                {{else if value}}<label><b>{{value}}</b> {{label}}</label>{{/if}}
+                {{/each}}
+            </div>
+            <ul class="gd-trade-offer">
+                {{#each items}}
+                <li>
+                    <img src="{{img}}" alt=""><span>{{name}}</span>
+                    {{#if ../edit}}
+                    <input type="number" min="1" max="{{max}}" step="1" data-qty="{{id}}" value="{{qty}}">
+                    <a data-action="drop" data-item-id="{{id}}" data-tooltip="Убрать"><i class="fas fa-xmark"></i></a>
+                    {{else}}{{#if (gt qty 1)}}<em>×{{qty}}</em>{{/if}}{{/if}}
+                </li>
+                {{else}}
+                <li class="gd-trade-none">{{#if edit}}Добавьте из сумки ниже или перетащите с листа персонажа{{else}}пока ничего{{/if}}</li>
+                {{/each}}
+            </ul>
+            {{#if edit}}
+            <input type="search" class="gd-trade-search" placeholder="Поиск в сумке" value="{{search}}">
+            <div class="gd-trade-bag">
+                {{#each bag}}
+                <button type="button" data-action="add" data-item-id="{{id}}" data-find="{{find}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if (gt left 1)}}<em>{{left}}</em>{{/if}}<i class="fas fa-plus"></i></button>
+                {{else}}
+                <span class="gd-trade-none">в сумке больше ничего</span>
+                {{/each}}
+                <span class="gd-trade-none gd-trade-nothing" hidden>ничего не нашлось</span>
+            </div>
+            {{/if}}
+        </section>
+        {{/each}}
+    </div>
+    <footer class="gd-trade-foot">
+        {{#if (eq state "done")}}<span class="gd-trade-state">Обмен состоялся — запись в чате.</span>
+        {{else if (eq state "cancelled")}}<span class="gd-trade-state">Обмен отменён.</span>
+        {{else}}
+        <span class="gd-trade-state">{{#if waiting}}Оба согласны — меняемся…{{else}}Правка любой стороны снимает оба «Согласен».{{/if}}</span>
+        {{#if mine}}<button type="button" data-action="ready" class="{{#if myReady}}on{{/if}}">{{#if myReady}}<i class="fas fa-rotate-left"></i> Передумал{{else}}<i class="fas fa-check"></i> Согласен{{/if}}</button>{{/if}}
+        {{#if gm}}<button type="button" data-action="force"><i class="fas fa-gavel"></i> Провести сейчас</button>{{/if}}
+        <button type="button" data-action="cancel"><i class="fas fa-xmark"></i> {{#if gm}}Отменить{{else}}Отказаться{{/if}}</button>
+        {{/if}}
+    </footer>
+    {{/if}}
+</div>

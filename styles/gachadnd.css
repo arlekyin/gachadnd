@@ -3499,3 +3499,45 @@
 .gd-perfection-strokes li button { flex: 0 0 auto; width: auto; padding: 0 0.6rem; line-height: 1.6; }
 .gd-perfection-state, .gd-perfection-note { margin: 0.3rem 0; }
 .gd-perfection-note { font-size: 0.85em; opacity: 0.75; }
+
+/* ---------- Обмен между игроками ---------- */
+.gachadnd-trade .window-content { padding: 0; background: linear-gradient(180deg, #16140f, #0c0b09); color: #e6dfd2; }
+.gd-trade-root { display: flex; flex-direction: column; height: 100%; }
+.gd-trade { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.gd-trade-col { display: flex; flex-direction: column; min-height: 0; padding: 12px 14px; gap: 8px; }
+.gd-trade-col + .gd-trade-col { border-left: 1px solid rgba(255, 255, 255, 0.08); }
+.gd-trade-col.ready { background: rgba(120, 200, 110, 0.05); }
+.gd-trade-who { display: flex; align-items: center; gap: 10px; }
+.gd-trade-who img { width: 38px; height: 38px; border: 1px solid #4a4134; border-radius: 4px; object-fit: cover; }
+.gd-trade-who b { display: block; font-size: 15px; }
+.gd-trade-who small { display: block; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.55; }
+.gd-trade-ok { margin-left: auto; color: #8fdc7f; font-size: 12px; }
+.gd-trade-coins { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: #c9b98f; }
+.gd-trade-coins label { display: flex; align-items: center; gap: 4px; }
+.gd-trade-coins input { width: 54px; height: 24px; text-align: right; }
+.gd-trade-coins b { color: #f0dca0; }
+.gd-trade-offer { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; min-height: 40px; }
+.gd-trade-offer li { display: flex; align-items: center; gap: 8px; padding: 3px 6px 3px 3px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(240, 200, 120, 0.25); border-radius: 4px; font-size: 13px; }
+.gd-trade-offer li img { width: 26px; height: 26px; border: none; flex: none; }
+.gd-trade-offer li span { flex: 1; }
+.gd-trade-offer li input { width: 48px; height: 22px; text-align: right; }
+.gd-trade-offer li a { opacity: 0.6; cursor: pointer; }
+.gd-trade-offer li a:hover { opacity: 1; color: #ff9f8f; }
+.gd-trade-offer li.gd-trade-none { background: none; border: 1px dashed rgba(255, 255, 255, 0.12); justify-content: center; }
+.gd-trade-none { opacity: 0.5; font-size: 12px; font-style: italic; }
+.gd-trade-bag { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.gd-trade-bag button { display: flex; align-items: center; gap: 8px; width: 100%; height: auto; margin: 0; padding: 2px 8px 2px 2px; background: rgba(255, 255, 255, 0.02); border: 1px solid transparent; border-radius: 4px; color: inherit; font-size: 12px; text-align: left; }
+.gd-trade-bag button:hover { border-color: rgba(240, 200, 120, 0.4); background: rgba(240, 200, 120, 0.06); }
+.gd-trade-bag button img { width: 22px; height: 22px; border: none; flex: none; }
+.gd-trade-bag button span { flex: 1; }
+.gd-trade-bag button em { opacity: 0.6; font-style: normal; }
+.gd-trade-bag button i { opacity: 0.45; font-size: 11px; }
+.gd-trade-search { width: 100%; height: 26px; margin-top: 4px; }
+.gd-trade-bag button[hidden], .gd-trade-nothing[hidden] { display: none; }
+.gd-trade-foot { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.gd-trade-state { flex: 1; font-size: 12px; opacity: 0.7; }
+.gd-trade-foot button { width: auto; height: 30px; margin: 0; padding: 0 14px; white-space: nowrap; }
+.gd-trade-foot button.on { border-color: #8fdc7f; color: #8fdc7f; }
+.gd-trade-card-title { font-weight: 600; margin-bottom: 4px; }
+.gd-trade-card p { margin: 2px 0; }
+.gd-trade-card button { margin-top: 4px; }
