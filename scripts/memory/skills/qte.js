@@ -16,6 +16,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket } from "../../core/socket.js";
 import { registerCues, playCue, tone, noise } from "../../cutscene/audio.js";
 import { fxCalm, soundOn, sfxVolume } from "../../core/prefs.js";
+import { t } from "../../core/i18n.js";
 
 const KEYS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 const TIME_MS = 2500;
@@ -73,7 +74,7 @@ Hooks.on('dnd5e.rollAttackV2', (rolls, { subject } = {}) => {
         if (!user) continue;
         const data = {
             userId: user.id, actorId: actor.id, tokenId: target.document?.id ?? null, sceneId: canvas.scene?.id ?? null,
-            attacker: attacker?.name ?? subject.item?.name ?? 'Атака', total: roll.total, d20, ac, critical: !!roll.isCritical
+            attacker: attacker?.name ?? subject.item?.name ?? t('Атака'), total: roll.total, d20, ac, critical: !!roll.isCritical
         };
         if (user.id === game.user.id) runQte(data);
         else emit('qteStart', data);
@@ -100,7 +101,7 @@ export async function runQte(data) {
         if (uses?.max) await item.update({ 'system.uses.spent': Number(uses.spent ?? 0) + 1 });
         const success = await playQte({ attacker: data.attacker });
         let mode = null, text;
-        if (!success) text = 'не успел — атака как была.';
+        if (!success) text = t('не успел — атака как была.');
         else {
             // Помеха задним числом: второй d20, берётся меньший
             const second = Math.ceil(Math.random() * 20);
@@ -108,7 +109,7 @@ export async function runQte(data) {
             const total = data.total - data.d20 + kept;
             const hit = kept !== 1 && (kept === 20 || total >= data.ac);
             mode = hit ? 'half' : 'cancel';
-            text = `успел! Второй d20: ${second}, итог атаки ${total} против КД ${data.ac} — ${hit ? 'всё равно попала, урон вдвое меньше' : 'промах, урона нет'}.`;
+            text = t('успел! Второй d20: {second}, итог атаки {total} против КД {ac} — {v}.', { second, total, ac: data.ac, v: hit ? t('всё равно попала, урон вдвое меньше') : t('промах, урона нет') });
         }
         if (mode) await actor.setFlag(MODULE_ID, 'qte', { mode, at: Date.now() });
         await ChatMessage.create({
@@ -134,11 +135,11 @@ Hooks.on('dnd5e.preApplyDamage', (actor, amount) => {
     if (!pending || Date.now() - pending.at > PENDING_MS) return;
     actor.unsetFlag(MODULE_ID, 'qte');
     if (pending.mode === 'cancel') {
-        ui.notifications.info(`QTE: ${actor.name} увернулся — урон ${amount} не прошёл.`);
+        ui.notifications.info(t('QTE: {name} увернулся — урон {amount} не прошёл.', { name: actor.name, amount }));
         return false;
     }
     const half = Math.floor(amount / 2);
-    ui.notifications.info(`QTE: урон по ${actor.name} вдвое меньше — ${half} вместо ${amount}.`);
+    ui.notifications.info(t('QTE: урон по {name} вдвое меньше — {half} вместо {amount}.', { name: actor.name, half, amount }));
     passing.add(actor.uuid ?? actor.id);
     actor.applyDamage(half, { ignore: true });
     return false;

@@ -4,7 +4,7 @@
 // у игрока без выбранного токена; в бою стихает до четверти (или замолкает — настройка), после боя возвращается.
 // В «Управление громкостью» — блок модуля: «Gacha: всё», фон арены, Терминал, тема героя; ползунок фона меняет
 // громкость сразу. Звуки — assets/sounds/arena (docs/arena-sounds.md).
-import { connect, joinAs, checker, moduleErrors, done } from './harness.mjs';
+import { connect, joinAs, joinSpectator, checker, moduleErrors, done } from './harness.mjs';
 import { install, scene } from './fixtures.mjs';
 
 const f = await connect();
@@ -58,12 +58,9 @@ const arenaId = await ev(async hero => {
     return scene.id;
 }, ids.hero);
 const player = await joinAs(f, 'Claude_player');
+const spectator = await joinSpectator(f);
 const pev = (fn, arg) => player.page.evaluate(fn, arg);
-// Особенность стенда: изменения от Мастера доходят до игрока, только если Мастер вошёл позже
-await page.reload();
-await page.waitForFunction(() => window.game?.ready, null, { polling: 250, timeout: 120000 });
-await sleep(1500);
-await install(page);
+// Особенность стенда: последняя вошедшая вкладка не получает рассылок — после игрока вошёл «зритель»
 const since = f.log.length;
 const playing = async (on, id) => on.evaluate(async id => {
     for (let i = 0; i < 60 && (canvas.scene?.id !== id || !canvas.ready); i++) await new Promise(r => setTimeout(r, 250));
@@ -122,6 +119,7 @@ check('«Управление громкостью»: Gacha — всё, фон �
     panel.rows.join() === 'volume,arenaAmbienceVolume,soundsVolume,auraMusicVolume' && panel.half === Math.round(panel.before * 50) / 100, JSON.stringify(panel));
 
 await ev(async back => { for (const c of game.combats.contents) await c.delete(); await game.scenes.get(back)?.activate(); }, back);
+await spectator.close();
 await player.close();
 const errors = moduleErrors(f.log.slice(since)).concat(moduleErrors(player.log));
 check('ошибок модуля в консоли нет', !errors.length, errors.slice(0, 3).join(' | '));

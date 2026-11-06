@@ -7,6 +7,7 @@
 
 import { duoProgress, DUO_THRESHOLD } from "../synergy/duo-links.js";
 import { MODULE_ID } from "../../core/constants.js";
+import { tagLabel, categoryLabel } from "../../core/ids.js";
 import { updateActorSynergies, isMemorySkill, getSlotBonus, naturalSlotCap, setSkillEquipped, isInCombat, occupiesSlot } from "../synergy/synergy.js";
 import { HOOKS, restSite, allowSkillChange } from "../memory-api.js";
 import { MemoryAltar } from "../altar/memory-altar.js";
@@ -16,6 +17,7 @@ import { collectGlossary } from "../../core/glossary.js";
 import { playTerminalSound } from "../../core/sounds.js";
 import { NeuralBackground } from "./neural.js";
 import { heatable, heatOf, levelFor, nextRisk, riskText } from "../overheat.js";
+import { t } from "../../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -24,15 +26,15 @@ const TEMPLATES = 'modules/gachadnd/templates/terminal';
 const CONTENT_PARTS = ['banner', 'deck', 'feature', 'side'];
 
 const RARITY = {
-    gray: { label: 'Серый', color: '#9d9d9d' },
-    green: { label: 'Зелёный', color: '#1eff00' },
-    blue: { label: 'Синий', color: '#0070dd' },
-    purple: { label: 'Фиолетовый', color: '#a335ee' },
-    red: { label: 'Красный', color: '#ff003c' },
-    orange: { label: 'Оранжевый', color: '#ff8000' }
+    gray: { label: t('Серый'), color: '#9d9d9d' },
+    green: { label: t('Зелёный'), color: '#1eff00' },
+    blue: { label: t('Синий'), color: '#0070dd' },
+    purple: { label: t('Фиолетовый'), color: '#a335ee' },
+    red: { label: t('Красный'), color: '#ff003c' },
+    orange: { label: t('Оранжевый'), color: '#ff8000' }
 };
 
-const PERIOD_SHORT = { sr: 'КО', lr: 'ДО', day: 'день', turn: 'ход', turnStart: 'раунд', initiative: 'бой', gachaRun: 'забег', gachaScene: 'сцена', gachaFloor: 'этаж' };
+const PERIOD_SHORT = { sr: t('КО'), lr: t('ДО'), day: t('день'), turn: t('ход'), turnStart: t('раунд'), initiative: t('бой'), gachaRun: t('забег'), gachaScene: t('сцена'), gachaFloor: t('этаж') };
 const RANK_LABELS = ['I', 'II', 'III'];
 
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -61,26 +63,26 @@ function statsRows(item) {
     const rows = [];
     const activity = item.system?.activities?.contents?.[0];
     if (!activity) {
-        rows.push(['Тип', 'Пассивный — действует, пока навык экипирован']);
+        rows.push([t('Тип'), t('Пассивный — действует, пока навык экипирован')]);
     } else {
         const labels = activity.labels ?? {};
         const activation = labels.activation || CONFIG.DND5E.activityActivationTypes?.[activity.activation?.type]?.label;
-        if (activation) rows.push(['Активация', activation]);
-        if (labels.range || activity.range?.value) rows.push(['Дальность', labels.range || `${activity.range.value} фт`]);
+        if (activation) rows.push([t('Активация'), activation]);
+        if (labels.range || activity.range?.value) rows.push([t('Дальность'), labels.range || t('{value} фт', { value: activity.range.value })]);
         const template = activity.target?.template;
-        if (template?.type) rows.push(['Область', `${CONFIG.DND5E.areaTargetTypes?.[template.type]?.label ?? template.type}, ${template.size} фт`]);
+        if (template?.type) rows.push([t('Область'), t('{type}, {size} фт', { type: CONFIG.DND5E.areaTargetTypes?.[template.type]?.label ?? template.type, size: template.size })]);
         const ability = activity.save?.ability?.first?.() ?? [...(activity.save?.ability ?? [])][0];
-        if (ability) rows.push(['Спасбросок', labels.save || CONFIG.DND5E.abilities?.[ability]?.label || ability]);
+        if (ability) rows.push([t('Спасбросок'), labels.save || CONFIG.DND5E.abilities?.[ability]?.label || ability]);
     }
     const uses = usesInfo(item);
     if (uses) {
         // Заряды редактируются прямо в строке характеристик
         const period = item.system.uses.recovery?.[0]?.period;
         const periodLabel = period ? (CONFIG.DND5E.limitedUsePeriods?.[period]?.label ?? uses.period) : '';
-        rows.push(['Заряды', `<input type="text" class="gd-uses-input" data-item-id="${item.id}" data-max="${uses.max}" value="${uses.value}"> / ${uses.max}${periodLabel ? ` · ${esc(periodLabel)}` : ''}`, true]);
+        rows.push([t('Заряды'), `<input type="text" class="gd-uses-input" data-item-id="${item.id}" data-max="${uses.max}" value="${uses.value}"> / ${uses.max}${periodLabel ? ` · ${esc(periodLabel)}` : ''}`, true]);
     }
     const heat = heatRow(item);
-    if (heat) rows.push(['Перегрев', heat, true]);
+    if (heat) rows.push([t('Перегрев'), heat, true]);
     return rows.map(([label, value, raw]) => ({ label, html: raw ? value : esc(value) }));
 }
 
@@ -88,10 +90,10 @@ function statsRows(item) {
 function heatRow(item) {
     if (!heatable(item)) return '';
     const heat = heatOf(item);
-    if (heat.locked) return '<span class="gd-heat locked">заблокирован до долгого отдыха</span>';
+    if (heat.locked) return t('<span class="gd-heat locked">заблокирован до долгого отдыха</span>');
     if (!heat.borrowed && !heat.extra) return '';
     const level = levelFor(heat.extra);
-    return `<span class="gd-heat lvl-${Math.min(level, 6)}">${level ? `уровень ${level}` : 'остыл'} · заёмных зарядов ${heat.borrowed} · дальше — ${esc(riskText(nextRisk(item)))}</span>`;
+    return `<span class="gd-heat lvl-${Math.min(level, 6)}">${t('{v} · заёмных зарядов {borrowed} · дальше — {v2}', { v: level ? t('уровень {level}', { level }) : t('остыл'), borrowed: heat.borrowed, v2: esc(riskText(nextRisk(item))) })}</span>`;
 }
 
 function hasActivities(item) {
@@ -154,7 +156,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
     static PARTS = Object.fromEntries(['backdrop', ...CONTENT_PARTS].map(id => [id, { template: `${TEMPLATES}/${id}.hbs`, scrollable: { deck: ['.gd-deck'], side: ['.gd-glossary', '.gd-syn-list'] }[id] }]));
 
     get title() {
-        return `Терминал Тумана: ${this.actor.name}`;
+        return t('Терминал Тумана: {name}', { name: this.actor.name });
     }
 
     // Изменения документов приходят пачками (экипировка, пересчёт синергий) — перерисовка одна
@@ -230,7 +232,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
 
         const site = restSite();
         const atRest = !!site;
-        const restLabel = site?.label ?? 'Привал';
+        const restLabel = site?.label ?? t('Привал');
         const restIcon = site?.site === 'anchor' ? 'fa-anchor' : 'fa-campground';
         // Кнопки места отдыха от расширений (Кладбище в Якоре)
         this.#restLinks = (site?.links ?? []).map(l => l.run);
@@ -324,19 +326,19 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             equipped: !!flags.is_active, ranked, rank: romanRank(rank),
             chips: [
                 { text: rarity.label, color: rarity.color },
-                { text: flags.category ?? '' },
-                ...tags.map(t => ({ text: t, cls: 'tag' })),
-                ...(ranked ? [{ text: `Ранг ${romanRank(rank)}${canRankUp(selected) ? ' · можно улучшить' : ''}` }] : []),
-                ...(['purple', 'red'].includes(flags.rarity) ? [{ text: 'Уникальный', cls: 'unique' }] : []),
-                ...(flags.trigger ? [{ text: 'Срабатывает сам', cls: 'tag' }] : []),
+                { text: flags.category ? categoryLabel(flags.category) : '' },
+                ...tags.map(tag => ({ text: tagLabel(tag), cls: 'tag' })),
+                ...(ranked ? [{ text: t('Ранг {v}{v2}', { v: romanRank(rank), v2: canRankUp(selected) ? t(' · можно улучшить') : '' }) }] : []),
+                ...(['purple', 'red'].includes(flags.rarity) ? [{ text: t('Уникальный'), cls: 'unique' }] : []),
+                ...(flags.trigger ? [{ text: t('Срабатывает сам'), cls: 'tag' }] : []),
                 // Сплав (Сделка луны): пара навыков на один слот
-                ...(flags.fused ? [{ text: `Сплав с «${this.actor.items.get(flags.fused.partner)?.name ?? '?'}»`, cls: 'unique' }] : [])
+                ...(flags.fused ? [{ text: t('Сплав с «{v}»', { v: this.actor.items.get(flags.fused.partner)?.name ?? '?' }), cls: 'unique' }] : [])
             ],
             drawback: flags.drawback && !flags.cleansed && !flags.drawback_lifted ? drawbackHtml(descriptions.get(selected.id), flags.drawback) : null,
             notes: view.notes,
             extensions: view.actions.map(({ label, icon, title }, index) => ({ index, label, icon, title })),
             // Снятый штраф (награда события) убирается и из текста описания
-            body: (flags.drawback_lifted ? descriptionBody(descriptions.get(selected.id)).replace(/<p><strong>Штраф:<\/strong>[\s\S]*?<\/p>/, '') : descriptionBody(descriptions.get(selected.id))) || '<p>Описание отсутствует.</p>',
+            body: (flags.drawback_lifted ? descriptionBody(descriptions.get(selected.id)).replace(/<p><strong>Штраф:<\/strong>[\s\S]*?<\/p>/, '') : descriptionBody(descriptions.get(selected.id))) || t('<p>Описание отсутствует.</p>'),
             hiddenRanks: isGM && ranked && rank < flags.max_rank
                 ? (flags.rank_texts ?? []).slice(rank - 1).map((text, i) => ({ label: RANK_LABELS[rank + i], text }))
                 : null,
@@ -349,13 +351,13 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
     // Активные синергии: способности (с кнопкой броска) и эффекты; клик раскрывает описание
     #synergies(synergyItems, synergyEffects, descriptions) {
         return [
-            ...synergyItems.map(doc => ({ doc, kind: 'способность', rollable: hasActivities(doc) })),
-            ...synergyEffects.map(doc => ({ doc, kind: doc.flags[MODULE_ID]?.is_system_effect ? 'дебафф системы' : 'эффект', system: !!doc.flags[MODULE_ID]?.is_system_effect }))
+            ...synergyItems.map(doc => ({ doc, kind: 'способность', rollable: hasActivities(doc) })),  // i18n: данные
+            ...synergyEffects.map(doc => ({ doc, kind: doc.flags[MODULE_ID]?.is_system_effect ? t('дебафф системы') : t('эффект'), system: !!doc.flags[MODULE_ID]?.is_system_effect }))
         ].map(({ doc, kind, rollable, system }) => ({
             id: doc.id, img: doc.img, name: doc.name, kind, rollable: !!rollable, system: !!system,
             open: this.expanded.has(doc.id),
             usesHtml: rollable ? usesHtml(doc) : '',
-            desc: descriptionBody(descriptions.get(doc.id)) || '<p>Описание отсутствует.</p>'
+            desc: descriptionBody(descriptions.get(doc.id)) || t('<p>Описание отсутствует.</p>')
         }));
     }
 
@@ -491,10 +493,10 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!item || !game.user.isGM) return;
         const current = item.flags[MODULE_ID]?.personal_effect ?? '';
         const text = await foundry.applications.api.DialogV2.prompt({
-            window: { title: `Личный эффект: ${item.name} — ${this.actor.name}` },
-            content: `<p>Эффект, отражающий характер персонажа. Пустая строка между абзацами — новый абзац.</p>
+            window: { title: t('Личный эффект: {name} — {name2}', { name: item.name, name2: this.actor.name }) },
+            content: `<p>${t('Эффект, отражающий характер персонажа. Пустая строка между абзацами — новый абзац.')}</p>
                 <textarea name="personal" rows="8" style="width: 100%">${esc(current)}</textarea>`,
-            ok: { label: 'Сохранить', callback: (ev, button) => button.form.elements.personal.value },
+            ok: { label: t('Сохранить'), callback: (ev, button) => button.form.elements.personal.value },
             rejectClose: false
         });
         if (text === null || text === undefined) return;
@@ -541,7 +543,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
         if (isInCombat(this.actor) && !game.user.isGM) {
             if (equipping) {
                 if (!this.actor.getFlag(MODULE_ID, 'swapPending')) {
-                    ui.notifications.warn('В бою навыки менять нельзя.');
+                    ui.notifications.warn(t('В бою навыки менять нельзя.'));
                     return this.#renderContent();
                 }
                 usesSwap = true;
@@ -549,12 +551,12 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
                 const swap = this.actor.items.find(i => isMemorySkill(i) && i.flags[MODULE_ID].is_active
                     && i.flags[MODULE_ID].combat_swap && (Number(i.system.uses?.max) || 0) > (i.system.uses?.spent || 0));
                 if (!swap) {
-                    ui.notifications.warn('В бою навыки менять нельзя.');
+                    ui.notifications.warn(t('В бою навыки менять нельзя.'));
                     return this.#renderContent();
                 }
                 await swap.update({ 'system.uses.spent': (swap.system.uses.spent || 0) + 1 });
                 await this.actor.setFlag(MODULE_ID, 'swapPending', true);
-                ui.notifications.info(`${swap.name}: выберите навык, который займёт освободившийся слот.`);
+                ui.notifications.info(t('{name}: выберите навык, который займёт освободившийся слот.', { name: swap.name }));
             }
         }
         if (equipping) {
@@ -562,7 +564,7 @@ export class MemoryTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
             const cap = naturalSlotCap(this.actor) + getSlotBonus(equipped) + (Number(item.flags[MODULE_ID]?.slot_bonus) || 0);
             // Сращённый всадник экипируется сверх лимита
             if (occupiesSlot(item) && equipped.filter(occupiesSlot).length >= cap) {
-                ui.notifications.error(`Достигнут абсолютный предел (${cap}).`);
+                ui.notifications.error(t('Достигнут абсолютный предел ({cap}).', { cap }));
                 return this.#renderContent();
             }
         }

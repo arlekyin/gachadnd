@@ -19,6 +19,7 @@ import { HOOKS } from "../memory/memory-api.js";
 import { getFloor } from "./economy.js";
 import { startBreach } from "./breach.js";
 import { logChronicle } from "./chronicle-log.js";
+import { t } from "../core/i18n.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 const FADE = 900;
@@ -61,7 +62,7 @@ export function findBoss(scene = canvas?.scene) {
 
 function card(content, { whisper = false } = {}) {
     return ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Луна' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Луна') }),
         ...(whisper ? { whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id) } : {}),
         content: `<div class="gd-moon-boon">${content}</div>`
     });
@@ -100,16 +101,16 @@ async function askEcho(combat, boon) {
     if (!party.length) return null;
     const cr = a => Number(a.system?.details?.cr) || 0;
     const bosses = game.actors.filter(a => a.type === 'npc' && a.getFlag(MODULE_ID, 'creature') !== 'devourer').sort((a, b) => cr(b) - cr(a) || a.name.localeCompare(b.name));
-    if (!bosses.length) { ui.notifications.warn('Отголосок Босса: в мире нет актёров-НИП.'); return null; }
+    if (!bosses.length) { ui.notifications.warn(t('Отголосок Босса: в мире нет актёров-НИП.')); return null; }
     const current = party.some(c => c.id === combat.combatant?.id) ? combat.combatant.id : party[0].id;
     const bossId = bosses.some(a => a.id === boon.boss?.id) ? boon.boss.id : bosses[0].id;
     const options = (list, selected, label) => list.map(x => `<option value="${x.id}"${x.id === selected ? ' selected' : ''}>${esc(label(x))}</option>`).join('');
     return foundry.applications.api.DialogV2.prompt({
-        window: { title: 'Отголосок Босса', icon: 'fas fa-crown' },
-        content: `<div class="form-group"><label>Кто зовёт</label><select name="caller">${options(party, current, c => c.name)}</select></div>
-            <div class="form-group"><label>Чей Отголосок</label><select name="boss">${options(bosses, bossId, a => `${a.name} (ПО ${a.system?.details?.cr ?? '—'})`)}</select></div>
-            <p class="hint">Отголосок ходит сразу после позвавшего и рассыпается, когда его ход закончится.</p>`,
-        ok: { label: 'Позвать', icon: 'fas fa-crown', callback: (event, button) => ({ callerId: button.form.elements.caller.value, bossId: button.form.elements.boss.value }) },
+        window: { title: t('Отголосок Босса'), icon: 'fas fa-crown' },
+        content: `<div class="form-group"><label>${t('Кто зовёт')}</label><select name="caller">${options(party, current, c => c.name)}</select></div>
+            <div class="form-group"><label>${t('Чей Отголосок')}</label><select name="boss">${options(bosses, bossId, a => t('{name} (ПО {v})', { name: a.name, v: a.system?.details?.cr ?? '—' }))}</select></div>
+            <p class="hint">${t('Отголосок ходит сразу после позвавшего и рассыпается, когда его ход закончится.')}</p>`,
+        ok: { label: t('Позвать'), icon: 'fas fa-crown', callback: (event, button) => ({ callerId: button.form.elements.caller.value, bossId: button.form.elements.boss.value }) },
         rejectClose: false
     });
 }
@@ -120,11 +121,11 @@ async function askEcho(combat, boon) {
  * @returns {Promise<TokenDocument|null>}
  */
 export async function callEcho({ callerId = null, bossId = null } = {}) {
-    if (!game.user.isGM) { ui.notifications.warn('Отголосок Босса зовёт Мастер — по просьбе отряда.'); return null; }
+    if (!game.user.isGM) { ui.notifications.warn(t('Отголосок Босса зовёт Мастер — по просьбе отряда.')); return null; }
     const combat = game.combat;
-    if (!combat?.started) { ui.notifications.warn('Отголосок Босса: бой не идёт.'); return null; }
+    if (!combat?.started) { ui.notifications.warn(t('Отголосок Босса: бой не идёт.')); return null; }
     const found = availableBoon('echo');
-    if (!found) { ui.notifications.warn('Отголосок Босса: у отряда нет этого дара на этом этаже.'); return null; }
+    if (!found) { ui.notifications.warn(t('Отголосок Босса: у отряда нет этого дара на этом этаже.')); return null; }
     if (!callerId || !bossId) {
         const choice = await askEcho(combat, found.boon);
         if (!choice) return null;
@@ -132,13 +133,13 @@ export async function callEcho({ callerId = null, bossId = null } = {}) {
     }
     const caller = combat.combatants.get(callerId);
     const boss = game.actors.get(bossId);
-    if (!caller?.token || !boss) { ui.notifications.warn('Отголосок Босса: нет позвавшего или Босса.'); return null; }
+    if (!caller?.token || !boss) { ui.notifications.warn(t('Отголосок Босса: нет позвавшего или Босса.')); return null; }
 
     const proto = boss.prototypeToken;
     const at = placeNear(caller.token, proto.width ?? 1, proto.height ?? 1);
     const data = (await boss.getTokenDocument(at)).toObject();
     Object.assign(data, {
-        name: `Отголосок: ${boss.name}`, actorLink: false, hidden: false, alpha: 0.85,
+        name: t('Отголосок: {name}', { name: boss.name }), actorLink: false, hidden: false, alpha: 0.85,
         disposition: CONST.TOKEN_DISPOSITIONS.FRIENDLY
     });
     data.texture = { ...data.texture, tint: ECHO_TINT };
@@ -149,8 +150,8 @@ export async function callEcho({ callerId = null, bossId = null } = {}) {
     const initiative = Number.isFinite(caller.initiative) ? Math.round((caller.initiative - 0.001) * 1000) / 1000 : null;
     await combat.createEmbeddedDocuments('Combatant', [{ tokenId: token.id, sceneId: token.parent.id, actorId: boss.id, initiative }]);
     await spendBoon(found.index);
-    logChronicle('echo', `Отголосок: ${boss.name}`);
-    await card(`<i class="fas fa-crown"></i> <strong>Отголосок Босса.</strong> Рядом с <strong>${esc(caller.name)}</strong> встаёт ${esc(boss.name)} — бледный, как отражение в воде. Один ход сразу после позвавшего, и он рассыпется.`);
+    logChronicle('echo', t('Отголосок: {name}', { name: boss.name }));
+    await card(`<i class="fas fa-crown"></i> <strong>${t('Отголосок Босса.')}</strong> ${t('Рядом с')} <strong>${esc(caller.name)}</strong> ${t('встаёт {v} — бледный, как отражение в воде. Один ход сразу после позвавшего, и он рассыпется.', { v: esc(boss.name) })}`);
     return token;
 }
 
@@ -164,21 +165,21 @@ export async function callEcho({ callerId = null, bossId = null } = {}) {
  * @returns {Promise<TokenDocument|null>}
  */
 export async function callDevourer({ point = null } = {}) {
-    if (!game.user.isGM) { ui.notifications.warn('Пожирателя натравливает Мастер — по просьбе отряда.'); return null; }
+    if (!game.user.isGM) { ui.notifications.warn(t('Пожирателя натравливает Мастер — по просьбе отряда.')); return null; }
     const combat = game.combat;
-    if (!combat?.started) { ui.notifications.warn('Натравить Пожирателя: бой не идёт.'); return null; }
-    if (combat.scene && combat.scene.id !== canvas.scene?.id) { ui.notifications.warn('Натравить Пожирателя: откройте сцену этого боя.'); return null; }
+    if (!combat?.started) { ui.notifications.warn(t('Натравить Пожирателя: бой не идёт.')); return null; }
+    if (combat.scene && combat.scene.id !== canvas.scene?.id) { ui.notifications.warn(t('Натравить Пожирателя: откройте сцену этого боя.')); return null; }
     const found = availableBoon('devour');
-    if (!found) { ui.notifications.warn('Натравить Пожирателя: у отряда нет этого дара на этом этаже.'); return null; }
+    if (!found) { ui.notifications.warn(t('Натравить Пожирателя: у отряда нет этого дара на этом этаже.')); return null; }
     const token = await startBreach({ ally: true, point });
     if (!token) return null;
-    await token.update({ name: `${token.name} (на стороне отряда)`, [`flags.${MODULE_ID}.moonDevourer`]: { turns: 0 } });
+    await token.update({ name: t('{name} (на стороне отряда)', { name: token.name }), [`flags.${MODULE_ID}.moonDevourer`]: { turns: 0 } });
     const [combatant] = await combat.createEmbeddedDocuments('Combatant', [{ tokenId: token.id, sceneId: token.parent.id, actorId: token.actorId }]);
     if (combatant) await combat.rollInitiative([combatant.id]);
     await spendBoon(found.index);
     await game.settings.set(MODULE_ID, 'moonTithe', { floor: getFloor(), combat: combat.id });
-    logChronicle('devour', 'Пожиратель за отряд');
-    await card(`<i class="fas fa-paw"></i> <strong>Натравить Пожирателя.</strong> Луна открыла ему дорогу — к врагам отряда. Два хода он рвёт их, потом уходит. Из добычи этого боя он заберёт свой кристалл.`);
+    logChronicle('devour', t('Пожиратель за отряд'));
+    await card(`<i class="fas fa-paw"></i> <strong>${t('Натравить Пожирателя.')}</strong> ${t('Луна открыла ему дорогу — к врагам отряда. Два хода он рвёт их, потом уходит. Из добычи этого боя он заберёт свой кристалл.')}`);
     return token;
 }
 
@@ -190,7 +191,7 @@ Hooks.on(HOOKS.lootRolled, roll => {
     game.settings.set(MODULE_ID, 'moonTithe', {}).catch(() => {});
     if (!roll.drops.length) return;
     const [taken] = roll.drops.splice(Math.floor(Math.random() * roll.drops.length), 1);
-    roll.lines.push(`<div class="gd-moon-boon"><i class="fas fa-paw"></i> Пожиратель уносит свою плату: <strong>${esc(taken.crystal.name)}</strong>.</div>`);
+    roll.lines.push(`<div class="gd-moon-boon"><i class="fas fa-paw"></i> ${t('Пожиратель уносит свою плату:')} <strong>${esc(taken.crystal.name)}</strong>.</div>`);
 });
 
 // ==========================================
@@ -214,12 +215,12 @@ Hooks.on('combatTurnChange', async (combat, prior, current) => {
     const flags = token?.flags?.[MODULE_ID];
     if (flags?.echo) {
         await vanish(token, combat);
-        await card(`<i class="fas fa-crown"></i> Отголосок ${esc(token.actor?.name ?? 'Босса')} рассыпается лунной пылью.`);
+        await card(`<i class="fas fa-crown"></i> ${t('Отголосок {v} рассыпается лунной пылью.', { v: esc(token.actor?.name ?? t('Босса')) })}`);
     } else if (flags?.moonDevourer) {
         const turns = (flags.moonDevourer.turns ?? 0) + 1;
         if (turns < DEVOURER_TURNS) return token.update({ [`flags.${MODULE_ID}.moonDevourer.turns`]: turns });
         await vanish(token, combat);
-        await card(`<i class="fas fa-paw"></i> Пожиратель сыт этим боем и уходит в разрыв. Шов затягивается.`);
+        await card(`<i class="fas fa-paw"></i> ${t('Пожиратель сыт этим боем и уходит в разрыв. Шов затягивается.')}`);
     }
 });
 
@@ -237,10 +238,10 @@ Hooks.on('combatStart', async () => {
     const echo = availableBoon('echo'), devour = availableBoon('devour');
     if (!echo && !devour) return;
     const buttons = [
-        echo ? `<button type="button" data-gd-boon="echo"><i class="fas fa-crown"></i> Позвать Отголосок Босса${echo.boon.boss ? ` (${esc(echo.boon.boss.name)})` : ''}</button>` : '',
-        devour ? `<button type="button" data-gd-boon="devour"><i class="fas fa-paw"></i> Натравить Пожирателя</button>` : ''
+        echo ? `<button type="button" data-gd-boon="echo"><i class="fas fa-crown"></i> ${t('Позвать Отголосок Босса{v}', { v: echo.boon.boss ? ` (${esc(echo.boon.boss.name)})` : '' })}</button>` : '',
+        devour ? `<button type="button" data-gd-boon="devour"><i class="fas fa-paw"></i> ${t('Натравить Пожирателя')}</button>` : ''
     ].join('');
-    await card(`<i class="fas fa-moon"></i> <strong>Дары луны</strong> на этом этаже — по одному разу. Нажмите, когда отряд попросит.<div class="gd-moon-boon-buttons">${buttons}</div>`, { whisper: true });
+    await card(`<i class="fas fa-moon"></i> <strong>${t('Дары луны')}</strong> ${t('на этом этаже — по одному разу. Нажмите, когда отряд попросит.')}<div class="gd-moon-boon-buttons">${buttons}</div>`, { whisper: true });
 });
 
 // Дар потрачен (кнопкой, макросом) — кнопки в уже показанных шёпотах гаснут

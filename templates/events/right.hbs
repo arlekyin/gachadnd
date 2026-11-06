@@ -1,6 +1,6 @@
 <section class="gd-ev-right{{#if decided}} decided{{/if}}">
     {{#if empty}}
-    <p class="gd-ev-text">Страница пуста — событие ещё не выбрано.</p>
+    <p class="gd-ev-text">{{t "Страница пуста — событие ещё не выбрано."}}</p>
     {{else}}
     <div class="gd-ev-place">{{place}}</div>
     <h2 class="gd-ev-title">{{title}}</h2>
@@ -14,12 +14,12 @@
         {{/each}}
     </ol>
     {{#if needsWho}}
-    <label class="gd-ev-who">Кто: <select name="who">{{#each who}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}</select></label>
+    <label class="gd-ev-who">{{t "Кто:"}} <select name="who">{{#each who}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}</select></label>
     {{/if}}
     {{#if rolling}}
     <div class="gd-ev-roll">
         <span>{{rolling.actor}} — {{rolling.check}}</span>
-        {{#if rolling.canRoll}}<button type="button" data-action="roll"><i class="fas fa-dice-d20"></i> Бросить</button>{{else}}<em>ждём броска</em>{{/if}}
+        {{#if rolling.canRoll}}<button type="button" data-action="roll"><i class="fas fa-dice-d20"></i> {{t "Бросить"}}</button>{{else}}<em>{{t "ждём броска"}}</em>{{/if}}
     </div>
     {{/if}}
     {{#if done}}
@@ -29,8 +29,8 @@
     <p class="gd-ev-outcome"></p>
     {{/if}}
     <div class="gd-ev-gm">
-        {{#if isGM}}{{#if open}}{{#unless preview}}<a data-action="reroll">другое событие</a>{{/unless}}{{/if}}{{/if}}
-        {{#if isGM}}<a data-action="finish">закрыть дневник</a>{{else}}{{#if done}}<a data-action="finish">закрыть дневник</a>{{/if}}{{/if}}
+        {{#if isGM}}{{#if open}}{{#unless preview}}<a data-action="reroll">{{t "другое событие"}}</a>{{/unless}}{{/if}}{{/if}}
+        {{#if isGM}}<a data-action="finish">{{t "закрыть дневник"}}</a>{{else}}{{#if done}}<a data-action="finish">{{t "закрыть дневник"}}</a>{{/if}}{{/if}}
     </div>
     {{/if}}
 </section>

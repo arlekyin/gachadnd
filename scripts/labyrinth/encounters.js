@@ -24,29 +24,35 @@ import { hint } from "../core/prefs.js";
 import { onRenderChatMessage } from "../core/chat-hooks.js";
 import { partyActors } from "./horsemen.js";
 import { BIOMES, currentBiome } from "./biomes.js";
+import { DUNGEON_BIOMES, dungeonNote } from "../arena/dungeon.js";
+import { SCHEME_NAMES as DUNGEON_SCHEMES } from "../arena/dungeon-layout.js";
 import { getFloor } from "./economy.js";
 import { mapScene } from "./scene-travel.js";
 import { webStage, isEaten, touchedSet } from "./web-graph.js";
+import { VOWS, ARENA_VOWS, CREW_VOWS, vowsOn } from "./vows.js";
+import { t } from "../core/i18n.js";
 
 const PACK = 'dnd5e.monsters';
 const TABLES = `${MODULE_ID}.gacha-tables`;
-const PREFIX = 'Встречи';
-const FOLDER = 'Лабиринт: монстры';
+const PREFIX = 'Встречи';  // i18n: данные
+const FOLDER = 'Лабиринт: монстры';  // i18n: данные
 // Сила встречи по узлу: столбец бюджета (0 — низкая, 1 — средняя, 2 — тяжёлая), запас, прибавка уровня,
 // доля бюджета на вожака (0 — без вожака)
 const NODES = {
-    mob: { label: 'Монстры', tier: 1, scale: 1, plus: 0, leader: 0, name: 'средняя' },
-    elite: { label: 'Элита', tier: 2, scale: 1, plus: 0, leader: 0.5, name: 'тяжёлая' },
-    outpost: { label: 'Застава', tier: 2, scale: 1, plus: 1, leader: 0.5, name: 'тяжёлая, на уровень выше' },
-    boss: { label: 'Босс', tier: 2, scale: 1.25, plus: 0, leader: 0.6, name: 'тяжёлая с запасом' }
+    mob: { label: t('Монстры'), tier: 1, scale: 1, plus: 0, leader: 0, name: t('средняя') },
+    elite: { label: t('Элита'), tier: 2, scale: 1, plus: 0, leader: 0.5, name: t('тяжёлая') },
+    outpost: { label: t('Застава'), tier: 2, scale: 1, plus: 1, leader: 0.5, name: t('тяжёлая, на уровень выше') },
+    boss: { label: t('Босс'), tier: 2, scale: 1.25, plus: 0, leader: 0.6, name: t('тяжёлая с запасом') }
 };
 // Погода на арене: доля боёв узла под погодой (Монстры — никогда, рядовой бой остаётся быстрым)
 const WEATHER_CHANCE = { mob: 0, elite: 0.5, outpost: 1, boss: 1 };
-const WEATHER_NAMES = { rain: 'ливень', fog: 'туман Предела', wind: 'ветер' };
+const WEATHER_NAMES = { rain: t('ливень'), fog: t('туман Предела'), wind: t('ветер') };
 // Арена по узлу: размер в клетках (крупнее бой — шире поле)
 const ARENA_SIZE = { mob: [24, 18], elite: [28, 20], outpost: [28, 20], boss: [30, 22] };
-const SCHEME_NAMES = { glade: 'поляна', edge: 'опушка', thicket: 'чаща', swamp: 'топь', ruins: 'руины', crossing: 'переправа', hill: 'холм' };
-const MOOD_NAMES = { day: 'день', night: 'ночь', fog: 'туман', rot: 'порча', blood: 'кровь' };
+// Обет «Теснина»
+const NARROW_SIZE = [20, 14];
+const SCHEME_NAMES = { glade: t('поляна'), edge: t('опушка'), thicket: t('чаща'), swamp: t('топь'), ruins: t('руины'), crossing: t('переправа'), hill: t('холм'), ...DUNGEON_SCHEMES };
+const MOOD_NAMES = { day: t('день'), night: t('ночь'), fog: t('туман'), rot: t('порча'), blood: t('пробуждение Босса') };
 const FRACTION_XP = { 0: 10, 0.125: 25, 0.25: 50, 0.5: 100 };
 export const xpOfCr = cr => (cr < 1 ? FRACTION_XP[cr] ?? 10 : CONFIG.DND5E.CR_EXP_LEVELS?.[cr] ?? 0);
 const levelOf = actor => Math.max(1, Number(actor?.system?.details?.level) || 1);
@@ -127,9 +133,10 @@ const pickWeighted = (list, rnd) => {
 
 /**
  * Состав встречи: [{ key, name, id, cr, xp, count }], стая, опыт и бюджет. rnd — случайность (для проверок с зерном)
- * @returns {Promise<{ type, biome, group, budget, xp, creatures }|null>}
+ * vows — обеты Элиты: подмога и густая стая добавляют рядовых поверх бюджета, второй вожак — ещё одного вожака
+ * @returns {Promise<{ type, biome, group, budget, xp, creatures, vows }|null>}
  */
-export async function buildEncounter(type, { party = partyActors(), biome = currentBiome(), rnd = Math.random, avoid = null } = {}) {
+export async function buildEncounter(type, { party = partyActors(), biome = currentBiome(), rnd = Math.random, avoid = null, vows = [] } = {}) {
     const node = NODES[type];
     if (!node) return null;
     const budget = budgetFor(type, party);
@@ -163,10 +170,19 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
         chosen.push(m); left -= m.xp;
     }
     if (!chosen.length) chosen.push(list[0]);
+    // Обеты: рядовой — кого в составе больше всех, без рядовых — слабейший в стае
+    const heroes = Math.max(1, party.length);
+    const extra = vows.includes('horde') ? heroes : vows.includes('reinforce') ? Math.ceil(heroes / 2) : 0;
+    if (extra) {
+        const ranks = chosen.slice(node.leader ? 1 : 0);
+        const rank = ranks.sort((a, b) => ranks.filter(m => m.key === b.key).length - ranks.filter(m => m.key === a.key).length)[0] ?? list[0];
+        for (let i = 0; i < extra; i++) chosen.push(rank);
+    }
+    if (vows.includes('second') && node.leader) chosen.push(chosen[0]);
     const byKey = new Map();
     for (const m of chosen) byKey.set(m.key, { ...m, count: (byKey.get(m.key)?.count ?? 0) + 1 });
     const creatures = [...byKey.values()].sort((a, b) => b.xp - a.xp);
-    return { type, biome, group, budget, xp: creatures.reduce((s, m) => s + m.xp * m.count, 0), creatures };
+    return { type, biome, group, budget, xp: creatures.reduce((s, m) => s + m.xp * m.count, 0), creatures, vows };
 }
 
 // ==========================================
@@ -181,40 +197,58 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
  */
 export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_ID, 'floorMap'), rnd = Math.random } = {}) {
     const here = map?.web ? map.currentNodeId : null;
-    const [mood, why] = here && (isEaten(map, here) || touchedSet(map).has(here)) ? ['rot', 'узел тронут Пожирателем']
-        : webStage(map?.web?.ticks ?? 0) > 0 ? ['blood', 'Босс набрал ступени']
-        : enc.biome === 'town' ? ['night', 'город в глуши']
+    const [mood, why] = here && (isEaten(map, here) || touchedSet(map).has(here)) ? ['rot', t('узел тронут Пожирателем')]
+        : webStage(map?.web?.ticks ?? 0) > 0 ? ['blood', t('ступень {stage} из 4', { stage: webStage(map.web.ticks) })]
+        : enc.biome === 'town' ? ['night', t('город в глуши')]
         : ['day', null];
-    const [cols, rows] = ARENA_SIZE[enc.type] ?? [28, 20];
+    const vows = enc.vows ?? [];
+    const [cols, rows] = vows.includes('narrow') ? NARROW_SIZE : ARENA_SIZE[enc.type] ?? [28, 20];
     const leader = NODES[enc.type]?.leader ? enemies[0] ?? null : null;
-    const weather = hint('hintWeather') && rnd() < (WEATHER_CHANCE[enc.type] ?? 0) ? pick(Object.keys(WEATHER_NAMES), rnd) : null;
-    return { biome: 'forest', mood, why, cols, rows, weather, encounter: { node: enc.type, leader } };
+    // Обет «Непогода» — выбор отряда: не смотрит ни на шанс, ни на галочку
+    const weather = vows.includes('storm') || (hint('hintWeather') && rnd() < (WEATHER_CHANCE[enc.type] ?? 0)) ? pick(Object.keys(WEATHER_NAMES), rnd) : null;
+    // Подземный биом этажа — арена подземелья
+    return { biome: DUNGEON_BIOMES.has(enc.biome) ? enc.biome : 'forest', mood, stage: mood === 'blood' ? webStage(map?.web?.ticks ?? 0) : undefined, why, cols, rows, weather, encounter: { node: enc.type, leader, pincers: vows.includes('pincers') } };
+}
+
+/** Обеты, которые модуль не смог применить сам: поле — только на арене, состав — только из карточки */
+function manualVows(enc, state) {
+    const vows = enc.vows ?? [];
+    const missed = state === 'skip' ? [...ARENA_VOWS, ...CREW_VOWS] : state === 'placed' && !enc.arena ? ARENA_VOWS : [];
+    return vows.filter(id => missed.includes(id)).map(id => VOWS[id].name);
 }
 
 function cardHtml(enc, state = 'wait') {
     const node = NODES[enc.type];
-    const list = enc.creatures.map(m => `<li>${m.count > 1 ? `${m.count} × ` : ''}${m.name} <small>(опасность ${m.cr < 1 ? `1/${Math.round(1 / m.cr)}` : m.cr})</small></li>`).join('');
+    const list = enc.creatures.map(m => `<li>${m.count > 1 ? `${m.count} × ` : ''}${m.name} <small>${t('(опасность {cr})', { cr: m.cr > 0 && m.cr < 1 ? `1/${Math.round(1 / m.cr)}` : m.cr })}</small></li>`).join('');
     const buttons = state === 'wait'
-        ? `<div class="gd-stone-buttons"><button type="button" data-gd-enc="arena"><i class="fas fa-mountain-sun"></i> На арену</button><button type="button" data-gd-enc="here"><i class="fas fa-location-dot"></i> На эту сцену</button><button type="button" data-gd-enc="reroll"><i class="fas fa-dice"></i> Другой состав</button><button type="button" data-gd-enc="skip">Сам</button></div>`
-        : `<p><em>${state === 'skip' ? 'Мастер собирает бой сам.' : 'Враги на поле — бой создан, инициатива за Мастером.'}</em></p>`
-            + (enc.arena ? `<p><small>Арена: ${SCHEME_NAMES[enc.arena.scheme] ?? enc.arena.scheme}, ${MOOD_NAMES[enc.arena.mood] ?? enc.arena.mood}${enc.arena.why ? ` — ${enc.arena.why}` : ''}${enc.arena.weather ? `; ${WEATHER_NAMES[enc.arena.weather]}` : ''}${enc.arena.flank ? '; часть стаи заходит с флангов' : ''}.</small></p>` : '');
+        ? `<div class="gd-stone-buttons"><button type="button" data-gd-enc="arena"><i class="fas fa-mountain-sun"></i> ${t('На арену')}</button><button type="button" data-gd-enc="here"><i class="fas fa-location-dot"></i> ${t('На эту сцену')}</button><button type="button" data-gd-enc="reroll"><i class="fas fa-dice"></i> ${t('Другой состав')}</button><button type="button" data-gd-enc="skip">${t('Сам')}</button></div>`
+        : `<p><em>${state === 'skip' ? t('Мастер собирает бой сам.') : t('Враги на поле — бой создан, инициатива за Мастером.')}</em></p>`
+            + (enc.arena ? `<p><small>${t('Арена: {scheme}, {mood}{v}{v2}{v3}.', { scheme: SCHEME_NAMES[enc.arena.scheme] ?? enc.arena.scheme, mood: MOOD_NAMES[enc.arena.mood] ?? enc.arena.mood, v: enc.arena.why ? ` — ${enc.arena.why}` : '', v2: enc.arena.weather ? `; ${WEATHER_NAMES[enc.arena.weather]}` : '', v3: enc.arena.flank ? t('; часть стаи заходит с флангов') : '' })}</small></p>${enc.arena.place ? `<p><small>${t('Место: {place}.', { place: enc.arena.place })}</small></p>` : ''}` : '');
+    const vows = enc.vows?.length ? `<p><small>${t('Обеты: {v}.', { v: enc.vows.map(id => VOWS[id].name).join(', ') })}</small></p>` : '';
+    const manual = manualVows(enc, state);
+    const reminder = manual.length ? `<p><strong>${t('Учитывает Мастер: {v}.', { v: manual.join(', ') })}</strong></p>` : '';
     return `<div class="gd-scent-chat gd-enc-card"><i class="fas fa-skull-crossbones"></i> <strong>${node.label}: ${enc.group}</strong>
-        <p>Сила — ${node.name}: ${enc.xp} из ${enc.budget} опыта.</p><ul>${list}</ul>${buttons}</div>`;
+        <p>${t('Сила — {name}: {xp} из {budget} опыта.', { name: node.name, xp: enc.xp, budget: enc.budget })}</p><ul>${list}</ul>${vows}${buttons}${reminder}</div>`;
 }
 
-/** Предложить встречу Мастеру (вызывается при входе отряда на узел) */
-export async function offerEncounter(type) {
+/** Предложить встречу Мастеру (вызывается при входе отряда на узел; на Элите — после выбора обетов) */
+export async function offerEncounter(type, { vows = [] } = {}) {
     if (!NODES[type] || !game.user.isGM || (game.users.activeGM && game.users.activeGM.id !== game.user.id) || !hint('hintEncounters')) return null;
-    const enc = await buildEncounter(type);
+    const enc = await buildEncounter(type, { vows });
     if (!enc) return null;
     return ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Лабиринт' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Лабиринт') }),
         whisper: game.users.filter(u => u.isGM).map(u => u.id),
         content: cardHtml(enc),
         flags: { [MODULE_ID]: { encounter: { ...enc, state: 'wait' } } }
     });
 }
-Hooks.on('gachadnd.nodeEntered', type => { offerEncounter(type).catch(error => console.error(`${MODULE_ID} | встреча`, error)); });
+Hooks.on('gachadnd.nodeEntered', type => {
+    // Элита ждёт обеты: состав и арена зависят от них
+    if (type === 'elite' && vowsOn()) return;
+    offerEncounter(type).catch(error => console.error(`${MODULE_ID} | встреча`, error));
+});
+Hooks.on('gachadnd.vowsSealed', vows => { offerEncounter('elite', { vows }).catch(error => console.error(`${MODULE_ID} | встреча`, error)); });
 
 // ==========================================
 // РАССТАНОВКА
@@ -288,7 +322,7 @@ async function resolve(message, action) {
     if (!enc || enc.state !== 'wait') return;
     if (action === 'skip') return message.update({ content: cardHtml(enc, 'skip'), [`flags.${MODULE_ID}.encounter.state`]: 'skip' });
     if (action === 'reroll') {
-        const next = await buildEncounter(enc.type, { biome: enc.biome, avoid: enc.group });
+        const next = await buildEncounter(enc.type, { biome: enc.biome, avoid: enc.group, vows: enc.vows ?? [] });
         if (!next) return;
         return message.update({ content: cardHtml(next), [`flags.${MODULE_ID}.encounter`]: { ...next, state: 'wait' } });
     }
@@ -297,11 +331,12 @@ async function resolve(message, action) {
         const enemies = await worldActors(enc);
         let scene, arena = null;
         if (action === 'arena') {
+            ui.notifications.info(t('Арена строится — полминуты; потом все перейдут на неё, бой с участниками готов.'));
             const generate = game.gachadnd?.arena?.generate;
             const { why, ...options } = arenaFor(enc, enemies);
             let plan;
             ({ scene, plan } = await generate({ ...options, party: partyActors().map(a => a.id), enemies }));
-            arena = { scheme: plan.scheme, mood: options.mood, why, flank: !!plan.formation?.flank, weather: options.weather };
+            arena = { scheme: plan.scheme, mood: options.mood, why, flank: !!plan.formation?.flank, weather: options.weather, place: plan.dungeon ? dungeonNote(plan) : null };
             await scene.activate();
         } else scene = await placeHere(enemies);
         await makeCombat(scene);

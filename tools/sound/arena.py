@@ -26,6 +26,9 @@ SOUNDS = {
     '459981': ('wind-2', False),          # florianreichelt — порывистый ветер
     '559389': ('fog-1', False),           # szegvari — мистический гул леса
     '593785': ('fog-2', False),           # steaq — низкий тёмный гул
+    '516566': ('crypt-1', False),         # Kinoton — тёмный гул, капель, сквозняк (катакомбы)
+    '789913': ('crypt-2', False),         # newlocknew — подземный гул, петля (катакомбы)
+    '636108': ('caves-1', False),         # fonografico — пещера: капель, камень (пещеры)
 }
 TARGET_RMS = 10 ** (-22 / 20)
 PEAK = 10 ** (-1 / 20)

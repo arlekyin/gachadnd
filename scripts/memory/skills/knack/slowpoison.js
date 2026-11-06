@@ -14,6 +14,7 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { isKnack, ref, actorFrom, tokenOf, esc, noTemplate, targetsWithin, combatOf, hpOf, alive, card } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const RANGE = 60;
 const ROUNDS = 3;
@@ -25,8 +26,8 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     if (!isKnack(item, 'slowpoison') || !actor) return;
     noTemplate(usage);
     const token = tokenOf(actor)?.document;
-    if (!combatOf(actor) || !token) { ui.notifications.warn('Медленный яд — только в бою, в котором участвует персонаж.'); return false; }
-    if (targetsWithin(token, RANGE).length !== 1) { ui.notifications.warn(`Медленный яд: выберите одну цель (T) в пределах ${RANGE} футов.`); return false; }
+    if (!combatOf(actor) || !token) { ui.notifications.warn(t('Медленный яд — только в бою, в котором участвует персонаж.')); return false; }
+    if (targetsWithin(token, RANGE).length !== 1) { ui.notifications.warn(t('Медленный яд: выберите одну цель (T) в пределах {RANGE} футов.', { RANGE })); return false; }
 });
 
 Hooks.on('dnd5e.postUseActivity', (activity) => {
@@ -54,11 +55,11 @@ export async function mark({ actorId, tokenId, sceneId, targetId }) {
     list.push({ id, sourceId: actor.id, tokenId: target.id, sceneId, round: combat.round, hp: hpOf(target.actor), sum: 0 });
     await combat.setFlag(MODULE_ID, FLAG, list);
     await target.actor.createEmbeddedDocuments('ActiveEffect', [{
-        name: 'Медленный яд: 0', img: ICON, showIcon: 2,
-        description: `<p>Яд считает весь урон, который получает существо. В начале раунда ${combat.round + ROUNDS} он вернёт его разом — урон Ядом.</p>`,
+        name: t('Медленный яд: 0'), img: ICON, showIcon: 2,
+        description: `<p>${t('Яд считает весь урон, который получает существо. В начале раунда {v} он вернёт его разом — урон Ядом.', { v: combat.round + ROUNDS })}</p>`,
         flags: { [MODULE_ID]: { slowPoison: id } }
     }]);
-    return card(actor, 'Медленный яд', `<p>${esc(target.name)} отмечен. Весь урон, который он получит до конца раунда ${combat.round + ROUNDS - 1}, вернётся к нему ядом.</p>`, { icon: 'fa-flask' });
+    return card(actor, t('Медленный яд'), `<p>${t('{v} отмечен. Весь урон, который он получит до конца раунда {v2}, вернётся к нему ядом.', { v: esc(target.name), v2: combat.round + ROUNDS - 1 })}</p>`, { icon: 'fa-flask' });
 }
 
 // Счёт: убыль ПЗ отмеченной цели — от кого угодно
@@ -75,7 +76,7 @@ Hooks.on('updateActor', async (actor, changes) => {
         entry.hp = now;
         changed = true;
         const effect = effectOf(actor, entry.id);
-        if (effect && effect.name !== `Медленный яд: ${entry.sum}`) await effect.update({ name: `Медленный яд: ${entry.sum}` });
+        if (effect && effect.name !== t('Медленный яд: {sum}', { sum: entry.sum })) await effect.update({ name: t('Медленный яд: {sum}', { sum: entry.sum }) });
     }
     if (changed) await combat.setFlag(MODULE_ID, FLAG, list);
 });
@@ -96,9 +97,9 @@ async function release(entry) {
     const actor = target?.actor;
     if (!actor) return;
     await effectOf(actor, entry.id)?.delete();
-    if (!alive(actor)) return card(source ?? actor, 'Медленный яд', `<p>${esc(target.name)} не дожил до яда — отметка пропала.</p>`, { icon: 'fa-flask' });
-    if (!entry.sum) return card(source ?? actor, 'Медленный яд', `<p>Яд сработал впустую: ${esc(target.name)} за три раунда не получил урона.</p>`, { icon: 'fa-flask' });
-    return card(source ?? actor, 'Медленный яд', `<p>Яд сработал: всё, что ${esc(target.name)} получил за три раунда, возвращается разом.</p><p>[[/damage ${entry.sum} poison]]</p>`,
+    if (!alive(actor)) return card(source ?? actor, t('Медленный яд'), `<p>${t('{v} не дожил до яда — отметка пропала.', { v: esc(target.name) })}</p>`, { icon: 'fa-flask' });
+    if (!entry.sum) return card(source ?? actor, t('Медленный яд'), `<p>${t('Яд сработал впустую: {v} за три раунда не получил урона.', { v: esc(target.name) })}</p>`, { icon: 'fa-flask' });
+    return card(source ?? actor, t('Медленный яд'), `<p>${t('Яд сработал: всё, что {v} получил за три раунда, возвращается разом.', { v: esc(target.name) })}</p><p>[[/damage ${entry.sum} poison]]</p>`,
         { icon: 'fa-flask', flags: { slowPoisonRelease: { tokenId: target.id, sceneId: entry.sceneId, sum: entry.sum } } });
 }
 

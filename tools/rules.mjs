@@ -129,12 +129,13 @@ function makeGenerators({ items, risks, synergyDictionary }) {
         },
 
         economy() {
-            const base = floor => 100 * 1.5 ** (floor - 1);
+            const base = floor => 100 * 2.25 ** (floor - 1);
             const r = n => Math.round(n);
             const rows = [['Этаж', 'База', 'Монстры', 'Элита', 'Босс', 'Кристаллы (сер./зел./син./фиол.)', 'Очистка', 'Обновление', 'Предметы в магазине']];
             for (let f = 1; f <= 10; f++) {
                 const b = base(f);
-                const items = f >= 7 ? 'обычные, необычные, редкие' : f >= 4 ? 'обычные, необычные' : 'обычные';
+                // Как allowedItemRarities в scripts/labyrinth/economy.js
+                const items = f >= 6 ? 'до очень редких' : f >= 4 ? 'до редких' : f >= 2 ? 'обычные, необычные' : 'обычные';
                 rows.push([String(f), `${r(b)}`, `${r(b * 0.05)}–${r(b * 0.15)}`, `${r(b * 0.2)}–${r(b * 0.5)}`, `${r(b * 0.7)}–${r(b)}`,
                     [0.2, 0.5, 1.2, 3].map(k => r(b * k)).join(' / '), `${r(b * 0.5)}`, `${r(b * 0.2)}`, items]);
             }

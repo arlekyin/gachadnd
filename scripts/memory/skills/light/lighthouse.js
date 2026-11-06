@@ -19,6 +19,7 @@ import { addTurnEffect } from "../turn-effects.js";
 import { isLight, ref, actorFrom, centerOf, feetToPx, lightCard, esc } from "./common.js";
 import { placedTemplate, sceneTemplates, shapeOf, hasTemplate, turnTemplate, onDeleteTemplate } from "../../../core/templates.js";
 import { saveCard } from "../blast/common.js";
+import { t } from "../../../core/i18n.js";
 
 const ROUNDS = 10;
 const TURN = 90;
@@ -32,7 +33,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isLight(item, 'lighthouse') || !item.actor) return;
     if (!canvas?.ready) {
-        ui.notifications.warn('Маяк ставится на сцену.');
+        ui.notifications.warn(t('Маяк ставится на сцену.'));
         return false;
     }
 });
@@ -41,13 +42,13 @@ Hooks.on('dnd5e.postUseActivity', (activity, usage, results) => {
     const item = activity?.item, actor = item?.actor;
     if (!isLight(item, 'lighthouse') || !actor) return;
     const template = placedTemplate(results);
-    if (!template) return ui.notifications.warn('Маяк: луч не поставлен — поставьте конус на сцене.');
+    if (!template) return ui.notifications.warn(t('Маяк: луч не поставлен — поставьте конус на сцене.'));
     requestGM('lightLighthouse', { ...ref(actor), templateId: template.id, templateType: template.documentName, sceneId: template.parent.id });
 });
 
 onSocket('lightLighthouse', ({ payload }) => {
     if (!isActiveGM()) return;
-    raise(payload).catch(error => console.error('gachadnd | Маяк', error));
+    raise(payload).catch(error => console.error(`gachadnd | Маяк`, error));
 });
 
 /** Мастер: свет маяка и флаг шаблона */
@@ -67,7 +68,7 @@ export async function raise({ actorId, tokenId, sceneId, templateId, templateTyp
         [template.documentName === 'Region' ? 'color' : 'fillColor']: '#ffd75e',
         [`flags.${MODULE_ID}.${FLAG}`]: { actorId: actor.id, tokenId, lightId: light.id, combatId: combat?.id ?? null, until: combat ? combat.round + ROUNDS : null }
     });
-    await lightCard(actor, 'Маяк', `<p>Маяк зажжён. Луч поворачивается на 90° в начале каждого раунда${combat ? `, горит до конца раунда ${combat.round + ROUNDS - 1}` : ''}.</p>`, { icon: 'fa-tower-observation' });
+    await lightCard(actor, t('Маяк'), `<p>${t('Маяк зажжён. Луч поворачивается на 90° в начале каждого раунда{v}.', { v: combat ? t(', горит до конца раунда {v}', { v: combat.round + ROUNDS - 1 }) : '' })}</p>`, { icon: 'fa-tower-observation' });
 }
 
 const lighthouses = scene => sceneTemplates(scene).filter(t => t.flags?.[MODULE_ID]?.[FLAG]);
@@ -123,18 +124,18 @@ async function shine(combat, scene) {
         const ally = ownerToken ? token.disposition === ownerToken.disposition : !!actor.hasPlayerOwner;
         if (ally) {
             await addTurnEffect(actor, combat, {
-                name: 'Маяк: свет', img: 'icons/svg/sun.svg',
-                description: 'Луч маяка: +1d4 к броскам атаки и спасброскам до конца хода.',
+                name: t('Маяк: свет'), img: 'icons/svg/sun.svg',
+                description: t('Луч маяка: +1d4 к броскам атаки и спасброскам до конца хода.'),
                 changes: [...attackBonus('+1d4'), { key: 'system.bonuses.abilities.save', mode: 2, value: '+1d4' }]
             }, { until: 'thisTurn', tokenId: token.id });
-            await lightCard(actor, 'Маяк', `<p>${esc(token.name)} в луче маяка: +1d4 к атакам и спасброскам до конца хода.</p>`, { icon: 'fa-tower-observation' });
+            await lightCard(actor, t('Маяк'), `<p>${t('{v} в луче маяка: +1d4 к атакам и спасброскам до конца хода.', { v: esc(token.name) })}</p>`, { icon: 'fa-tower-observation' });
         } else {
             const dc = dcOf(owner);
             // Как у способностей dnd5e: враг бросает спасбросок сам (кнопка в карточке), слепота — на провале
             await saveCard({
-                actor: owner ?? actor, title: 'Маяк', icon: 'fa-tower-observation', tokens: [token], ability: 'con', dc,
-                note: `${esc(token.name)} начинает ход в луче маяка. Провал — ослеплён до конца своего хода (модуль наложит сам).`,
-                onFail: { effect: { name: 'Маяк: ослеплён', img: 'icons/svg/blind.svg', statuses: ['blinded'], description: 'Луч маяка: ослеплён до конца своего хода.' }, until: 'thisTurn' }
+                actor: owner ?? actor, title: t('Маяк'), icon: 'fa-tower-observation', tokens: [token], ability: 'con', dc,
+                note: t('{v} начинает ход в луче маяка. Провал — ослеплён до конца своего хода (модуль наложит сам).', { v: esc(token.name) }),
+                onFail: { effect: { name: t('Маяк: ослеплён'), img: 'icons/svg/blind.svg', statuses: ['blinded'], description: t('Луч маяка: ослеплён до конца своего хода.') }, until: 'thisTurn' }
             });
         }
         return;

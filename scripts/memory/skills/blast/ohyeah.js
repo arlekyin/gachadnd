@@ -13,6 +13,7 @@ import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { placeToken } from "../pick.js";
 import { occupied, key } from "../grid.js";
 import { isBlast, ref, tokenOf, quiet, damageOf, dcOf, centerOf, feetToPx, blast } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const DASH_FT = 30;
 
@@ -68,7 +69,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     if (chosen.has(item.id)) return;
     const caster = tokenOf(actor);
     if (!canvas?.ready || !caster) {
-        ui.notifications.warn('Ох, да!: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Ох, да!: токена персонажа нет на сцене.'));
         return false;
     }
     aim(caster.document).then(angle => {
@@ -118,8 +119,8 @@ export async function dash({ actorId, tokenId, sceneId, angle, formula, type, dc
     await placeToken(token, route.end[0] * size, route.end[1] * size);
     const at = route.breaches[0] ? { sceneId, x: route.breaches[0].point.x, y: route.breaches[0].point.y, radius: size * 1.5 } : null;
     await blast({
-        actor, title: `Ох, да! — ${actor.name} проламывает стен: ${route.breaches.length}`, icon: 'fa-person-running', victims: route.victims,
-        formula, type, ability: 'str', dc, at, note: 'Провал спасброска — ничком (модуль положит сам).',
+        actor, title: t('Ох, да! — {name} проламывает стен: {length}', { name: actor.name, length: route.breaches.length }), icon: 'fa-person-running', victims: route.victims,
+        formula, type, ability: 'str', dc, at, note: t('Провал спасброска — ничком (модуль положит сам).'),
         onFail: { status: 'prone' }
     });
 }
@@ -145,7 +146,7 @@ export function aim(token) {
         for (const t of route.victims) preview.lineStyle(3, 0xff5050, 0.9).drawRect(t.x + 4, t.y + 4, (t.width || 1) * size - 8, (t.height || 1) * size - 8);
     };
     paint({ x: origin.x + 1, y: origin.y });
-    ui.notifications.info('Ох, да!: наведите рывок и щёлкните. Правая кнопка или Esc — отмена.');
+    ui.notifications.info(t('Ох, да!: наведите рывок и щёлкните. Правая кнопка или Esc — отмена.'));
     return new Promise(resolve => {
         const finish = result => {
             canvas.stage.off('mousemove', onMove);

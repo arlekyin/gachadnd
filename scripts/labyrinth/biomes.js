@@ -2,22 +2,25 @@
  * Gacha Roguelike dnd5e — Биомы этажей
  *
  * У этажа свой биом; на длинном этаже Застава делит его надвое: до неё — одно место, после — другое
- * (лес и болота → город в глуши; море → море в шторм). По биому выбираются события, их зарисовки и тексты.
+ * (лес и болота → город в глуши; катакомбы → пещеры). По биому выбираются события, их зарисовки и тексты.
  * Этажи без описанного биома — «Лабиринт».
  */
 
 import { MODULE_ID } from "../core/constants.js";
 import { mapScene } from "./scene-travel.js";
 import { getFloor } from "./economy.js";
+import { t } from "../core/i18n.js";
 
 export const BIOMES = {
-    swamp: { name: 'Лес и болота' },
-    town: { name: 'Город в глуши' },
-    sea: { name: 'Море и острова' },
-    storm: { name: 'Море в шторм' },
-    deep: { name: 'Глубины' },
-    sky: { name: 'Небесные острова' },
-    labyrinth: { name: 'Лабиринт' }
+    swamp: { name: t('Лес и болота') },
+    town: { name: t('Город в глуши') },
+    sea: { name: t('Море и острова') },
+    storm: { name: t('Море в шторм') },
+    deep: { name: t('Глубины') },
+    sky: { name: t('Небесные острова') },
+    crypt: { name: t('Катакомбы') },
+    caves: { name: t('Пещеры') },
+    labyrinth: { name: t('Лабиринт') }
 };
 
 /**
@@ -32,7 +35,8 @@ export const biomeArt = biome => BIOME_ART[biome] ?? `modules/gachadnd/assets/sk
 // Этаж → [до Заставы, после Заставы]
 const FLOORS = {
     1: ['swamp', 'town'],
-    2: ['sea', 'storm'],
+    // Подземелья (docs/dungeon-floor.md); море и шторм — куда переедут, решим позже
+    2: ['crypt', 'caves'],
     3: ['deep', 'deep'],
     4: ['sky', 'sky']
 };

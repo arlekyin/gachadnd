@@ -13,6 +13,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { getFloor } from "./economy.js";
+import { t } from "../core/i18n.js";
 
 const DEPTH = /^Глубина (\d+)$/;
 const SATIETY = /^Насыщение (\d+)$/;
@@ -44,9 +45,9 @@ export async function addSatiety(delta = 1, reason = '') {
     if (value === before) return value;
     await game.settings.set(MODULE_ID, 'devourerSatiety', value);
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Пожиратель' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Пожиратель') }),
         whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id),
-        content: `<div class="gd-scent-chat"><i class="fas fa-utensils"></i> Насыщение Пожирателя: <strong>${value}</strong>${reason ? ` — ${reason}` : ''}. Эффекты на листе модуль включил сам.</div>`
+        content: `<div class="gd-scent-chat"><i class="fas fa-utensils"></i> ${t('Насыщение Пожирателя:')} <strong>${value}</strong>${t('{v}. Эффекты на листе модуль включил сам.', { v: reason ? ` — ${reason}` : '' })}</div>`
     });
     return value;
 }
@@ -88,7 +89,7 @@ Hooks.on('updateActor', (actor, changes, options) => {
     if (!game.users.activeGM?.isSelf || !isHunter(actor)) return;
     const value = foundry.utils.getProperty(changes, 'system.attributes.hp.value');
     if (value === undefined || value > 0 || !(options.gachadndHp > 0)) return;
-    addSatiety(1, 'сведён к 0 ПЗ');
+    addSatiety(1, t('сведён к 0 ПЗ'));
     Hooks.callAll('gachadnd.devourerDefeated', actor);
 });
 

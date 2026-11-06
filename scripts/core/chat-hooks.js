@@ -6,6 +6,7 @@
  * обработчик всегда получает HTMLElement.
  */
 
+
 export function onRenderChatMessage(handler) {
     // Ошибка одного обработчика не мешает остальным и видна в журнале с местом, где случилась
     const safe = (message, html) => {

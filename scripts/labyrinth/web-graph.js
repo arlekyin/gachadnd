@@ -9,6 +9,8 @@
  * квадратного поля) хранятся в карте: рисунок одинаков у всех и при каждой перерисовке.
  */
 
+import { t } from "../core/i18n.js";
+
 export const WEB_SHAPE = {
     belts: [
         { tier: 'A', zone: 'inner', count: [5, 6], radius: 0.24 },
@@ -184,10 +186,10 @@ export const WEB = { CALM: 12, EVERY: 2, TOUCH: 2, PAUSE: 4, RUN: 3, SPREAD: 1, 
 
 /** Ступени Босса паутины: что даёт каждая (иконки на карте) */
 export const BOSS_STAGES = [
-    { id: 'muffle', icon: 'fa-volume-xmark', name: 'Глушитель', text: 'синергии самого частого тега отряда не действуют' },
-    { id: 'sleepy', icon: 'fa-moon', name: 'Крайний спит', text: 'последний экипированный навык каждого спит, пока у Босса больше половины ПЗ' },
-    { id: 'strong', icon: 'fa-heart-circle-plus', name: 'Окрепший', text: 'у Босса на четверть больше ПЗ' },
-    { id: 'retinue', icon: 'fa-users', name: 'Свита', text: 'с Боссом выходит свита — двое приспешников' }
+    { id: 'muffle', icon: 'fa-volume-xmark', name: t('Глушитель'), text: t('синергии самого частого тега отряда не действуют') },
+    { id: 'sleepy', icon: 'fa-moon', name: t('Крайний спит'), text: t('последний экипированный навык каждого спит, пока у Босса больше половины ПЗ') },
+    { id: 'strong', icon: 'fa-heart-circle-plus', name: t('Окрепший'), text: t('у Босса на четверть больше ПЗ') },
+    { id: 'retinue', icon: 'fa-users', name: t('Свита'), text: t('с Боссом выходит свита — двое приспешников') }
 ];
 
 /** Ступени, которые Мастер оставил включёнными (WEB.STAGES — их id; null — все), по порядку */

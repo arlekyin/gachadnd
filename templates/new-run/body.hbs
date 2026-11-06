@@ -1,31 +1,40 @@
 <div class="gd-nr">
     {{!-- Отряд: персонажи с игроками; уровень не 1 — предупреждение, решает Мастер --}}
     <section>
-        <h3><i class="fas fa-users"></i> Отряд</h3>
+        <h3><i class="fas fa-users"></i> {{t "Отряд"}}</h3>
         {{#if noParty}}
-        <p class="gd-nr-warn">У игроков нет персонажей. Назначьте их в «Настройке участника» — отряд модуль берёт оттуда.</p>
+        {{#unless free.length}}<p class="gd-nr-warn">{{t "У игроков нет персонажей. Назначьте их в «Настройке участника» — отряд модуль берёт оттуда."}}</p>{{/unless}}
         {{else}}
         <ul class="gd-nr-party">
             {{#each party}}
-            <li class="{{#if warn}}warn{{/if}}"><img src="{{img}}" alt=""><b>{{name}}</b><span>{{level}} ур.{{#if warn}} — забег рассчитан на 1 уровень{{/if}}</span></li>
+            <li class="{{#if warn}}warn{{/if}}"><img src="{{img}}" alt=""><b>{{name}}</b><span>{{t "{level} ур." level=level}}{{#if warn}} {{t "— забег рассчитан на 1 уровень"}}{{/if}}</span></li>
             {{/each}}
         </ul>
         {{/if}}
+        {{!-- Игрокам без персонажа — готовые герои 1 уровня из dnd5e: создаются и назначаются при «Начать» --}}
+        {{#if free.length}}
+        <ul class="gd-nr-party gd-nr-free">
+            {{#each free}}
+            <li><i class="fas fa-user-plus"></i><b>{{name}}</b><select name="hero-{{id}}"><option value="">{{t "— без героя —"}}</option>{{#each ../heroes}}<option value="{{id}}">{{name}}</option>{{/each}}</select></li>
+            {{/each}}
+        </ul>
+        <p class="gd-nr-note">{{#if heroes.length}}{{t "Без персонажа — выберите готового героя 1 уровня: при «Начать» он появится у игрока."}}{{else}}{{t "Готовых героев dnd5e не нашлось — назначьте персонажей в «Настройке участника»."}}{{/if}}</p>
+        {{/if}}
     </section>
     <section>
-        <h3><i class="fas fa-map-marked-alt"></i> Карта этажа</h3>
-        <label class="gd-nr-row"><input type="radio" name="mode" value="rows" {{#if (eq mode "rows")}}checked{{/if}}> Ряды —
-            <input type="number" name="length" value="{{length}}" min="6" max="15" step="1"> рядов</label>
-        <label class="gd-nr-row"><input type="radio" name="mode" value="web" {{#if (eq mode "web")}}checked{{/if}}> Паутина вокруг Босса</label>
-        {{#if oldMap}}<p class="gd-nr-note">Прежняя карта останется на своей сцене.</p>{{/if}}
+        <h3><i class="fas fa-map-marked-alt"></i> {{t "Карта этажа"}}</h3>
+        <label class="gd-nr-row"><input type="radio" name="mode" value="rows" {{#if (eq mode "rows")}}checked{{/if}}> {{t "Ряды —"}}
+            <input type="number" name="length" value="{{length}}" min="6" max="15" step="1"> {{t "рядов"}}</label>
+        <label class="gd-nr-row"><input type="radio" name="mode" value="web" {{#if (eq mode "web")}}checked{{/if}}> {{t "Паутина вокруг Босса"}}</label>
+        {{#if oldMap}}<p class="gd-nr-note">{{t "Прежняя карта останется на своей сцене."}}</p>{{/if}}
     </section>
     <section>
-        <h3><i class="fas fa-anchor"></i> Якорь</h3>
+        <h3><i class="fas fa-anchor"></i> {{t "Якорь"}}</h3>
         <select name="anchor">
-            <option value="none" {{#unless anchorScene}}selected{{/unless}}>Без своей сцены</option>
-            <option value="create">Создать простую сцену</option>
-            {{#each scenes}}<option value="{{id}}" {{#if (eq id ../anchorScene)}}selected{{/if}}>Сцена: {{name}}</option>{{/each}}
+            <option value="none" {{#unless anchorScene}}selected{{/unless}}>{{t "Без своей сцены"}}</option>
+            <option value="create">{{t "Создать простую сцену"}}</option>
+            {{#each scenes}}<option value="{{id}}" {{#if (eq id ../anchorScene)}}selected{{/if}}>{{t "Сцена: {name}" name=name}}</option>{{/each}}
         </select>
     </section>
-    <footer><button type="submit"><i class="fas fa-flag-checkered"></i> Начать</button></footer>
+    <footer><button type="submit"><i class="fas fa-flag-checkered"></i> {{t "Начать"}}</button></footer>
 </div>

@@ -13,29 +13,29 @@
         {{#if selected}}
         <div class="gd-o-card">
             {{#each socks}}{{#if id}}
-            <div class="gd-o-ln {{#if dark}}dark{{/if}}"><span class="gd-gem {{#unless dark}}glow{{/unless}}" style="--r: {{color}}"><i class="fas {{icon}}"></i></span><span><b>{{name}}</b> — {{text}}</span>{{#if removable}}<button type="button" data-action="facetRemove" data-where="{{where}}" data-stone="{{id}}" data-tooltip="Вынуть"><i class="fas fa-xmark"></i></button>{{/if}}</div>
+            <div class="gd-o-ln {{#if dark}}dark{{/if}}"><span class="gd-gem {{#unless dark}}glow{{/unless}}" style="--r: {{color}}"><i class="fas {{icon}}"></i></span><span><b>{{name}}</b> — {{text}}</span>{{#if removable}}<button type="button" data-action="facetRemove" data-where="{{where}}" data-stone="{{id}}" data-tooltip="{{t 'Вынуть'}}"><i class="fas fa-xmark"></i></button>{{/if}}</div>
             {{else}}<div class="gd-o-ln"><span class="gd-o-sock"></span></div>{{/if}}{{/each}}
         </div>
         {{/if}}
         {{/each}}
         {{/each}}
-        {{#if facet.empty}}<div class="gd-t-empty">У персонажа нет способностей класса с действием.</div>{{/if}}
+        {{#if facet.empty}}<div class="gd-t-empty">{{t "У персонажа нет способностей класса с действием."}}</div>{{/if}}
     </div>
     {{else}}
     {{#unless bar}}
     {{!-- Теги Памяти — фильтр: щелчок — только карты с этим тегом --}}
     <div class="gd-t-tags">
-        {{#each tagFilters}}<a class="{{#if on}}on{{/if}} {{#if muffled}}muffled{{/if}}" data-action="filterTag" data-tag="{{tag}}" data-tooltip="{{tag}}"><i class="fas {{icon}}"></i> {{n}}</a>{{/each}}
+        {{#each tagFilters}}<a class="{{#if on}}on{{/if}} {{#if muffled}}muffled{{/if}}" data-action="filterTag" data-tag="{{tag}}" data-tooltip="{{tagLabel tag}}"><i class="fas {{icon}}"></i> {{n}}</a>{{/each}}
     </div>
     {{#if cardsPresent}}
     <div class="gd-t-grid">
         {{#each equippedPlates}}{{> plate}}{{/each}}
         {{#each sockets}}<div class="gd-plate socket"><i class="fas fa-plus"></i></div>{{/each}}
-        <div class="gd-t-div">Память <b>{{memoryPlates.length}}</b></div>
+        <div class="gd-t-div">{{t "Память"}} <b>{{memoryPlates.length}}</b></div>
         {{#each memoryPlates}}{{> plate}}{{/each}}
     </div>
     {{else}}
-    <div class="gd-t-empty">Память пуста. Кристаллы выпадают после боёв и продаются в Магазине — поглотите кристалл из инвентаря, чтобы навык появился здесь.</div>
+    <div class="gd-t-empty">{{t "Память пуста. Кристаллы выпадают после боёв и продаются в Магазине — поглотите кристалл из инвентаря, чтобы навык появился здесь."}}</div>
     {{/if}}
     {{/unless}}
     {{/if}}
@@ -46,8 +46,8 @@
     data-action="toggleEquip" data-item-id="{{id}}" data-name="{{name}}" data-tags="{{tagText}}" {{#if equipped}}data-equipped="1"{{/if}} {{#if asleep}}data-asleep="1"{{/if}}>
     {{#unless passive}}<span class="gd-ak {{kind}}" data-tooltip="{{kindLabel}}"></span>{{/unless}}
     {{#if uses}}<span class="gd-ch">{{#each uses.pips}}<u class="{{#unless this}}off{{/unless}}"></u>{{/each}}</span>{{/if}}
-    <span class="gd-gem {{#if equipped}}glow{{else}}dull{{/if}} {{#if hot}}hot{{/if}}"><i class="fas {{icon}}"></i>{{#if hot}}<svg class="gd-crack" viewBox="0 0 46 52"><path d="M23 4 L20 15 L26 22 L18 31 L24 40 L21 49" /><path d="M26 22 L33 26 M18 31 L11 33" /></svg>{{/if}}{{#if counter}}<span class="gd-cnt">{{counter.state}}</span>{{/if}}{{#if hot}}<span class="gd-loan">заём</span>{{/if}}{{#if locked}}<span class="gd-loan">блок</span>{{/if}}</span>
+    <span class="gd-gem {{#if equipped}}glow{{else}}dull{{/if}} {{#if hot}}hot{{/if}}"><i class="fas {{icon}}"></i>{{#if hot}}<svg class="gd-crack" viewBox="0 0 46 52"><path d="M23 4 L20 15 L26 22 L18 31 L24 40 L21 49" /><path d="M26 22 L33 26 M18 31 L11 33" /></svg>{{/if}}{{#if counter}}<span class="gd-cnt">{{counter.state}}</span>{{/if}}{{#if hot}}<span class="gd-loan">{{t "заём"}}</span>{{/if}}{{#if locked}}<span class="gd-loan">{{t "блок"}}</span>{{/if}}</span>
     <span class="gd-plate-nm">{{name}}</span>
-    {{#if asleep}}<span class="gd-zz"><i class="fas fa-moon"></i></span><span class="gd-moon">спит</span>{{/if}}
+    {{#if asleep}}<span class="gd-zz"><i class="fas fa-moon"></i></span><span class="gd-moon">{{t "спит"}}</span>{{/if}}
 </div>
 {{/inline}}

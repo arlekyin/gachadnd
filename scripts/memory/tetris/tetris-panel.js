@@ -9,6 +9,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { COLORS, ENEMIES_TO_BLAST, draw, shapeCells } from "./tetris-pieces.js";
+import { t } from "../../core/i18n.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -60,7 +61,7 @@ export class TetrisPanel extends ApplicationV2 {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-tetris'],
         tag: 'div',
-        window: { title: 'Догони меня... Кирпичи?', icon: 'fas fa-shapes', resizable: false },
+        window: { title: t('Догони меня... Кирпичи?'), icon: 'fas fa-shapes', resizable: false },
         position: { width: 300, height: 'auto' }
     };
 
@@ -85,7 +86,7 @@ export class TetrisPanel extends ApplicationV2 {
     }
 
     get title() {
-        return `Кирпичи — ${this.actor.name}`;
+        return t('Кирпичи — {name}', { name: this.actor.name });
     }
 
     #skill() {
@@ -103,13 +104,13 @@ export class TetrisPanel extends ApplicationV2 {
         const left = skill?.system?.uses?.max ? Number(skill.system.uses.value ?? 0) : null;
         return `<div class="gd-tetris">
             <div class="gd-tetris-queue">
-                <div class="gd-tetris-slot next"><span>Следующая</span>${pieceHtml(next, 'big')}</div>
-                <button type="button" class="gd-tetris-swap" data-swap title="Поменять местами"><i class="fas fa-right-left"></i></button>
-                <div class="gd-tetris-slot hold"><span>Запас</span>${pieceHtml(hold)}</div>
+                <div class="gd-tetris-slot next"><span>${t('Следующая')}</span>${pieceHtml(next, 'big')}</div>
+                <button type="button" class="gd-tetris-swap" data-swap title="${t('Поменять местами')}"><i class="fas fa-right-left"></i></button>
+                <div class="gd-tetris-slot hold"><span>${t('Запас')}</span>${pieceHtml(hold)}</div>
             </div>
             <footer class="gd-tetris-status">
-                <p>Бонусным действием обрушьте «Следующую». Группа, где сцеплены ${ENEMIES_TO_BLAST} врага и больше, детонирует.</p>
-                ${left === null ? '' : `<span class="gd-tetris-uses" title="Обрушений до конца боя">${left > 0 ? `осталось ${left}` : 'до конца боя — всё'}</span>`}
+                <p>${t('Бонусным действием обрушьте «Следующую». Группа, где сцеплены {ENEMIES_TO_BLAST} врага и больше, детонирует.', { ENEMIES_TO_BLAST })}</p>
+                ${left === null ? '' : `<span class="gd-tetris-uses" title="${t('Обрушений до конца боя')}">${left > 0 ? t('осталось {left}', { left }) : t('до конца боя — всё')}</span>`}
             </footer>
         </div>`;
     }

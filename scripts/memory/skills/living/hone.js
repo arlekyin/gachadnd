@@ -9,6 +9,7 @@
  */
 
 import { livingSkill, counterOf, counterMax, setCounter } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const KIND = 'hone';
 const isWeaponAttack = activity => activity?.type === 'attack' && activity.item?.type === 'weapon';
@@ -27,7 +28,7 @@ Hooks.on('dnd5e.preRollDamageV2', config => {
         roll.options.isCritical = true;
     }
     critical.add(activity.uuid);
-    ui.notifications.info(`${skill.name}: рука набита — критическое попадание.`);
+    ui.notifications.info(t('{name}: рука набита — критическое попадание.', { name: skill.name }));
 });
 
 Hooks.on('dnd5e.rollDamageV2', async (rolls, { subject } = {}) => {

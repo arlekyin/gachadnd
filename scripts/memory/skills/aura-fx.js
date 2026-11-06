@@ -13,6 +13,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { registerCues, playCue, tone, noise, duckScene } from "../../cutscene/audio.js";
 import { MAX, MIN, auraOf, auraText } from "./aura.js";
 import { fxCalm, soundOn, sfxVolume, musicVolume } from "../../core/prefs.js";
+import { t } from "../../core/i18n.js";
 
 const PULSE_MS = 6000;
 const PULSE_FT = 15;
@@ -29,13 +30,13 @@ const sound = (name, options = {}) => {
 
 export function registerAuraSettings() {
     game.settings.register(MODULE_ID, 'auraTheme', {
-        name: 'Тема героя (Счётчик ауры)',
-        hint: 'Музыка, которая играет, пока аура персонажа на максимуме. Пусто — встроенный синтезированный бит.',
+        name: t('Тема героя (Счётчик ауры)'),
+        hint: t('Музыка, которая играет, пока аура персонажа на максимуме. Пусто — встроенный синтезированный бит.'),
         scope: 'world', config: false, type: String, filePicker: 'audio', default: ''
     });
     game.settings.register(MODULE_ID, 'auraMusicVolume', {
-        name: 'Громкость темы героя',
-        hint: '0 — тема не играет у вас.',
+        name: t('Громкость темы героя'),
+        hint: t('0 — тема не играет у вас.'),
         scope: 'client', config: false, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 0.35,
         onChange: () => { stopTheme(); refresh(); }
     });

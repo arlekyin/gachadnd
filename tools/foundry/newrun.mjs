@@ -2,6 +2,7 @@
 // Приветствие Мастеру при первом запуске с кнопкой; окно — отряд с уровнями (не 1 — предупреждение), режим карты,
 // Якорь; «Начать» — сцена этажа с начерченным этажом 1, простая сцена Якоря, Якорь открыт, карточка в чат
 // со ссылкой на «Памятку», у Мастера — «Первый забег». Страницы ссылаются на главы правил ([[…]] в src/rules).
+// Игроку без персонажа (Claude_trusted) — выбор готового героя dnd5e: при «Начать» герой создан, его и назначен.
 // В конце созданные сцены удаляются, настройки — как были.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
 import { install } from './fixtures.mjs';
@@ -47,11 +48,16 @@ const win = await ev(async () => {
     game.gachadnd.newRun(); await sleep(900);
     const el = foundry.applications.instances.get('gachadnd-new-run')?.element;
     const rows = [...el.querySelectorAll('.gd-nr-party li')].map(li => ({ text: li.textContent.replace(/\s+/g, ' ').trim(), warn: li.classList.contains('warn') }));
-    return { rows, modes: el.querySelectorAll('input[name="mode"]').length, anchor: [...el.querySelectorAll('select[name="anchor"] option')].map(o => o.value).slice(0, 2) };
+    const trusted = game.users.getName('Claude_trusted');
+    const pick = el.querySelector(`select[name="hero-${trusted.id}"]`);
+    const heroes = pick ? [...pick.options].filter(o => o.value).map(o => o.textContent) : [];
+    if (pick) pick.value = pick.options[1]?.value ?? '';
+    return { free: !!pick, heroes: heroes.length, chosen: pick?.selectedOptions[0]?.textContent ?? null, rows, modes: el.querySelectorAll('input[name="mode"]').length, anchor: [...el.querySelectorAll('select[name="anchor"] option')].map(o => o.value).slice(0, 2) };
 });
 const mine = win.rows.find(r => /NR-тест/.test(r.text));
 check('окно: отряд с уровнями, у героя 3 уровня — предупреждение; ряды или паутина; Якорь — без сцены или создать',
     mine?.warn && /3 ур/.test(mine.text) && win.modes === 2 && win.anchor.join() === 'none,create', JSON.stringify(win));
+check('игрок без персонажа — выбор из готовых героев dnd5e (12)', win.free && win.heroes >= 10 && win.chosen, JSON.stringify({ free: win.free, heroes: win.heroes, chosen: win.chosen }));
 await f.shot('newrun-1-window');
 
 // ---------- Начать: ряды на 6, простая сцена Якоря
@@ -73,6 +79,7 @@ const run = await ev(async () => {
         floor: floor?.name, remembered: game.settings.get('gachadnd', 'floorSceneId') === floor?.id, nodes: map?.nodes?.length ?? 0, rows: map ? Math.max(...map.nodes.map(x => x.row ?? x.layer ?? 0)) + 1 : 0,
         runFloor: game.settings.get('gachadnd', 'runFloor'), anchor: anchor?.name, anchorSetting: game.settings.get('gachadnd', 'anchorSceneId') === anchor?.id,
         anchorOpen: game.settings.get('gachadnd', 'anchorOpen'), here: canvas.scene?.id === anchor?.id,
+        hero: (u => ({ name: u.character?.name ?? null, owner: !!u.character?.testUserPermission(u, 'OWNER'), level: u.character?.system?.details?.level, folder: u.character?.folder?.name ?? null }))(game.users.getName('Claude_trusted')),
         card: !!card, link: /@UUID\[Compendium\.gachadnd\.gacha-rules[^\]]*\]\{Памятка\}|content-link[^>]*>[^<]*Памятка/.test(card?.content ?? ''),
         guide: (sheet => sheet ? { page: sheet.document.pages.get(sheet.pageId ?? sheet.options?.pageId)?.name ?? null, text: /Шесть шагов/.test(sheet.element?.textContent ?? '') } : null)(
             [...foundry.applications.instances.values()].find(a => /Справочник Мастера/.test(a.title ?? '')))
@@ -80,6 +87,8 @@ const run = await ev(async () => {
 });
 check('«Начать»: сцена «Лабиринт: этаж 1» — сцена карты, на ней начерчен этаж 1', run.floor === 'Лабиринт: этаж 1' && run.remembered && run.nodes > 5 && run.runFloor === 1, JSON.stringify(run));
 check('простая сцена Якоря создана и выбрана в настройке; Якорь открыт, отряд перенесён на неё', run.anchor === 'Якорь' && run.anchorSetting && run.anchorOpen && run.here, JSON.stringify(run));
+check(`готовый герой «${win.chosen}» создан, назначен Claude_trusted и принадлежит ему; 1 уровень, папка «Лабиринт: герои»`,
+    run.hero.name === win.chosen && run.hero.owner && run.hero.level === 1 && run.hero.folder === 'Лабиринт: герои', JSON.stringify(run.hero));
 check('в чат — «Забег начинается» со ссылкой на «Памятку»; у Мастера открыт «Первый забег»', run.card && run.link && run.guide?.page === 'Первый забег' && run.guide.text, JSON.stringify(run));
 await f.shot('newrun-2-started');
 
@@ -108,6 +117,12 @@ await ev(async saved => {
     if (saved.scene) await game.scenes.get(saved.scene)?.view();
     for (const s of game.scenes.filter(s => s.getFlag('gachadnd', 'newRun'))) await s.delete();
     for (const a of game.actors.filter(a => a.name.startsWith('NR-тест'))) await a.delete();
+    // Готовый герой — обратно: назначение, герой, папка
+    const trusted = game.users.getName('Claude_trusted'), hero = trusted.character;
+    await trusted.update({ character: null });
+    if (hero?.folder?.name === 'Лабиринт: герои') await hero.delete();
+    const folder = game.folders.find(f => f.type === 'Actor' && f.name === 'Лабиринт: герои');
+    if (folder && !folder.contents.length) await folder.delete();
     await game.settings.set('gachadnd', 'anchorOpen', saved.settings.anchorOpen);
 }, saved);
 await wait(800);

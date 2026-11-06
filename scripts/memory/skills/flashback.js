@@ -12,15 +12,16 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { availableHitDice, spendHitDice } from "../inventory.js";
+import { t } from "../../core/i18n.js";
 
 const isFlashback = item => !!item?.flags?.[MODULE_ID]?.flashback;
 
 export const TIERS = {
-    simple: { label: 'Простая', cost: 0, roll: null, hint: 'бесплатно, без проверки', example: 'я взял с собой верёвку' },
-    hard: { label: 'Сложная', cost: 1, roll: '1d20', hint: '1 Кость Хитов, проверка', example: 'вчера я подкупил стражника' },
-    wild: { label: 'Невероятная', cost: 2, roll: '2d20kl', hint: '2 Кости Хитов, проверка с помехой', example: 'неделю назад я заминировал этот мост' }
+    simple: { label: t('Простая'), cost: 0, roll: null, hint: t('бесплатно, без проверки'), example: t('я взял с собой верёвку') },
+    hard: { label: t('Сложная'), cost: 1, roll: '1d20', hint: t('1 Кость Хитов, проверка'), example: t('вчера я подкупил стражника') },
+    wild: { label: t('Невероятная'), cost: 2, roll: '2d20kl', hint: t('2 Кости Хитов, проверка с помехой'), example: t('неделю назад я заминировал этот мост') }
 };
-const ABILITIES = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
+const ABILITIES = { str: t('Сила'), dex: t('Ловкость'), con: t('Телосложение'), int: t('Интеллект'), wis: t('Мудрость'), cha: t('Харизма') };
 const esc = text => foundry.utils.escapeHTML?.(String(text ?? '')) ?? String(text ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Использование навыка — только через окно: заряд тратится, когда заявка подтверждена
@@ -29,7 +30,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     if (!isFlashback(item) || !item.actor) return;
     const uses = item.system.uses;
     if (uses?.max && Number(uses.value ?? 0) <= 0) {
-        ui.notifications.warn('Флешбэк уже использован — он восстановится после долгого отдыха.');
+        ui.notifications.warn(t('Флешбэк уже использован — он восстановится после долгого отдыха.'));
         return false;
     }
     flashback(item.actor, item);
@@ -39,24 +40,24 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
 /** Окно заявки. @returns {Promise<{text, tier, ability}|null>} */
 export async function askFlashback(actor) {
     const dice = availableHitDice(actor);
-    const tiers = Object.entries(TIERS).map(([key, t], n) => {
-        const off = t.cost > dice;
+    const tiers = Object.entries(TIERS).map(([key, tier], n) => {
+        const off = tier.cost > dice;
         return `<label class="gd-flashback-tier ${off ? 'off' : ''}">
             <input type="radio" name="tier" value="${key}" ${n === 0 ? 'checked' : ''} ${off ? 'disabled' : ''}>
-            <strong>${t.label}</strong> — ${t.hint}<br><small>например: «${t.example}»</small></label>`;
+            <strong>${tier.label}</strong> — ${tier.hint}<br><small>${t('например: «{example}»', { example: tier.example })}</small></label>`;
     }).join('');
     const abilities = Object.entries(ABILITIES).map(([key, label]) => `<option value="${key}">${label}</option>`).join('');
     return foundry.applications.api.DialogV2.prompt({
-        window: { title: `Флешбэк — ${actor.name}` },
+        window: { title: t('Флешбэк — {name}', { name: actor.name }) },
         content: `<div class="gd-flashback-form">
-            <p>Что вы подготовили заранее?</p>
-            <textarea name="text" rows="3" placeholder="Я заранее…"></textarea>
+            <p>${t('Что вы подготовили заранее?')}</p>
+            <textarea name="text" rows="3" placeholder="${t('Я заранее…')}"></textarea>
             <div class="gd-flashback-tiers">${tiers}</div>
-            <p class="gd-flashback-ability">Проверка: <select name="ability">${abilities}</select></p>
-            <p class="gd-flashback-dice">Костей Хитов: ${dice}. Правдоподобность и сложность проверки определяет Мастер.</p>
+            <p class="gd-flashback-ability">${t('Проверка:')} <select name="ability">${abilities}</select></p>
+            <p class="gd-flashback-dice">${t('Костей Хитов: {dice}. Правдоподобность и сложность проверки определяет Мастер.', { dice })}</p>
         </div>`,
         ok: {
-            label: 'Вспомнить',
+            label: t('Вспомнить'),
             callback: (event, button) => {
                 const form = button.form.elements;
                 return { text: form.text.value.trim(), tier: form.tier.value, ability: form.ability.value };
@@ -69,18 +70,18 @@ export async function askFlashback(actor) {
 export async function flashback(actor, item) {
     const answer = await askFlashback(actor);
     if (!answer) return;
-    if (!answer.text) return ui.notifications.warn('Флешбэк: опишите, что вы подготовили.');
+    if (!answer.text) return ui.notifications.warn(t('Флешбэк: опишите, что вы подготовили.'));
     const tier = TIERS[answer.tier] ?? TIERS.simple;
     if (tier.cost && !(await spendHitDice(actor, tier.cost))) {
-        return ui.notifications.warn(`Не хватает Костей Хитов: нужно ${tier.cost}, доступно ${availableHitDice(actor)}.`);
+        return ui.notifications.warn(t('Не хватает Костей Хитов: нужно {cost}, доступно {v}.', { cost: tier.cost, v: availableHitDice(actor) }));
     }
     const uses = item?.system?.uses;
     if (uses?.max) await item.update({ 'system.uses.spent': Number(uses.spent ?? 0) + 1 });
 
     const head = `<div class="gd-flashback-card">
-        <div class="gd-flashback-title"><i class="fas fa-clock-rotate-left"></i> Флешбэк — ${tier.label.toLowerCase()} подготовка</div>
+        <div class="gd-flashback-title"><i class="fas fa-clock-rotate-left"></i> ${t('Флешбэк — {v} подготовка', { v: tier.label.toLowerCase() })}</div>
         <blockquote>${esc(answer.text)}</blockquote>
-        <p class="gd-flashback-meta">${tier.cost ? `Потрачено Костей Хитов: ${tier.cost}. ` : ''}${tier.roll ? `Проверка: ${ABILITIES[answer.ability]}${tier.roll === '2d20kl' ? ', с помехой' : ''}. Сложность и последствия — за Мастером.` : 'Без проверки. Как это сработало — решает Мастер.'}</p>
+        <p class="gd-flashback-meta">${tier.cost ? t('Потрачено Костей Хитов: {cost}. ', { cost: tier.cost }) : ''}${tier.roll ? t('Проверка: {v}{v2}. Сложность и последствия — за Мастером.', { v: ABILITIES[answer.ability], v2: tier.roll === '2d20kl' ? t(', с помехой') : '' }) : t('Без проверки. Как это сработало — решает Мастер.')}</p>
     </div>`;
     const speaker = ChatMessage.getSpeaker({ actor });
     await ChatMessage.create({ speaker, content: head });

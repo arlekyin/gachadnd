@@ -19,6 +19,7 @@ import { hint } from "../../core/prefs.js";
 import { isActiveGM } from "../../core/socket.js";
 import { naturalSlotCap, occupiesSlot } from "../synergy/synergy.js";
 import { VOICES, VOICE_TAGS } from "./voices.js";
+import { t } from "../../core/i18n.js";
 
 export const STAGE = { whisper: 4, vision: 8, surge: 12 };
 export const MAX = STAGE.surge;
@@ -108,17 +109,17 @@ export async function startSurge(actor) {
     const dc = 10 + overloadOf(actor);
     const memory = memories[idx], last = idx === memories.length - 1 && read < memories.length;
     const players = game.users.filter(u => !u.isGM && actor.testUserPermission(u, 'OWNER'));
-    const body = `<p class="gd-echo-memory">${esc(memory.text)}</p><p class="gd-echo-desire"><b>Желание:</b> <span>${esc(surge.desire)}</span></p>`;
-    const playerButtons = `<div class="gd-echo-buttons"><button type="button" data-echo="play"><i class="fas fa-masks-theater"></i> Сыграть — Вдохновение</button><button type="button" data-echo="mute"><i class="fas fa-hand"></i> Заглушить — спасбросок Мдр, Сл ${dc}</button></div>`;
-    const gmButtons = `<div class="gd-echo-buttons gm"><button type="button" data-echo="postpone"><i class="fas fa-clock"></i> Отложить</button><button type="button" data-echo="replace"><i class="fas fa-pen"></i> Заменить желание</button></div>`;
-    const head = `<p class="gd-echo-note">Наплыв: голос берёт верх на эту сцену.${last ? ' Это последнее воспоминание.' : ''}</p>`;
+    const body = `<p class="gd-echo-memory">${esc(memory.text)}</p><p class="gd-echo-desire"><b>${t('Желание:')}</b> <span>${esc(surge.desire)}</span></p>`;
+    const playerButtons = `<div class="gd-echo-buttons"><button type="button" data-echo="play"><i class="fas fa-masks-theater"></i> ${t('Сыграть — Вдохновение')}</button><button type="button" data-echo="mute"><i class="fas fa-hand"></i> ${t('Заглушить — спасбросок Мдр, Сл {dc}', { dc })}</button></div>`;
+    const gmButtons = `<div class="gd-echo-buttons gm"><button type="button" data-echo="postpone"><i class="fas fa-clock"></i> ${t('Отложить')}</button><button type="button" data-echo="replace"><i class="fas fa-pen"></i> ${t('Заменить желание')}</button></div>`;
+    const head = `<p class="gd-echo-note">${t('Наплыв: голос берёт верх на эту сцену.{v}', { v: last ? t(' Это последнее воспоминание.') : '' })}</p>`;
     const flags = { surgeAt: surge.at, last };
     if (players.length) {
         await sendVoice(actor, voice, head + body + playerButtons, flags).then(m => m?.update({ whisper: players.map(u => u.id) }));
         await ChatMessage.create({
             speaker: { alias: VOICES[voice].title },
             whisper: game.users.filter(u => u.isGM).map(u => u.id),
-            content: `<div class="gd-echo-card gm" style="--echo:${VOICES[voice].color}"><div class="gd-echo-title"><i class="fas ${VOICES[voice].icon}"></i> Наплыв у ${esc(actor.name)} — ${VOICES[voice].title.toLowerCase()}</div>${body}<p class="gd-echo-note">Игрок выбирает: сыграть или заглушить. Можно ничего не трогать.</p>${gmButtons}</div>`,
+            content: `<div class="gd-echo-card gm" style="--echo:${VOICES[voice].color}"><div class="gd-echo-title"><i class="fas ${VOICES[voice].icon}"></i> ${t('Наплыв у {v} — {v2}', { v: esc(actor.name), v2: VOICES[voice].title.toLowerCase() })}</div>${body}<p class="gd-echo-note">${t('Игрок выбирает: сыграть или заглушить. Можно ничего не трогать.')}</p>${gmButtons}</div>`,
             flags: { [MODULE_ID]: { echo: { actorId: actor.id, voice, ...flags, gm: true } } }
         });
     } else await sendVoice(actor, voice, head + body + playerButtons + gmButtons, flags);
@@ -126,34 +127,34 @@ export async function startSurge(actor) {
 
 async function resolve(actor, action, message) {
     const e = echoOf(actor), s = e.surge;
-    if (!s || s.at !== message.flags[MODULE_ID].echo.surgeAt) return ui.notifications.info('Этот наплыв уже прошёл.');
+    if (!s || s.at !== message.flags[MODULE_ID].echo.surgeAt) return ui.notifications.info(t('Этот наплыв уже прошёл.'));
     const story = { ...e.story, [s.voice]: Math.max(e.story[s.voice] ?? 0, s.idx + 1) };
     const v = VOICES[s.voice];
     const note = html => ChatMessage.create({ speaker: { alias: v.title }, whisper: [...new Set([...echoListeners(actor), ...game.users.filter(u => u.isGM).map(u => u.id)])], content: `<div class="gd-echo-card result" style="--echo:${v.color}">${html}</div>`, flags: { [MODULE_ID]: { echo: { actorId: actor.id, voice: s.voice } } } });
     if (action === 'play') {
         await setEcho(actor, { value: STAGE.whisper, story, surge: null });
         await actor.update({ 'system.attributes.inspiration': true });
-        return note(`<p><b>${esc(actor.name)}</b> играет голос до конца сцены: <i>${esc(s.desire)}</i></p><p>Вдохновение получено. Голос выговорился — эхо стихло до шёпота.</p>`);
+        return note(`<p><b>${esc(actor.name)}</b> ${t('играет голос до конца сцены:')} <i>${esc(s.desire)}</i></p><p>${t('Вдохновение получено. Голос выговорился — эхо стихло до шёпота.')}</p>`);
     }
     if (action === 'mute') {
         const dc = 10 + overloadOf(actor);
         const [roll] = await actor.rollSavingThrow({ ability: 'wis', target: dc }, { configure: false }) ?? [];
         const ok = (roll?.total ?? 0) >= dc;
         await setEcho(actor, ok ? { value: STAGE.vision, story, surge: null } : { value: STAGE.surge - 1, story, surge: null, full: true });
-        return note(ok ? `<p><b>${esc(actor.name)}</b> глушит голос (${roll?.total} против Сл ${dc}). Голос замолкает, но Видение остаётся.</p>` : `<p><b>${esc(actor.name)}</b> не смог заглушить голос (${roll?.total} против Сл ${dc}). Видение на полную силу до долгого отдыха.</p>`);
+        return note(ok ? `<p><b>${esc(actor.name)}</b> ${t('глушит голос ({total} против Сл {dc}). Голос замолкает, но Видение остаётся.', { total: roll?.total, dc })}</p>` : `<p><b>${esc(actor.name)}</b> ${t('не смог заглушить голос ({total} против Сл {dc}). Видение на полную силу до долгого отдыха.', { total: roll?.total, dc })}</p>`);
     }
     if (action === 'postpone' && game.user.isGM) {
         await setEcho(actor, { value: STAGE.surge - 1, surge: null });
-        return note(`<p>Наплыв у <b>${esc(actor.name)}</b> отложен. Голос вернётся, когда эхо снова поднимется.</p>`);
+        return note(`<p>${t('Наплыв у')} <b>${esc(actor.name)}</b> ${t('отложен. Голос вернётся, когда эхо снова поднимется.')}</p>`);
     }
     if (action === 'replace' && game.user.isGM) {
         const desire = await foundry.applications.api.DialogV2.prompt({
-            window: { title: 'Желание голоса' }, content: `<input type="text" name="desire" value="${esc(s.desire)}" style="width:100%">`,
-            ok: { label: 'Заменить', callback: (event, button) => button.form.elements.desire.value }
+            window: { title: t('Желание голоса') }, content: `<input type="text" name="desire" value="${esc(s.desire)}" style="width:100%">`,
+            ok: { label: t('Заменить'), callback: (event, button) => button.form.elements.desire.value }
         }).catch(() => null);
         if (!desire) return;
         await setEcho(actor, { surge: { ...s, desire } });
-        return sendVoice(actor, s.voice, `<p class="gd-echo-desire"><b>Желание изменилось:</b> <span>${esc(desire)}</span></p>`);
+        return sendVoice(actor, s.voice, `<p class="gd-echo-desire"><b>${t('Желание изменилось:')}</b> <span>${esc(desire)}</span></p>`);
     }
 }
 
@@ -245,10 +246,10 @@ Hooks.on('deleteCombat', () => { if (!isActiveGM()) return; for (const id of [..
 export function echoInfo(actor) {
     if (!isCharacter(actor)) return null;
     const e = echoOf(actor), voice = voiceOf(actor), v = voice ? VOICES[voice] : null, stage = stageOf(e.value);
-    const label = { quiet: 'тихо', whisper: 'шёпот', vision: e.full ? 'Видение — на полную' : 'Видение', surge: 'наплыв' }[stage];
+    const label = { quiet: t('тихо'), whisper: t('шёпот'), vision: e.full ? t('Видение — на полную') : t('Видение'), surge: t('наплыв') }[stage];
     const read = voice ? Math.min(e.story[voice] ?? 0, v.memories.length) : 0;
-    const tip = [`Эхо ${e.value} из ${MAX} — ${label}`, v ? `${v.title}: ${read} из ${v.memories.length} воспоминаний` : 'Голос ещё не проступил',
-        'Шёпот — с 4, Видение — с 8, наплыв — на 12. Долгий отдых −3'].join(' · ');
+    const tip = [t('Эхо {value} из {MAX} — {label}', { value: e.value, MAX, label }), v ? t('{title}: {read} из {length} воспоминаний', { title: v.title, read, length: v.memories.length }) : t('Голос ещё не проступил'),
+        t('Шёпот — с 4, Видение — с 8, наплыв — на 12. Долгий отдых −3')].join(' · ');
     return { value: e.value, max: MAX, pct: Math.round(e.value / MAX * 100), stage, label, voice, title: v?.title ?? '', icon: v?.icon ?? 'fa-wave-square', color: v?.color ?? '#9aa', tip, full: e.full };
 }
 

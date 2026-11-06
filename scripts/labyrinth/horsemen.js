@@ -10,12 +10,13 @@
 import { MODULE_ID } from "../core/constants.js";
 import { isMemorySkill, setSkillEquipped } from "../memory/synergy/synergy.js";
 import { HOOKS } from "../memory/memory-api.js";
+import { t } from "../core/i18n.js";
 
 export const HORSEMEN = {
-    hunger: 'Голод',
-    plague: 'Чума',
-    war: 'Война',
-    death: 'Смерть'
+    hunger: t('Голод'),
+    plague: t('Чума'),
+    war: t('Война'),
+    death: t('Смерть')
 };
 
 const COMBAT_NODES = ['mob', 'elite', 'outpost', 'boss'];
@@ -69,7 +70,7 @@ export async function cleanseHorseman(item) {
     if (!item.flags[MODULE_ID].is_active) await setSkillEquipped(item, true);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: item.actor }),
-        content: `<div class="gachadnd-rank-up"><strong>🐎 ${flags.skill_name}</strong> срастается с носителем — <strong>${flags.cleansed_name}</strong></div>`
+        content: `<div class="gachadnd-rank-up"><strong>🐎 ${flags.skill_name}</strong> ${t('срастается с носителем —')} <strong>${flags.cleansed_name}</strong></div>`
     });
     Hooks.callAll('gachadnd.synergyUpdated', item.actor);
     if (flags.horseman === 'war') await syncWarEffects();
@@ -100,7 +101,7 @@ Hooks.on('createItem', async (item, options, userId) => {
     if (flags.horseman === 'hunger') {
         const eaten = actor.items.filter(i => isMemorySkill(i) && i.id !== item.id && !i.flags[MODULE_ID].is_active && !i.flags[MODULE_ID].undeletable);
         if (eaten.length) await actor.deleteEmbeddedDocuments('Item', eaten.map(i => i.id));
-        await whisperOwners(actor, `<strong>Голод</strong> пожирает неэкипированные навыки: ${eaten.map(i => i.name).join(', ') || 'нечего есть'}.`);
+        await whisperOwners(actor, `<strong>${t('Голод')}</strong> ${t('пожирает неэкипированные навыки: {v}.', { v: eaten.map(i => i.name).join(', ') || t('нечего есть') })}`);
     }
     Hooks.callAll('gachadnd.synergyUpdated', actor);
 });
@@ -112,7 +113,7 @@ Hooks.on('createItem', async (item, options, userId) => {
 // Поглощение кристалла: всадник — один на персонажа; проклятый Голод просит кристалл себе
 Hooks.on(HOOKS.preAbsorbCrystal, (actor, crystal, usageConfig) => {
     if (crystal.flags?.[MODULE_ID]?.horseman && getHorseman(actor)) {
-        ui.notifications.warn(`⚠️ У персонажа ${actor.name} уже есть всадник.`);
+        ui.notifications.warn(t('⚠️ У персонажа {name} уже есть всадник.', { name: actor.name }));
         return false;
     }
     const hunger = getHorseman(actor, 'hunger');
@@ -125,10 +126,10 @@ Hooks.on(HOOKS.preAbsorbCrystal, (actor, crystal, usageConfig) => {
 async function chooseHungerOrMemory(actor, crystal) {
     const choice = await foundry.applications.api.DialogV2.wait({
         window: { title: crystal.name },
-        content: '<p>Голод ждёт. Скормить кристалл ему или поглотить навык в Память?</p>',
+        content: t('<p>Голод ждёт. Скормить кристалл ему или поглотить навык в Память?</p>'),
         buttons: [
-            { action: 'feed', label: 'Скормить Голоду', icon: 'fas fa-skull', default: true },
-            { action: 'memory', label: 'В Память', icon: 'fas fa-brain' }
+            { action: 'feed', label: t('Скормить Голоду'), icon: 'fas fa-skull', default: true },
+            { action: 'memory', label: t('В Память'), icon: 'fas fa-brain' }
         ],
         rejectClose: false
     });
@@ -142,7 +143,7 @@ async function chooseHungerOrMemory(actor, crystal) {
 // Проклятого всадника снять нельзя
 Hooks.on(HOOKS.preChangeSkill, (actor, item, equipping) => {
     if (equipping || !isHorseman(item) || isCleansed(item)) return;
-    ui.notifications.warn(`${item.name}: проклятого всадника снять нельзя.`);
+    ui.notifications.warn(t('{name}: проклятого всадника снять нельзя.', { name: item.name }));
     return false;
 });
 
@@ -153,11 +154,11 @@ Hooks.on(HOOKS.terminalSkillView, (item, view) => {
     const cleansed = isCleansed(item);
     view.notes.push({
         cls: `gd-horseman ${cleansed ? 'cleansed' : ''}`,
-        text: `🐎 ${HORSEMEN[flags.horseman]} · ${cleansed ? 'сращён' : `проклят${flags.cleanse_goal ? ` · сращивание ${flags.cleanse_progress ?? 0} / ${flags.cleanse_goal}` : ''}`}`
+        text: `🐎 ${HORSEMEN[flags.horseman]} · ${cleansed ? t('сращён') : t('проклят{v}', { v: flags.cleanse_goal ? t(' · сращивание {v} / {cleanse_goal}', { v: flags.cleanse_progress ?? 0, cleanse_goal: flags.cleanse_goal }) : '' })}`
     });
     if (cleansed || !game.user?.isGM) return;
-    if (flags.cleanse_goal) view.actions.push({ label: 'Прогресс', icon: 'fas fa-plus', title: 'Видит только Мастер', run: () => addCleanseProgress(item, 1) });
-    view.actions.push({ label: 'Срастить', icon: 'fas fa-horse-head', title: 'Видит только Мастер', run: () => cleanseHorseman(item) });
+    if (flags.cleanse_goal) view.actions.push({ label: t('Прогресс'), icon: 'fas fa-plus', title: t('Видит только Мастер'), run: () => addCleanseProgress(item, 1) });
+    view.actions.push({ label: t('Срастить'), icon: 'fas fa-horse-head', title: t('Видит только Мастер'), run: () => cleanseHorseman(item) });
 });
 
 // ==========================================
@@ -171,7 +172,7 @@ export async function feedHunger(actor, crystal) {
     if (quantity > 1) await crystal.update({ 'system.quantity': quantity - 1 });
     else await crystal.delete();
     await hunger.setFlag(MODULE_ID, 'fed_since_rest', true);
-    await whisperOwners(actor, `<strong>Голод</strong> съедает ${crystal.name}.`);
+    await whisperOwners(actor, `<strong>${t('Голод')}</strong> ${t('съедает {name}.', { name: crystal.name })}`);
     await addCleanseProgress(hunger, 1);
     return true;
 }
@@ -187,7 +188,7 @@ Hooks.on('dnd5e.restCompleted', async (actor, result, config) => {
         const victim = victims[Math.floor(Math.random() * victims.length)];
         if (victim) {
             await victim.delete();
-            await whisperOwners(actor, `<strong>Голод</strong> не дождался еды и пожрал навык «${victim.name}».`);
+            await whisperOwners(actor, `<strong>${t('Голод')}</strong> ${t('не дождался еды и пожрал навык «{name}».', { name: victim.name })}`);
         }
     }
     await hunger.setFlag(MODULE_ID, 'fed_since_rest', false);
@@ -219,7 +220,7 @@ export async function onNodeEntered(type) {
                 const level = actor.system.details?.level ?? 1;
                 const hp = actor.system.attributes.hp.value;
                 await actor.update({ 'system.attributes.hp.value': Math.max(0, hp - level) });
-                await whisperOwners(actor, `<strong>Война</strong> недовольна миром: −${level} ПЗ, благ этого узла вы не получаете.`);
+                await whisperOwners(actor, `<strong>${t('Война')}</strong> ${t('недовольна миром: −{level} ПЗ, благ этого узла вы не получаете.', { level })}`);
             }
         }
     }
@@ -265,10 +266,10 @@ export async function syncWarEffects() {
     const holder = cleansedWarHolder();
     const prof = holder?.system.attributes?.prof ?? 0;
     const streak = holder ? (getHorseman(holder, 'war').flags[MODULE_ID].streak ?? 0) : 0;
-    await syncPartyEffect('bloodbath', Math.min(streak, prof), 'Кровавая баня', [['system.bonuses.abilities.save', '+{n}']]);
+    await syncPartyEffect('bloodbath', Math.min(streak, prof), t('Кровавая баня'), [['system.bonuses.abilities.save', '+{n}']]);
     const combat = game.combats?.find(c => c.started);
     const kills = combat?.getFlag(MODULE_ID, 'war_kills') ?? 0;
-    await syncPartyEffect('count', holder ? Math.min(kills, prof) : 0, 'Боевой счёт', COUNT_CHANGES);
+    await syncPartyEffect('count', holder ? Math.min(kills, prof) : 0, t('Боевой счёт'), COUNT_CHANGES);
 }
 
 // Убийство врага в бою: Боевой счёт растёт, если у отряда есть сращённая Война
@@ -287,5 +288,5 @@ Hooks.on('updateActor', async (actor, changes) => {
 // Боевой счёт живёт до конца боя
 Hooks.on('deleteCombat', async () => {
     if (!isActiveGM()) return;
-    await syncPartyEffect('count', 0, 'Боевой счёт', COUNT_CHANGES);
+    await syncPartyEffect('count', 0, t('Боевой счёт'), COUNT_CHANGES);
 });

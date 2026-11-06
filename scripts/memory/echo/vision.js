@@ -13,6 +13,7 @@
 
 import { MODULE_ID } from "../../core/constants.js";
 import { echoOf, voiceOf, setEcho, STAGE } from "./echo.js";
+import { t } from "../../core/i18n.js";
 
 export const visionMode = () => { try { return game.settings.get(MODULE_ID, 'echoVision') ?? 'full'; } catch (e) { return 'full'; } };
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -24,7 +25,7 @@ export const peekActor = () => (game.user.isGM && peek ? game.actors.get(peek) ?
 export function setPeek(actor) {
     peek = actor && peek !== actor.id ? actor.id : null;
     const a = peekActor();
-    if (a && !visionPower(a)) ui.notifications.info(`У ${a.name} сейчас нет Видения (эхо ${echoOf(a).value}, Видение — с ${STAGE.vision}): экран как у всех.`);
+    if (a && !visionPower(a)) ui.notifications.info(t('У {name} сейчас нет Видения (эхо {value}, Видение — с {vision}): экран как у всех.', { name: a.name, value: echoOf(a).value, vision: STAGE.vision }));
     peekBanner();
     rebuild();
     Hooks.callAll('gachadnd.echoPeek', a);
@@ -36,7 +37,7 @@ function peekBanner() {
     if (!a) return;
     const el = document.createElement('div');
     el.id = 'gd-echo-peek';
-    el.innerHTML = `<i class="fas fa-eye"></i> Экран: <b>${foundry.utils.escapeHTML(a.name)}</b> <button type="button"><i class="fas fa-rotate-left"></i> Вернуть свой</button>`;
+    el.innerHTML = `<i class="fas fa-eye"></i> ${t('Экран:')} <b>${foundry.utils.escapeHTML(a.name)}</b> <button type="button"><i class="fas fa-rotate-left"></i> ${t('Вернуть свой')}</button>`;
     el.querySelector('button').addEventListener('click', () => setPeek(null));
     document.body.append(el);
 }

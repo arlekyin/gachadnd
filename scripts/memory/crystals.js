@@ -7,6 +7,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { t } from "../core/i18n.js";
 
 export function getSkillPack() {
     return game.packs.get(`${MODULE_ID}.gacha-skills`) || game.packs.get('world.gacha-skills');
@@ -19,8 +20,8 @@ export function crystalImage(rarity) {
 
 // Старые имена переименованных навыков — для кристаллов, выданных до появления skill_id
 const RENAMED = {
-    'брайн-данс': 'Последний кадр',
-    'я особенный!': 'Думаешь, ты особенный?'
+    'брайн-данс': 'Последний кадр',  // i18n: данные — имена навыков: их переводит пак
+    'я особенный!': 'Думаешь, ты особенный?'  // i18n: данные
 };
 
 /**
@@ -41,11 +42,11 @@ export function buildCrystalData(skill) {
     const rarity = flags.rarity || 'gray';
     const activityId = foundry.utils.randomID();
     return {
-        name: `Кристалл: ${source.name}`,
+        name: `Кристалл: ${source.name}`,  // i18n: данные
         type: 'consumable',
         img: crystalImage(rarity),
         system: {
-            description: { value: `<p>Сожмите кристалл в руке, чтобы поглотить этот навык.</p><hr>${source.system?.description?.value ?? ''}` },
+            description: { value: `<p>${t('Сожмите кристалл в руке, чтобы поглотить этот навык.')}</p><hr>${source.system?.description?.value ?? ''}` },
             type: { value: 'potion', subtype: '' },
             quantity: 1,
             uses: { spent: 0, max: '1', recovery: [], autoDestroy: true },
@@ -53,7 +54,7 @@ export function buildCrystalData(skill) {
                 [activityId]: {
                     _id: activityId,
                     type: 'utility',
-                    name: 'Поглотить кристалл',
+                    name: t('Поглотить кристалл'),
                     activation: { type: 'special', value: null, condition: '' },
                     consumption: { targets: [{ type: 'itemUses', target: '', value: '1' }] }
                 }

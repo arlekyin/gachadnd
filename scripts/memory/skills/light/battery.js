@@ -12,6 +12,7 @@ import { isActiveGM } from "../../../core/socket.js";
 import { isMemorySkill } from "../../synergy/synergy.js";
 import { recharge, heatable, heatOf, nextRisk, riskText } from "../../overheat.js";
 import { isLight, lightSkill, tokenOf, centerOf, inBrightLight, lightCard, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 export const COST = 3;
 const FLAG = 'battery';
@@ -38,42 +39,42 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const charges = chargesOf(battery), cap = capacityOf(actor);
     if (charges >= cap) return;
     await battery.setFlag(MODULE_ID, FLAG, charges + 1);
-    await lightCard(actor, 'Солнечная батарея', `<p>Ход на ярком свету: заряд ${charges + 1}/${cap}.</p>`, { icon: 'fa-solar-panel' });
+    await lightCard(actor, t('Солнечная батарея'), `<p>${t('Ход на ярком свету: заряд {v}/{cap}.', { v: charges + 1, cap })}</p>`, { icon: 'fa-solar-panel' });
 });
 
 // Использование — только окно: 3 заряда батареи за 1 заряд навыка
 Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isLight(item, 'battery') || !item.actor) return;
-    discharge(item).catch(error => console.error('gachadnd | Солнечная батарея', error));
+    discharge(item).catch(error => console.error(`gachadnd | Солнечная батарея`, error));
     return false;
 });
 
 export async function discharge(battery, targetId = null) {
     const actor = battery.actor;
     const charges = chargesOf(battery);
-    if (charges < COST) return ui.notifications.warn(`Солнечная батарея: заряд ${charges}/${capacityOf(actor)}, нужно ${COST}. Заканчивайте ход на ярком свету.`);
+    if (charges < COST) return ui.notifications.warn(t('Солнечная батарея: заряд {charges}/{v}, нужно {COST}. Заканчивайте ход на ярком свету.', { charges, v: capacityOf(actor), COST }));
     const targets = batteryTargets(battery);
-    if (!targets.length) return ui.notifications.warn('Солнечная батарея: нет экипированного навыка, которому нужен заряд.');
+    if (!targets.length) return ui.notifications.warn(t('Солнечная батарея: нет экипированного навыка, которому нужен заряд.'));
     const target = targetId ? targets.find(t => t.id === targetId) : await chooseTarget(battery, targets);
     if (!target) return;
     await battery.setFlag(MODULE_ID, FLAG, charges - COST);
     const amount = await recharge(target, 1);
-    const risk = heatable(target) ? `<p class="gd-heat-risk">Следующее использование заёмного заряда — ${riskText(nextRisk(target))}.</p>` : '';
-    await lightCard(actor, `Солнечная батарея → ${target.name}`, `<p>Восстановлено зарядов: ${amount}. В батарее осталось ${charges - COST}.</p>${risk}`, { icon: 'fa-solar-panel' });
+    const risk = heatable(target) ? `<p class="gd-heat-risk">${t('Следующее использование заёмного заряда — {v}.', { v: riskText(nextRisk(target)) })}</p>` : '';
+    await lightCard(actor, t('Солнечная батарея → {name}', { name: target.name }), `<p>${t('Восстановлено зарядов: {amount}. В батарее осталось {v}.', { amount, v: charges - COST })}</p>${risk}`, { icon: 'fa-solar-panel' });
     return target;
 }
 
 async function chooseTarget(battery, targets) {
     const options = targets.map(item => {
         const max = Number(item.system.uses.max), spent = Number(item.system.uses.spent);
-        const risk = heatable(item) ? riskText(nextRisk(item)) : 'не греется';
-        return `<option value="${item.id}">${esc(item.name)} — заряды ${max - spent}/${max}, ${risk}</option>`;
+        const risk = heatable(item) ? riskText(nextRisk(item)) : t('не греется');
+        return `<option value="${item.id}">${t('{v} — заряды {v2}/{max}, {risk}', { v: esc(item.name), v2: max - spent, max, risk })}</option>`;
     }).join('');
     const id = await foundry.applications.api.DialogV2.prompt({
-        window: { title: `Солнечная батарея — ${chargesOf(battery)}/${capacityOf(battery.actor)}` },
-        content: `<p>${COST} заряда батареи — 1 заряд навыку:</p><select name="target">${options}</select>`,
-        ok: { label: 'Подзарядить', callback: (event, button) => button.form.elements.target.value },
+        window: { title: t('Солнечная батарея — {v}/{v2}', { v: chargesOf(battery), v2: capacityOf(battery.actor) }) },
+        content: `<p>${t('{COST} заряда батареи — 1 заряд навыку:', { COST })}</p><select name="target">${options}</select>`,
+        ok: { label: t('Подзарядить'), callback: (event, button) => button.form.elements.target.value },
         rejectClose: false
     }).catch(() => null);
     return targets.find(item => item.id === id) ?? null;

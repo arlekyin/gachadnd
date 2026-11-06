@@ -13,6 +13,7 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { emit, onSocket } from "../../../core/socket.js";
 import { isLight, tokenOf, feetToPx, lightCard, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 export const BOUNCES = 2;
 /** Отражений на ранге навыка: 2, 3, 4 */
@@ -126,7 +127,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     if (chosen.has(item.id)) return;
     const caster = tokenOf(item.actor);
     if (!canvas?.ready || !caster) {
-        ui.notifications.warn('Рикошет: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Рикошет: токена персонажа нет на сцене.'));
         return false;
     }
     // Сначала прицел, затем использование заново — заряд тратится только при выстреле
@@ -154,7 +155,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
     emit('lightRicochet', data);
     showBeam(data);
     const names = shot.hits.map(t => esc(t.name)).join(', ');
-    lightCard(item.actor, 'Рикошет', `<p>Отражений: ${shot.bounces}. ${names ? `Луч задел: ${names} — спасбросок Ловкости.` : 'Луч никого не задел.'}</p>`, { icon: 'fa-wand-sparkles' });
+    lightCard(item.actor, t('Рикошет'), `<p>${t('Отражений: {bounces}. {v}', { bounces: shot.bounces, v: names ? t('Луч задел: {names} — спасбросок Ловкости.', { names }) : t('Луч никого не задел.') })}</p>`, { icon: 'fa-wand-sparkles' });
 });
 
 /**
@@ -183,7 +184,7 @@ export function aim(caster, length, bounces = BOUNCES) {
         }
     };
     paint({ x: origin.x + 1, y: origin.y });
-    ui.notifications.info('Рикошет: наведите луч и щёлкните. Правая кнопка или Esc — отмена.');
+    ui.notifications.info(t('Рикошет: наведите луч и щёлкните. Правая кнопка или Esc — отмена.'));
 
     return new Promise(resolve => {
         const finish = result => {

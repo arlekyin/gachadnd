@@ -5,32 +5,34 @@
  * Не использует глобальные объекты Foundry на уровне модуля.
  */
 
+import { t } from "./i18n.js";
+
 // Собственные периоды модуля, регистрируются в CONFIG.DND5E.limitedUsePeriods.
 // gachaFloor оставлен для навыков, собранных до перехода «этажа» на долгий отдых.
 export const GACHA_PERIODS = {
-    gachaFloor: { label: 'Этаж', abbreviation: 'этаж' },
-    gachaRun: { label: 'Забег', abbreviation: 'забег' },
-    gachaScene: { label: 'Сцена', abbreviation: 'сцена' }
+    gachaFloor: { label: t('Этаж'), abbreviation: t('этаж') },
+    gachaRun: { label: t('Забег'), abbreviation: t('забег') },
+    gachaScene: { label: t('Сцена'), abbreviation: t('сцена') }
 };
 
 // Значения поля `recovery` в YAML → период dnd5e
 export const RECOVERY_VALUES = {
-    short: { period: 'sr', label: 'короткий отдых' },
-    long: { period: 'lr', label: 'долгий отдых' },
-    day: { period: 'day', label: 'день' },
-    turn: { period: 'turn', label: 'ход' },
-    round: { period: 'turnStart', label: 'раунд' },
-    combat: { period: 'initiative', label: 'бой' },
+    short: { period: 'sr', label: t('короткий отдых') },
+    long: { period: 'lr', label: t('долгий отдых') },
+    day: { period: 'day', label: t('день') },
+    turn: { period: 'turn', label: t('ход') },
+    round: { period: 'turnStart', label: t('раунд') },
+    combat: { period: 'initiative', label: t('бой') },
     // Устаревшее значение: «этаж» заменён долгим отдыхом (он проходит только после босса)
-    floor: { period: 'lr', label: 'долгий отдых' },
-    run: { period: 'gachaRun', label: 'забег' },
-    scene: { period: 'gachaScene', label: 'сцена' },
-    none: { period: null, label: 'без восстановления' }
+    floor: { period: 'lr', label: t('долгий отдых') },
+    run: { period: 'gachaRun', label: t('забег') },
+    scene: { period: 'gachaScene', label: t('сцена') },
+    none: { period: null, label: t('без восстановления') }
 };
 
 export function registerGachaPeriods() {
     const periods = CONFIG.DND5E?.limitedUsePeriods;
-    if (!periods) return console.warn('[GachaDND] CONFIG.DND5E.limitedUsePeriods не найден, периоды не зарегистрированы.');
+    if (!periods) return console.warn(`[GachaDND] CONFIG.DND5E.limitedUsePeriods не найден, периоды не зарегистрированы.`);
     for (const [key, config] of Object.entries(GACHA_PERIODS)) {
         if (!(key in periods)) periods[key] = { ...config };
     }

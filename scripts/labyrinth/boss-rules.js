@@ -27,13 +27,14 @@ import { MAP_DATA } from "./map.js";
 import { getFloor } from "./economy.js";
 import { findBoss } from "./moon-boons.js";
 import { isWeb, webStage, activeStages } from "./web-map.js";
+import { t } from "../core/i18n.js";
 
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
 const FLAG = 'bossRule';
 
 export const BOSS_RULES = {
-    muffle: { name: 'Глушитель', icon: 'fa-volume-xmark', text: rule => `Босс питается тегом «${esc(rule.tag)}»: синергии этого тега в этом бою не действуют.` },
-    sleepy: { name: 'Крайний спит', icon: 'fa-moon', text: () => 'Последний экипированный навык каждого спит, пока у Босса больше половины ПЗ.' }
+    muffle: { name: t('Глушитель'), icon: 'fa-volume-xmark', text: rule => t('Босс питается тегом «{v}»: синергии этого тега в этом бою не действуют.', { v: esc(rule.tag) }) },
+    sleepy: { name: t('Крайний спит'), icon: 'fa-moon', text: () => t('Последний экипированный навык каждого спит, пока у Босса больше половины ПЗ.') }
 };
 
 /** Тип узла, на котором стоит отряд */
@@ -94,7 +95,7 @@ export async function setBossRules(combat, ids) {
     await clearRule(combat);
     ids = [...new Set(ids.filter(id => BOSS_RULES[id]))];
     if (!ids.length) {
-        if (previous) await announce(`<strong>Правило Босса снято.</strong>`);
+        if (previous) await announce(`<strong>${t('Правило Босса снято.')}</strong>`);
         return null;
     }
     const party = partyIn(combat);
@@ -111,13 +112,13 @@ export async function setBossRules(combat, ids) {
     if (ids.includes('sleepy')) {
         for (const actor of party) {
             const item = lastEquipped(actor);
-            if (item) await sleepSkill(item, { combatId: combat.id, bossRule: true, reason: 'правило Босса «Крайний спит», пока у Босса больше половины ПЗ' });
+            if (item) await sleepSkill(item, { combatId: combat.id, bossRule: true, reason: t('правило Босса «Крайний спит», пока у Босса больше половины ПЗ') });
         }
     }
     for (const actor of party) await updateActorSynergies(actor);
     const sleepers = ids.includes('sleepy') ? party.map(a => a.items.find(i => i.flags?.[MODULE_ID]?.asleep?.bossRule)).filter(Boolean) : [];
-    const lines = ids.map(id => `<i class="fas ${BOSS_RULES[id].icon}"></i> <strong>Правило Босса — ${BOSS_RULES[id].name}.</strong> ${BOSS_RULES[id].text(rule)}`);
-    await announce(`${lines.join('<br>')}${sleepers.length ? `<br>Спят: ${sleepers.map(i => `«${esc(i.name)}» (${esc(i.actor.name)})`).join(', ')}.` : ''}`);
+    const lines = ids.map(id => `<i class="fas ${BOSS_RULES[id].icon}"></i> <strong>${t('Правило Босса — {name}.', { name: BOSS_RULES[id].name })}</strong> ${BOSS_RULES[id].text(rule)}`);
+    await announce(`${lines.join('<br>')}${sleepers.length ? `<br>${t('Спят: {v}.', { v: sleepers.map(i => `«${esc(i.name)}» (${esc(i.actor.name)})`).join(', ') })}` : ''}`);
     return rule;
 }
 
@@ -130,9 +131,9 @@ async function strengthen(combat) {
     if (!hp?.max) return null;
     const extra = Math.round(hp.max * 0.25);
     await actor.createEmbeddedDocuments('ActiveEffect', [{
-        name: 'Ступень Босса: окреп', img: 'icons/svg/regen.svg', origin: actor.uuid,
+        name: t('Ступень Босса: окреп'), img: 'icons/svg/regen.svg', origin: actor.uuid,
         changes: [{ key: 'system.attributes.hp.max', mode: 2, value: String(extra) }],
-        description: '<p>Отряд долго ходил по этажу: у Босса на четверть больше ПЗ до конца боя.</p>',
+        description: t('<p>Отряд долго ходил по этажу: у Босса на четверть больше ПЗ до конца боя.</p>'),
         flags: { [MODULE_ID]: { bossBoost: combat.id } }
     }]);
     await actor.update({ 'system.attributes.hp.value': (Number(hp.value) || 0) + extra });
@@ -140,7 +141,7 @@ async function strengthen(combat) {
 }
 
 const announce = (html, whisper = false) => ChatMessage.create({
-    speaker: ChatMessage.getSpeaker({ alias: 'Лабиринт' }),
+    speaker: ChatMessage.getSpeaker({ alias: t('Лабиринт') }),
     ...(whisper ? { whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id) } : {}),
     content: `<div class="gd-boss-rule">${html}</div>`
 });
@@ -151,22 +152,22 @@ Hooks.on('combatStart', async combat => {
     const map = mapScene()?.getFlag(MODULE_ID, 'floorMap');
     if (isWeb(map)) {
         const stage = webStage(map.web?.ticks ?? 0);
-        if (!stage) return announce('<i class="fas fa-feather"></i> <strong>Босс спокоен:</strong> отряд уложился в тишину этажа — ни одной ступени.');
+        if (!stage) return announce(t('<i class="fas fa-feather"></i> <strong>Босс спокоен:</strong> отряд уложился в тишину этажа — ни одной ступени.'));
         const got = activeStages().slice(0, stage).map(s => s.id);
         const rules = got.filter(id => id === 'muffle' || id === 'sleepy');
         if (rules.length) await setBossRules(combat, rules);
         if (got.includes('strong')) {
             const extra = await strengthen(combat);
-            if (extra) await announce(`<i class="fas fa-heart-circle-plus"></i> <strong>Ступень Босса — Окрепший:</strong> +${extra} к максимуму ПЗ до конца боя.`);
+            if (extra) await announce(`<i class="fas fa-heart-circle-plus"></i> <strong>${t('Ступень Босса — Окрепший:')}</strong> ${t('+{extra} к максимуму ПЗ до конца боя.', { extra })}`);
         }
-        if (got.includes('retinue')) await announce('<i class="fas fa-users"></i> <strong>Ступень Босса — Свита:</strong> выставьте с Боссом двух приспешников его этажа.', true);
-        if (hint('hintBossRules')) await announce(`<i class="fas fa-hourglass-half"></i> Ступеней Босса: ${stage} — отряд ходил по этажу ${map.web.ticks} шаг.<div class="gd-boss-rule-buttons"><button type="button" data-gd-bossrule="none"><i class="fas fa-ban"></i> Снять правила</button></div>`, true);
+        if (got.includes('retinue')) await announce(t('<i class="fas fa-users"></i> <strong>Ступень Босса — Свита:</strong> выставьте с Боссом двух приспешников его этажа.'), true);
+        if (hint('hintBossRules')) await announce(`<i class="fas fa-hourglass-half"></i> ${t('Ступеней Босса: {stage} — отряд ходил по этажу {ticks} шаг.', { stage, ticks: map.web.ticks })}<div class="gd-boss-rule-buttons"><button type="button" data-gd-bossrule="none"><i class="fas fa-ban"></i> ${t('Снять правила')}</button></div>`, true);
         return;
     }
     const ids = Object.keys(BOSS_RULES);
     const rule = await setBossRule(combat, ids[Math.floor(Math.random() * ids.length)]);
     if (!rule || !hint('hintBossRules')) return;
-    await announce(`<i class="fas fa-dice"></i> Правило Босса выпало само — решать вам.<div class="gd-boss-rule-buttons"><button type="button" data-gd-bossrule="other"><i class="fas fa-rotate"></i> Другое правило</button><button type="button" data-gd-bossrule="none"><i class="fas fa-ban"></i> Без правила</button></div>`, true);
+    await announce(`<i class="fas fa-dice"></i> ${t('Правило Босса выпало само — решать вам.')}<div class="gd-boss-rule-buttons"><button type="button" data-gd-bossrule="other"><i class="fas fa-rotate"></i> ${t('Другое правило')}</button><button type="button" data-gd-bossrule="none"><i class="fas fa-ban"></i> ${t('Без правила')}</button></div>`, true);
 });
 
 onRenderChatMessage((message, html) => {
@@ -176,7 +177,7 @@ onRenderChatMessage((message, html) => {
         if (!game.user.isGM) { button.disabled = true; continue; }
         button.addEventListener('click', async () => {
             const combat = game.combat;
-            if (!combat) return ui.notifications.warn('Боя нет.');
+            if (!combat) return ui.notifications.warn(t('Боя нет.'));
             if (button.dataset.gdBossrule === 'none') return setBossRule(combat, null);
             const current = ruleOf(combat)?.id;
             const others = Object.keys(BOSS_RULES).filter(id => id !== current);
@@ -199,7 +200,7 @@ Hooks.on('updateActor', async actor => {
     for (const a of partyIn(combat)) {
         for (const item of a.items.filter(i => i.flags?.[MODULE_ID]?.asleep?.bossRule)) await wakeSkill(item);
     }
-    await announce('<i class="fas fa-sun"></i> <strong>Босс ранен наполовину</strong> — спящие навыки просыпаются.');
+    await announce(t('<i class="fas fa-sun"></i> <strong>Босс ранен наполовину</strong> — спящие навыки просыпаются.'));
 });
 
 // Конец боя: правило уходит вместе с боем — синергии считаются заново (спящие просыпаются в scars.js)
@@ -226,7 +227,7 @@ Hooks.on('dnd5e.rollAttackV2', async (rolls, { subject } = {}) => {
     const roll = Array.isArray(rolls) ? rolls[0] : rolls;
     if (!roll?.isCritical) return;
     const target = [...game.user.targets][0]?.actor;
-    if (target?.type === 'character' && target.hasPlayerOwner) await grantScar(target, { reason: 'Критический Укус Пожирателя' });
+    if (target?.type === 'character' && target.hasPlayerOwner) await grantScar(target, { reason: t('Критический Укус Пожирателя') });
 });
 
 // Элита с 3-го этажа: после боя к4, на 1 — шрам случайному участнику отряда
@@ -235,9 +236,9 @@ Hooks.on('deleteCombat', async combat => {
     const party = partyIn(combat).filter(a => (Number(a.system?.attributes?.hp?.value) || 0) > 0);
     if (!party.length) return;
     const roll = await new Roll('1d4').evaluate();
-    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ alias: 'Лабиринт' }), flavor: `Элита оставляет следы: к4${roll.total === 1 ? ' — шрам' : ''}` });
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ alias: t('Лабиринт') }), flavor: t('Элита оставляет следы: к4{v}', { v: roll.total === 1 ? t(' — шрам') : '' }) });
     if (roll.total !== 1) return;
-    await grantScar(party[Math.floor(Math.random() * party.length)], { reason: 'Элита оставила шрам' });
+    await grantScar(party[Math.floor(Math.random() * party.length)], { reason: t('Элита оставила шрам') });
 });
 
 // Награда за ступени Босса паутины: каждая набранная ступень — ещё один кристалл в добыче Босса; если набраны
@@ -250,5 +251,5 @@ Hooks.on(MEMORY_HOOKS.lootPlanned, plan => {
     if (!stage) return;
     plan.extra += stage;
     if (stage >= activeStages().length) plan.rarities.push('purple');
-    plan.lines.push(`<div style="text-align: center; margin-top: 8px; color: #e8a49c;"><i class="fas fa-skull"></i> Босс набрал ступеней: ${stage} — в добыче ещё ${stage} крист.${stage >= activeStages().length ? ', один из них фиолетовый' : ''}.</div>`);
+    plan.lines.push(`<div style="text-align: center; margin-top: 8px; color: #e8a49c;"><i class="fas fa-skull"></i> ${t('Босс набрал ступеней: {stage} — в добыче ещё {stage} крист.{v}.', { stage, v: stage >= activeStages().length ? t(', один из них фиолетовый') : '' })}</div>`);
 });

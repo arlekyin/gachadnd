@@ -39,3 +39,15 @@ release/
 
 # Скачанные исходники фона арены (готовые .ogg — рядом): python tools/sound/arena.py
 assets/sounds/*/_src/
+
+# Макеты и записи: в них есть сверка с наборами, которые нельзя распространять
+tools/mockups/
+
+# Спрайты оружия живут в модуле token-choreography
+assets/battlemap/weapons/
+
+# Снимки страниц правил из проверки rules-pages, старая копия synergy-tiers, отчёт симулятора, настройки редактора
+rules-pages/
+scripts/synergy-tiers.js
+tools/sim/last-web.txt
+.claude/

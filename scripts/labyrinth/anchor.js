@@ -20,6 +20,7 @@ import { getFloor } from "./economy.js";
 import { isCrystalItem } from "../memory/inventory.js";
 import { isMemorySkill, occupiesSlot, naturalSlotCap } from "../memory/synergy/synergy.js";
 import { GraveyardWindow } from "./graveyard.js";
+import { t } from "../core/i18n.js";
 
 // ==========================================
 // ЗАПАХ
@@ -30,9 +31,9 @@ const OVERLOAD_SCENT = 2;
 const BREACH_NODES = ['mob', 'elite', 'event', 'rest'];
 
 export const SCENT_STATES = {
-    silence: { label: 'Тишина', color: '#7f8c8d', icon: 'fa-wind' },
-    whisper: { label: 'Шёпот', color: '#d4a64a', icon: 'fa-ear-listen' },
-    hunt: { label: 'Охота', color: '#ff4d4d', icon: 'fa-paw' }
+    silence: { label: t('Тишина'), color: '#7f8c8d', icon: 'fa-wind' },
+    whisper: { label: t('Шёпот'), color: '#d4a64a', icon: 'fa-ear-listen' },
+    hunt: { label: t('Охота'), color: '#ff4d4d', icon: 'fa-paw' }
 };
 
 /** Пороги Запаха этажа: Шёпот от 4 + 2Э, Охота от 6 + 3Э */
@@ -68,23 +69,23 @@ export function partyScent(actors = partyActors(), floor = getFloor()) {
 
 // Строки для игроков: ни чисел, ни порогов — только то, что чувствуют персонажи
 const ATMOSPHERE = {
-    whisper: 'Туман пахнет металлом. Кристаллы в сумках тихо гудят, и сквозь стены доносится: «ещё…»',
-    hunt: 'Гул кристаллов срывается на дрожь. Где-то рядом рвётся ткань узла — что-то идёт по следу.'
+    whisper: t('Туман пахнет металлом. Кристаллы в сумках тихо гудят, и сквозь стены доносится: «ещё…»'),
+    hunt: t('Гул кристаллов срывается на дрожь. Где-то рядом рвётся ткань узла — что-то идёт по следу.')
 };
 const ANCHOR_ATMOSPHERE = {
-    whisper: 'Под куполом тихо, но кристаллы в сумках гудят громче рун над головой.',
-    hunt: 'За границей купола, среди голодных душ, что-то медленно ходит кругами.'
+    whisper: t('Под куполом тихо, но кристаллы в сумках гудят громче рун над головой.'),
+    hunt: t('За границей купола, среди голодных душ, что-то медленно ходит кругами.')
 };
 
 function scentReport(scent) {
-    const members = scent.members.filter(m => m.value).map(m => `${m.name} ${m.value}${m.overload ? ` (перегрузка ${m.overload})` : ''}`).join(', ');
-    return `<strong style="color: ${scent.color}">${scent.label}</strong> · Запах ${scent.value} (Шёпот от ${scent.thresholds.whisper}, Охота от ${scent.thresholds.hunt})${members ? `<br><small>${members}</small>` : ''}`;
+    const members = scent.members.filter(m => m.value).map(m => `${m.name} ${m.value}${m.overload ? t(' (перегрузка {overload})', { overload: m.overload }) : ''}`).join(', ');
+    return `<strong style="color: ${scent.color}">${scent.label}</strong> ${t('· Запах {value} (Шёпот от {whisper}, Охота от {hunt}){v}', { value: scent.value, whisper: scent.thresholds.whisper, hunt: scent.thresholds.hunt, v: members ? `<br><small>${members}</small>` : '' })}`;
 }
 
 function whisperGM(content) {
     if (!hintOn('hintScent')) return null;
     return ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Нюх Пожирателя' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Нюх Пожирателя') }),
         whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id),
         content: `<div class="gd-scent-chat">${content}</div>`
     });
@@ -93,7 +94,7 @@ function whisperGM(content) {
 function atmosphere(text) {
     if (!hintOn('hintAtmosphere')) return null;
     return ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Туман' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Туман') }),
         content: `<div class="gd-scent-chat atmosphere"><i class="fas fa-wind"></i> <em>${text}</em></div>`
     });
 }
@@ -106,15 +107,15 @@ export async function announceScent(nodeType, { web = false } = {}) {
     let hint = '';
     // Паутина: Пожиратель ходит по карте сам (web-map.js) — здесь только Запах и атмосфера
     if (web) {
-        await whisperGM(scentReport(scent) + (scent.state === 'hunt' ? '<br>Паутина: Пожиратель на карте идёт к отряду — скорость по Запаху.' : ''));
+        await whisperGM(scentReport(scent) + (scent.state === 'hunt' ? t('<br>Паутина: Пожиратель на карте идёт к отряду — скорость по Запаху.') : ''));
         return atmosphere(ATMOSPHERE[scent.state]);
     }
     // Жильцы Якоря (приманка) дописывают своё к прорыву: ctx.gm — Мастеру, ctx.players — атмосфера
     const ctx = { nodeType, breach: scent.state === 'hunt' && BREACH_NODES.includes(nodeType), gm: [], players: [], tasks: [] };
     if (scent.state === 'hunt') {
         hint = ctx.breach
-            ? '<br>Узел подходит: Пожиратель может прорваться (на узел Привала — до отдыха).'
-            : '<br>Сюда он не входит — прорвётся на следующем подходящем узле.';
+            ? t('<br>Узел подходит: Пожиратель может прорваться (на узел Привала — до отдыха).')
+            : t('<br>Сюда он не входит — прорвётся на следующем подходящем узле.');
         Hooks.callAll('gachadnd.huntBreach', ctx);
         await Promise.all(ctx.tasks);
     }
@@ -144,9 +145,9 @@ export function isAnchorOpen() {
 // В Лабиринте Алтарь открыт только в Якоре; подпись в Терминале — «Якорь»
 Hooks.on(HOOKS.queryRest, state => {
     if (!isAnchorOpen()) return;
-    Object.assign(state, { atRest: true, site: 'anchor', label: 'Якорь' });
-    state.links.push({ label: 'Кладбище', icon: 'fas fa-cross', title: 'Надгробия тех, чьи тела забрал Предел', run: () => GraveyardWindow.open() });
-    state.links.push({ label: 'Жильцы', icon: 'fas fa-people-roof', title: 'Жильцы Якоря и их услуги', run: () => game.gachadnd.openResidents() });
+    Object.assign(state, { atRest: true, site: 'anchor', label: t('Якорь') });
+    state.links.push({ label: t('Кладбище'), icon: 'fas fa-cross', title: t('Надгробия тех, чьи тела забрал Предел'), run: () => GraveyardWindow.open() });
+    state.links.push({ label: t('Жильцы'), icon: 'fas fa-people-roof', title: t('Жильцы Якоря и их услуги'), run: () => game.gachadnd.openResidents() });
 });
 
 /**
@@ -155,7 +156,7 @@ Hooks.on(HOOKS.queryRest, state => {
  * travel: false — переход уже сделала катсцена портала.
  */
 export async function setAnchor(open = true, { travel = true } = {}) {
-    if (!game.user.isGM) return ui.notifications.warn('Открывать Якорь может только Мастер.');
+    if (!game.user.isGM) return ui.notifications.warn(t('Открывать Якорь может только Мастер.'));
     open = !!open;
     if (open === isAnchorOpen()) return;
     const anchor = anchorScene();
@@ -167,22 +168,22 @@ export async function setAnchor(open = true, { travel = true } = {}) {
     await game.settings.set(MODULE_ID, 'anchorOpen', open);
     if (!open) {
         const map = mapScene()?.getFlag(MODULE_ID, 'floorMap');
-        const here = { mob: 'Монстры', elite: 'Элита', event: 'Событие', risk: 'Риск', shop: 'Магазин', rest: 'Привал', doom: 'Погибель', boss: 'Босс', start: 'Вход' }[map?.nodes?.find(n => n.id === map.currentNodeId)?.type];
+        const here = { mob: t('Монстры'), elite: t('Элита'), event: t('Событие'), risk: t('Риск'), shop: t('Магазин'), rest: t('Привал'), doom: t('Погибель'), boss: t('Босс'), start: t('Вход') }[map?.nodes?.find(n => n.id === map.currentNodeId)?.type];
         return ChatMessage.create({
-            speaker: ChatMessage.getSpeaker({ alias: 'Якорь' }),
-            content: `<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд покидает купол Якоря и возвращается в Лабиринт${here ? ` — на узел «${here}»` : ''}. Голодные души смыкаются за спиной.</div>`
+            speaker: ChatMessage.getSpeaker({ alias: t('Якорь') }),
+            content: `<div class="gd-scent-chat"><i class="fas fa-anchor"></i> ${t('Отряд покидает купол Якоря и возвращается в Лабиринт{v}. Голодные души смыкаются за спиной.', { v: here ? t(' — на узел «{here}»', { here }) : '' })}</div>`
         });
     }
     announceRest();
     // Жильцы: ячейки Ростовщика закрываются, после Босса у купола ждут новые
     Hooks.callAll('gachadnd.anchorOpened');
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Якорь' }),
-        content: '<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд в <strong>Якоре</strong>. Руны над куполом медленно вращаются; Алтарь Памяти открыт. Отдыха здесь нет: Кости Хитов возвращает только Расщепление.</div>'
+        speaker: ChatMessage.getSpeaker({ alias: t('Якорь') }),
+        content: t('<div class="gd-scent-chat"><i class="fas fa-anchor"></i> Отряд в <strong>Якоре</strong>. Руны над куполом медленно вращаются; Алтарь Памяти открыт. Отдыха здесь нет: Кости Хитов возвращает только Расщепление.</div>')
     });
     const scent = partyScent();
     if (scent.state === 'silence') return;
-    const hint = scent.state === 'hunt' ? '<br>Отряд выделяется на фоне купола: Пожиратель кружит у границы. Внутрь не входит.' : '';
+    const hint = scent.state === 'hunt' ? t('<br>Отряд выделяется на фоне купола: Пожиратель кружит у границы. Внутрь не входит.') : '';
     await whisperGM(scentReport(scent) + hint);
     await atmosphere(ANCHOR_ATMOSPHERE[scent.state]);
 }

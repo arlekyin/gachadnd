@@ -3,18 +3,20 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { tagLabel, categoryLabel } from "../core/ids.js";
 import { getSynergyDictionary } from "./synergy/synergy-data.js";
 import { isMemorySkill } from "./synergy/synergy.js";
 import { getSkillPack, currentSkillName, crystalForSkill, buildCrystalData } from "./crystals.js";
 import { allowAbsorb } from "./memory-api.js";
+import { t } from "../core/i18n.js";
 
 const RARITY_MAP = {
-    'gray': { label: 'Серый', color: '#9d9d9d', class: 'rarity-gray' },
-    'green': { label: 'Зелёный', color: '#1eff00', class: 'rarity-green' },
-    'blue': { label: 'Синий', color: '#0070dd', class: 'rarity-blue' },
-    'purple': { label: 'Фиолетовый', color: '#a335ee', class: 'rarity-purple' },
-    'red': { label: 'Красный', color: '#ff003c', class: 'rarity-red' },
-    'orange': { label: 'Оранжевый', color: '#ff8000', class: 'rarity-orange' }
+    'gray': { label: t('Серый'), color: '#9d9d9d', class: 'rarity-gray' },
+    'green': { label: t('Зелёный'), color: '#1eff00', class: 'rarity-green' },
+    'blue': { label: t('Синий'), color: '#0070dd', class: 'rarity-blue' },
+    'purple': { label: t('Фиолетовый'), color: '#a335ee', class: 'rarity-purple' },
+    'red': { label: t('Красный'), color: '#ff003c', class: 'rarity-red' },
+    'orange': { label: t('Оранжевый'), color: '#ff8000', class: 'rarity-orange' }
 };
 
 // Вместимость Памяти: навыки на листе, включая неэкипированные; навыки с memory_bonus её расширяют, даже не экипированные
@@ -144,10 +146,10 @@ const RANK_LABELS = ['I', 'II', 'III'];
 export async function announceRankUp(actor, item, rank, note = '') {
     // Открытие нового ранга: его эффект игроки узнают только сейчас
     const flags = item.flags?.[MODULE_ID] ?? {};
-    const revealed = flags.stacking ? `Сила навыка: ${(flags.stack_base ?? 1) * rank}` : flags.rank_texts?.[rank - 2];
+    const revealed = flags.stacking ? t('Сила навыка: {v}', { v: (flags.stack_base ?? 1) * rank }) : flags.rank_texts?.[rank - 2];
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> — ранг ${romanRank(rank)}`
+        content: `<div class="gachadnd-rank-up"><strong>⬆️ ${item.name}</strong> ${t('— ранг {v}', { v: romanRank(rank) })}`
             + `${revealed ? `<br>${String(revealed).replace(/&/g, '&amp;').replace(/</g, '&lt;')}` : ''}`
             + `${note ? `<br><span style="opacity: 0.75">${note}</span>` : ''}</div>`
     });
@@ -224,15 +226,15 @@ export function findDuplicateCrystal(actor, item) {
 
 // Слияние на Алтаре Памяти: повторный кристалл + Кости Хитов → ранг; кости списываются с самых маленьких
 export async function forgeSkill(actor, item) {
-    if (!canRankUp(item)) return ui.notifications.warn(`⚠️ Навык «${item.name}» нельзя улучшить.`);
+    if (!canRankUp(item)) return ui.notifications.warn(t('⚠️ Навык «{name}» нельзя улучшить.', { name: item.name }));
     const crystal = findDuplicateCrystal(actor, item);
-    if (!crystal) return ui.notifications.warn(`⚠️ Для слияния нужен повторный кристалл «${item.name}» в инвентаре.`);
+    if (!crystal) return ui.notifications.warn(t('⚠️ Для слияния нужен повторный кристалл «{name}» в инвентаре.', { name: item.name }));
     const rank = (item.flags[MODULE_ID].rank ?? 1) + 1;
     const cost = FORGE_COST[rank] ?? 2;
-    if (!(await spendHitDice(actor, cost))) return ui.notifications.warn(`⚠️ Не хватает Костей Хитов: нужно ${cost}, доступно ${availableHitDice(actor)}.`);
+    if (!(await spendHitDice(actor, cost))) return ui.notifications.warn(t('⚠️ Не хватает Костей Хитов: нужно {cost}, доступно {v}.', { cost, v: availableHitDice(actor) }));
     await consumeCrystal(crystal);
     await rankUpSkill(item);
-    await announceRankUp(actor, item, rank, `Алтарь Памяти: слит повторный кристалл, потрачено Костей Хитов — ${cost}`);
+    await announceRankUp(actor, item, rank, t('Алтарь Памяти: слит повторный кристалл, потрачено Костей Хитов — {cost}', { cost }));
 }
 
 /**
@@ -242,12 +244,12 @@ export async function forgeSkill(actor, item) {
 export function checkMemoryAccess(actor, skillName) {
     const existing = findMemorySkill(actor, skillName);
     if (existing) {
-        if (canRankUp(existing)) return { ok: false, reason: `Навык «${skillName}» уже в Памяти. Повторный кристалл сливается с ним на Алтаре Памяти (Якорь) — кнопкой «Слить» в Терминале Тумана.` };
-        if ((existing.flags[MODULE_ID].max_rank ?? 1) === 1) return { ok: false, reason: `Навык «${skillName}» уникален и уже есть в Памяти.` };
-        return { ok: false, reason: `Навык «${skillName}» уже в Памяти на максимальном ранге.` };
+        if (canRankUp(existing)) return { ok: false, reason: t('Навык «{skillName}» уже в Памяти. Повторный кристалл сливается с ним на Алтаре Памяти (Якорь) — кнопкой «Слить» в Терминале Тумана.', { skillName }) };
+        if ((existing.flags[MODULE_ID].max_rank ?? 1) === 1) return { ok: false, reason: t('Навык «{skillName}» уникален и уже есть в Памяти.', { skillName }) };
+        return { ok: false, reason: t('Навык «{skillName}» уже в Памяти на максимальном ранге.', { skillName }) };
     }
     if (actor.items.filter(isMemorySkill).length >= getMemoryCapacity(actor)) {
-        return { ok: false, reason: `Память персонажа ${actor.name} переполнена (максимум ${getMemoryCapacity(actor)} навыков). Освободите место.` };
+        return { ok: false, reason: t('Память персонажа {name} переполнена (максимум {v} навыков). Освободите место.', { name: actor.name, v: getMemoryCapacity(actor) }) };
     }
     return { ok: true };
 }
@@ -299,7 +301,7 @@ async function absorbCrystal(actor, item) {
             extraFlags,
             fallbackDescription: item.system?.description?.value || ""
         });
-        if (result.status === 'added') ui.notifications.info(`🧠 Кристалл «${skillName}» поглощён в Память персонажа ${actor.name}!`);
+        if (result.status === 'added') ui.notifications.info(t('🧠 Кристалл «{skillName}» поглощён в Память персонажа {name}!', { skillName, name: actor.name }));
         else ui.notifications.warn(`⚠️ ${result.reason}`);
     } catch (err) {
         console.error(`❌ Ошибка поглощения кристалла:`, err);
@@ -311,7 +313,7 @@ async function absorbCrystal(actor, item) {
 export function isCrystalItem(item) {
     if (!item) return false;
     const isCrystal = item.getFlag(MODULE_ID, 'is_crystal_item');
-    return isCrystal || item.name.startsWith('Кристалл:');
+    return isCrystal || item.name.startsWith('Кристалл:');  // i18n: данные
 }
 
 // ==========================================
@@ -358,9 +360,9 @@ Hooks.on('preCreateItem', (item, data, options) => {
  */
 export async function giveCrystal(actor, skill, fallback = null) {
     const crystal = await crystalForSkill(skill) ?? (fallback ? buildCrystalData(fallback) : null);
-    if (!crystal) return ui.notifications.warn(`⚠️ Навык «${skill.skillName ?? skill.skillId}» не найден в компендиуме навыков.`);
+    if (!crystal) return ui.notifications.warn(t('⚠️ Навык «{skillId}» не найден в компендиуме навыков.', { skillId: skill.skillName ?? skill.skillId }));
     await actor.createEmbeddedDocuments('Item', [crystal]);
-    ui.notifications.info(`💎 ${crystal.name} — в инвентаре персонажа ${actor.name}.`);
+    ui.notifications.info(t('💎 {name} — в инвентаре персонажа {name2}.', { name: crystal.name, name2: actor.name }));
 }
 
 // Копия навыка, который уже есть в Памяти, на лист не добавляется
@@ -379,8 +381,8 @@ const PERSONAL_BLOCK = /<div class="gd-personal">[\s\S]*?<\/div>/;
 export async function setPersonalEffect(item, text) {
     const clean = String(text ?? '').trim();
     const paragraphs = clean
-        ? clean.split(/\n\s*\n/).map((p, i) => `<p>${i === 0 ? '<strong>Личный эффект:</strong> ' : ''}${foundry.utils.escapeHTML ? foundry.utils.escapeHTML(p) : p.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</p>`.replace(/\n/g, '<br>')).join('')
-        : '<p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p>';
+        ? clean.split(/\n\s*\n/).map((p, i) => `<p>${i === 0 ? t('<strong>Личный эффект:</strong> ') : ''}${foundry.utils.escapeHTML ? foundry.utils.escapeHTML(p) : p.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</p>`.replace(/\n/g, '<br>')).join('')
+        : t('<p><strong>Личный эффект:</strong> не определён. Определяется Мастером вместе с игроком при получении навыка.</p>');
     const block = `<div class="gd-personal">${paragraphs}</div>`;
     const description = item.system.description?.value ?? '';
     const value = PERSONAL_BLOCK.test(description) ? description.replace(PERSONAL_BLOCK, block) : `${description}\n${block}`;
@@ -390,7 +392,7 @@ export async function setPersonalEffect(item, text) {
 // Неудаляемые навыки (Битый сектор): удалить может только Мастер
 Hooks.on('preDeleteItem', (item) => {
     if (!isMemorySkill(item) || !item.flags[MODULE_ID].undeletable || game.user.isGM) return;
-    ui.notifications.error('Файл повреждён.');
+    ui.notifications.error(t('Файл повреждён.'));
     return false;
 });
 
@@ -411,7 +413,7 @@ Hooks.on('deleteItem', (item, options, userId) => {
     if (!isMemorySkill(item)) return;
     // Снятый шрам — не сожжённый навык
     if (item.flags[MODULE_ID]?.scar) return;
-    ui.notifications.info(`🔥 Навык «${item.name}» сожжён.`);
+    ui.notifications.info(t('🔥 Навык «{name}» сожжён.', { name: item.name }));
     // Удаление навыка из Памяти — сожжение: растёт счётчик (Городская легенда),
     // а синергии и эффекты от состава Памяти пересчитываются
     addBurned(actor, 1);
@@ -430,12 +432,12 @@ function renderCustomCard(message, htmlElement) {
 
     const rarity = gachaFlags.rarity || 'gray';
     const rarityInfo = RARITY_MAP[rarity] || RARITY_MAP['gray'];
-    const itemName = itemData.name || message.item?.name || 'Кристалл Памяти';
+    const itemName = itemData.name || message.item?.name || t('Кристалл Памяти');
     const itemImg = itemData.img || message.item?.img || 'icons/svg/item-bag.svg';
-    const category = gachaFlags.category || 'НАВЫК';
+    const category = categoryLabel(gachaFlags.category || 'НАВЫК');
     const tags = gachaFlags.tags || [];
 
-    const tagsHtml = tags.map(t => `<span class="gachadnd-tag">[${t}]</span>`).join(' ');
+    const tagsHtml = tags.map(tag => `<span class="gachadnd-tag">[${tagLabel(tag)}]</span>`).join(' ');
 
     const customCardHtml = `
         <div class="gachadnd-chat-card ${rarityInfo.class}">
@@ -444,7 +446,7 @@ function renderCustomCard(message, htmlElement) {
                 <div class="gachadnd-card-title-box">
                     <h3 class="gachadnd-card-title">${itemName}</h3>
                     <span class="gachadnd-card-subtitle" style="color: ${rarityInfo.color};">
-                        💎 Кристалл Памяти • ${rarityInfo.label}
+                        ${t('💎 Кристалл Памяти • {label}', { label: rarityInfo.label })}
                     </span>
                 </div>
             </div>
@@ -454,7 +456,7 @@ function renderCustomCard(message, htmlElement) {
             </div>
 
             <div class="gachadnd-card-description">
-                <p>Кристалл успешно поглощен и интегрирован в нейросеть.</p>
+                <p>${t('Кристалл успешно поглощен и интегрирован в нейросеть.')}</p>
             </div>
         </div>
     `;
@@ -497,7 +499,7 @@ Hooks.on('createItem', async (item, options, userId) => {
         try {
             // Пробуем загрузить словарь
             const synergyDict = getSynergyDictionary(10); 
-            if (!synergyDict) throw new Error("Словарь синергий пуст или не загрузился!");
+            if (!synergyDict) throw new Error(t("Словарь синергий пуст или не загрузился!"));
             
             const officialTags = Object.keys(synergyDict);
             const optionsHtml = officialTags.map(t => 
@@ -505,33 +507,33 @@ Hooks.on('createItem', async (item, options, userId) => {
             ).join('');
 
             foundry.applications.api.DialogV2.prompt({
-                window: { title: `Настройка: ${item.name}` },
+                window: { title: t('Настройка: {name}', { name: item.name }) },
                 content: `
                     <div style="padding-bottom: 10px;">
-                        <p><strong>Навык интегрирован в Память!</strong></p>
-                        <p>Этот модуль требует калибровки спектра излучения.</p>
+                        <p><strong>${t('Навык интегрирован в Память!')}</strong></p>
+                        <p>${t('Этот модуль требует калибровки спектра излучения.')}</p>
                         
                         <div class="form-group">
-                            <label>Тег для трансляции:</label>
+                            <label>${t('Тег для трансляции:')}</label>
                             <div class="form-fields">
                                 <select name="emitterTag">
-                                    <option value="" disabled selected>-- Выберите тег --</option>
+                                    <option value="" disabled selected>${t('-- Выберите тег --')}</option>
                                     ${optionsHtml}
                                 </select>
                             </div>
                         </div>
                         
                         <div class="form-group">
-                            <label>Или свой тег:</label>
+                            <label>${t('Или свой тег:')}</label>
                             <div class="form-fields">
-                                <input type="text" name="emitterCustomTag" placeholder="Например: пустота">
+                                <input type="text" name="emitterCustomTag" placeholder="${t('Например: пустота')}">
                             </div>
                         </div>
                     </div>
                 `,
                 ok: {
                     icon: 'fas fa-sliders-h',
-                    label: "Запустить модуль",
+                    label: t("Запустить модуль"),
                     callback: async (event, button) => {
                         const form = button.form.elements;
                         const customTag = (form.emitterCustomTag?.value ?? '').trim().toLowerCase();
@@ -539,7 +541,7 @@ Hooks.on('createItem', async (item, options, userId) => {
                         const finalTag = customTag || selectedTag;
 
                         if (!finalTag) {
-                            ui.notifications.warn("Тег не выбран!");
+                            ui.notifications.warn(t("Тег не выбран!"));
                             return;
                         }
 
@@ -547,10 +549,10 @@ Hooks.on('createItem', async (item, options, userId) => {
 
                         await item.update({
                             name: `${item.name.replace(/\s*\[.*?\]/, '')} [${finalTag}]`,
-                            'system.description.value': `<p><strong>Излучает тег:</strong> ${finalTag}</p><hr>` + item.system.description.value
+                            'system.description.value': `<p><strong>${t('Излучает тег:')}</strong> ${finalTag}</p><hr>` + item.system.description.value
                         });
 
-                        ui.notifications.info(`⚙️ Модуль настроен на тег: [${finalTag}]`);
+                        ui.notifications.info(t('⚙️ Модуль настроен на тег: [{finalTag}]', { finalTag }));
                         Hooks.callAll("gachadnd.synergyUpdated", actor);
                     }
                 },
@@ -559,7 +561,7 @@ Hooks.on('createItem', async (item, options, userId) => {
             
         } catch (error) {
             console.error(`[GachaDND] ❌ Ошибка при вызове окна Сингулярности:`, error);
-            ui.notifications.error("Ошибка окна настройки! Проверьте консоль (F12).");
+            ui.notifications.error(t("Ошибка окна настройки! Проверьте консоль (F12)."));
         }
     } else if (flags.tagEmitter && flags.emitted_tag) {
         console.log(`[GachaDND] Модуль уже имеет тег: ${flags.emitted_tag}. Окно не требуется.`);

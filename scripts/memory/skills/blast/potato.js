@@ -14,6 +14,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { isBlast, ref, actorFrom, tokenOf, esc, quiet, damageOf, feetBetween, around, blast, boomAt } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const FLAG = 'potatoes';
 const BOMB = 'icons/weapons/thrown/bomb-fuse-black-grey.webp';
@@ -31,11 +32,11 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     const caster = tokenOf(actor)?.document;
     const target = userTarget();
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id) || !caster) {
-        ui.notifications.warn('Горячая картошка — только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Горячая картошка — только в бою, в котором участвует персонаж.'));
         return false;
     }
     if (!adjacent(caster, target)) {
-        ui.notifications.warn('Горячая картошка: выберите целью одно существо вплотную к вам.');
+        ui.notifications.warn(t('Горячая картошка: выберите целью одно существо вплотную к вам.'));
         return false;
     }
     chosen.set(item.id, target.id);
@@ -56,7 +57,7 @@ async function mark(token, id, on) {
     const actor = token?.actor;
     if (!actor) return;
     if (on) {
-        await actor.createEmbeddedDocuments('ActiveEffect', [{ name: 'Горячая картошка', img: BOMB, showIcon: 2, description: 'К вам прилипла бомба. Бонусным действием её можно передать существу вплотную.', flags: { [MODULE_ID]: { potato: id } } }]);
+        await actor.createEmbeddedDocuments('ActiveEffect', [{ name: t('Горячая картошка'), img: BOMB, showIcon: 2, description: t('К вам прилипла бомба. Бонусным действием её можно передать существу вплотную.'), flags: { [MODULE_ID]: { potato: id } } }]);
     } else {
         const ids = actor.effects.filter(e => e.flags?.[MODULE_ID]?.potato === id).map(e => e.id);
         if (ids.length) await actor.deleteEmbeddedDocuments('ActiveEffect', ids);
@@ -73,14 +74,14 @@ export async function stick({ actorId, tokenId, sceneId, targetId, formula }) {
     // Таймер — видимый бросок, но шёпотом: только владельцу и Мастеру
     const whisper = game.users.filter(u => u.isGM || owner.testUserPermission(u, 'OWNER')).map(u => u.id);
     // Режим броска «открытый» по умолчанию стёр бы шёпот: сообщение собирается и шепчется явно
-    const data = await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: owner }), flavor: `Таймер бомбы: взрыв в начале раунда ${combat.round + roll.total}. Никому не говорите.` }, { create: false });
+    const data = await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: owner }), flavor: t('Таймер бомбы: взрыв в начале раунда {total}. Никому не говорите.', { total: combat.round + roll.total }) }, { create: false });
     await ChatMessage.create({ ...data, whisper });
     const id = foundry.utils.randomID();
     await combat.setFlag(MODULE_ID, FLAG, [...listOf(combat), { id, ownerId: owner.id, holder: target.id, timer: roll.total, formula, from: tokenId, passRound: combat.round }]);
     await mark(target, id, true);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: owner }),
-        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-bomb"></i> Горячая картошка</div><p>Бомба прилипла к ${esc(target.name)}. Тикает…</p><div class="gd-blast-buttons"><button type="button" data-potato-pass="${id}"><i class="fas fa-hand-holding"></i> Передать своей цели</button></div></div>`,
+        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-bomb"></i> ${t('Горячая картошка')}</div><p>${t('Бомба прилипла к {v}. Тикает…', { v: esc(target.name) })}</p><div class="gd-blast-buttons"><button type="button" data-potato-pass="${id}"><i class="fas fa-hand-holding"></i> ${t('Передать своей цели')}</button></div></div>`,
         flags: { [MODULE_ID]: { potato: id } }
     });
 }
@@ -94,14 +95,14 @@ export async function pass({ id, toId, userId }) {
     const holder = scene?.tokens.get(bomb?.holder), to = scene?.tokens.get(toId);
     const user = game.users.get(userId);
     const warn = text => user?.isSelf ? ui.notifications.warn(text) : ui.notifications.warn(`${user?.name ?? ''}: ${text}`);
-    if (!bomb || !holder || !to) return warn('Бомбы уже нет.');
-    if (!(user?.isGM || holder.actor?.testUserPermission(user, 'OWNER'))) return warn('Передать бомбу может только тот, у кого она в руках.');
-    if (!adjacent(holder, to)) return warn('Передать можно только существу вплотную.');
-    if (to.id === bomb.from && bomb.passRound === combat.round) return warn('Нельзя вернуть бомбу тому, кто дал её в этом раунде.');
+    if (!bomb || !holder || !to) return warn(t('Бомбы уже нет.'));
+    if (!(user?.isGM || holder.actor?.testUserPermission(user, 'OWNER'))) return warn(t('Передать бомбу может только тот, у кого она в руках.'));
+    if (!adjacent(holder, to)) return warn(t('Передать можно только существу вплотную.'));
+    if (to.id === bomb.from && bomb.passRound === combat.round) return warn(t('Нельзя вернуть бомбу тому, кто дал её в этом раунде.'));
     await combat.setFlag(MODULE_ID, FLAG, list.map(b => b.id === id ? { ...b, holder: to.id, from: holder.id, passRound: combat.round } : b));
     await mark(holder, id, false);
     await mark(to, id, true);
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ token: holder }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-hand-holding"></i> Горячая картошка</div><p>${esc(holder.name)} суёт бомбу ${esc(to.name)}!</p></div>` });
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ token: holder }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-hand-holding"></i> ${t('Горячая картошка')}</div><p>${t('{v} суёт бомбу {v2}!', { v: esc(holder.name), v2: esc(to.name) })}</p></div>` });
 }
 
 onRenderChatMessage((message, html) => {
@@ -110,7 +111,7 @@ onRenderChatMessage((message, html) => {
     if (!listOf(game.combat).some(b => b.id === button.dataset.potatoPass)) { button.disabled = true; return; }
     button.addEventListener('click', () => {
         const to = userTarget();
-        if (!to) return ui.notifications.warn('Выберите целью (T) существо, которому передаёте бомбу.');
+        if (!to) return ui.notifications.warn(t('Выберите целью (T) существо, которому передаёте бомбу.'));
         requestGM('blastPotatoPass', { id: button.dataset.potatoPass, toId: to.id });
     });
 });
@@ -129,7 +130,7 @@ Hooks.on('updateCombat', async (combat, changed) => {
         if (!holder) continue;
         await mark(holder, bomb.id, false);
         const owner = game.actors.get(bomb.ownerId);
-        await blast({ actor: owner ?? holder.actor, title: `Горячая картошка взрывается у ${holder.name}`, icon: 'fa-bomb', victims: [holder], splash: around(holder, 5), formula: bomb.formula, type: 'fire', at: boomAt(holder, 10) });
+        await blast({ actor: owner ?? holder.actor, title: t('Горячая картошка взрывается у {name}', { name: holder.name }), icon: 'fa-bomb', victims: [holder], splash: around(holder, 5), formula: bomb.formula, type: 'fire', at: boomAt(holder, 10) });
     }
     await combat.setFlag(MODULE_ID, FLAG, left);
 });

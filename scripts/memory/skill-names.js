@@ -14,20 +14,21 @@
 import { MODULE_ID } from "../core/constants.js";
 import { isActiveGM } from "../core/socket.js";
 import { getSkillPack } from "./crystals.js";
+import { t } from "../core/i18n.js";
 
-const CRYSTAL = 'Кристалл: ';
+const CRYSTAL = 'Кристалл: ';  // i18n: данные
 let cache = null;
 
 export function registerSkillNameSettings() {
     game.settings.register(MODULE_ID, 'rudeNames', {
-        name: 'Грубые названия навыков (18+)',
-        hint: 'Навыки с ненормативной лексикой в названии показываются в исходном виде. Выключено — приличные названия.',
+        name: t('Грубые названия навыков (18+)'),
+        hint: t('Навыки с ненормативной лексикой в названии показываются в исходном виде. Выключено — приличные названия.'),
         scope: 'world', config: true, type: Boolean, default: false,
         onChange: () => syncSkillNames()
     });
     game.settings.register(MODULE_ID, 'skillNames', {
-        name: 'Свои названия навыков',
-        hint: 'По строке на навык: «Название из модуля = Своё название». Хранится в этом мире и с модулем не распространяется. Удалите строку — вернётся название модуля.',
+        name: t('Свои названия навыков'),
+        hint: t('По строке на навык: «Название из модуля = Своё название». Хранится в этом мире и с модулем не распространяется. Удалите строку — вернётся название модуля.'),
         scope: 'world', config: false, type: String, default: '', multiline: true,
         onChange: () => syncSkillNames()
     });

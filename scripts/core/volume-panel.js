@@ -7,12 +7,13 @@
  */
 
 import { MODULE_ID } from "./constants.js";
+import { t } from "./i18n.js";
 
 const ROWS = [
-    { key: 'volume', label: 'Gacha: всё', tooltip: 'Общая громкость всех звуков модуля' },
-    { key: 'arenaAmbienceVolume', label: 'Фон арены', tooltip: 'Лес, ночь, ливень, ветер, туман на арене' },
-    { key: 'soundsVolume', label: 'Терминал', tooltip: 'Звуки экипировки, снятия и слияния навыков' },
-    { key: 'auraMusicVolume', label: 'Тема героя', tooltip: 'Музыкальная тема Счётчика ауры' }
+    { key: 'volume', label: t('Gacha: всё'), tooltip: t('Общая громкость всех звуков модуля') },
+    { key: 'arenaAmbienceVolume', label: t('Фон арены'), tooltip: t('Лес, ночь, ливень, ветер, туман на арене') },
+    { key: 'soundsVolume', label: t('Терминал'), tooltip: t('Звуки экипировки, снятия и слияния навыков') },
+    { key: 'auraMusicVolume', label: t('Тема героя'), tooltip: t('Музыкальная тема Счётчика ауры') }
 ];
 
 const icon = v => (v <= 0 ? 'fa-volume-xmark' : v < 0.5 ? 'fa-volume-low' : 'fa-volume-high');

@@ -11,6 +11,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { addTurnEffect } from "../turn-effects.js";
 import { isKnack, ref, actorFrom, tokenOf, esc, noTemplate, areaOf, around, boom, boomAt, card } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const ICON = 'icons/svg/sound.svg';
 
@@ -19,7 +20,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     if (!isKnack(item, 'firecracker') || !actor) return;
     noTemplate(usage);
     if (!tokenOf(actor)) {
-        ui.notifications.warn('Хлопушка: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Хлопушка: токена персонажа нет на сцене.'));
         return false;
     }
 });
@@ -42,8 +43,8 @@ export async function bang({ actorId, tokenId, sceneId, radius }) {
     const combat = game.combat?.started ? game.combat : null;
     const deaf = around(token, radius);
     const effect = {
-        name: 'Хлопушка: без реакций', img: ICON,
-        description: '<p>Уши заложило: до начала своего следующего хода существо не может совершать реакции.</p>',
+        name: t('Хлопушка: без реакций'), img: ICON,
+        description: t('<p>Уши заложило: до начала своего следующего хода существо не может совершать реакции.</p>'),
         flags: { [MODULE_ID]: { firecracker: true } }
     };
     for (const t of deaf) {
@@ -52,7 +53,7 @@ export async function bang({ actorId, tokenId, sceneId, radius }) {
         else await t.actor.createEmbeddedDocuments('ActiveEffect', [{ ...effect, showIcon: 2, duration: { seconds: 6 } }]);
     }
     boom({ ...boomAt(token, radius), color: 0xffe066 });
-    return card(actor, 'Хлопушка', deaf.length
-        ? `<p>Хлопок! До начала своего хода без реакций: ${esc(deaf.map(t => t.name).join(', '))}.</p>`
-        : '<p>Хлопок вхолостую — рядом никого.</p>', { icon: 'fa-burst' });
+    return card(actor, t('Хлопушка'), deaf.length
+        ? `<p>${t('Хлопок! До начала своего хода без реакций: {v}.', { v: esc(deaf.map(t => t.name).join(', ')) })}</p>`
+        : t('<p>Хлопок вхолостую — рядом никого.</p>'), { icon: 'fa-burst' });
 }

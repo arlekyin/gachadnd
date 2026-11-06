@@ -13,6 +13,7 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { isLiving, ref, tokenOf, quiet, dcOf, damageOf, around, blast, boomAt, feetBetween, sourceOf, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const KIND = 'countdown';
 const FLAG = 'countdowns';
@@ -30,13 +31,13 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     const caster = tokenOf(actor);
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id) || !caster) {
-        ui.notifications.warn('Обратный отсчёт — только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Обратный отсчёт — только в бою, в котором участвует персонаж.'));
         return false;
     }
     const target = [...game.user.targets][0]?.document;
     const reach = RANGE - (caster.document.parent.grid.distance || 5);
     if (!target?.actor || target.id === caster.document.id || feetBetween(caster.document, target) > reach) {
-        ui.notifications.warn(`Обратный отсчёт: выделите (T) существо в пределах ${RANGE} футов.`);
+        ui.notifications.warn(t('Обратный отсчёт: выделите (T) существо в пределах {RANGE} футов.', { RANGE }));
         return false;
     }
     aimed.set(item.id, target.id);
@@ -65,7 +66,7 @@ export async function hang({ actorId, sceneId, target, dice, dc }) {
     const owner = game.actors.get(actorId);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: owner }),
-        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-stopwatch"></i> Обратный отсчёт: ${esc(token.name)}</div><p>Отсчёт <strong>${START}</strong> — минус один в начале каждого хода ${esc(owner?.name)}. На нуле — взрыв 10 футов: ${dice}к6 звуком и ещё 1к6 за каждое попадание по носителю.</p></div>`
+        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-stopwatch"></i> ${t('Обратный отсчёт: {v}', { v: esc(token.name) })}</div><p>${t('Отсчёт')} <strong>${START}</strong> ${t('— минус один в начале каждого хода {v}. На нуле — взрыв 10 футов: {dice}к6 звуком и ещё 1к6 за каждое попадание по носителю.', { v: esc(owner?.name), dice })}</p></div>`
     });
 }
 
@@ -77,9 +78,9 @@ async function explode(combat, entry, reason) {
     const owner = game.actors.get(entry.ownerId);
     const victims = [token, ...around(token, RADIUS)];
     await blast({
-        actor: owner, title: `Обратный отсчёт: взрыв (${token.name})`, icon: 'fa-stopwatch', victims,
+        actor: owner, title: t('Обратный отсчёт: взрыв ({name})', { name: token.name }), icon: 'fa-stopwatch', victims,
         formula: `${entry.dice + entry.hits}d6`, type: 'thunder', ability: 'dex', dc: entry.dc,
-        note: `${esc(reason)}. ${entry.dice}к6 и ещё ${entry.hits}к6 за попадания по носителю.`,
+        note: t('{v}. {dice}к6 и ещё {hits}к6 за попадания по носителю.', { v: esc(reason), dice: entry.dice, hits: entry.hits }),
         at: boomAt(token, RADIUS)
     });
 }
@@ -92,7 +93,7 @@ Hooks.on('updateCombat', async (combat, changed) => {
     if (!actorId || !list.some(c => c.ownerId === actorId)) return;
     const next = list.map(c => (c.ownerId === actorId ? { ...c, value: c.value - 1 } : c));
     await save(combat, next);
-    for (const entry of next.filter(c => c.ownerId === actorId && c.value <= 0)) await explode(combat, entry, 'Отсчёт дошёл до нуля');
+    for (const entry of next.filter(c => c.ownerId === actorId && c.value <= 0)) await explode(combat, entry, t('Отсчёт дошёл до нуля'));
 });
 
 // Попадание владельца по носителю — +1к6; носитель пал — взрыв сразу
@@ -105,7 +106,7 @@ Hooks.on('dnd5e.applyDamage', async (actor, amount, options) => {
     const entry = list.find(c => c.tokenId === tokenId);
     if (!entry) return;
     const hp = Number(actor.system?.attributes?.hp?.value) || 0;
-    if (hp <= 0) return explode(combat, entry, `${actor.name} падает — отсчёт обрывается взрывом`);
+    if (hp <= 0) return explode(combat, entry, t('{name} падает — отсчёт обрывается взрывом', { name: actor.name }));
     if (sourceOf(options)?.id !== entry.ownerId) return;
     await save(combat, list.map(c => (c.id === entry.id ? { ...c, hits: c.hits + 1 } : c)));
 });

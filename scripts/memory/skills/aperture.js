@@ -17,10 +17,12 @@
 import { MODULE_ID } from "../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { key, cellOf, footprint, occupied, nearestFree } from "./grid.js";
+import { t } from "../../core/i18n.js";
+import { tileData } from "../../core/tiles.js";
 
 const ART = { blue: `modules/${MODULE_ID}/assets/portal/blue.svg`, orange: `modules/${MODULE_ID}/assets/portal/orange.svg` };
 const TINT = { blue: 0x2f9bff, orange: 0xff8a1c };
-const LABEL = { blue: 'синий', orange: 'оранжевый' };
+const LABEL = { blue: t('синий'), orange: t('оранжевый') };
 const isPortalSkill = item => !!item?.flags?.[MODULE_ID]?.portal;
 // Журнал прохода в консоль: макрос game.gachadnd.portalDebug(true) (у каждого клиента свой) или CONFIG.debug.gachadndPortal = true
 const debugOn = () => {
@@ -31,35 +33,35 @@ const trace = text => { if (debugOn()) console.log(`%c${MODULE_ID} | Порта�
 
 export function registerPortalSettings() {
     game.settings.register(MODULE_ID, 'portalDebug', {
-        name: 'Журнал Портала',
-        hint: 'Пишет в консоль браузера (F12) каждый шаг прохода через Портал: какие перемещения увидел модуль, нашёл ли портал и выход, чем закончился перенос. Включать у того, кто двигает токен, и у Мастера.',
+        name: t('Журнал Портала'),
+        hint: t('Пишет в консоль браузера (F12) каждый шаг прохода через Портал: какие перемещения увидел модуль, нашёл ли портал и выход, чем закончился перенос. Включать у того, кто двигает токен, и у Мастера.'),
         scope: 'client', config: false, type: Boolean, default: false
     });
 }
 
 // Строка при загрузке — по ней видно, что в браузере новый код модуля, и включён ли журнал
 Hooks.once('ready', () => {
-    console.log(`%c${MODULE_ID} | Портал: код прохода загружен (v13: moveToken, v12: updateToken); журнал ${debugOn() ? 'ВКЛЮЧЁН' : 'выключен — включить: game.gachadnd.portalDebug(true)'}`, 'color: #2f9bff');
+    console.log(`%c${MODULE_ID} | Портал: код прохода загружен (v13: moveToken, v12: updateToken); журнал ${debugOn() ? t('ВКЛЮЧЁН') : t('выключен — включить: game.gachadnd.portalDebug(true)')}`, 'color: #2f9bff');
 });
 
 /** Сводка для отладки: версия, порталы на сцене, выделенные токены, слушатели хуков */
 export function portalReport() {
     const scene = canvas?.scene, size = scene?.grid?.size;
     const lines = [
-        `Foundry ${game.release?.version ?? game.version} (поколение ${game.release?.generation ?? '?'}), dnd5e ${game.system?.version ?? '?'}`,
-        `Пользователь: ${game.user.name}${game.user.isGM ? ' (Мастер)' : ''}, активный Мастер: ${game.users.activeGM?.name ?? 'нет'}${isActiveGM() ? ' — это вы' : ''}`,
-        `Сцена: ${scene?.name ?? 'нет'}, клетка ${size}px`,
-        `Хуки: updateToken ${Hooks.events?.updateToken?.length ?? '?'}, moveToken ${Hooks.events?.moveToken?.length ?? '?'}`
+        t('Foundry {version} (поколение {v}), dnd5e {v2}', { version: game.release?.version ?? game.version, v: game.release?.generation ?? '?', v2: game.system?.version ?? '?' }),
+        t('Пользователь: {name}{v}, активный Мастер: {v2}{v3}', { name: game.user.name, v: game.user.isGM ? t(' (Мастер)') : '', v2: game.users.activeGM?.name ?? t('нет'), v3: isActiveGM() ? t(' — это вы') : '' }),
+        t('Сцена: {v}, клетка {size}px', { v: scene?.name ?? t('нет'), size }),
+        t('Хуки: updateToken {v}, moveToken {v2}', { v: Hooks.events?.updateToken?.length ?? '?', v2: Hooks.events?.moveToken?.length ?? '?' })
     ];
     for (const tile of scene?.tiles ?? []) {
         const flag = tile.flags?.[MODULE_ID]?.portal;
-        if (flag) lines.push(`Портал ${flag.color} (${game.actors.get(flag.actorId)?.name ?? flag.actorId}): клетка ${cellOf(tile, size)}, x=${tile.x} y=${tile.y}`);
+        if (flag) lines.push(t('Портал {color} ({actorId}): клетка {v}, x={x} y={y}', { color: flag.color, actorId: game.actors.get(flag.actorId)?.name ?? flag.actorId, v: cellOf(tile, size), x: tile.x, y: tile.y }));
     }
     for (const token of canvas?.tokens?.controlled ?? []) {
         const doc = token.document;
-        lines.push(`Токен ${doc.name}: клетка ${cellOf(doc, size)}, x=${doc.x} y=${doc.y}, ${doc.width}×${doc.height}, move() ${typeof doc.move === 'function' ? 'есть' : 'нет'}`);
+        lines.push(t('Токен {name}: клетка {v}, x={x} y={y}, {width}×{height}, move() {v2}', { name: doc.name, v: cellOf(doc, size), x: doc.x, y: doc.y, width: doc.width, height: doc.height, v2: typeof doc.move === 'function' ? t('есть') : t('нет') }));
     }
-    console.log(`%c${MODULE_ID} | Портал — сводка\n${lines.join('\n')}`, 'color: #2f9bff');
+    console.log(`%c${MODULE_ID} | Портал — сводка\\n${lines.join('\n')}`, 'color: #2f9bff');
     return lines;
 }
 
@@ -81,11 +83,11 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isPortalSkill(item) || !item.actor) return;
     if (!canvas?.ready || !canvas.grid?.isSquare) {
-        ui.notifications.warn('Портал ставится только на сцену с квадратной сеткой.');
+        ui.notifications.warn(t('Портал ставится только на сцену с квадратной сеткой.'));
         return false;
     }
     if (!item.actor.getActiveTokens?.()[0]) {
-        ui.notifications.warn('Токена персонажа нет на сцене: порталу не от кого отсчитывать дальность.');
+        ui.notifications.warn(t('Токена персонажа нет на сцене: порталу не от кого отсчитывать дальность.'));
         return false;
     }
 });
@@ -162,7 +164,7 @@ function placePortal(actor, range) {
     const send = () => {
         for (const [color, k] of Object.entries(placed)) {
             const [x, y] = k.split(',').map(Number);
-            trace(`выстрел: ${color} в клетку ${k}`);
+            trace(t('выстрел: {color} в клетку {k}', { color, k }));
             requestGM('portalPlace', { actorId: actor.id, sceneId: scene.id, color, x: x * size, y: y * size });
         }
     };
@@ -173,7 +175,7 @@ function placePortal(actor, range) {
         finish();
         // Первый портал пары уже выбран — он ставится и без второго
         if (Object.keys(placed).length) send();
-        else ui.notifications.info('Портал не поставлен.');
+        else ui.notifications.info(t('Портал не поставлен.'));
     };
     // Левая кнопка — синий, правая — оранжевый (как у портальной пушки)
     const onConfirm = event => {
@@ -181,12 +183,12 @@ function placePortal(actor, range) {
         if (button !== 0 && button !== 2) return;
         event.stopPropagation();
         const color = only ?? (button === 2 ? 'orange' : 'blue');
-        if (!okFor[color]) return ui.notifications.warn(`Сюда нельзя: портал — в свободную клетку не дальше ${range} футов.`);
+        if (!okFor[color]) return ui.notifications.warn(t('Сюда нельзя: портал — в свободную клетку не дальше {range} футов.', { range }));
         placed[color] = key(...cell);
         if (--left > 0) {
             only = color === 'blue' ? 'orange' : 'blue';
             draw();
-            return ui.notifications.info(`Теперь ${LABEL[only]} портал: клик — поставить, Esc — оставить один.`);
+            return ui.notifications.info(t('Теперь {v} портал: клик — поставить, Esc — оставить один.', { v: LABEL[only] }));
         }
         finish();
         send();
@@ -199,8 +201,8 @@ function placePortal(actor, range) {
     canvas.app.view.oncontextmenu = event => event.preventDefault();
     document.addEventListener('keydown', onKey, true);
     ui.notifications.info(left === 2
-        ? 'Портал: левая кнопка — синий, правая — оранжевый; затем второй. Esc — отмена.'
-        : 'Портал: левая кнопка — синий, правая — оранжевый. Esc — отмена.');
+        ? t('Портал: левая кнопка — синий, правая — оранжевый; затем второй. Esc — отмена.')
+        : t('Портал: левая кнопка — синий, правая — оранжевый. Esc — отмена.'));
 }
 
 onSocket('portalPlace', ({ payload }) => {
@@ -212,13 +214,13 @@ async function setPortal({ actorId, sceneId, color, x, y }) {
     const scene = game.scenes.get(sceneId);
     if (!scene || !ART[color]) return;
     const size = scene.grid.size;
-    trace(`Мастер ставит ${color} портал в ${x / size},${y / size}`);
+    trace(t('Мастер ставит {color} портал в {v},{v2}', { color, v: x / size, v2: y / size }));
     const old = portalsOf(scene, actorId)[color];
     if (old) await scene.deleteEmbeddedDocuments('Tile', [old.id]);
-    await scene.createEmbeddedDocuments('Tile', [{
+    await scene.createEmbeddedDocuments('Tile', [tileData({
         texture: { src: ART[color] }, x, y, width: size, height: size,
         flags: { [MODULE_ID]: { portal: { actorId, color, at: Date.now() } } }
-    }]);
+    })]);
 }
 
 // ==========================================
@@ -240,7 +242,7 @@ Hooks.on('createToken', token => {
 
 Hooks.on('updateToken', (token, changes, options, userId) => {
     if (!('x' in changes || 'y' in changes)) return;
-    trace(`updateToken ${token.name}: x=${changes.x ?? '—'} y=${changes.y ?? '—'}, от ${game.users?.get?.(userId)?.name ?? userId}, опции: ${Object.keys(options ?? {}).join(', ') || 'нет'}`);
+    trace(t('updateToken {name}: x={v} y={v2}, от {v3}, опции: {v4}', { name: token.name, v: changes.x ?? '—', v2: changes.y ?? '—', v3: game.users?.get?.(userId)?.name ?? userId, v4: Object.keys(options ?? {}).join(', ') || t('нет') }));
     const scene = token.parent;
     const size = scene?.grid?.size;
     if (!size) return;
@@ -248,9 +250,9 @@ Hooks.on('updateToken', (token, changes, options, userId) => {
     const to = cellOf(token, size);
     lastCell.set(token.id, to);
     // v13+: проход ловит moveToken ниже — там видно, закончилось ли движение
-    if (options?.gachadndPortal) return trace('  это сам перенос — пропуск');
-    if (hasMovementApi(token)) return trace('  Foundry v13+: проход — по moveToken');
-    if (!isActiveGM()) return trace('  в v12 переносит активный Мастер — не этот клиент');
+    if (options?.gachadndPortal) return trace(t('  это сам перенос — пропуск'));
+    if (hasMovementApi(token)) return trace(t('  Foundry v13+: проход — по moveToken'));
+    if (!isActiveGM()) return trace(t('  в v12 переносит активный Мастер — не этот клиент'));
     trace(`${token.name}: ${from ?? '?'} → ${to}`);
     passThrough(scene, token, from, to, size).catch(error => console.error(`${MODULE_ID} | Портал`, error));
 });
@@ -261,22 +263,22 @@ Hooks.on('updateToken', (token, changes, options, userId) => {
 const hasMovementApi = token => typeof token?.move === 'function';
 
 Hooks.on('moveToken', (token, movement, operation, user) => {
-    trace(`moveToken ${token.name}: от ${user?.name ?? user?.id ?? user}, путь ${(movement?.passed?.waypoints ?? []).map(w => `${w.x},${w.y}:${w.action}`).join(' → ') || '—'}, осталось ${movement?.pending?.waypoints?.length ?? '?'}, метод ${movement?.method ?? '?'}`);
-    if ((user?.id ?? user) !== game.user.id) trace('  перенос делает тот, кто двигал, — не этот клиент');
+    trace(t('moveToken {name}: от {v}, путь {v2}, осталось {v3}, метод {v4}', { name: token.name, v: user?.name ?? user?.id ?? user, v2: (movement?.passed?.waypoints ?? []).map(w => `${w.x},${w.y}:${w.action}`).join(' → ') || '—', v3: movement?.pending?.waypoints?.length ?? '?', v4: movement?.method ?? '?' }));
+    if ((user?.id ?? user) !== game.user.id) trace(t('  перенос делает тот, кто двигал, — не этот клиент'));
     if (operation?.gachadndPortal || (user?.id ?? user) !== game.user.id) return;
     // Перенос сам — тоже перемещение «displace»: его не ловить (кроме поворота Перспектива — он может
     // поставить существо прямо в портал)
     const displaced = [...(movement?.passed?.waypoints ?? []), ...(movement?.pending?.waypoints ?? [])].some(w => w.action === 'displace');
-    if (displaced && !operation?.gachadndFez) return trace('  это перенос (displace) — пропуск');
+    if (displaced && !operation?.gachadndFez) return trace(t('  это перенос (displace) — пропуск'));
     const scene = token.parent;
     const size = scene?.grid?.size;
     if (!size) return;
-    if (movement?.pending?.waypoints?.length) return trace(`${token.name}: движение ещё не закончено`);
+    if (movement?.pending?.waypoints?.length) return trace(t('{name}: движение ещё не закончено', { name: token.name }));
     // В момент moveToken документ ещё стоит в начале пути: конец пути — из самого движения.
     // Направление — по последнему шагу пути, а не от начала (путь мог петлять)
     const path = movement?.passed?.waypoints ?? [];
     const end = movement?.destination ?? path.at(-1);
-    if (!end) return trace('  у движения нет конца пути');
+    if (!end) return trace(t('  у движения нет конца пути'));
     const before = path.length > 1 ? path.at(-2) : movement?.origin;
     const from = before ? cellOf(before, size) : lastCell.get(token.id);
     const to = cellOf(end, size);
@@ -305,30 +307,30 @@ async function arrived(token, from, to) {
 async function passThrough(scene, token, from, to, size) {
     const cells = footprint(token, ...to);
     const portals = [...scene.tiles].filter(t => t.flags?.[MODULE_ID]?.portal).map(t => `${t.flags[MODULE_ID].portal.color} ${cellOf(t, size)}`);
-    trace(`  клетки токена ${cells.join(' ')}; порталы: ${portals.join(', ') || 'нет'}`);
+    trace(t('  клетки токена {v}; порталы: {v2}', { v: cells.join(' '), v2: portals.join(', ') || t('нет') }));
     for (const tile of scene.tiles) {
         const flag = tile.flags?.[MODULE_ID]?.portal;
         if (!flag || !cells.includes(key(...cellOf(tile, size)))) continue;
-        trace(`  вошёл в ${flag.color} портал`);
+        trace(t('  вошёл в {color} портал', { color: flag.color }));
         const exit = portalsOf(scene, flag.actorId)[flag.color === 'blue' ? 'orange' : 'blue'];
-        if (!exit) return trace(`${token.name}: второй портал не открыт`);
+        if (!exit) return trace(t('{name}: второй портал не открыт', { name: token.name }));
         const t0 = performance.now();
         await arrived(token, from, to);
-        trace(`  доехал за ${Math.round(performance.now() - t0)} мс`);
+        trace(t('  доехал за {v} мс', { v: Math.round(performance.now() - t0) }));
         // Документ встаёт в конец пути не сразу (v13) — подождать его там; оказался в другой
         // клетке — его успели сдвинуть дальше, в портал он не вошёл
         const there = () => { const c = cellOf(token, size); return c[0] === to[0] && c[1] === to[1]; };
         for (let waited = 0; !there() && waited < 1500; waited += 50) await new Promise(resolve => setTimeout(resolve, 50));
-        if (!there()) return trace(`${token.name}: ушёл с портала до прибытия (сейчас ${cellOf(token, size)})`);
+        if (!there()) return trace(t('{name}: ушёл с портала до прибытия (сейчас {v})', { name: token.name, v: cellOf(token, size) }));
         const [ex, ey] = cellOf(exit, size);
         // Направление движения: шаг по каждой оси; не знаем, откуда шёл — выход в любую свободную клетку
         const dx = from ? Math.sign(to[0] - from[0]) : 0, dy = from ? Math.sign(to[1] - from[1]) : 0;
         const portals = new Set([...scene.tiles].filter(t => t.flags?.[MODULE_ID]?.portal).map(t => key(...cellOf(t, size))));
         const taken = new Set([...occupied(scene, size, { except: [token.id] }), ...portals]);
         const spot = nearestFree(scene, size, token, ex + dx, ey + dy, taken);
-        if (!spot) return trace(`${token.name}: у выхода нет свободной клетки`);
+        if (!spot) return trace(t('{name}: у выхода нет свободной клетки', { name: token.name }));
         lastCell.set(token.id, spot);
-        trace(`${token.name}: ${to} → выход ${spot}`);
+        trace(t('{name}: {to} → выход {spot}', { name: token.name, to, spot }));
         const at = { x: spot[0] * size, y: spot[1] * size };
         try {
             if (hasMovementApi(token)) {
@@ -336,19 +338,19 @@ async function passThrough(scene, token, from, to, size) {
                     gachadndPortal: true, autoRotate: false, showRuler: false,
                     constrainOptions: { ignoreWalls: true, ignoreCost: true }
                 });
-                trace(`  move(displace) → ${done}; токен теперь ${cellOf(token, size)}`);
+                trace(t('  move(displace) → {done}; токен теперь {v}', { done, v: cellOf(token, size) }));
             } else {
                 token.object?.stopAnimation?.();
                 await token.update(at, { gachadndPortal: true, animate: false });
-                trace(`  update → токен теперь ${cellOf(token, size)}`);
+                trace(t('  update → токен теперь {v}', { v: cellOf(token, size) }));
             }
         } catch (error) {
             console.error(`${MODULE_ID} | Портал: перенос не удался`, error);
-            trace(`  ОШИБКА переноса: ${error?.message ?? error}`);
+            trace(t('  ОШИБКА переноса: {v}', { v: error?.message ?? error }));
         }
         return;
     }
-    trace('  не в портале');
+    trace(t('  не в портале'));
 }
 
 // ==========================================

@@ -32,10 +32,12 @@ import { playChronicle } from "./chronicle.js";
 import { EventWindow, registerEventSettings } from "./events.js";
 import { registerDevourerSettings, addSatiety, getSatiety, syncDevourer, worldDevourer } from "./devourer-state.js";
 import { setBossRule, setBossRules } from "./boss-rules.js";
+import { registerVowsSettings, vowsApi } from "./vows.js";
 import { registerWebSettings, isWeb } from "./web-map.js";
 import { WebOverlay } from "./web-overlay.js";
 import { mapScene } from "./scene-travel.js";
 import { requestScar } from "../memory/skills/living/scars.js";
+import { t } from "../core/i18n.js";
 
 Hooks.once('init', () => {
     registerEconomySettings();
@@ -51,6 +53,7 @@ Hooks.once('init', () => {
     registerResidentSettings();
     registerDevourerSettings();
     registerWebSettings();
+    registerVowsSettings();
     // Смена этажа закрывает временные слоты Памяти из наград событий
     const floorSetting = game.settings.settings.get(`gachadnd.runFloor`);
     const previous = floorSetting.onChange;
@@ -78,13 +81,13 @@ Hooks.once('init', () => {
         // Прорыв Пожирателя: Мастер щёлкает точку, у всех катсцена, затем его токен в этой точке
         breach: () => startBreach(),
         // Насыщение Пожирателя: game.gachadnd.satiety(+1) — откуп, уход с Брюхом; без числа — текущее
-        satiety: delta => delta ? addSatiety(delta, 'Мастер') : getSatiety(),
+        satiety: delta => delta ? addSatiety(delta, t('Мастер')) : getSatiety(),
         // Глубина и Насыщение на листе Пожирателя — заново (restore: ПЗ и легендарные ресурсы на максимум)
         syncDevourer: (options = {}) => syncDevourer(worldDevourer(), options),
         // Правило Босса на текущий бой (Мастер): 'muffle' | 'sleepy' | null — снять
         bossRule: id => (Array.isArray(id) ? setBossRules(game.combat, id) : setBossRule(game.combat, id)),
         // Шрам персонажу: game.gachadnd.scar(actor, 'voice' | 'burn' | 'crack' | без вида — случайный)
-        scar: (actor, kind = null) => requestScar(actor, { kind, reason: 'Мастер' }),
+        scar: (actor, kind = null) => requestScar(actor, { kind, reason: t('Мастер') }),
         // Сделка луны после Босса: окно с весами у всех (Мастер, отряд на узле Босса)
         openDeal: () => DealWindow.open(),
         // Дары луны в бою (Мастер, по просьбе отряда): Отголосок Босса и натравленный Пожиратель
@@ -100,6 +103,8 @@ Hooks.once('init', () => {
         newRun: () => NewRunWindow.open(),
         // Встречи на боевых узлах: состав, бюджет, предложение Мастеру
         encounters: encounterApi,
+        // Обеты на Элите: окно, начать выбор, принять, отметить победу (Мастер)
+        vows: vowsApi,
         startRun: options => startRun(options),
         openEvent: () => EventWindow.open(),
         previewEvent: id => EventWindow.preview(id)
@@ -109,7 +114,7 @@ Hooks.once('init', () => {
 Hooks.on('getSceneControlButtons', (controls) => {
     addTokenTools(controls, [{
         name: 'gachadnd-map',
-        title: 'Карта Этажа (Туман)',
+        title: t('Карта Этажа (Туман)'),
         icon: 'fas fa-map-marked-alt',
         visible: true,
         button: true,
@@ -117,21 +122,21 @@ Hooks.on('getSceneControlButtons', (controls) => {
         onClick: () => (isWeb(mapScene()?.getFlag('gachadnd', 'floorMap')) ? WebOverlay.toggle() : game.gachadnd.openMapTerminal())
     }, ...(hasResidentSafe('broker') ? [{
         name: 'gachadnd-cells',
-        title: 'Ячейки Ростовщика',
+        title: t('Ячейки Ростовщика'),
         icon: 'fas fa-vault',
         visible: true,
         button: true,
         onClick: () => ResidentsWindow.open('broker')
     }] : []), ...(game.user?.isGM ? [{
         name: 'gachadnd-new-run',
-        title: 'Новый забег (Мастер)',
+        title: t('Новый забег (Мастер)'),
         icon: 'fas fa-flag-checkered',
         visible: true,
         button: true,
         onClick: () => NewRunWindow.open()
     }, {
         name: 'gachadnd-anchor',
-        title: 'Якорь: открыть или закрыть хаб (Мастер)',
+        title: t('Якорь: открыть или закрыть хаб (Мастер)'),
         icon: 'fas fa-anchor',
         visible: true,
         button: true,

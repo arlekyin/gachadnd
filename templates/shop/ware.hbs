@@ -5,7 +5,7 @@
     </span>
     <i class="gd-string"></i>
     <span class="gd-tag">
-        <span class="gd-tag-price">{{#if soldTo}}Продано{{else}}{{price}} зм{{/if}}</span>
+        <span class="gd-tag-price">{{#if soldTo}}{{t "Продано"}}{{else}}{{t "{price} зм" price=price}}{{/if}}</span>
         {{#if soldTo}}<span class="gd-tag-sold">{{soldTo}}</span>{{/if}}
         <span class="gd-tag-more"><span class="gd-tag-name">{{name}}</span><span class="gd-tag-sub">{{sub}}</span></span>
     </span>

@@ -6,6 +6,7 @@
  */
 
 import { key, cellOf } from "./grid.js";
+import { t } from "../../core/i18n.js";
 
 /**
  * @param {object} o
@@ -56,7 +57,7 @@ export function pickCell({ caster, range, allowed = () => true, draw, hint }) {
         const onConfirm = event => {
             if ((event.button ?? event.data?.button ?? 0) !== 0) return;
             event.stopPropagation();
-            if (!ok) return ui.notifications.warn(`Сюда нельзя: свободная клетка не дальше ${range} футов.`);
+            if (!ok) return ui.notifications.warn(t('Сюда нельзя: свободная клетка не дальше {range} футов.', { range }));
             finish(cell);
         };
         const onKey = event => {

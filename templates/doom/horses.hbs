@@ -15,12 +15,12 @@
         {{#if canTake}}
         <div class="gd-horse-take">
             <select data-horse="{{key}}">{{#each @root.candidates}}<option value="{{id}}">{{name}}</option>{{/each}}</select>
-            <button type="button" data-action="take" data-horse="{{key}}">Забрать</button>
+            <button type="button" data-action="take" data-horse="{{key}}">{{t "Забрать"}}</button>
         </div>
         {{/if}}
     </div>
     {{/each}}
     {{else}}
-    <p class="gd-doom-empty">Отряд покинул узел Погибели.</p>
+    <p class="gd-doom-empty">{{t "Отряд покинул узел Погибели."}}</p>
     {{/if}}
 </section>

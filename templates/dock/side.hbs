@@ -1,9 +1,9 @@
 <div class="gd-t-side">
     {{#if facetPage}}
     {{!-- Шкатулка: камни тегов со ступенью; ромбы — сколько можно вставить, горят — вставлены --}}
-    <div class="gd-syn-head">Камни</div>
+    <div class="gd-syn-head">{{t "Камни"}}</div>
     {{#each facet.box}}
-    <div class="gd-o-tag" style="--c: {{color}}"><i class="fas {{icon}}"></i> {{tag}} <span class="gd-o-pips">{{#each pips}}<u class="{{#if this}}on{{/if}}"></u>{{/each}}</span></div>
+    <div class="gd-o-tag" style="--c: {{color}}"><i class="fas {{icon}}"></i> {{tagLabel tag}} <span class="gd-o-pips">{{#each pips}}<u class="{{#if this}}on{{/if}}"></u>{{/each}}</span></div>
     <div class="gd-o-stones">
         {{#each stones}}
         <div class="gd-o-stone {{#if used}}used{{/if}} {{#if locked}}locked{{/if}} {{#if fits}}fits{{else}}nofit{{/if}}" data-action="facetStone" data-stone="{{id}}">
@@ -12,28 +12,28 @@
         </div>
         {{/each}}
     </div>
-    {{else}}<div class="gd-o-tag">Камней пока нет.</div>{{/each}}
-    {{#if facet.locked}}<div class="gd-f-lock"><i class="fas fa-lock"></i> Бой — огранку не меняют</div>{{/if}}
+    {{else}}<div class="gd-o-tag">{{t "Камней пока нет."}}</div>{{/each}}
+    {{#if facet.locked}}<div class="gd-f-lock"><i class="fas fa-lock"></i> {{t "Бой — огранку не меняют"}}</div>{{/if}}
     {{else}}
     {{#unless bar}}
-    <div class="gd-syn-head">Синергии <b></b></div>
+    <div class="gd-syn-head">{{t "Синергии"}} <b></b></div>
     <div class="gd-syn-list">
         {{#each synergies}}
         <div class="gd-syn-row {{#if muffled}}muffled{{/if}}" data-tag="{{tag}}" data-count="{{count}}" data-tier="{{tier}}" data-tiers="{{tiers}}">
-            <i class="fas {{icon}}"></i><span class="gd-tn">{{tag}}</span>
+            <i class="fas {{icon}}"></i><span class="gd-tn">{{tagLabel tag}}</span>
             <span class="gd-pp">{{#each pips}}<u class="{{#if on}}on{{/if}} {{#if gap}}gap{{/if}}"></u>{{/each}}</span>
-            <span class="gd-nx"><b>{{tier}}</b>{{#if muffled}} <em>заглушено Боссом</em>{{/if}}</span>
+            <span class="gd-nx"><b>{{tier}}</b>{{#if muffled}} <em>{{t "заглушено Боссом"}}</em>{{/if}}</span>
         </div>
         {{/each}}
         {{!-- Образец строки для нового тега в предпросмотре --}}
         <div class="gd-syn-row" data-template hidden><i class="fas fa-circle"></i><span class="gd-tn"></span><span class="gd-pp"><u></u><u></u><u class="gap"></u><u></u><u class="gap"></u><u></u></span><span class="gd-nx"><b></b></span></div>
     </div>
     {{#if abilities.length}}
-    {{!-- Способности синергий и связок — янтарь, под названием — откуда; наведение и щелчок — в панели подробностей --}}
-    <div class="gd-syn-head gd-abil-head">Способности</div>
+    {{!-- Что дают синергии: способности и постоянные эффекты ступеней, связки — янтарь, под названием — откуда; наведение и щелчок — в панели подробностей --}}
+    <div class="gd-syn-head gd-abil-head">{{t "Что дают синергии"}}</div>
     <div class="gd-t-abil">
         {{#each abilities}}
-        <div class="gd-ability {{#if muffled}}muffled{{/if}} {{#if selected}}sel{{/if}}" data-ability-id="{{id}}">
+        <div class="gd-ability {{#if muffled}}muffled{{/if}} {{#if selected}}sel{{/if}} {{#unless sheet}}calm{{/unless}}" data-ability-id="{{id}}" data-tags="{{tags}}">
             <span class="gd-gem glow gd-gem-amber"><i class="fas {{icon}}"></i></span>
             <span class="gd-ability-txt"><b>{{name}}</b><small>{{#each tagIcons}}<i class="fas {{this}}"></i>{{/each}} {{source}}</small></span>
             {{#unless passive}}<span class="gd-ak {{kind}}" data-tooltip="{{kindLabel}}"></span>{{/unless}}

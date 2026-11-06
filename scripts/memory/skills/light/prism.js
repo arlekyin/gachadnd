@@ -17,6 +17,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { isLight, lightCard, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 export const MARK = 'gdPrism';
 export const PART = 'gdPrismPart';
@@ -42,7 +43,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
     if (!isLight(item, 'prism') || !actor) return;
     const combat = game.combat?.started ? game.combat : null;
     actor.setFlag(MODULE_ID, FLAG, { combatId: combat?.id ?? null, round: combat?.round ?? null, turn: combat?.turn ?? null });
-    lightCard(actor, 'Призма', `<p>Урон следующей атаки разложится на семь цветов радуги: ${SPECTRUM.map(typeLabel).join(', ')}. Сопротивления цели считаются по каждой части.</p>`, { icon: 'fa-rainbow', cls: 'prism' });
+    lightCard(actor, t('Призма'), `<p>${t('Урон следующей атаки разложится на семь цветов радуги: {v}. Сопротивления цели считаются по каждой части.', { v: SPECTRUM.map(typeLabel).join(', ') })}</p>`, { icon: 'fa-rainbow', cls: 'prism' });
 });
 
 // Бросок урона атаки взведённого персонажа: части урона помечаются, призма гаснет
@@ -113,13 +114,13 @@ Hooks.on('dnd5e.applyDamage', (actor, amount, options) => {
         const value = Math.trunc(d.value);
         // dnd5e 5: active.resistance, dnd5e 6: active.type.resistance или active.all.resistance
         const has = c => !!(d.active[c] || d.active.type?.[c] || d.active.all?.[c]);
-        const why = has('immunity') ? 'иммунитет' : has('resistance') ? 'сопротивление' : has('vulnerability') ? 'уязвимость' : '';
+        const why = has('immunity') ? t('иммунитет') : has('resistance') ? t('сопротивление') : has('vulnerability') ? t('уязвимость') : '';
         const arrow = value !== before ? ` → <strong>${value}</strong>` : '';
         return `<li style="--gd-prism:${COLORS[d.type] ?? '#888'}"><span>${esc(typeLabel(d.type))}</span> ${before}${arrow}${why ? ` <em>(${why})</em>` : ''}</li>`;
     }).filter(Boolean);
     ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-light-card prism"><div class="gd-light-title"><i class="fas fa-rainbow"></i> Призма — ${esc(actor.name)}</div><ul class="gd-prism-parts">${rows.join('')}</ul><p>Итого урона: <strong>${amount}</strong>.</p></div>`
+        content: `<div class="gd-light-card prism"><div class="gd-light-title"><i class="fas fa-rainbow"></i> ${t('Призма — {v}', { v: esc(actor.name) })}</div><ul class="gd-prism-parts">${rows.join('')}</ul><p>${t('Итого урона:')} <strong>${amount}</strong>.</p></div>`
     });
 });
 
@@ -133,7 +134,7 @@ function prismLine(message, html) {
     if (!flag?.parts || !html || html.querySelector?.('.gd-prism-line')) return;
     const line = document.createElement('div');
     line.className = 'gd-prism-line';
-    line.innerHTML = `<i class="fas fa-rainbow"></i> Призма: ${flag.total} (${esc(flag.source)}) → `
+    line.innerHTML = `<i class="fas fa-rainbow"></i> ${t('Призма: {total} ({v}) →', { total: flag.total, v: esc(flag.source) })} `
         + flag.parts.map(p => `<span style="--gd-prism:${COLORS[p.type] ?? '#888'}">${p.value} ${esc(typeLabel(p.type).toLowerCase())}</span>`).join(' · ');
     // dnd5e 6: кнопка броска стоит в строке с иконкой — строку раскладки ставим перед всей строкой
     const roll = html.querySelector('.dice-roll');

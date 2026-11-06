@@ -10,6 +10,7 @@
 import { MODULE_ID } from "../core/constants.js";
 import { isAtRest } from "./memory-api.js";
 import { isCrystalItem } from "./inventory.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const RARITY_COLORS = { gray: '#9d9d9d', green: '#1eff00', blue: '#0070dd', purple: '#a335ee', red: '#ff003c', orange: '#ff8000' };
@@ -57,7 +58,7 @@ export class StashWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-stash'],
         tag: 'div',
-        window: { title: 'Хранилище', icon: 'fas fa-box-archive', resizable: true },
+        window: { title: t('Хранилище'), icon: 'fas fa-box-archive', resizable: true },
         position: { width: 620, height: 520 },
         actions: {
             deposit: StashWindow.#onDeposit,
@@ -69,16 +70,16 @@ export class StashWindow extends HandlebarsApplicationMixin(ApplicationV2) {
 
     static open(actor) {
         actor ??= game.user.character ?? canvas.tokens?.controlled[0]?.actor;
-        if (!actor) return ui.notifications.warn('Выберите своего персонажа.');
-        if (!actor.isOwner) return ui.notifications.warn('Хранилище открывается только для своего персонажа.');
-        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn('Хранилище доступно только у Алтаря Памяти.');
+        if (!actor) return ui.notifications.warn(t('Выберите своего персонажа.'));
+        if (!actor.isOwner) return ui.notifications.warn(t('Хранилище открывается только для своего персонажа.'));
+        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn(t('Хранилище доступно только у Алтаря Памяти.'));
         const existing = foundry.applications.instances?.get(`gachadnd-stash-${actor.id}`);
         if (existing) return existing.render({ force: true });
         return new StashWindow(actor).render({ force: true });
     }
 
     get title() {
-        return `Хранилище · ${this.actor.name}`;
+        return t('Хранилище · {name}', { name: this.actor.name });
     }
 
     async _prepareContext() {
@@ -95,7 +96,7 @@ export class StashWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     #busy = false;
     async #run(task) {
         if (this.#busy) return;
-        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn('Хранилище доступно только у Алтаря Памяти.');
+        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn(t('Хранилище доступно только у Алтаря Памяти.'));
         this.#busy = true;
         try {
             await task();

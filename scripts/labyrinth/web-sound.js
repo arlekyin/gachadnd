@@ -9,6 +9,7 @@
  * tools/sound/render.mjs (OfflineAudioContext) в файлы для прослушивания.
  */
 
+
 const MODULE_ID = 'gachadnd';
 
 let shared = null;
@@ -237,5 +238,5 @@ export function playWeb(name, arg, { throttle = 0 } = {}) {
     last.set(name, now);
     const io = output();
     if (!io) return;
-    try { SOUNDS[name]?.(io.ctx, io.out, io.ctx.currentTime + 0.01, arg); } catch (err) { console.warn('gachadnd | звук паутины', err); }
+    try { SOUNDS[name]?.(io.ctx, io.out, io.ctx.currentTime + 0.01, arg); } catch (err) { console.warn(`gachadnd | звук паутины`, err); }
 }

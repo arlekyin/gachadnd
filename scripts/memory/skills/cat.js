@@ -19,6 +19,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { key, occupied } from "./grid.js";
 import { pickCell, placeToken } from "./pick.js";
+import { t } from "../../core/i18n.js";
 
 const ALPHA = 0.6;
 const isCat = item => !!item?.flags?.[MODULE_ID]?.cat;
@@ -45,15 +46,15 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     if (!actor) return;
     if (isCat(item)) {
         if (!canvas?.ready || !canvas.grid?.isSquare) {
-            ui.notifications.warn('Кот Шрёдингера работает только на сцене с квадратной сеткой.');
+            ui.notifications.warn(t('Кот Шрёдингера работает только на сцене с квадратной сеткой.'));
             return false;
         }
         if (!actor.getActiveTokens?.()[0]) {
-            ui.notifications.warn('Токена персонажа нет на сцене.');
+            ui.notifications.warn(t('Токена персонажа нет на сцене.'));
             return false;
         }
         if (superposition(actor)) {
-            ui.notifications.warn('Персонаж уже в суперпозиции.');
+            ui.notifications.warn(t('Персонаж уже в суперпозиции.'));
             return false;
         }
         return;
@@ -63,7 +64,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     if (!pair) return;
     const controlled = canvas.tokens?.controlled.map(t => t.document) ?? [];
     const keep = controlled.some(t => t.id === pair.copy.id) ? 'copy' : 'original';
-    requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep, reason: `действие: ${item.name}` });
+    requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep, reason: t('действие: {name}', { name: item.name }) });
 });
 
 Hooks.on('dnd5e.postUseActivity', async (activity) => {
@@ -82,7 +83,7 @@ Hooks.on('dnd5e.postUseActivity', async (activity) => {
     };
     const cell = await pickCell({
         caster, range, allowed: fits,
-        hint: 'Кот Шрёдингера: клик — где появится вторая копия, правая кнопка или Esc — отмена.',
+        hint: t('Кот Шрёдингера: клик — где появится вторая копия, правая кнопка или Esc — отмена.'),
         draw: (g, [x, y], ok, s) => {
             const w = (doc.width || 1) * s, h = (doc.height || 1) * s;
             const tint = ok ? 0xb58cff : 0xff4d4d;
@@ -93,7 +94,7 @@ Hooks.on('dnd5e.postUseActivity', async (activity) => {
     if (!cell) {
         const spent = Number(item.system.uses?.spent ?? 0);
         if (item.system.uses?.max && spent > 0) await item.update({ 'system.uses.spent': spent - 1 });
-        return ui.notifications.info('Кот Шрёдингера отменён.');
+        return ui.notifications.info(t('Кот Шрёдингера отменён.'));
     }
     requestGM('catSplit', { sceneId: scene.id, tokenId: doc.id, x: cell[0] * size, y: cell[1] * size });
 });
@@ -115,7 +116,7 @@ async function split({ sceneId, tokenId, x, y }) {
     await original.update({ alpha: ALPHA, [`flags.${MODULE_ID}.cat`]: { copyId: copy.id, alpha: original.alpha ?? 1 } });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ token: original }),
-        content: `<div class="gd-cat-card"><strong>Кот Шрёдингера</strong> — ${foundry.utils.escapeHTML?.(original.name) ?? original.name} теперь в двух местах сразу. Где он на самом деле, не знает никто.</div>`
+        content: `<div class="gd-cat-card"><strong>${t('Кот Шрёдингера')}</strong> ${t('— {name} теперь в двух местах сразу. Где он на самом деле, не знает никто.', { name: foundry.utils.escapeHTML?.(original.name) ?? original.name })}</div>`
     });
 }
 
@@ -141,7 +142,7 @@ async function collapse({ sceneId, originalId, keep, reason = '' }) {
     if (copy) await scene.deleteEmbeddedDocuments('Token', [copy.id]);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ token: original }),
-        content: `<div class="gd-cat-card"><strong>Кот Шрёдингера</strong> — суперпозиция схлопнулась${reason ? ` (${foundry.utils.escapeHTML?.(reason) ?? reason})` : ''}: настоящий — ${keep === 'copy' ? 'вторая копия' : 'исходный'}.</div>`
+        content: `<div class="gd-cat-card"><strong>${t('Кот Шрёдингера')}</strong> ${t('— суперпозиция схлопнулась{v}: настоящий — {v2}.', { v: reason ? ` (${foundry.utils.escapeHTML?.(reason) ?? reason})` : '', v2: keep === 'copy' ? t('вторая копия') : t('исходный') })}</div>`
     });
 }
 
@@ -164,7 +165,7 @@ Hooks.on('dnd5e.preApplyDamage', (actor, amount) => {
         const hitCopy = pointed === pair.copy.id;
         const keep = real === hitCopy ? 'copy' : 'original';
         coin(actor, real, amount);
-        requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep, reason: real ? 'попали по настоящему' : 'попали по пустышке' });
+        requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep, reason: real ? t('попали по настоящему') : t('попали по пустышке') });
         return real ? undefined : false;
     }
     // Не ясно, по кому: урон ждёт ответа
@@ -175,25 +176,25 @@ Hooks.on('dnd5e.preApplyDamage', (actor, amount) => {
 function coin(actor, real, amount) {
     ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-cat-card gd-cat-coin ${real ? 'real' : 'empty'}"><strong>Монетка</strong> — ${real ? `настоящий! Урон ${amount} проходит.` : 'пустышка! Урон уходит в никуда.'}</div>`
+        content: `<div class="gd-cat-card gd-cat-coin ${real ? 'real' : 'empty'}"><strong>${t('Монетка')}</strong> — ${real ? t('настоящий! Урон {amount} проходит.', { amount }) : t('пустышка! Урон уходит в никуда.')}</div>`
     });
 }
 
 async function askHit(actor, pair, amount, real) {
     const DialogV2 = foundry.applications.api.DialogV2;
     const choice = await DialogV2.wait({
-        window: { title: 'Кот Шрёдингера' },
-        content: `<p>По какому токену ${foundry.utils.escapeHTML?.(actor.name) ?? actor.name} пришёлся урон ${amount}?</p>`,
+        window: { title: t('Кот Шрёдингера') },
+        content: `<p>${t('По какому токену {name} пришёлся урон {amount}?', { name: foundry.utils.escapeHTML?.(actor.name) ?? actor.name, amount })}</p>`,
         buttons: [
-            { action: 'original', label: 'Исходный', default: true },
-            { action: 'copy', label: 'Копия' }
+            { action: 'original', label: t('Исходный'), default: true },
+            { action: 'copy', label: t('Копия') }
         ],
         rejectClose: false
     }).catch(() => null);
     if (!choice) return;
     const hitCopy = choice === 'copy';
     coin(actor, real, amount);
-    requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep: real === hitCopy ? 'copy' : 'original', reason: real ? 'попали по настоящему' : 'попали по пустышке' });
+    requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep: real === hitCopy ? 'copy' : 'original', reason: real ? t('попали по настоящему') : t('попали по пустышке') });
     if (!real) return;
     decided.add(actor.id);
     await actor.applyDamage(amount, { ignore: true });
@@ -212,15 +213,15 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const DialogV2 = foundry.applications.api.DialogV2;
     canvas.animatePan?.({ x: pair.copy.x, y: pair.copy.y, duration: 400 });
     const choice = await DialogV2.wait({
-        window: { title: 'Кот Шрёдингера' },
-        content: `<p>Ход ${foundry.utils.escapeHTML?.(actor.name) ?? actor.name}. Где вы на самом деле?</p>`,
+        window: { title: t('Кот Шрёдингера') },
+        content: `<p>${t('Ход {name}. Где вы на самом деле?', { name: foundry.utils.escapeHTML?.(actor.name) ?? actor.name })}</p>`,
         buttons: [
-            { action: 'original', label: 'Исходный токен', default: true },
-            { action: 'copy', label: 'Копия' }
+            { action: 'original', label: t('Исходный токен'), default: true },
+            { action: 'copy', label: t('Копия') }
         ],
         rejectClose: false
     }).catch(() => null);
-    requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep: choice === 'copy' ? 'copy' : 'original', reason: 'начало хода' });
+    requestGM('catCollapse', { sceneId: canvas.scene.id, originalId: pair.original.id, keep: choice === 'copy' ? 'copy' : 'original', reason: t('начало хода') });
 });
 
 // Конец боя — суперпозиция схлопывается в исходный
@@ -228,7 +229,7 @@ Hooks.on('deleteCombat', combat => {
     if (!isActiveGM()) return;
     const scene = combat.scene ?? canvas?.scene;
     for (const token of scene?.tokens ?? []) {
-        if (token.flags?.[MODULE_ID]?.cat?.copyId) collapse({ sceneId: scene.id, originalId: token.id, keep: 'original', reason: 'конец боя' });
+        if (token.flags?.[MODULE_ID]?.cat?.copyId) collapse({ sceneId: scene.id, originalId: token.id, keep: 'original', reason: t('конец боя') });
     }
 });
 

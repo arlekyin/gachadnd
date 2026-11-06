@@ -16,11 +16,12 @@ import {
 } from "./economy.js";
 
 import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const RARITY_COLORS = { gray: '#9d9d9d', green: '#1eff00', blue: '#0070dd', purple: '#a335ee', red: '#ff003c' };
-const ITEM_RARITY_LABELS = { common: 'обычный', uncommon: 'необычный', rare: 'редкий', veryRare: 'очень редкий', legendary: 'легендарный' };
+const ITEM_RARITY_LABELS = { common: t('обычный'), uncommon: t('необычный'), rare: t('редкий'), veryRare: t('очень редкий'), legendary: t('легендарный') };
 const SHOP_WEIGHTS = { gray: 600, green: 250, blue: 100, purple: 40 };
 
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -51,7 +52,7 @@ async function saveShop(map, nodeId, shop) {
 export async function randomFromPack(packId, filter, count) {
     const pack = game.packs.get(packId);
     if (!pack) {
-        ui.notifications.warn(`Магазин: компендиум «${packId}» не найден. Укажите его в настройках модуля.`);
+        ui.notifications.warn(t('Магазин: компендиум «{packId}» не найден. Укажите его в настройках модуля.', { packId }));
         return [];
     }
     const index = await pack.getIndex({ fields: ['type', 'img', 'system.rarity', 'system.price'] });
@@ -100,7 +101,7 @@ function priceFor(good, actor) {
 }
 
 async function chat(content) {
-    await ChatMessage.create({ speaker: { alias: 'Торговец Тумана' }, content: `<div class="gachadnd-shop-chat">${content}</div>` });
+    await ChatMessage.create({ speaker: { alias: t('Торговец Тумана') }, content: `<div class="gachadnd-shop-chat">${content}</div>` });
 }
 
 async function performShopOp({ op, userId, actorId, slot, itemId }) {
@@ -115,9 +116,9 @@ async function performShopOp({ op, userId, actorId, slot, itemId }) {
 
     if (op === 'buy') {
         const good = shop.goods.find(g => g.slot === slot);
-        if (!good || good.sold) return deny('Товар уже продан.');
+        if (!good || good.sold) return deny(t('Товар уже продан.'));
         const price = priceFor(good, actor);
-        if (!(await pay(actor, price))) return deny(`${actor.name}: не хватает золота (${price} зм).`);
+        if (!(await pay(actor, price))) return deny(t('{name}: не хватает золота ({price} зм).', { name: actor.name, price }));
         let data = null;
         if (good.kind === 'crystal') data = await crystalForSkill({ skillId: good.skillId });
         else data = (await fromUuid(good.uuid))?.toObject();
@@ -127,31 +128,31 @@ async function performShopOp({ op, userId, actorId, slot, itemId }) {
         }
         good.sold = actor.id;
         await saveShop(found.map, found.node.id, shop);
-        return chat(`<strong>${esc(actor.name)}</strong> покупает <strong>${esc(good.name)}</strong> за ${price} зм.`);
+        return chat(`<strong>${esc(actor.name)}</strong> ${t('покупает')} <strong>${esc(good.name)}</strong> ${t('за {price} зм.', { price })}`);
     }
 
     if (op === 'cleanse') {
         const item = actor.items.get(itemId);
         const flags = item?.flags?.[MODULE_ID];
-        if (!item || !isMemorySkill(item) || flags.undeletable || (flags.horseman && !flags.cleansed)) return deny('Этот навык не очистить.');
+        if (!item || !isMemorySkill(item) || flags.undeletable || (flags.horseman && !flags.cleansed)) return deny(t('Этот навык не очистить.'));
         const voucher = cleanseVouchers(actor) > 0;
         const price = cleanseCostFor(actor, floor);
-        if (!(await pay(actor, price))) return deny(`${actor.name}: не хватает золота (${price} зм).`);
+        if (!(await pay(actor, price))) return deny(t('{name}: не хватает золота ({price} зм).', { name: actor.name, price }));
         if (voucher) await actor.setFlag(MODULE_ID, 'cleanse_vouchers', cleanseVouchers(actor) - 1);
         await actor.setFlag(MODULE_ID, 'shop_cleanses', (actor.getFlag(MODULE_ID, 'shop_cleanses') ?? 0) + 1);
         await item.delete({ gachadndCleanse: true });
-        return chat(`<strong>${esc(actor.name)}</strong> очищает Память от навыка «${esc(item.name)}» за ${price} зм.`);
+        return chat(`<strong>${esc(actor.name)}</strong> ${t('очищает Память от навыка «{v}» за {price} зм.', { v: esc(item.name), price })}`);
     }
 
     if (op === 'reroll') {
         const voucher = rerollVouchers(actor) > 0;
         const price = rerollCostFor(actor, shop, floor);
-        if (!(await pay(actor, price))) return deny(`${actor.name}: не хватает золота (${price} зм).`);
+        if (!(await pay(actor, price))) return deny(t('{name}: не хватает золота ({price} зм).', { name: actor.name, price }));
         if (voucher) await actor.setFlag(MODULE_ID, 'reroll_vouchers', rerollVouchers(actor) - 1);
         shop.goods = await generateStock(floor);
         shop.rerolls = (shop.rerolls ?? 0) + 1;
         await saveShop(found.map, found.node.id, shop);
-        return chat(`<strong>${esc(actor.name)}</strong> оплачивает новый ассортимент за ${price} зм.`);
+        return chat(`<strong>${esc(actor.name)}</strong> ${t('оплачивает новый ассортимент за {price} зм.', { price })}`);
     }
 }
 
@@ -162,7 +163,7 @@ const request = payload => requestGM('shopOp', payload);
 let queue = Promise.resolve();
 onSocket('shopOp', message => {
     if (!isActiveGM()) return;
-    queue = queue.then(() => performShopOp(message.payload)).catch(err => console.error('[GachaDND] Магазин:', err));
+    queue = queue.then(() => performShopOp(message.payload)).catch(err => console.error(`[GachaDND] Магазин:`, err));
     return queue;
 });
 onSocket('openShop', () => ShopWindow.show());
@@ -179,7 +180,7 @@ onSocket('openShop', () => ShopWindow.show());
 
 const TEMPLATES = 'modules/gachadnd/templates/shop';
 const LIVE_PARTS = ['display', 'counter', 'pawn', 'buyers'];
-const SIGN = 'Торговец Тумана';
+const SIGN = 'Торговец Тумана';  // i18n: данные
 // Буквы вывески, которые иногда гаснут: реальность лавки держится с усилием
 const FLICKER = { 2: 'flicker-a', 6: 'flicker-b', 11: 'flicker-c' };
 
@@ -188,7 +189,7 @@ export class ShopWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: 'gachadnd-shop',
         classes: ['gachadnd-shop'],
         tag: 'div',
-        window: { title: 'Торговец Тумана', icon: 'fas fa-store', resizable: true },
+        window: { title: t('Торговец Тумана'), icon: 'fas fa-store', resizable: true },
         position: { width: 920, height: 780 },
         actions: {
             buy: ShopWindow.#onBuy,
@@ -208,7 +209,7 @@ export class ShopWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static async open() {
         if (!game.user.isGM) return ShopWindow.show();
         const found = currentShopNode();
-        if (!found) return ui.notifications.warn('Отряд не стоит на узле Магазина.');
+        if (!found) return ui.notifications.warn(t('Отряд не стоит на узле Магазина.'));
         if (!found.node.shop) {
             const floor = getFloor();
             await saveShop(found.map, found.node.id, { floor, rerolls: 0, goods: await generateStock(floor) });
@@ -255,7 +256,7 @@ export class ShopWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         const gold = buyer ? wealth(buyer) : 0;
         const ware = good => {
             const price = buyer ? priceFor(good, buyer) : good.price;
-            const kindLabel = { crystal: 'кристалл', consumable: 'расходник', magic: 'магический предмет' }[good.kind];
+            const kindLabel = { crystal: t('кристалл'), consumable: t('расходник'), magic: t('магический предмет') }[good.kind];
             return {
                 ...good, price,
                 color: good.kind === 'crystal' ? RARITY_COLORS[good.rarity] : good.kind === 'magic' ? '#ffcf7a' : '#f1d9b0',

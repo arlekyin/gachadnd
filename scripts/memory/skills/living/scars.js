@@ -20,6 +20,7 @@ import { addSkillToMemory } from "../../inventory.js";
 import { getSkillPack } from "../../crystals.js";
 import { isMemorySkill, occupiesSlot, naturalSlotCap, setSkillEquipped, updateActorSynergies, isAwake, TAG_COUNT_MODIFIERS } from "../../synergy/synergy.js";
 import { sleepSkill, wakeSkill, note, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 export const scarKind = item => item?.flags?.[MODULE_ID]?.scar ?? null;
 export const isScar = item => !!scarKind(item) && isMemorySkill(item);
@@ -53,19 +54,19 @@ export async function grantScar(actor, { kind = null, reason = '' } = {}) {
     }
     await setSkillEquipped(scar, true);
     await updateActorSynergies(actor);
-    await note(actor, `Шрам: ${esc(scar.name)}`, `<p>${reason ? `${esc(reason)}. ` : ''}${esc(actor.name)} получает шрам — он занимает слот, снять его нельзя. Лечит Знахарь в Якоре или Очистка в Магазине.</p>${pushed ? `<p>Из слота вытеснен «${esc(pushed.name)}» — он остался в Памяти.</p>` : ''}`, 'fa-heart-crack');
+    await note(actor, t('Шрам: {v}', { v: esc(scar.name) }), `<p>${t('{v}{v2} получает шрам — он занимает слот, снять его нельзя. Лечит Знахарь в Якоре или Очистка в Магазине.', { v: reason ? `${esc(reason)}. ` : '', v2: esc(actor.name) })}</p>${pushed ? `<p>${t('Из слота вытеснен «{v}» — он остался в Памяти.', { v: esc(pushed.name) })}</p>` : ''}`, 'fa-heart-crack');
     return scar;
 }
 
 // Шрам не снимается
 Hooks.on(HOOKS.preChangeSkill, (actor, item, equipping) => {
     if (equipping || !isScar(item)) return;
-    ui.notifications.warn(`${item.name}: шрам не снять — его лечит Знахарь в Якоре или Очистка в Магазине.`);
+    ui.notifications.warn(t('{name}: шрам не снять — его лечит Знахарь в Якоре или Очистка в Магазине.', { name: item.name }));
     return false;
 });
 
 Hooks.on(HOOKS.terminalSkillView, (item, view) => {
-    if (isScar(item)) view.notes.push({ cls: 'gd-scar-note', text: '✖ Шрам · снять нельзя · лечит Знахарь в Якоре или Очистка в Магазине' });
+    if (isScar(item)) view.notes.push({ cls: 'gd-scar-note', text: t('✖ Шрам · снять нельзя · лечит Знахарь в Якоре или Очистка в Магазине') });
 });
 
 // Снятый шрам — не сожжённый навык (счётчик сожжений его не видит: inventory.js)
@@ -88,8 +89,8 @@ Hooks.on('updateCombat', async (combat, changed) => {
         const awake = actor.items.filter(i => isMemorySkill(i) && isAwake(i) && !isScar(i));
         const victim = awake[Math.floor(Math.random() * awake.length)];
         if (!victim) continue;
-        await sleepSkill(victim, { combatId: combat.id, until: 'round2', reason: 'шрам «Чужой голос», до конца первого раунда' });
-        await note(actor, 'Чужой голос', `<p>Чужой голос в голове ${esc(actor.name)} заглушает «${esc(victim.name)}» — навык спит до конца первого раунда.</p>`, 'fa-head-side-virus');
+        await sleepSkill(victim, { combatId: combat.id, until: 'round2', reason: t('шрам «Чужой голос», до конца первого раунда') });
+        await note(actor, t('Чужой голос'), `<p>${t('Чужой голос в голове {v} заглушает «{v2}» — навык спит до конца первого раунда.', { v: esc(actor.name), v2: esc(victim.name) })}</p>`, 'fa-head-side-virus');
     }
 });
 
@@ -121,7 +122,7 @@ Hooks.on('dnd5e.postUseActivity', async activity => {
     const max = Number(item.system?.uses?.max) || 0;
     if (!max) return;
     const roll = await new Roll('1d20').evaluate();
-    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `Трещина: «${item.name}»${roll.total === 1 ? ' — заряд сгорает дважды' : ''}` });
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: t('Трещина: «{name}»{v}', { name: item.name, v: roll.total === 1 ? t(' — заряд сгорает дважды') : '' }) });
     if (roll.total !== 1) return;
     const spent = Number(item.system.uses.spent) || 0;
     if (spent < max) await item.update({ 'system.uses.spent': spent + 1 });

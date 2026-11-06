@@ -6,6 +6,8 @@
  * line, rectangle) в пикселях. Навыкам нужна только геометрия, её и отдаёт shapeOf().
  */
 
+import { t } from "./i18n.js";
+
 /** v14: шаблоны — это Регионы */
 export const regionTemplates = () => (game.release?.generation ?? 13) >= 14;
 
@@ -64,7 +66,7 @@ export function onDeleteTemplate(fn) {
 }
 
 /** Круглая зона на сцене: v13 — MeasuredTemplate, v14 — Регион с кругом. distance — радиус в футах */
-export function createCircle(scene, { x, y, distance, fillColor, borderColor, name = 'Зона', flags = {} }) {
+export function createCircle(scene, { x, y, distance, fillColor, borderColor, name = t('Зона'), flags = {} }) {
     if (!regionTemplates()) {
         return scene.createEmbeddedDocuments('MeasuredTemplate', [{ t: 'circle', x, y, distance, direction: 0, fillColor, borderColor, flags }]);
     }

@@ -16,6 +16,7 @@ import { cellOf, occupied, nearestFree } from "../grid.js";
 import { placeToken } from "../pick.js";
 import { isLight, ref, actorFrom, tokenOf, lightCard, esc } from "./common.js";
 import { fxCalm } from "../../../core/prefs.js";
+import { t } from "../../../core/i18n.js";
 
 const FRAME_FT = 30;
 const FLAG = 'cameraFlash';
@@ -43,11 +44,11 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     }
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id)) {
-        ui.notifications.warn('Вспышка камеры: снимок делается в бою — он хранится до его конца.');
+        ui.notifications.warn(t('Вспышка камеры: снимок делается в бою — он хранится до его конца.'));
         return false;
     }
     if (!tokenOf(actor)) {
-        ui.notifications.warn('Вспышка камеры: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Вспышка камеры: токена персонажа нет на сцене.'));
         return false;
     }
 });
@@ -59,10 +60,10 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
 });
 
 onSocket('lightFlashShot', ({ payload }) => {
-    if (isActiveGM()) shoot(payload).catch(error => console.error('gachadnd | Вспышка камеры', error));
+    if (isActiveGM()) shoot(payload).catch(error => console.error(`gachadnd | Вспышка камеры`, error));
 });
 onSocket('lightFlashDevelop', ({ payload }) => {
-    if (isActiveGM()) develop(payload).catch(error => console.error('gachadnd | Вспышка камеры', error));
+    if (isActiveGM()) develop(payload).catch(error => console.error(`gachadnd | Вспышка камеры`, error));
 });
 
 /** Мастер: снимок */
@@ -78,7 +79,7 @@ export async function shoot({ actorId, tokenId, sceneId }) {
         tokens: framed.map(t => ({ id: t.id, x: t.x, y: t.y, name: t.name }))
     });
     flashAll(sceneId);
-    await lightCard(actor, 'Вспышка камеры', `<p>Щёлк! В кадре: ${framed.map(t => esc(t.name)).join(', ')}. ПЗ на снимке: ${hp.value}. Повторное использование навыка проявит снимок.</p>`, { icon: 'fa-camera' });
+    await lightCard(actor, t('Вспышка камеры'), `<p>${t('Щёлк! В кадре: {v}. ПЗ на снимке: {value}. Повторное использование навыка проявит снимок.', { v: framed.map(t => esc(t.name)).join(', '), value: hp.value })}</p>`, { icon: 'fa-camera' });
 }
 
 /** Мастер: проявка */
@@ -108,7 +109,7 @@ export async function develop({ actorId, tokenId, sceneId }) {
     await actor.update({ 'system.attributes.hp.value': shot.hp, 'system.attributes.hp.temp': shot.temp });
     await actor.unsetFlag(MODULE_ID, FLAG);
     flashAll(scene.id);
-    await lightCard(actor, 'Вспышка камеры — проявка', `<p>${moved.length ? `Вернулись на места со снимка: ${moved.map(esc).join(', ')}.` : 'Все и так на своих местах.'} ПЗ ${esc(actor.name)}: ${before} → ${shot.hp}.</p>`, { icon: 'fa-camera-retro' });
+    await lightCard(actor, t('Вспышка камеры — проявка'), `<p>${t('{v} ПЗ {v2}: {before} → {hp}.', { v: moved.length ? t('Вернулись на места со снимка: {v}.', { v: moved.map(esc).join(', ') }) : t('Все и так на своих местах.'), v2: esc(actor.name), before, hp: shot.hp })}</p>`, { icon: 'fa-camera-retro' });
 }
 
 /** Белая вспышка у всех на этой сцене */

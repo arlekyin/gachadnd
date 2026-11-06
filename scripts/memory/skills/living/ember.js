@@ -13,6 +13,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { pickCell } from "../pick.js";
 import { isLiving, livingSkill, counterOf, setCounter, ref, tokenOf, quiet, dcOf, damageOf, inCircle, blast, feetToPx, sourceOf } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const KIND = 'ember';
 const BASE = 5, STEP = 5, MAX = 30, PER = 3;
@@ -28,14 +29,14 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     if (chosen.has(item.id)) return;
     const caster = tokenOf(actor);
     if (!caster) {
-        ui.notifications.warn('Тлеющий уголь: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Тлеющий уголь: токена персонажа нет на сцене.'));
         return false;
     }
     const radius = emberRadius(item);
     pickCell({
         caster, range: Number(activity.range?.value) || 60,
         draw: (g, cell, ok, s) => g.lineStyle(2, ok ? 0xff7a1a : 0xff3030, 0.9).beginFill(0xff7a1a, ok ? 0.22 : 0.05).drawCircle(cell[0] * s + s / 2, cell[1] * s + s / 2, feetToPx(radius) + s / 2).endFill(),
-        hint: `Тлеющий уголь: точка пламени, радиус ${radius} футов. Правая кнопка или Esc — отмена.`
+        hint: t('Тлеющий уголь: точка пламени, радиус {radius} футов. Правая кнопка или Esc — отмена.', { radius })
     }).then(cell => {
         if (!cell) return;
         chosen.set(item.id, cell);
@@ -64,8 +65,8 @@ export async function flare({ actorId, sceneId, cell, radius, damage, dc }) {
     const point = { x: cell[0] * size + size / 2, y: cell[1] * size + size / 2 };
     const reach = feetToPx(radius, scene) + size / 2;
     return blast({
-        actor, title: 'Тлеющий уголь', icon: 'fa-fire', victims: inCircle(scene, point, reach),
-        formula: damage.formula, type: 'fire', ability: 'dex', dc, note: `Радиус пламени — ${radius} футов.`,
+        actor, title: t('Тлеющий уголь'), icon: 'fa-fire', victims: inCircle(scene, point, reach),
+        formula: damage.formula, type: 'fire', ability: 'dex', dc, note: t('Радиус пламени — {radius} футов.', { radius }),
         at: { sceneId, ...point, radius: reach, color: 0xff7a1a }
     });
 }
@@ -85,5 +86,5 @@ Hooks.on('dnd5e.applyDamage', async (actor, amount, options) => {
     const before = emberRadius(skill);
     await setCounter(skill, counterOf(skill) + 1);
     const after = emberRadius(skill);
-    if (after > before) ui.notifications.info(`${skill.name}: уголь разгорается — радиус ${after} футов.`);
+    if (after > before) ui.notifications.info(t('{name}: уголь разгорается — радиус {after} футов.', { name: skill.name, after }));
 });

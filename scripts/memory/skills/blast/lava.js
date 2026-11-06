@@ -13,6 +13,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { cellOf } from "../grid.js";
 import { isBlast, ref, actorFrom, esc, quiet, damageOf, blast } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const ROUNDS = 10;
 const FLAG = 'lava';
@@ -25,7 +26,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     quiet(usage, message);
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id)) {
-        ui.notifications.warn('Пол — это лава: только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Пол — это лава: только в бою, в котором участвует персонаж.'));
         return false;
     }
 });
@@ -52,7 +53,7 @@ export async function start({ actorId, tokenId, sceneId, formula }) {
     await combat.setFlag(MODULE_ID, FLAG, { actorId: actor.id, until: combat.round + ROUNDS, formula, starts });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card lava"><div class="gd-blast-title"><i class="fas fa-volcano"></i> Пол — это лава!</div><p>До конца раунда ${combat.round + ROUNDS - 1}: кто закончит ход там же, где начал, — получает ${esc(formula)} урона огнём. Всех касается.</p></div>`
+        content: `<div class="gd-blast-card lava"><div class="gd-blast-title"><i class="fas fa-volcano"></i> ${t('Пол — это лава!')}</div><p>${t('До конца раунда {v}: кто закончит ход там же, где начал, — получает {v2} урона огнём. Всех касается.', { v: combat.round + ROUNDS - 1, v2: esc(formula) })}</p></div>`
     });
 }
 
@@ -68,11 +69,11 @@ Hooks.on('updateCombat', async (combat, changed) => {
     if (token && state.starts?.[previous.id] && where(token) === state.starts[previous.id] && !above(token)
         && (token.actor?.system?.attributes?.hp?.value ?? 1) > 0) {
         const owner = actorFrom({ actorId: state.actorId, tokenId: null, sceneId: token.parent.id });
-        await blast({ actor: owner ?? token.actor, title: `Пол — это лава: ${token.name} стоял на месте`, icon: 'fa-volcano', victims: [token], formula: state.formula, type: 'fire' });
+        await blast({ actor: owner ?? token.actor, title: t('Пол — это лава: {name} стоял на месте', { name: token.name }), icon: 'fa-volcano', victims: [token], formula: state.formula, type: 'fire' });
     }
     if ('round' in changed && combat.round >= state.until) {
         await combat.unsetFlag(MODULE_ID, FLAG);
-        await ChatMessage.create({ content: '<div class="gd-blast-card lava"><div class="gd-blast-title"><i class="fas fa-volcano"></i> Пол — это лава</div><p>Пол остыл.</p></div>' });
+        await ChatMessage.create({ content: t('<div class="gd-blast-card lava"><div class="gd-blast-title"><i class="fas fa-volcano"></i> Пол — это лава</div><p>Пол остыл.</p></div>') });
         return;
     }
     // Начало хода: клетка запоминается

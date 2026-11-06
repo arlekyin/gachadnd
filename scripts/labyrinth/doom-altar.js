@@ -15,6 +15,7 @@ import { mapScene } from "./scene-travel.js";
 import { randomCrystal, buildCrystalData } from "../memory/crystals.js";
 import { HORSEMEN, partyActors, getHorseman, hasTakenHorseman } from "./horsemen.js";
 import { emit, onSocket } from "../core/socket.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -54,7 +55,7 @@ async function saveDoom(map, nodeId, doom) {
 
 async function chat(content) {
     await ChatMessage.create({
-        speaker: { alias: 'Алтарь Погибели' },
+        speaker: { alias: t('Алтарь Погибели') },
         content: `<div class="gachadnd-doom-chat">${content}</div>`
     });
 }
@@ -75,11 +76,11 @@ const HORSE_SEATS = [
     { x: 17, y: 64, facing: 'right' }, { x: 83, y: 64, facing: 'left' }
 ];
 const STATUS_LABELS = {
-    absent: () => 'Пасть пуста — этот всадник уже в отряде',
-    closed: () => 'Пасть сомкнута',
-    open: () => 'Пасть открыта',
-    taken: doom => `Забран: ${game.actors.get(doom.taken?.actorId)?.name ?? ''}`,
-    locked: (doom, threshold) => `Откроется при ${threshold} крови`
+    absent: () => t('Пасть пуста — этот всадник уже в отряде'),
+    closed: () => t('Пасть сомкнута'),
+    open: () => t('Пасть открыта'),
+    taken: doom => t('Забран: {v}', { v: game.actors.get(doom.taken?.actorId)?.name ?? '' }),
+    locked: (doom, threshold) => t('Откроется при {threshold} крови', { threshold })
 };
 
 export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -87,7 +88,7 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         id: 'gachadnd-doom-altar',
         classes: ['gachadnd-doom'],
         tag: 'div',
-        window: { title: 'Алтарь Погибели', icon: 'fas fa-horse-head', resizable: true },
+        window: { title: t('Алтарь Погибели'), icon: 'fas fa-horse-head', resizable: true },
         position: { width: 900, height: 780 },
         actions: {
             sacrifice: DoomAltar.#onSacrifice,
@@ -99,9 +100,9 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Мастер открывает алтарь — окно появляется у всех
     static async open() {
-        if (!game.user.isGM) return ui.notifications.warn('Алтарём управляет Мастер.');
+        if (!game.user.isGM) return ui.notifications.warn(t('Алтарём управляет Мастер.'));
         const found = currentDoomNode();
-        if (!found) return ui.notifications.warn('Отряд не стоит на узле Погибели.');
+        if (!found) return ui.notifications.warn(t('Отряд не стоит на узле Погибели.'));
         // Порядок, в котором кони открывают пасти, случаен для каждого алтаря и фиксируется при первом открытии
         if (!found.node.doom) {
             await saveDoom(found.map, found.node.id, { blood: 0, order: Object.keys(HORSEMEN).sort(() => Math.random() - 0.5), taken: null });
@@ -239,7 +240,7 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!state || !actor) return;
         const level = actor.system.details?.level ?? 1;
         const hp = actor.system.attributes.hp.value;
-        if (hp <= level) return ui.notifications.warn(`${actor.name}: не хватает ПЗ для жертвы.`);
+        if (hp <= level) return ui.notifications.warn(t('{name}: не хватает ПЗ для жертвы.', { name: actor.name }));
 
         await actor.update({ 'system.attributes.hp.value': hp - level });
         // Кристаллы — за каждую отметку крови, которую перешла эта жертва
@@ -248,15 +249,15 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         state.doom.blood += level;
         const crystals = [];
         for (let i = Math.floor(before / per); i < Math.floor(state.doom.blood / per); i++) {
-            const crystal = await randomCrystal(rollRarity(), 'проклят');
+            const crystal = await randomCrystal(rollRarity(), t('проклят'));
             if (crystal) crystals.push(crystal);
         }
         if (crystals.length) await actor.createEmbeddedDocuments('Item', crystals);
         // Последняя жертва — чтобы у всех проиграть капли и всплывающий кристалл
         state.doom.last = { actorId: actor.id, at: Date.now(), img: crystals.at(-1)?.img ?? null };
         await saveDoom(state.map, state.node.id, state.doom);
-        const gained = crystals.length ? ` Постамент отдаёт: ${crystals.map(c => `<strong>${esc(c.name)}</strong>`).join(', ')}.` : '';
-        await chat(`<strong>${esc(actor.name)}</strong> отдаёт постаменту ${level} ПЗ. Кровь: ${state.doom.blood}.${gained}`);
+        const gained = crystals.length ? ` ${t('Постамент отдаёт: {v}.', { v: crystals.map(c => `<strong>${esc(c.name)}</strong>`).join(', ') })}` : '';
+        await chat(`<strong>${esc(actor.name)}</strong> ${t('отдаёт постаменту {level} ПЗ. Кровь: {blood}.{gained}', { level, blood: state.doom.blood, gained })}`);
     }
 
     static async #onTake(event, target) {
@@ -266,18 +267,18 @@ export class DoomAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const actorId = this.element.querySelector(`select[data-horse="${key}"]`)?.value;
         const actor = game.actors.get(actorId);
         if (!state || !actor || state.doom.taken) return;
-        if (hasTakenHorseman(actor)) return ui.notifications.warn(`У персонажа ${actor.name} уже есть всадник.`);
+        if (hasTakenHorseman(actor)) return ui.notifications.warn(t('У персонажа {name} уже есть всадник.', { name: actor.name }));
 
         const pack = game.packs.get(`${MODULE_ID}.gacha-skills`);
         const index = await pack?.getIndex({ fields: [`flags.${MODULE_ID}.horseman`] });
         const entry = index?.find(e => e.flags?.[MODULE_ID]?.horseman === key);
-        if (!entry) return ui.notifications.error(`Кристалл всадника «${HORSEMEN[key]}» не найден в компендиуме навыков.`);
+        if (!entry) return ui.notifications.error(t('Кристалл всадника «{v}» не найден в компендиуме навыков.', { v: HORSEMEN[key] }));
 
         await actor.createEmbeddedDocuments('Item', [buildCrystalData(await pack.getDocument(entry._id))]);
         await actor.setFlag(MODULE_ID, 'horseman', key);
         state.doom.taken = { key, actorId: actor.id };
         await saveDoom(state.map, state.node.id, state.doom);
-        await chat(`Конь отдаёт кристалл <strong>${HORSEMEN[key]}</strong> персонажу <strong>${esc(actor.name)}</strong>. Пасти остальных коней смыкаются.`);
+        await chat(`${t('Конь отдаёт кристалл')} <strong>${HORSEMEN[key]}</strong> ${t('персонажу')} <strong>${esc(actor.name)}</strong>${t('. Пасти остальных коней смыкаются.')}`);
     }
 }
 

@@ -14,10 +14,10 @@
         <i class="gd-reflection"></i>
     </div>
     {{!-- Ставни: закрыты, если отряд не у Торговца; при новой выкладке опускаются и поднимаются --}}
-    <div class="gd-shutter"><span class="gd-shutter-plate">{{#if open}}Новая выкладка{{else}}Закрыто{{/if}}</span></div>
+    <div class="gd-shutter"><span class="gd-shutter-plate">{{#if open}}{{t "Новая выкладка"}}{{else}}{{t "Закрыто"}}{{/if}}</span></div>
     {{#if open}}
-    <button type="button" class="gd-restock" data-action="reroll" {{#unless reroll.can}}disabled{{/unless}} title="Опустить ставни и выложить другой товар">
-        <i class="fas fa-store-slash"></i> Новая выкладка · {{#if reroll.free}}даром{{else}}{{reroll.cost}} зм{{/if}}
+    <button type="button" class="gd-restock" data-action="reroll" {{#unless reroll.can}}disabled{{/unless}} title="{{t 'Опустить ставни и выложить другой товар'}}">
+        <i class="fas fa-store-slash"></i> {{t "Новая выкладка ·"}} {{#if reroll.free}}{{t "даром"}}{{else}}{{t "{cost} зм" cost=reroll.cost}}{{/if}}
     </button>
     {{/if}}
 </section>

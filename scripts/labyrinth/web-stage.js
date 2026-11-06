@@ -171,13 +171,42 @@ const seed = str => { let h = 2166136261; for (const ch of str) h = Math.imul(h 
 // Кристалл: вытянутый шестигранник; грани — светлая слева, тёмная справа, блик сверху
 const crystal = r => [0, -1.2 * r, 0.78 * r, -0.42 * r, 0.78 * r, 0.5 * r, 0, 1.2 * r, -0.78 * r, 0.5 * r, -0.78 * r, -0.42 * r];
 
+/** Обвод кристалла поровну на m кусков: по ломаной на голос */
+function splitLoop(flat, m) {
+    const pts = [];
+    for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
+    pts.push(pts[0]);
+    const lens = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+    const share = lens.reduce((a, b) => a + b, 0) / m;
+    const parts = [];
+    let seg = 0, used = 0;
+    const at = () => [pts[seg][0] + (pts[seg + 1][0] - pts[seg][0]) * used / lens[seg], pts[seg][1] + (pts[seg + 1][1] - pts[seg][1]) * used / lens[seg]];
+    for (let k = 0; k < m; k++) {
+        const line = at();
+        let left = share;
+        while (left > 1e-6) {
+            const step = Math.min(left, lens[seg] - used);
+            used += step; left -= step;
+            line.push(...at());
+            if (lens[seg] - used > 1e-6) continue;
+            if (seg === lens.length - 1) break;
+            seg++; used = 0;
+        }
+        parts.push(line);
+    }
+    return parts;
+}
+
+// Портреты на орбите: оборот за 70 секунд
+const ORBIT_SPEED = 2 * Math.PI / 70;
+
 const AMBER = 0xffb347, EMBER = 0xff8a1e, DIM_AMBER = 0x8a6230, BRASS = 0xb8925a, BONE = 0xf1e6cf, BOSS_RED = 0xc8322a;
 // Кольца астролябии (доли радиуса поля): обод, кольцо Застав, внутренняя зона, сердце у Босса
 const RINGS = { rim: 1.05, outposts: 0.62, inner: 0.35, core: 0.13 };
 
 export class WebStage {
-    constructor(canvas, { onStep, canStep, onHover, resizeTo = window, fog = null } = {}) {
-        this.onStep = onStep; this.canStep = canStep; this.onHover = onHover;
+    constructor(canvas, { onStep, canStep, onHover, onVote, resizeTo = window, fog = null } = {}) {
+        this.onStep = onStep; this.canStep = canStep; this.onHover = onHover; this.onVote = onVote;
         this.app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1, resizeTo });
         this.time = 0;
         this.shared = fog;
@@ -195,7 +224,10 @@ export class WebStage {
         this.nodesLayer = new PIXI.Container();
         this.fogLayer = new PIXI.Container();
         this.labels = new PIXI.Container();
-        this.app.stage.addChild(this.fog, this.rings, this.glows, this.lines, this.lantern, this.nodesLayer, this.fogLayer, this.labels);
+        // Голоса игроков: ореол — под кристаллами, оправа и орбита с портретами — над ними
+        this.voteGlows = new PIXI.Container();
+        this.votes = new PIXI.Container();
+        this.app.stage.addChild(this.fog, this.rings, this.glows, this.lines, this.lantern, this.voteGlows, this.nodesLayer, this.fogLayer, this.votes, this.labels);
         this.nodes = new Map();
         this.tendrils = [];
         this.sparks = [];
@@ -465,6 +497,84 @@ export class WebStage {
             }
         }
         this.#remember(model, here);
+        this.setVotes(model.votes);
+    }
+
+    /**
+     * Голоса игроков: оправа кристалла делится поровну между цветами голосов, ореол — их смесь,
+     * вокруг — латунное кольцо, по нему медленно плывут портреты.
+     * @param {Map<string, {id: string, name: string, img: string, color: string}[]>} votes  узел → проголосовавшие (map-votes.js)
+     */
+    setVotes(votes = new Map()) {
+        if (this.model) this.model.votes = votes;
+        for (const layer of [this.voteGlows, this.votes]) layer.removeChildren().forEach(c => c.destroy({ children: true }));
+        const before = this.orbits ?? [];
+        this.orbits = [];
+        this.voteHalos = [];
+        for (const [id, voters] of votes) {
+            const at = this.nodes.get(id);
+            if (!at || !voters.length) continue;
+            const { x, y } = at.node.position, r = at.r, colors = voters.map(v => hex(v.color));
+            const halo = new PIXI.Graphics();
+            halo.beginFill(colors.reduce((sum, c, i) => mixc(sum, c, 1 / (i + 1))), 1).drawCircle(x, y, r * 1.6).endFill();
+            halo.filters = [new PIXI.BlurFilter(r * 0.8)];
+            this.voteGlows.addChild(halo);
+            this.voteHalos.push(halo);
+            const rim = new PIXI.Graphics();
+            rim.position.set(x, y);
+            splitLoop(crystal(r * 1.5), colors.length).forEach((line, i) => {
+                rim.lineStyle({ width: 3, color: colors[i], alpha: 1, cap: 'round', join: 'round' }).moveTo(line[0], line[1]);
+                for (let k = 2; k < line.length; k += 2) rim.lineTo(line[k], line[k + 1]);
+            });
+            const rho = r * 2.1, face = Math.max(10, this.R * 0.62);
+            rim.lineStyle({ width: 1.4, color: BRASS, alpha: 0.85 }).drawCircle(0, 0, rho);
+            this.votes.addChild(rim);
+            voters.forEach((voter, i) => {
+                const g = this.#voteFace(voter, face);
+                this.votes.addChild(g);
+                // Новый голос всплывает; уже стоявший остаётся как был
+                const was = before.some(o => o.node === id && o.voter === voter.id);
+                this.orbits.push({ g, x, y, rho, node: id, voter: voter.id, angle: -Math.PI / 2 + i * 2 * Math.PI / voters.length, born: was ? 0 : performance.now() });
+            });
+        }
+        this.#moveOrbits();
+    }
+
+    /** Портрет: тень, арт в круге, ободок цвета игрока */
+    #voteFace(voter, r) {
+        const g = new PIXI.Container();
+        const back = new PIXI.Graphics();
+        back.beginFill(0x000000, 0.55).drawCircle(0, 1.5, r + 2).endFill();
+        back.beginFill(0x2a2420, 1).drawCircle(0, 0, r).endFill();
+        this.faces ??= new Map();
+        if (!this.faces.has(voter.img)) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = voter.img;
+            this.faces.set(voter.img, new PIXI.Texture(new PIXI.BaseTexture(img)));
+        }
+        const texture = this.faces.get(voter.img), art = new PIXI.Sprite(texture);
+        art.anchor.set(0.5);
+        const fit = () => { if (!art.destroyed) art.scale.set(2 * r / Math.min(texture.width, texture.height)); };
+        if (texture.baseTexture.valid) fit();
+        else texture.baseTexture.once('loaded', fit);
+        const mask = new PIXI.Graphics();
+        mask.beginFill(0xffffff, 1).drawCircle(0, 0, r).endFill();
+        art.mask = mask;
+        const ring = new PIXI.Graphics();
+        ring.lineStyle({ width: 2.4, color: hex(voter.color), alpha: 1 }).drawCircle(0, 0, r);
+        g.addChild(back, art, mask, ring);
+        return g;
+    }
+
+    /** Портреты плывут по кольцам; только что поставленный — всплывает */
+    #moveOrbits() {
+        const spin = this.time * ORBIT_SPEED, now = performance.now();
+        for (const o of this.orbits ?? []) {
+            o.g.position.set(o.x + Math.cos(o.angle + spin) * o.rho, o.y + Math.sin(o.angle + spin) * o.rho);
+            const k = o.born ? Math.min(1, (now - o.born) / 280) : 1;
+            o.g.scale.set(k < 1 ? 1.18 * Math.sin(k * Math.PI * 0.62) / Math.sin(Math.PI * 0.62) : 1);
+        }
     }
 
     /** Что было нарисовано — для анимации переходов при следующей перерисовке */
@@ -714,7 +824,12 @@ export class WebStage {
 
     /** Щелчок: первый — выбрать (кристалл загорается), второй по тому же — шаг */
     #tap(n) {
-        if (!this.canStep?.(n)) { playWeb('denied'); return this.onStep?.(n.id, false); }
+        if (!this.canStep?.(n)) {
+            // Игрок: щелчок — голос за узел; за узел под отрядом голосовать незачем
+            if (this.onVote?.(n)) return playWeb('select');
+            playWeb('denied');
+            return this.onStep?.(n.id, false);
+        }
         if (this.selected === n.id) { this.#select(null); return this.onStep?.(n.id, true); }
         this.#select(n.id);
     }
@@ -840,6 +955,10 @@ export class WebStage {
         if (this.innerRing) this.innerRing.rotation = t * 0.035;
         const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
         for (const { glow, data } of this.nodes.values()) if (data.state === 'reachable' && !data.visited) glow.alpha = 0.25 + 0.3 * pulse;
+        // Голоса: на появлении и закрытии слоя их нет, кристаллы приходят и уходят сами
+        this.votes.visible = this.voteGlows.visible = !this.intro && !this.leaving;
+        for (const halo of this.voteHalos ?? []) halo.alpha = 0.3 + 0.25 * pulse;
+        this.#moveOrbits();
         if (this.pointer) {
             const k = Math.min(1, (performance.now() - this.pointer.start) / 900), e = 1 - (1 - k) ** 3;
             this.pointer.g.rotation = this.pointer.from + (this.pointer.to - this.pointer.from) * e;

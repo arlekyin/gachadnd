@@ -1,8 +1,8 @@
 // Огранка в настоящей Foundry: node tools/foundry/facet.mjs [--headed]
 // Камни за ступени синергий; вкладка «Огранка» в Терминале — оружие и категории с тремя гнёздами, шкатулка
-// камней; предел камней тега; Разлёт, Перекидка (выбор игрока), Переливание — карточками; Мина — закладка
-// в клетку в досягаемости способности и срабатывание, когда туда вошли; В долг — без ячейки, максимум ПЗ меньше
-// в начале следующего хода; Переливание — союзнику рядом с героем; Выброс — только ближе к цели; Раскат —
+// камней; предел камней тега; Разлёт (и союзнику), Перекидка (ближайшему, полный урон), Переливание — карточками;
+// Мина — закладка в клетку в досягаемости способности и срабатывание, когда туда вошли; В долг — без ячейки,
+// вместо неё кости хитов; Переливание — союзнику рядом с героем; Выброс — только ближе к цели; Раскат —
 // половина в начале следующего хода; Плата кровью — кнопка в карточке; камни гаснут, если ступень упала;
 // игрок вставляет камень сам. Броски: промах по цели — камни молчат; та же атака против КД каждого задетого;
 // у Волны — спасбросок в карточке камня; Мина замораживает атаку — наступивший против своего КД. Выброс —
@@ -91,22 +91,15 @@ await ev(() => foundry.applications.instances.get('gachadnd-dock')?.close({ inst
 await target(a);
 let r = await roll(weapons['Меч'], 'attack');
 const spread = r.cards.find(x => /Разлёт — Меч/.test(x.text));
-check('Разлёт: урон Мечом по Врагу А — карточка тем же уроном Врагу Б и Врагу В', spread && /Враг Б/.test(spread.text) && /Враг В/.test(spread.text) && spread.text.includes(String(r.total)), JSON.stringify({ total: r.total, cards: r.cards.map(x => x.text) }));
+check('Разлёт: урон Мечом по Врагу А — карточка тем же уроном Врагу Б и Врагу В; героя рядом не задевает', spread && /Враг Б/.test(spread.text) && /Враг В/.test(spread.text) && !/герой/.test(spread.text) && spread.text.includes(String(r.total)), JSON.stringify({ total: r.total, cards: r.cards.map(x => x.text) }));
 
-// ---------- Перекидка: два кандидата — выбирает игрок, половина
+// ---------- Перекидка: ближайшему к цели, тем же уроном (Враг Б и Враг В рядом — один из них)
 await unplace(weapons['Меч'], 'spread');
 await place(weapons['Меч'], 'hop');
 await target(a);
 r = await roll(weapons['Меч'], 'attack');
-const hopCard = r.cards.find(x => x.flags.facetHop);
-const hop = hopCard ? await ev(async ({ id, uuid }) => {
-    const n = game.messages.size;
-    (await gdt.mod('core/socket.js')).requestGM('facetHopPick', { messageId: id, uuid });
-    await new Promise(r => setTimeout(r, 1500));
-    return { used: game.messages.get(id).getFlag('gachadnd', 'facetHop').used, cards: game.messages.contents.slice(n).map(m => m.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')) };
-}, { id: hopCard.id, uuid: await ev(id => canvas.tokens.placeables.find(t => t.actor?.id === id).document.uuid, c) }) : null;
-check('Перекидка: кандидатов двое — кнопки; выбран Враг В — ему половина урона',
-    hopCard && hop?.used && hop.cards.some(t => /Перекидка — Меч/.test(t) && /Враг В/.test(t) && t.includes(String(Math.floor(r.total / 2)))), JSON.stringify({ total: r.total, hopCard: hopCard?.text, hop }));
+const hopCard = r.cards.find(x => /Перекидка — Меч/.test(x.text))?.text ?? '';
+check('Перекидка: ближайшему к цели без выбора и тем же уроном, одному', /ближайшее существо/.test(hopCard) && hopCard.includes(String(r.total)) && /Враг Б/.test(hopCard) !== /Враг В/.test(hopCard), JSON.stringify({ total: r.total, hopCard }));
 await f.shot('facet-2-hop');
 
 // ---------- Переливание: урон по врагу лечит союзника рядом с героем (Союзник — слева от героя)
@@ -255,6 +248,7 @@ const debt = await ev(async ({ hero, id }) => {
     const actor = game.actors.get(hero);
     await actor.update({ 'system.attributes.hp.value': 30, 'system.spells.spell1.value': 2 });
     const slotsBefore = actor.system.spells.spell1.value;
+    const diceBefore = Object.values(actor.classes).reduce((s, c) => s + c.system.hd.value, 0);
     canvas.tokens.placeables.find(t => t.actor?.id === hero).setTarget(true, { releaseOthers: true });
     const activity = actor.items.get(id).system.activities.contents[0];
     // Начать с хода врага, чтобы следующий ход героя был «следующим»
@@ -267,17 +261,15 @@ const debt = await ev(async ({ hero, id }) => {
     Hooks.once('dnd5e.preRollDamageV2', config => { for (const roll of config.rolls ?? []) roll.parts = ['8']; });
     await activity.rollDamage({}, { configure: false }, {});
     await sleep(1200);
-    const mid = { slots: actor.system.spells.spell1.value, debt: actor.getFlag('gachadnd', 'facetDebt'), echo: (actor.getFlag('gachadnd', 'facetEcho') ?? []).length, hp: actor.system.attributes.hp.value };
+    const mid = { slots: actor.system.spells.spell1.value, dice: Object.values(actor.classes).reduce((s, c) => s + c.system.hd.value, 0), echo: (actor.getFlag('gachadnd', 'facetEcho') ?? []).length, hp: actor.system.attributes.hp.value };
     const n = game.messages.size;
     for (let i = 0; i < game.combat.turns.length && game.combat.combatant?.actorId !== hero; i++) { await game.combat.nextTurn(); await sleep(600); }
     await sleep(1200);
     const texts = game.messages.contents.slice(n).map(m => m.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
-    const tempmax = actor.system.attributes.hp.tempmax;
-    await actor.update({ 'system.attributes.hp.tempmax': 0 });
-    return { slotsBefore, ...mid, hpAfter: actor.system.attributes.hp.value, tempmax, debtAfter: actor.getFlag('gachadnd', 'facetDebt') ?? null, echoCard: texts.some(t => /Раскат —/.test(t)), payCard: texts.some(t => /расплата/.test(t)) };
+    return { slotsBefore, diceBefore, ...mid, tempmax: actor.system.attributes.hp.tempmax, echoCard: texts.some(t => /Раскат —/.test(t)) };
 }, { hero: ids.hero, id: kit['cure-wounds'] });
-check('В долг: Исцеление ран не потратило ячейку, долг 5 ПЗ ждёт хода', debt.slotsBefore > 0 && debt.slots === debt.slotsBefore && debt.debt === 5 && debt.hp === 30 && debt.echo === 1, JSON.stringify(debt));
-check('начало следующего хода героя: долг снят — максимум ПЗ на 5 меньше, текущие те же; Раскат — карточка половины лечения', debt.hpAfter === 30 && debt.tempmax === -5 && !debt.debtAfter && debt.echoCard && debt.payCard, JSON.stringify(debt));
+check('В долг: Исцеление ран 1-го круга не потратило ячейку, ушла одна кость хитов; ПЗ и максимум на месте', debt.slotsBefore > 0 && debt.slots === debt.slotsBefore && debt.dice === debt.diceBefore - 1 && debt.hp === 30 && !debt.tempmax && debt.echo === 1, JSON.stringify(debt));
+check('начало следующего хода героя: Раскат — карточка половины лечения', debt.echoCard, JSON.stringify(debt));
 await ev(id => game.combats.get(id)?.delete(), combatId);
 await wait(800);
 
@@ -297,7 +289,7 @@ const pay = await ev(async ({ hero, sword }) => {
     await sleep(1500);
     return { line, hp: actor.system.attributes.hp.value, level: actor.system.details.level };
 }, { hero: ids.hero, sword: weapons['Меч'] });
-check('Плата кровью: в карточке Меча строка «Огранка: Перекидка, Плата кровью» и кнопка — нажали, ушли ПЗ по уровню', /Перекидка/.test(pay.line) && /Плата кровью/.test(pay.line) && pay.hp === 40 - pay.level, JSON.stringify(pay));
+check('Плата кровью: в карточке Меча строка «Огранка: Перекидка, Плата кровью» и кнопка «Без траты действия» — нажали, ушли ПЗ по уровню', /Перекидка/.test(pay.line) && /Плата кровью/.test(pay.line) && /Без траты действия/.test(pay.line) && pay.hp === 40 - pay.level, JSON.stringify(pay));
 
 // ---------- Ступень упала — камень гаснет, но остаётся
 const fade = await ev(async ({ hero, skill, sword }) => {

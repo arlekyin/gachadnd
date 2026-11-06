@@ -3,6 +3,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { tagsLabel, categoryLabel } from "../core/ids.js";
 import { isMemorySkill } from "./synergy/synergy.js";
 import { addSkillToMemory } from "./inventory.js";
 import { randomCrystal, randomCrystalWithTag, crystalImage } from "./crystals.js";
@@ -10,6 +11,7 @@ import { SYNERGIES } from "./synergy/synergy-tiers.js";
 import { HOOKS } from "./memory-api.js";
 import { startDraft } from "./draft.js";
 import { revealLoot } from "./effects/loot-reveal.js";
+import { t } from "../core/i18n.js";
 
 // Веса редкости по этажам забега: чем глубже, тем больше редких
 const RARITY_WEIGHTS_BY_FLOOR = [
@@ -64,10 +66,10 @@ const RARITY_COLORS = {
 
 const ROOM_TEMPLATES = {
     // Цель — 5–6 кристаллов на игрока за этаж: путь из 5 узлов даёт в среднем 1,75 Монстров и 0,75 Элиты, плюс Босс
-    'normal': { name: 'Обычная комната', chancePerPlayer: 1.0, bonusRoll: false },
-    'elite': { name: 'Элитный противник', chancePerPlayer: 1.5, bonusRoll: true },
-    'boss': { name: 'Босс', chancePerPlayer: 2.0, bonusRoll: true },
-    'cursed': { name: 'Проклятая комната', chancePerPlayer: 2.0, bonusRoll: false, excludeOrange: true, requiredTag: 'проклят' }
+    'normal': { name: t('Обычная комната'), chancePerPlayer: 1.0, bonusRoll: false },
+    'elite': { name: t('Элитный противник'), chancePerPlayer: 1.5, bonusRoll: true },
+    'boss': { name: t('Босс'), chancePerPlayer: 2.0, bonusRoll: true },
+    'cursed': { name: t('Проклятая комната'), chancePerPlayer: 2.0, bonusRoll: false, excludeOrange: true, requiredTag: t('проклят') }
 };
 
 function pickWeighted(weights) {
@@ -114,18 +116,18 @@ export const LOOT_ID = 'gachadnd-loot-terminal';
 
 // Пункты окна генератора: комнаты с нормой на игрока и фильтр редкости
 const ROOM_OPTIONS = [
-    { value: 'normal', label: 'Обычная комната (1 на игрока)' },
-    { value: 'elite', label: 'Элитный противник, Застава (1,5 на игрока)' },
-    { value: 'boss', label: 'Босс (2 на игрока)' },
-    { value: 'cursed', label: 'Проклятая комната (2 на игрока)' }
+    { value: 'normal', label: t('Обычная комната (1 на игрока)') },
+    { value: 'elite', label: t('Элитный противник, Застава (1,5 на игрока)') },
+    { value: 'boss', label: t('Босс (2 на игрока)') },
+    { value: 'cursed', label: t('Проклятая комната (2 на игрока)') }
 ];
 const RARITY_OPTIONS = [
-    { value: 'any', label: 'Без фильтра (стандартные шансы)' },
-    { value: 'gray', label: 'Только серые' },
-    { value: 'green', label: 'Только зелёные' },
-    { value: 'blue', label: 'Только синие' },
-    { value: 'purple', label: 'Только фиолетовые' },
-    { value: 'red', label: 'Только красные' }
+    { value: 'any', label: t('Без фильтра (стандартные шансы)') },
+    { value: 'gray', label: t('Только серые') },
+    { value: 'green', label: t('Только зелёные') },
+    { value: 'blue', label: t('Только синие') },
+    { value: 'purple', label: t('Только фиолетовые') },
+    { value: 'red', label: t('Только красные') }
 ].map(o => ({ ...o, color: RARITY_COLORS[o.value] ?? null }));
 
 export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -133,22 +135,25 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
         id: LOOT_ID,
         classes: ['gachadnd-loot'],
         tag: 'form',
-        window: { title: 'Генератор добычи (Мастер)', icon: 'fas fa-gem' },
+        window: { title: t('Генератор добычи (Мастер)'), icon: 'fas fa-gem' },
         position: { width: 380, height: 'auto' },
         form: { handler: GachaLootTerminal.#onSubmit, closeOnSubmit: true }
     };
 
     static PARTS = { form: { template: 'modules/gachadnd/templates/loot/form.hbs' } };
 
-    static open() {
-        const existing = foundry.applications.instances?.get(LOOT_ID);
-        if (existing) return existing.render({ force: true }).then(() => existing.bringToFront?.());
-        return new GachaLootTerminal().render({ force: true });
+    /** room — какая комната выбрана при открытии (Обеты открывают на Элите) */
+    room = null;
+
+    static open({ room = null } = {}) {
+        const app = foundry.applications.instances?.get(LOOT_ID) ?? new GachaLootTerminal();
+        if (room) app.room = room;
+        return app.render({ force: true }).then(() => app.bringToFront?.());
     }
 
     async _prepareContext() {
         return {
-            rooms: ROOM_OPTIONS, rarities: RARITY_OPTIONS,
+            rooms: ROOM_OPTIONS.map(o => ({ ...o, selected: o.value === this.room })), rarities: RARITY_OPTIONS,
             players: game.users.filter(u => u.active && !u.isGM).length || 4
         };
     }
@@ -174,7 +179,8 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
 
         // Подключённые системы добавляют кристаллы до броска (Лабиринт — за ступени Босса паутины):
         // plan.extra — сколько ещё, plan.rarities — редкость для первых из них (остальные — обычный бросок)
-        const plan = { roomType, extra: 0, rarities: [], lines: [] };
+        // plan.goldScale — множитель золота комнаты
+        const plan = { roomType, players, extra: 0, rarities: [], lines: [], goldScale: 1 };
         Hooks.callAll(HOOKS.lootPlanned, plan);
         dropsCount += Math.max(0, plan.extra);
         const planned = [...plan.rarities];
@@ -214,13 +220,13 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
         }
 
         // Подключённые системы добавляют своё (Лабиринт — золото комнаты) и строку в карточку
-        const loot = { roomType, actor: targetActor, lines: [...roll.lines], tasks: [] };
+        const loot = { roomType, actor: targetActor, lines: [...roll.lines], tasks: [], goldScale: plan.goldScale };
         Hooks.callAll(HOOKS.lootGenerated, loot);
         await Promise.all(loot.tasks);
 
         const forced = await this.applyForcedLoot(template, rarityFilter);
         // Гарантия близко — игроки видят только атмосферу, без чисел
-        if (rarityFilter === 'any' && pity.miss >= PITY.softFrom - 1) loot.lines.push('<div style="text-align: center; margin-top: 8px; color: #b9a6d8; font-style: italic;"><i class="fas fa-smog"></i> Туман густеет: вероятность копится.</div>');
+        if (rarityFilter === 'any' && pity.miss >= PITY.softFrom - 1) loot.lines.push(t('<div style="text-align: center; margin-top: 8px; color: #b9a6d8; font-style: italic;"><i class="fas fa-smog"></i> Туман густеет: вероятность копится.</div>'));
         await this.printLootCard(template.name, drops, targetActor, forced, loot.lines, draftOrder);
     }
 
@@ -252,12 +258,12 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
     async printLootCard(roomName, drops, targetActor, forced = [], lines = [], draftOrder = null) {
         let contentHtml = ``;
         if (drops.length === 0) {
-            contentHtml = `<div style="text-align: center; padding: 15px; color: #7a7062;">Ничего ценного...</div>`;
+            contentHtml = `<div style="text-align: center; padding: 15px; color: #7a7062;">${t('Ничего ценного...')}</div>`;
         } else {
             contentHtml = drops.map(d => {
                 const color = RARITY_COLORS[d.rarity] || '#aaa';
                 const flags = d.crystal.flags[MODULE_ID];
-                const tags = (flags.tags || []).join(', ');
+                const tags = tagsLabel(flags.tags);
                 const customImg = crystalImage(d.rarity);
 
                 return `
@@ -265,33 +271,33 @@ export class GachaLootTerminal extends HandlebarsApplicationMixin(ApplicationV2)
                         <img src="${customImg}" style="width: 40px; height: 40px; border-radius: 3px; border: 1px solid ${color};">
                         <div>
                             <div style="font-weight: bold; color: ${color}; font-size: 1.15em;">${d.crystal.name}</div>
-                            <div style="font-size: 0.8em; color: #8c8275;">${flags.category || 'УТИЛИТА'} ${tags ? `• [${tags}]` : ''}</div>
+                            <div style="font-size: 0.8em; color: #8c8275;">${categoryLabel(flags.category || 'УТИЛИТА')} ${tags ? `• [${tags}]` : ''}</div>
                         </div>
                     </div>`;
             }).join('');
         }
 
         const forcedText = {
-            added: () => 'занесён в Память',
-            duplicate: () => 'повтор — кристалл в инвентаре, слияние на Алтаре Памяти',
-            replaced: r => `занесён в Память, сгорел «${r.replacedName}»`,
-            burned: () => 'сгорел'
+            added: () => t('занесён в Память'),
+            duplicate: () => t('повтор — кристалл в инвентаре, слияние на Алтаре Памяти'),
+            replaced: r => t('занесён в Память, сгорел «{replacedName}»', { replacedName: r.replacedName }),
+            burned: () => t('сгорел')
         };
         const forcedHtml = forced.length ? `
             <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #2a2626;">
-                <div style="color: #ff003c; text-align: center; margin-bottom: 6px;">ЖАДНОСТЬ</div>
+                <div style="color: #ff003c; text-align: center; margin-bottom: 6px;">${t('ЖАДНОСТЬ')}</div>
                 ${forced.map(r => `<div style="font-size: 0.9em; color: #d0c9c0;"><strong>${r.actor.name}:</strong> <span style="color: ${RARITY_COLORS[r.rarity] || '#aaa'};">${r.skillName}</span> — ${forcedText[r.status]?.(r) ?? r.status}</div>`).join('')}
             </div>` : '';
 
-        const statusText = targetActor ? `<span style="color: #1eff00;">Добыча добавлена: <strong>${targetActor.name}</strong></span>`
-            : draftOrder ? `<span style="color: #ffaa00;">Кристаллы делятся по очереди: ${draftOrder.join(' → ')}</span>`
-            : drops.length ? `<span style="color: #ffaa00;">Токен не выделен, персонажей отряда нет.</span>` : '';
+        const statusText = targetActor ? `<span style="color: #1eff00;">${t('Добыча добавлена:')} <strong>${targetActor.name}</strong></span>`
+            : draftOrder ? `<span style="color: #ffaa00;">${t('Кристаллы делятся по очереди: {v}', { v: draftOrder.join(' → ') })}</span>`
+            : drops.length ? `<span style="color: #ffaa00;">${t('Токен не выделен, персонажей отряда нет.')}</span>` : '';
 
         ChatMessage.create({
-            speaker: ChatMessage.getSpeaker({ alias: "Туманный Разлом" }),
+            speaker: ChatMessage.getSpeaker({ alias: t("Туманный Разлом") }),
             content: `
             <div style="background: #0b0a0a; border: 2px solid #3d3834; border-radius: 6px; padding: 12px; font-family: 'Modesto Condensed', serif;">
-                <h3 style="text-align: center; color: #ede6dc; margin-bottom: 12px;">ДОБЫЧА: <span style="color: #ffaa00;">${roomName.toUpperCase()}</span></h3>
+                <h3 style="text-align: center; color: #ede6dc; margin-bottom: 12px;">${t('ДОБЫЧА:')} <span style="color: #ffaa00;">${roomName.toUpperCase()}</span></h3>
                 ${contentHtml}
                 ${lines.join('')}
                 <div style="text-align: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #2a2626;">${statusText}</div>

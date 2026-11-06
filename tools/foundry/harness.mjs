@@ -184,6 +184,16 @@ export async function joinAs(f, user) {
 }
 
 /**
+ * Последняя вошедшая в мир вкладка не получает рассылок сокета (особенность стенда): после игроков входит временный
+ * «зритель». close() — выйти и удалить его (страница Мастера должна быть открыта)
+ */
+export async function joinSpectator(f) {
+    await f.page.evaluate(async () => { if (!game.users.getName('GD-тест: зритель')) await User.create({ name: 'GD-тест: зритель', role: 1, password: '' }); });
+    const s = await joinAs(f, 'GD-тест: зритель');
+    return { ...s, close: async () => { await s.close(); await f.page.evaluate(async () => game.users.getName('GD-тест: зритель')?.delete()).catch(() => {}); } };
+}
+
+/**
  * Раннер: перед каждой проверкой страница перезагружается — вход сохраняется, мир грузится заново.
  * Одна страница не переживает десятки пересозданных сцен подряд на программном рендере.
  */

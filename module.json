@@ -98,7 +98,14 @@
       {
         "id": "impact-frames",
         "type": "module",
+        "manifest": "https://github.com/arlekyin/impact-frames/releases/latest/download/module.json",
         "reason": "Анимация удара Сайтамы: подъезд, серия ударов, полёт цели. Без модуля навык только отбрасывает цель."
+      },
+      {
+        "id": "token-choreography",
+        "type": "module",
+        "manifest": "https://github.com/arlekyin/token-choreography/releases/latest/download/module.json",
+        "reason": "Анимации токенов: походка, вес, отклик на удар. Рогалик работает и без него. Если у вас уже стоит другой модуль анимации токенов, снимите галочку: они могут конфликтовать."
       }
     ]
   },

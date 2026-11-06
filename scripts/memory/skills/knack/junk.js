@@ -16,6 +16,8 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { isKnack, ref, actorFrom, tokenOf, esc, noTemplate, targetsWithin, card, refund, centerOf } from "./common.js";
+import { t } from "../../../core/i18n.js";
+import { tileData } from "../../../core/tiles.js";
 
 const RANGE = 60;
 const thrownOf = item => item?.flags?.[MODULE_ID]?.thrown ?? null;
@@ -30,9 +32,9 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     if (!isKnack(item, 'junk') || !actor) return;
     noTemplate(usage);
     const token = tokenOf(actor)?.document;
-    if (!token) { ui.notifications.warn('Рандомная хрень: токена персонажа нет на сцене.'); return false; }
-    if (!throwable(actor).length) { ui.notifications.warn('Рандомная хрень: в сумке нет неэкипированного оружия — швырять нечего.'); return false; }
-    if (!targetsWithin(token, RANGE).length) { ui.notifications.warn(`Рандомная хрень: выберите цели (T) в пределах ${RANGE} футов.`); return false; }
+    if (!token) { ui.notifications.warn(t('Рандомная хрень: токена персонажа нет на сцене.')); return false; }
+    if (!throwable(actor).length) { ui.notifications.warn(t('Рандомная хрень: в сумке нет неэкипированного оружия — швырять нечего.')); return false; }
+    if (!targetsWithin(token, RANGE).length) { ui.notifications.warn(t('Рандомная хрень: выберите цели (T) в пределах {RANGE} футов.', { RANGE })); return false; }
 });
 
 Hooks.on('dnd5e.postUseActivity', (activity) => {
@@ -54,10 +56,10 @@ async function choose(actor, item) {
         <span style="flex:1">${esc(w.name)}</span>
         <select name="t${i}">${options}</select></label>`).join('');
     const picked = await foundry.applications.api.DialogV2.prompt({
-        window: { title: 'Рандомная хрень, вперёд!' },
-        content: `<p>Швырните до <strong>${limit}</strong> предметов — что в кого:</p>${rows}`,
+        window: { title: t('Рандомная хрень, вперёд!') },
+        content: `<p>${t('Швырните до')} <strong>${limit}</strong> ${t('предметов — что в кого:')}</p>${rows}`,
         ok: {
-            label: 'Вперёд!',
+            label: t('Вперёд!'),
             callback: (event, button) => {
                 const f = button.form.elements;
                 return weapons.map((w, i) => f[`w${i}`].checked ? { itemId: w.id, tokenId: f[`t${i}`].value } : null).filter(Boolean);
@@ -65,8 +67,8 @@ async function choose(actor, item) {
         },
         rejectClose: false
     });
-    if (!picked?.length) { await refund(item); return ui.notifications.info('Рандомная хрень: бросок отменён, заряд вернулся.'); }
-    if (picked.length > limit) { await refund(item); return ui.notifications.warn(`Рандомная хрень: не больше ${limit} предметов за раз — заряд вернулся.`); }
+    if (!picked?.length) { await refund(item); return ui.notifications.info(t('Рандомная хрень: бросок отменён, заряд вернулся.')); }
+    if (picked.length > limit) { await refund(item); return ui.notifications.warn(t('Рандомная хрень: не больше {limit} предметов за раз — заряд вернулся.', { limit })); }
 
     // Атаки — штатные dnd5e: цель на время броска — та, в которую летит предмет
     const before = [...game.user.targets].map(t => t.id);
@@ -99,18 +101,18 @@ export async function hurl({ actorId, tokenId, sceneId, throws }) {
         const spread = tiles.filter(t => t.target === target.id).length;
         tiles.push({
             target: target.id, weapon,
-            data: {
+            data: tileData({
                 texture: { src: weapon.img }, width: size * 0.45, height: size * 0.45,
                 x: c.x - size * 0.22 + spread * size * 0.18, y: c.y + size * 0.1, rotation: Math.floor(Math.random() * 90) - 45,
                 flags: { [MODULE_ID]: { junk: { actorId: actor.id, itemId: weapon.id, name: weapon.name } } }
-            }
+            })
         });
     }
     const created = tiles.length ? await scene.createEmbeddedDocuments('Tile', tiles.map(t => t.data)) : [];
     for (const [i, tile] of created.entries()) await tiles[i].weapon.setFlag(MODULE_ID, 'thrown', { sceneId, tileId: tile.id });
     const pick = created.map(t => `<button type="button" class="gd-knack-btn" data-gd-junk="${t.id}"><i class="fas fa-hand"></i> ${esc(t.flags[MODULE_ID].junk.name)}</button>`).join('');
-    return card(actor, 'Рандомная хрень, вперёд!', `<p>Брошено: ${esc(tiles.map(t => `${t.weapon.name} → ${scene.tokens.get(t.target)?.name}`).join(', '))}. Урон — кнопкой на карточке каждой атаки.</p>`
-        + (created.length ? `<p>Подобрать до конца боя:</p><div class="gd-knack-buttons">${pick}</div>` : ''),
+    return card(actor, t('Рандомная хрень, вперёд!'), `<p>${t('Брошено: {v}. Урон — кнопкой на карточке каждой атаки.', { v: esc(tiles.map(t => `${t.weapon.name} → ${scene.tokens.get(t.target)?.name}`).join(', ')) })}</p>`
+        + (created.length ? `<p>${t('Подобрать до конца боя:')}</p><div class="gd-knack-buttons">${pick}</div>` : ''),
         { icon: 'fa-dumpster-fire', flags: { junk: { sceneId, actorId: actor.id } } });
 }
 
@@ -163,6 +165,6 @@ Hooks.on('deleteCombat', async combat => {
         if (!actor) continue;
         const ids = lost.map(l => l.itemId).filter(id => actor.items.has(id));
         if (ids.length) await actor.deleteEmbeddedDocuments('Item', ids);
-        await card(actor, 'Рандомная хрень, вперёд!', `<p>Не подобрали — пропало навсегда: ${esc(lost.map(l => l.name).join(', '))}.</p>`, { icon: 'fa-dumpster-fire' });
+        await card(actor, t('Рандомная хрень, вперёд!'), `<p>${t('Не подобрали — пропало навсегда: {v}.', { v: esc(lost.map(l => l.name).join(', ')) })}</p>`, { icon: 'fa-dumpster-fire' });
     }
 });

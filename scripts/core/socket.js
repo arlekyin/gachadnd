@@ -6,6 +6,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
+import { t } from "./i18n.js";
 
 const SOCKET = `module.${MODULE_ID}`;
 const handlers = {};
@@ -42,6 +43,6 @@ onSocket('notify', message => {
 export function requestGM(action, payload) {
     payload = { ...payload, userId: game.user.id };
     if (isActiveGM()) return handlers[action]?.({ action, payload: { ...payload } });
-    if (!game.users.activeGM) return ui.notifications.warn('Действие выполняет Мастер — дождитесь его в игре.');
+    if (!game.users.activeGM) return ui.notifications.warn(t('Действие выполняет Мастер — дождитесь его в игре.'));
     emit(action, { payload });
 }

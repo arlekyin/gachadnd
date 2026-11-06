@@ -25,9 +25,9 @@
         {{#if last.img}}<img class="gd-rising" src="{{last.img}}" alt="">{{/if}}
     </div>
     <div class="gd-blood-count">
-        <b>{{chalice.blood}}</b> крови
-        {{#if chalice.done}}· пасти коней сомкнуты{{else}}{{#if chalice.next}}· следующий конь при {{chalice.next}}{{else}}· все кони пробудились{{/if}}{{/if}}
+        <b>{{chalice.blood}}</b> {{t "крови"}}
+        {{#if chalice.done}}{{t "· пасти коней сомкнуты"}}{{else}}{{#if chalice.next}}{{t "· следующий конь при {next}" next=chalice.next}}{{else}}{{t "· все кони пробудились"}}{{/if}}{{/if}}
     </div>
-    <div class="gd-curse-count">проклятый кристалл — через {{chalice.curseIn}} крови</div>
+    <div class="gd-curse-count">{{t "проклятый кристалл — через {curseIn} крови" curseIn=chalice.curseIn}}</div>
     {{/if}}
 </section>

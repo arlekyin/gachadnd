@@ -3,34 +3,34 @@
     <div class="gd-map-status">
         {{#if current}}
         <span class="gd-map-here" style="--node: {{current.color}}"><i class="fas {{current.icon}}"></i> {{current.label}}</span>
-        {{#if next.length}}<span class="gd-map-next">дальше — {{#each next}}<b style="--node: {{color}}">{{label}}</b>{{/each}}</span>{{else}}<span class="gd-map-next">этаж пройден</span>{{/if}}
+        {{#if next.length}}<span class="gd-map-next">{{t "дальше —"}} {{#each next}}<b style="--node: {{color}}">{{label}}</b>{{/each}}</span>{{else}}<span class="gd-map-next">{{t "этаж пройден"}}</span>{{/if}}
         {{else}}
-        <span class="gd-map-next">{{#if web}}Отряд у края паутины — войти можно с любого узла внешней зоны{{else}}Отряд у Входа — путь начинается с него{{/if}}</span>
+        <span class="gd-map-next">{{#if web}}{{t "Отряд у края паутины — войти можно с любого узла внешней зоны"}}{{else}}{{t "Отряд у Входа — путь начинается с него"}}{{/if}}</span>
         {{/if}}
     </div>
     {{#if web}}
-    <div class="gd-web-clock" title="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые 2 шага.">
-        <i class="fas fa-hourglass-half"></i> Шаг {{web.ticks}} ·
-        {{#if web.calm}}тишина ещё {{web.calm}}{{else}}{{#if web.toNext}}до ступени Босса {{web.toNext}}{{else}}Босс в полной силе{{/if}}{{/if}}
-        · ступеней {{web.stage}}/{{web.max}}{{#if web.eaten}} · съедено узлов: {{web.eaten}}{{/if}}
-        {{#if isGM}}{{#if web.devourer}}<button type="button" data-action="devourerGone" title="Откуп, ушёл с Брюхом — поедание замирает">Пожиратель ушёл</button>{{/if}}{{/if}}
+    <div class="gd-web-clock" title="{{t 'Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые 2 шага.'}}">
+        <i class="fas fa-hourglass-half"></i> {{t "Шаг {ticks} ·" ticks=web.ticks}}
+        {{#if web.calm}}{{t "тишина ещё {calm}" calm=web.calm}}{{else}}{{#if web.toNext}}{{t "до ступени Босса {toNext}" toNext=web.toNext}}{{else}}{{t "Босс в полной силе"}}{{/if}}{{/if}}
+        {{t "· ступеней {stage}/{max}" stage=web.stage max=web.max}}{{#if web.eaten}} {{t "· съедено узлов: {eaten}" eaten=web.eaten}}{{/if}}
+        {{#if isGM}}{{#if web.devourer}}<button type="button" data-action="devourerGone" title="{{t 'Откуп, ушёл с Брюхом — поедание замирает'}}">{{t "Пожиратель ушёл"}}</button>{{/if}}{{/if}}
     </div>
     {{/if}}
     {{#if scent}}
-    <span class="gd-map-scent" style="--scent: {{scent.color}}" title="Запах отряда · Шёпот от {{scent.thresholds.whisper}}, Охота от {{scent.thresholds.hunt}} · видит только Мастер"><i class="fas {{scent.icon}}"></i> {{scent.label}} · {{scent.value}}</span>
+    <span class="gd-map-scent" style="--scent: {{scent.color}}" title="{{t 'Запах отряда · Шёпот от {whisper}, Охота от {hunt} · видит только Мастер' whisper=scent.thresholds.whisper hunt=scent.thresholds.hunt}}"><i class="fas {{scent.icon}}"></i> {{scent.label}} · {{scent.value}}</span>
     {{/if}}
     {{#if pulse}}
-    <span class="gd-map-pulse" style="--pulse: {{pulse.color}}" title="{{pulse.detail}} · видит только Мастер"><i class="fas fa-heart-pulse"></i> Пульс: {{pulse.last}} · {{pulse.shift}} — Монстры {{pulse.mob}}, Элита {{pulse.elite}}</span>
+    <span class="gd-map-pulse" style="--pulse: {{pulse.color}}" title="{{t '{detail} · видит только Мастер' detail=pulse.detail}}"><i class="fas fa-heart-pulse"></i> {{t "Пульс: {last} · {shift} — Монстры {mob}, Элита {elite}" last=pulse.last shift=pulse.shift mob=pulse.mob elite=pulse.elite}}</span>
     {{/if}}
     {{#if omen}}
-    <div class="gd-map-omen" title="Предвестия Пожирателя у всех: ходов до прихода · видит только Мастер">
-        <i class="fas fa-snowflake"></i> Пожиратель:
+    <div class="gd-map-omen" title="{{t 'Предвестия Пожирателя у всех: ходов до прихода · видит только Мастер'}}">
+        <i class="fas fa-snowflake"></i> {{t "Пожиратель:"}}
         {{#each omen}}<button type="button" data-action="omen" data-stage="{{stage}}" class="{{#if active}}active{{/if}}">{{label}}</button>{{/each}}
     </div>
     {{/if}}
     {{#if satiety}}
-    <div class="gd-map-omen gd-map-satiety" title="Насыщение Пожирателя · предел этажа {{satiety.cap}} · 0 ПЗ и приманку модуль считает сам, откуп и уход с Брюхом — кнопкой · видит только Мастер">
-        <i class="fas fa-utensils"></i> Насыщение:
+    <div class="gd-map-omen gd-map-satiety" title="{{t 'Насыщение Пожирателя · предел этажа {cap} · 0 ПЗ и приманку модуль считает сам, откуп и уход с Брюхом — кнопкой · видит только Мастер' cap=satiety.cap}}">
+        <i class="fas fa-utensils"></i> {{t "Насыщение:"}}
         <button type="button" data-action="satiety" data-delta="-1">−</button>
         <b>{{satiety.value}}</b>
         <button type="button" data-action="satiety" data-delta="1">+</button>

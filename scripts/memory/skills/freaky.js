@@ -23,6 +23,7 @@ import { key, cellOf, footprint, nearestFree } from "./grid.js";
 import { CARDS, dealCards, applyCards, shuffleInitiative, broadcastCards } from "./freaky-cards.js";
 import { fxOn, fxCalm, soundOn, sfxVolume } from "../../core/prefs.js";
 import { blast } from "./blast/common.js";
+import { t } from "../../core/i18n.js";
 
 // Катсцена, мс: окна прячутся, фон темнеет и камера наезжает; полёт; пауза; всё возвращается
 const T = { focus: 550, fly: 1300, hold: 450, back: 550 };
@@ -115,11 +116,11 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     if (!isFreaky(item) || !actor) return;
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id)) {
-        ui.notifications.warn('Чумовая пятница работает только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Чумовая пятница работает только в бою, в котором участвует персонаж.'));
         return false;
     }
     if (participants(combat).length < 2) {
-        ui.notifications.warn('В бою некому меняться местами.');
+        ui.notifications.warn(t('В бою некому меняться местами.'));
         return false;
     }
 });
@@ -155,9 +156,9 @@ async function freakyFriday({ combatId, actorId }) {
     if (crushed.length) {
         const hurt = crushed.map(id => scene.tokens.get(id)).filter(t => t?.actor && alive(t.actor));
         // Как у способностей dnd5e: урон — кнопкой в карточке, применяет Мастер лотком
-        if (hurt.length) await blast({ actor: game.actors.get(actorId), title: 'Чумовая пятница: придавило', icon: 'fa-weight-hanging', victims: hurt, formula: CRUSH, type: 'bludgeoning' });
+        if (hurt.length) await blast({ actor: game.actors.get(actorId), title: t('Чумовая пятница: придавило'), icon: 'fa-weight-hanging', victims: hurt, formula: CRUSH, type: 'bludgeoning' });
         const who = hurt.map(t => t.name).join(', ');
-        crush = who ? `<br>Придавило: ${foundry.utils.escapeHTML?.(who) ?? who} — ${CRUSH} дробящего урона, кнопкой в карточке.` : '';
+        crush = who ? `<br>${t('Придавило: {v} — {CRUSH} дробящего урона, кнопкой в карточке.', { v: foundry.utils.escapeHTML?.(who) ?? who, CRUSH })}` : '';
     }
     // Карты: каждому участнику, заклинателю — баф
     const dealt = dealCards(participants(combat), actorId);
@@ -178,9 +179,9 @@ async function freakyFriday({ combatId, actorId }) {
     const cards = dealt.map(d => `<li>${esc(scene.tokens.get(d.tokenId)?.name ?? '?')} — <span class="${CARDS[d.card].buff ? 'buff' : 'debuff'}">${CARDS[d.card].name}</span><br><small>${CARDS[d.card].rules}</small></li>`).join('');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) }),
-        content: `<div class="gd-freaky-card"><strong>Чумовая пятница</strong> — все перепутались местами: ${esc(names)}.${crush}`
-            + `<br><strong>Карты</strong> (до конца следующего хода):<ul class="gd-freaky-cards">${cards}</ul>`
-            + (order.length ? '<br><strong>Очередь перепуталась:</strong> инициатива перемешана.' : '')
+        content: `<div class="gd-freaky-card"><strong>${t('Чумовая пятница')}</strong> ${t('— все перепутались местами: {v}.{crush}', { v: esc(names), crush })}`
+            + `<br><strong>${t('Карты')}</strong> ${t('(до конца следующего хода):')}<ul class="gd-freaky-cards">${cards}</ul>`
+            + (order.length ? t('<br><strong>Очередь перепуталась:</strong> инициатива перемешана.') : '')
             + '</div>'
     });
 }

@@ -9,8 +9,10 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { tagsLabel } from "../core/ids.js";
 import { isActiveGM, onSocket, notifyUser, requestGM } from "../core/socket.js";
 import { isMemorySkill } from "./synergy/synergy.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const DRAFT_ID = 'gachadnd-draft';
@@ -39,7 +41,7 @@ const draftParty = () => game.actors.filter(a => a.type === 'character' && a.has
 export async function startDraft(roomName, crystals) {
     const party = draftParty();
     if (!party.length || !crystals.length) return null;
-    if (getDraft().active) await finishDraft('Предыдущее распределение закрыто: началось новое.');
+    if (getDraft().active) await finishDraft(t('Предыдущее распределение закрыто: началось новое.'));
     const offset = game.settings.get(MODULE_ID, 'draftOffset') % party.length;
     await game.settings.set(MODULE_ID, 'draftOffset', offset + 1);
     const order = [...party.slice(offset), ...party.slice(0, offset)].map(a => a.id);
@@ -57,7 +59,7 @@ export async function startDraft(roomName, crystals) {
         active: true, room: roomName, order, turn: 0, picks: [], lagging,
         pool: crystals.map(data => ({ key: foundry.utils.randomID(), data }))
     });
-    return order.map(id => `${game.actors.get(id)?.name}${id === lagging ? ' (вне очереди)' : ''}`);
+    return order.map(id => `${game.actors.get(id)?.name}${id === lagging ? t(' (вне очереди)') : ''}`);
 }
 
 async function finishDraft(note) {
@@ -69,8 +71,8 @@ async function finishDraft(note) {
         .map(([id, list]) => `<div><strong>${game.actors.get(id)?.name ?? '—'}:</strong> ${list.map(p => `<span style="color: ${RARITY_COLORS[p.rarity] ?? '#aaa'}">${p.name}</span>`).join(', ')}</div>`)
         .join('');
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Туманный Разлом' }),
-        content: `<div class="gd-draft-chat"><strong>Распределение: ${draft.room ?? 'добыча'}</strong>${picks}${note ? `<div><em>${note}</em></div>` : ''}</div>`
+        speaker: ChatMessage.getSpeaker({ alias: t('Туманный Разлом') }),
+        content: `<div class="gd-draft-chat"><strong>${t('Распределение: {v}', { v: draft.room ?? t('добыча') })}</strong>${picks}${note ? `<div><em>${note}</em></div>` : ''}</div>`
     });
 }
 
@@ -86,7 +88,7 @@ async function performDraftOp({ op, key, userId }) {
 
     if (op === 'pick') {
         if (!actor) return;
-        if (!user?.isGM && !actor.testUserPermission(user, 'OWNER')) return notifyUser(userId, `Сейчас выбирает ${actor.name}.`);
+        if (!user?.isGM && !actor.testUserPermission(user, 'OWNER')) return notifyUser(userId, t('Сейчас выбирает {name}.', { name: actor.name }));
         const index = draft.pool.findIndex(p => p.key === key);
         if (index < 0) return;
         const [{ data }] = draft.pool.splice(index, 1);
@@ -96,7 +98,7 @@ async function performDraftOp({ op, key, userId }) {
     } else if (op === 'skip' && user?.isGM) {
         draft.turn += 1;
     } else if (op === 'stop' && user?.isGM) {
-        return finishDraft(draft.pool.length ? `Мастер закрыл распределение; не разобрано кристаллов: ${draft.pool.length}.` : '');
+        return finishDraft(draft.pool.length ? t('Мастер закрыл распределение; не разобрано кристаллов: {length}.', { length: draft.pool.length }) : '');
     } else return;
 
     if (!draft.pool.length) {
@@ -109,7 +111,7 @@ async function performDraftOp({ op, key, userId }) {
 let queue = Promise.resolve();
 onSocket('draftOp', message => {
     if (!isActiveGM()) return;
-    queue = queue.then(() => performDraftOp(message.payload)).catch(err => console.error('[GachaDND] Распределение:', err));
+    queue = queue.then(() => performDraftOp(message.payload)).catch(err => console.error(`[GachaDND] Распределение:`, err));
     return queue;
 });
 
@@ -124,7 +126,7 @@ export class DraftWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: DRAFT_ID,
         classes: ['gachadnd-draft'],
         tag: 'div',
-        window: { title: 'Распределение добычи', icon: 'fas fa-gem', resizable: true },
+        window: { title: t('Распределение добычи'), icon: 'fas fa-gem', resizable: true },
         position: { width: 640, height: 560 },
         actions: {
             pick: (event, target) => request({ op: 'pick', key: target.dataset.key }),
@@ -165,7 +167,7 @@ export class DraftWindow extends HandlebarsApplicationMixin(ApplicationV2) {
                 seenKeys.add(key);
                 return {
                     key, img: data.img, name: data.name.replace(/^Кристалл:\s*/, ''), glint, skillId: flags.skill_id ?? '',
-                    color: RARITY_COLORS[flags.rarity] ?? '#aaa', category: flags.category ?? '', tags: (flags.tags ?? []).join(', ')
+                    color: RARITY_COLORS[flags.rarity] ?? '#aaa', category: flags.category ?? '', tags: tagsLabel(flags.tags)
                 };
             })
         };

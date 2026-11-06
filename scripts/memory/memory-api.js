@@ -26,6 +26,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { t } from "../core/i18n.js";
 
 export const HOOKS = {
     preAbsorbCrystal: 'gachadnd.preAbsorbCrystal',
@@ -63,7 +64,7 @@ export function isAtRest() {
 }
 
 function restState(manual) {
-    const state = { atRest: manual, site: manual ? 'rest' : null, label: 'Привал', links: [] };
+    const state = { atRest: manual, site: manual ? 'rest' : null, label: t('Привал'), links: [] };
     Hooks.callAll(HOOKS.queryRest, state);
     return state;
 }

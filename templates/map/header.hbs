@@ -1,14 +1,14 @@
 <header class="gd-map-header">
     <div class="gd-map-title">
-        <span class="gd-map-caption">Карта Разлома</span>
-        <span class="gd-map-floor">Этаж <strong>{{floorRoman}}</strong></span>
+        <span class="gd-map-caption">{{t "Карта Разлома"}}</span>
+        <span class="gd-map-floor">{{t "Этаж"}} <strong>{{floorRoman}}</strong></span>
     </div>
     {{#if isGM}}
     <div class="gd-map-gm">
-        <label title="Номер нового этажа. От него зависят цены и награды золотом.">Этаж <input type="number" name="floor" value="{{nextFloor}}" min="1" max="20"></label>
-        <label title="Ряды — путь снизу вверх. Паутина — кольца вокруг Босса: ходите куда угодно, но Босс крепнет, а Пожиратель съедает узлы.">Карта <select name="mode"><option value="rows" {{#unless (eq mapMode "web")}}selected{{/unless}}>Ряды</option><option value="web" {{#if (eq mapMode "web")}}selected{{/if}}>Паутина</option></select></label>
-        <label title="Сколько рядов узлов от Входа до Босса. С 6 рядов посередине встаёт Застава. Паутине не нужно.">Рядов <input type="number" name="length" value="11" min="3" max="15"></label>
-        <button type="button" data-action="generate"><i class="fas fa-feather-pointed"></i> Начертить этаж</button>
+        <label title="{{t 'Номер нового этажа. От него зависят цены и награды золотом.'}}">{{t "Этаж"}} <input type="number" name="floor" value="{{nextFloor}}" min="1" max="20"></label>
+        <label title="{{t 'Ряды — путь снизу вверх. Паутина — кольца вокруг Босса: ходите куда угодно, но Босс крепнет, а Пожиратель съедает узлы.'}}">{{t "Карта"}} <select name="mode"><option value="rows" {{#unless (eq mapMode "web")}}selected{{/unless}}>{{t "Ряды"}}</option><option value="web" {{#if (eq mapMode "web")}}selected{{/if}}>{{t "Паутина"}}</option></select></label>
+        <label title="{{t 'Сколько рядов узлов от Входа до Босса. С 6 рядов посередине встаёт Застава. Паутине не нужно.'}}">{{t "Рядов"}} <input type="number" name="length" value="{{nextLength}}" min="3" max="15"></label>
+        <button type="button" data-action="generate"><i class="fas fa-feather-pointed"></i> {{t "Начертить этаж"}}</button>
     </div>
     {{/if}}
 </header>

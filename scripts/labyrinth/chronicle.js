@@ -17,6 +17,7 @@ import { fxOn, fxSlow } from "../core/prefs.js";
 import { boardContext } from "./map.js";
 import { RESIDENTS } from "./residents.js";
 import { LOTS } from "./moon-deal.js";
+import { t } from "../core/i18n.js";
 
 export const FLOOR_DRAWN = 'gachadnd.floorDrawn';
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
@@ -50,10 +51,10 @@ export function floorMarks(map, floor) {
     }
     for (const entry of map.chronicle ?? []) marks.push(entry);
     const boss = map.nodes.find(n => n.type === 'boss');
-    if (boss?.deal?.status === 'sealed') marks.push({ nodeId: boss.id, kind: 'moon', text: `Луна: ${LOTS[boss.deal.result?.lot ?? boss.deal.lot]?.name ?? 'сделка'}` });
-    else if (boss?.deal?.status === 'refused') marks.push({ nodeId: boss.id, kind: 'moon', text: 'Луне отказали' });
+    if (boss?.deal?.status === 'sealed') marks.push({ nodeId: boss.id, kind: 'moon', text: t('Луна: {v}', { v: LOTS[boss.deal.result?.lot ?? boss.deal.lot]?.name ?? t('сделка') }) });
+    else if (boss?.deal?.status === 'refused') marks.push({ nodeId: boss.id, kind: 'moon', text: t('Луне отказали') });
     for (const r of game.settings.get(MODULE_ID, 'anchorResidents') ?? []) {
-        if (r.floor === floor && RESIDENTS[r.id]) marks.push({ nodeId: last, kind: 'resident', text: `В Якоре: ${RESIDENTS[r.id].name}` });
+        if (r.floor === floor && RESIDENTS[r.id]) marks.push({ nodeId: last, kind: 'resident', text: t('В Якоре: {name}', { name: RESIDENTS[r.id].name }) });
     }
     return marks.filter(m => m.nodeId && MARKS[m.kind]);
 }
@@ -83,7 +84,7 @@ async function sheet(map, floor, cls) {
     const html = await foundry.applications.handlebars.renderTemplate(`modules/${MODULE_ID}/templates/map/board.hbs`, { hasMap: true, ...board });
     const el = document.createElement('div');
     el.className = `gd-chr-sheet ${cls}`;
-    el.innerHTML = `<div class="gd-chr-title"><span class="gd-chr-cap">Этаж ${roman(floor)}</span><span class="gd-chr-sub">${cls === 'old' ? 'летопись' : 'новый этаж'}</span></div>
+    el.innerHTML = `<div class="gd-chr-title"><span class="gd-chr-cap">${t('Этаж {v}', { v: roman(floor) })}</span><span class="gd-chr-sub">${cls === 'old' ? t('летопись') : t('новый этаж')}</span></div>
         <div class="gd-chr-board">${html}</div>`;
     const s = Math.min(1, BOARD_H / board.height);
     const fit = { s, top: (BOARD_H - board.height * s) / 2, h: board.height * s };
@@ -111,13 +112,13 @@ function threadPath(path, coords, fit) {
 function summaryPage(data, path) {
     const count = kind => (data.marks ?? []).filter(m => m.kind === kind).length;
     const lines = [
-        `Пройдено узлов: ${path.length}`,
-        count('fallen') ? `Остались на этаже: ${count('fallen')}` : null,
-        count('burn') ? `Сгорело навыков: ${count('burn')}` : null,
-        count('breach') ? `Прорывов Пожирателя: ${count('breach')}` : null,
+        t('Пройдено узлов: {length}', { length: path.length }),
+        count('fallen') ? t('Остались на этаже: {v}', { v: count('fallen') }) : null,
+        count('burn') ? t('Сгорело навыков: {v}', { v: count('burn') }) : null,
+        count('breach') ? t('Прорывов Пожирателя: {v}', { v: count('breach') }) : null,
         ...(data.marks ?? []).filter(m => m.kind === 'moon' || m.kind === 'resident').map(m => m.text)
     ].filter(Boolean);
-    return `<div class="gd-chr-diary"><div class="gd-chr-cap">Этаж ${roman(data.oldFloor)}</div><div class="gd-chr-sub">пройден</div>
+    return `<div class="gd-chr-diary"><div class="gd-chr-cap">${t('Этаж {v}', { v: roman(data.oldFloor) })}</div><div class="gd-chr-sub">${t('пройден')}</div>
         <ul>${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>`;
 }
 
@@ -136,7 +137,7 @@ export async function playChronicle(data) {
     const root = document.createElement('div');
     root.className = 'gachadnd-map gd-chronicle';
     root.style.setProperty('--slow', slow);
-    root.innerHTML = `<div class="gd-chr-veil"></div><div class="gd-chr-frame"><div class="gd-chr-spine"></div></div><div class="gd-chr-skip">щелчок — пропустить</div>`;
+    root.innerHTML = `<div class="gd-chr-veil"></div><div class="gd-chr-frame"><div class="gd-chr-spine"></div></div><div class="gd-chr-skip">${t('щелчок — пропустить')}</div>`;
     const frame = root.querySelector('.gd-chr-frame');
     // Фаза сцены — в разметке: dim, thread, turn, end (по ней ждут проверки)
     const phase = name => { root.dataset.phase = name; };
@@ -166,7 +167,7 @@ export async function playChronicle(data) {
         el.className = `gd-chr-mark${coord.x > 62 ? ' left' : ''}`;
         el.style.left = `${pt.x}px`;
         el.style.top = `${pt.y}px`;
-        el.innerHTML = shown.map(m => `<div class="${MARKS[m.kind].cls}"><i class="fas ${MARKS[m.kind].icon}"></i> ${esc(m.text)}</div>`).join('') + (rest > 0 ? `<div class="more">и ещё ${rest}</div>` : '');
+        el.innerHTML = shown.map(m => `<div class="${MARKS[m.kind].cls}"><i class="fas ${MARKS[m.kind].icon}"></i> ${esc(m.text)}</div>`).join('') + (rest > 0 ? `<div class="more">${t('и ещё {rest}', { rest })}</div>` : '');
         marksEl.append(el);
         markEls.set(nodeId, el);
     }

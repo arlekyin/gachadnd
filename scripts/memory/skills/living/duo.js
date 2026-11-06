@@ -18,6 +18,7 @@ import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { UNIVERSAL_DC_FORMULA } from "../../synergy/synergy-data.js";
 import { pickCell } from "../pick.js";
 import { isLiving, livingSkill, ref, tokenOf, quiet, dcOf, inCircle, blast, feetToPx, centerOf, around, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 // ==========================================
 // ЧУМНОЙ КОСТЁР
@@ -40,13 +41,13 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     const combat = game.combat;
     const caster = tokenOf(actor);
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id) || !caster) {
-        ui.notifications.warn('Чумной костёр — только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Чумной костёр — только в бою, в котором участвует персонаж.'));
         return false;
     }
     pickCell({
         caster, range: Number(activity.range?.value) || 60,
         draw: (g, cell, ok, s) => g.lineStyle(2, ok ? 0x9acd32 : 0xff3030, 0.9).beginFill(0x6b8e23, ok ? 0.25 : 0.05).drawCircle(cell[0] * s + s / 2, cell[1] * s + s / 2, feetToPx(PYRE_RADIUS) + s / 2).endFill(),
-        hint: 'Чумной костёр: точка облака. Правая кнопка или Esc — отмена.'
+        hint: t('Чумной костёр: точка облака. Правая кнопка или Esc — отмена.')
     }).then(cell => {
         if (!cell) return;
         chosen.set(item.id, cell);
@@ -76,7 +77,7 @@ export async function kindle({ actorId, sceneId, cell, dc }) {
     await combat.setFlag(MODULE_ID, PYRE, { actorId, x: cell[0] * size + size / 2, y: cell[1] * size + size / 2, radius: PYRE_RADIUS, dc, ends: 0 });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-biohazard"></i> Чумной костёр</div><p>Облако горящего яда — до конца следующего хода ${esc(actor.name)}. Кто начинает в нём ход, горит и травится.</p></div>`
+        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-biohazard"></i> ${t('Чумной костёр')}</div><p>${t('Облако горящего яда — до конца следующего хода {v}. Кто начинает в нём ход, горит и травится.', { v: esc(actor.name) })}</p></div>`
     });
 }
 
@@ -95,9 +96,9 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const token = combat.combatant?.token;
     if (!token?.actor || !inPyre(scene, state, token) || (token.actor.system?.attributes?.hp?.value ?? 1) <= 0) return;
     await blast({
-        actor: game.actors.get(state.actorId) ?? token.actor, title: `Чумной костёр: ${token.name} в облаке`, icon: 'fa-biohazard', victims: [token],
-        formula: '2d6', type: 'fire', ability: 'con', dc: state.dc, note: 'И ещё [[/damage 2d6 poison]]. Провал — отравлен до конца хода (модуль наложит сам).',
-        onFail: { effect: { name: 'Чумной костёр: отравлен', img: 'icons/svg/poison.svg', statuses: ['poisoned'], description: 'Горящий яд в горле: отравлен до конца хода.' }, until: 'thisTurn' }
+        actor: game.actors.get(state.actorId) ?? token.actor, title: t('Чумной костёр: {name} в облаке', { name: token.name }), icon: 'fa-biohazard', victims: [token],
+        formula: '2d6', type: 'fire', ability: 'con', dc: state.dc, note: t('И ещё [[/damage 2d6 poison]]. Провал — отравлен до конца хода (модуль наложит сам).'),
+        onFail: { effect: { name: t('Чумной костёр: отравлен'), img: 'icons/svg/poison.svg', statuses: ['poisoned'], description: t('Горящий яд в горле: отравлен до конца хода.') }, until: 'thisTurn' }
     });
 });
 
@@ -110,7 +111,7 @@ Hooks.on('dnd5e.preRollDamageV2', config => {
     const target = [...game.user.targets][0]?.actor;
     if (!fire || !target?.statuses?.has('poisoned')) return;
     config.rolls.push({ parts: ['1d6'], data: actor.getRollData(), options: { type: 'poison', types: ['poison'] } });
-    ui.notifications.info('Чумной костёр: +1к6 ядом по отравленной цели.');
+    ui.notifications.info(t('Чумной костёр: +1к6 ядом по отравленной цели.'));
 });
 
 // Облако видят все
@@ -163,8 +164,8 @@ Hooks.on('updateToken', async (token, changes, options) => {
     const victims = inCircle(scene, point, reach).filter(t => t.id !== token.id);
     const dc = (await new Roll(UNIVERSAL_DC_FORMULA, actor.getRollData()).evaluate()).total;
     await blast({
-        actor, title: 'Реактивная тяга', icon: 'fa-rocket', victims, formula: '2d6', type: 'fire', ability: 'dex', dc,
-        note: `${esc(token.name)} срывается с места — клетка позади взрывается.`, at: { sceneId: scene.id, ...point, radius: reach, color: 0xff9a3c }
+        actor, title: t('Реактивная тяга'), icon: 'fa-rocket', victims, formula: '2d6', type: 'fire', ability: 'dex', dc,
+        note: t('{v} срывается с места — клетка позади взрывается.', { v: esc(token.name) }), at: { sceneId: scene.id, ...point, radius: reach, color: 0xff9a3c }
     });
 });
 
@@ -186,7 +187,7 @@ Hooks.on('dnd5e.applyDamage', async (actor, amount) => {
     const whisper = game.users.filter(u => u.isGM || actor.testUserPermission(u, 'OWNER')).map(u => u.id);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }), whisper,
-        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-shield-heart"></i> Кровавый бастион</div><p>${esc(actor.name)} получает ${amount} урона. Реакцией — союзникам в 10 футах по <strong>${temp}</strong> временных ПЗ (зарядов: ${usesLeft(skill)}).</p><div class="gd-blast-buttons"><button type="button" data-gd-bastion><i class="fas fa-shield-heart"></i> Кровавый бастион</button></div></div>`,
+        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-shield-heart"></i> ${t('Кровавый бастион')}</div><p>${t('{v} получает {amount} урона. Реакцией — союзникам в 10 футах по', { v: esc(actor.name), amount })} <strong>${temp}</strong> ${t('временных ПЗ (зарядов: {v}).', { v: usesLeft(skill) })}</p><div class="gd-blast-buttons"><button type="button" data-gd-bastion><i class="fas fa-shield-heart"></i> ${t('Кровавый бастион')}</button></div></div>`,
         flags: { [MODULE_ID]: { bastion: { actorId: actor.id, temp } } }
     });
 });
@@ -223,6 +224,6 @@ export async function raise({ messageId }) {
     }
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-shield-heart"></i> Кровавый бастион</div><p>${allies.length ? `Временные ПЗ ${data.temp}: ${esc(allies.map(t => t.name).join(', '))}.` : 'Рядом никого из союзников — кровь пролита зря.'}</p></div>`
+        content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-shield-heart"></i> ${t('Кровавый бастион')}</div><p>${allies.length ? t('Временные ПЗ {temp}: {v}.', { temp: data.temp, v: esc(allies.map(t => t.name).join(', ')) }) : t('Рядом никого из союзников — кровь пролита зря.')}</p></div>`
     });
 }

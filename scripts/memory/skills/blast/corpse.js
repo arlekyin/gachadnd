@@ -11,6 +11,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { isBlast, ref, tokenOf, esc, quiet, dcOf, areaOf, feetBetween, around, isDead, blast, boomAt } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const DEFAULT_RANGE = 60;
 
@@ -26,11 +27,11 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     const corpse = userTarget();
     const range = Number(activity.range?.value) || DEFAULT_RANGE;
     if (!caster || !isCorpse(corpse)) {
-        ui.notifications.warn('Взрыв трупа: выберите целью один труп (0 ПЗ).');
+        ui.notifications.warn(t('Взрыв трупа: выберите целью один труп (0 ПЗ).'));
         return false;
     }
     if (feetBetween(caster, corpse) > range - 5) {
-        ui.notifications.warn(`Взрыв трупа: труп дальше ${range} футов.`);
+        ui.notifications.warn(t('Взрыв трупа: труп дальше {range} футов.', { range }));
         return false;
     }
     chosen.set(item.id, corpse.id);
@@ -59,8 +60,8 @@ export async function detonate({ actorId, sceneId, corpseId, dc, radius }) {
     const name = corpse.name;
     await corpse.delete();
     await blast({
-        actor: owner, title: `Взрыв трупа: ${name}`, icon: 'fa-skull', victims, formula: String(damage), type: 'fire', ability: 'dex', dc, at,
-        note: `Четверть максимума ПЗ (${max}) — ${damage}. Кого взрыв убьёт — того можно взорвать сразу, без заряда: кнопка «Цепная реакция» ниже, после применения урона.`,
+        actor: owner, title: t('Взрыв трупа: {name}', { name }), icon: 'fa-skull', victims, formula: String(damage), type: 'fire', ability: 'dex', dc, at,
+        note: t('Четверть максимума ПЗ ({max}) — {damage}. Кого взрыв убьёт — того можно взорвать сразу, без заряда: кнопка «Цепная реакция» ниже, после применения урона.', { max, damage }),
         flags: { corpse: { actorId: owner.id, dc, radius } }
     });
 }
@@ -73,11 +74,11 @@ export async function chain({ messageId }) {
     const scene = game.scenes.get(card.sceneId);
     const dead = (card.victims ?? []).map(id => scene?.tokens.get(id)).filter(t => isCorpse(t));
     const owner = game.actors.get(card.corpse.actorId);
-    if (!dead.length) return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: owner }), whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id), content: '<div class="gd-blast-card"><p>Цепной реакции нет: никто из задетых не погиб — урон ещё не применён?</p></div>' });
+    if (!dead.length) return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: owner }), whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id), content: t('<div class="gd-blast-card"><p>Цепной реакции нет: никто из задетых не погиб — урон ещё не применён?</p></div>') });
     await message.update({ [`flags.${MODULE_ID}.blastCard.corpse.used`]: true });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: owner }),
-        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-skull"></i> Цепная реакция</div><p>Взрыв убил — эти трупы можно взорвать сразу, без заряда:</p><div class="gd-blast-buttons">${dead.map(t => `<button type="button" data-corpse-chain="${t.id}">${esc(t.name)}</button>`).join('')}</div></div>`,
+        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-skull"></i> ${t('Цепная реакция')}</div><p>${t('Взрыв убил — эти трупы можно взорвать сразу, без заряда:')}</p><div class="gd-blast-buttons">${dead.map(t => `<button type="button" data-corpse-chain="${t.id}">${esc(t.name)}</button>`).join('')}</div></div>`,
         flags: { [MODULE_ID]: { corpseChain: { actorId: owner.id, sceneId: card.sceneId, dc: card.corpse.dc, radius: card.corpse.radius } } }
     });
 }
@@ -91,7 +92,7 @@ onRenderChatMessage((message, html) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.corpseChainCheck = '';
-    button.innerHTML = '<i class="fas fa-skull"></i> Цепная реакция';
+    button.innerHTML = t('<i class="fas fa-skull"></i> Цепная реакция');
     button.disabled = !!card.corpse.used || !(game.user.isGM || owner?.isOwner);
     button.addEventListener('click', () => { button.disabled = true; requestGM('blastCorpseChain', { messageId: message.id }); });
     const wrap = document.createElement('div');

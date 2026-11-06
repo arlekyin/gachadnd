@@ -14,6 +14,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { isMemorySkill } from "./synergy/synergy.js";
+import { t } from "../core/i18n.js";
 
 /** Сколько заёмных использований за долгий отдых проходят без броска */
 export const FREE = 1;
@@ -45,7 +46,7 @@ export function nextRisk(item) {
     const level = levelFor(heatOf(item).extra + 1);
     return { level, chance: CHANCE[level] };
 }
-export const riskText = ({ level, chance }) => level ? `перегрев ${level}: ${chance}% (сгорает на 1–${chance} к100)` : 'без перегрева';
+export const riskText = ({ level, chance }) => level ? t('перегрев {level}: {chance}% (сгорает на 1–{chance} к100)', { level, chance }) : t('без перегрева');
 
 // ==========================================
 // ПОДЗАРЯДКА
@@ -89,7 +90,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!item?.actor) return;
     if (heatOf(item).locked && isMemorySkill(item)) {
-        ui.notifications.warn(`«${item.name}» перегрет и заблокирован до долгого отдыха.`);
+        ui.notifications.warn(t('«{name}» перегрет и заблокирован до долгого отдыха.', { name: item.name }));
         return false;
     }
     const config = rechargerOf(item);
@@ -97,8 +98,8 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const targets = rechargeTargets(item);
     if (!targets.length) {
         ui.notifications.warn(config.target === 'equipped_empty'
-            ? `${item.name}: нет экипированного навыка, у которого закончились заряды.`
-            : `${item.name}: нет навыка, которому нужно восстановить заряды.`);
+            ? t('{name}: нет экипированного навыка, у которого закончились заряды.', { name: item.name })
+            : t('{name}: нет навыка, которому нужно восстановить заряды.', { name: item.name }));
         return false;
     }
     // Сначала цель, затем использование заново — тогда заряд и цена тратятся только при выборе
@@ -119,10 +120,10 @@ Hooks.on('dnd5e.postUseActivity', async (activity) => {
     if (!target) return;
     const config = rechargerOf(item);
     const amount = await recharge(target, config.restore);
-    const risk = heatable(target) ? `<p class="gd-heat-risk">Следующее использование заёмного заряда — ${riskText(nextRisk(target))}.</p>` : '';
+    const risk = heatable(target) ? `<p class="gd-heat-risk">${t('Следующее использование заёмного заряда — {v}.', { v: riskText(nextRisk(target)) })}</p>` : '';
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor: item.actor }),
-        content: `<div class="gd-heat-card"><div class="gd-heat-title"><i class="fas fa-bolt"></i> ${esc(item.name)} → ${esc(target.name)}</div><p>Восстановлено зарядов: ${amount}.</p>${risk}</div>`
+        content: `<div class="gd-heat-card"><div class="gd-heat-title"><i class="fas fa-bolt"></i> ${esc(item.name)} → ${esc(target.name)}</div><p>${t('Восстановлено зарядов: {amount}.', { amount })}</p>${risk}</div>`
     });
 });
 
@@ -130,13 +131,13 @@ async function chooseTarget(source, targets) {
     if (targets.length === 1 && rechargerOf(source).target === 'equipped_empty') return targets[0];
     const options = targets.map(item => {
         const value = maxUses(item) - spentOf(item);
-        const risk = heatable(item) ? riskText(nextRisk(item)) : 'не греется';
-        return `<option value="${item.id}">${esc(item.name)} — заряды ${value}/${maxUses(item)}, ${risk}</option>`;
+        const risk = heatable(item) ? riskText(nextRisk(item)) : t('не греется');
+        return `<option value="${item.id}">${t('{v} — заряды {value}/{v2}, {risk}', { v: esc(item.name), value, v2: maxUses(item), risk })}</option>`;
     }).join('');
     const id = await foundry.applications.api.DialogV2.prompt({
         window: { title: source.name },
-        content: `<p>Какому навыку вернуть заряды?</p><select name="target">${options}</select><p class="gd-heat-note">Заёмные заряды греют фиолетовые и красные навыки и навыки подзарядки: с второго заёмного использования до долгого отдыха навык может сгореть.</p>`,
-        ok: { label: 'Подзарядить', callback: (event, button) => button.form.elements.target.value },
+        content: `<p>${t('Какому навыку вернуть заряды?')}</p><select name="target">${options}</select><p class="gd-heat-note">${t('Заёмные заряды греют фиолетовые и красные навыки и навыки подзарядки: с второго заёмного использования до долгого отдыха навык может сгореть.')}</p>`,
+        ok: { label: t('Подзарядить'), callback: (event, button) => button.form.elements.target.value },
         rejectClose: false
     }).catch(() => null);
     return targets.find(item => item.id === id) ?? null;
@@ -147,7 +148,8 @@ async function chooseTarget(source, targets) {
 // ==========================================
 
 Hooks.on('preUpdateItem', (item, changes, options) => {
-    if (options.isRest || options.gachadndRecharge || !heatable(item)) return;
+    // Заряд забрал обет (Голодный Туман) — навык не применялся, заём не тратится
+    if (options.isRest || options.gachadndRecharge || options.gachadndDrain || !heatable(item)) return;
     // Изменения приходят и развёрнутыми, и плоскими ключами
     const next = changes['system.uses.spent'] ?? foundry.utils.getProperty(changes, 'system.uses.spent');
     if (next === undefined) return;
@@ -200,8 +202,8 @@ export async function overheat(item, levels) {
         const roll = await new Roll('1d100').evaluate();
         const burned = roll.total <= chance;
         const undeletable = !!item.flags[MODULE_ID].undeletable;
-        const verdict = !burned ? 'выдержал' : undeletable ? 'перегорел — заблокирован до долгого отдыха' : 'сгорел';
-        const flavor = `<div class="gd-heat-card ${burned ? 'burn' : ''}"><div class="gd-heat-title"><i class="fas fa-temperature-high"></i> Перегрев: ${esc(item.name)}</div><p>Уровень ${level}: ${chance}% — сгорает на 1–${chance}. Выпало ${roll.total} — ${verdict}.</p></div>`;
+        const verdict = !burned ? t('выдержал') : undeletable ? t('перегорел — заблокирован до долгого отдыха') : t('сгорел');
+        const flavor = `<div class="gd-heat-card ${burned ? 'burn' : ''}"><div class="gd-heat-title"><i class="fas fa-temperature-high"></i> ${t('Перегрев: {v}', { v: esc(item.name) })}</div><p>${t('Уровень {level}: {chance}% — сгорает на 1–{chance}. Выпало {total} — {verdict}.', { level, chance, total: roll.total, verdict })}</p></div>`;
         if (roll.toMessage) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor });
         else await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: flavor });
         if (!burned) continue;

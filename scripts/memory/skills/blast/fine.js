@@ -18,6 +18,7 @@ import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { pickCell } from "../pick.js";
 import { cellOf, occupied, key, wallBetween } from "../grid.js";
 import { isBlast, ref, actorFrom, tokenOf, esc, quiet, damageOf, blast } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const ROUNDS = 10, SPREAD_FT = 30;
 const FLAG = 'fire';
@@ -32,7 +33,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     const combat = game.combat;
     const caster = tokenOf(actor);
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id) || !caster) {
-        ui.notifications.warn('Это нормально — только в бою, в котором участвует персонаж с токеном на сцене.');
+        ui.notifications.warn(t('Это нормально — только в бою, в котором участвует персонаж с токеном на сцене.'));
         return false;
     }
     const size = canvas.grid.size;
@@ -41,7 +42,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
         caster, range: Number(activity.range?.value) || 30,
         allowed: cell => !taken.has(key(...cell)),
         draw: (g, cell, ok, s) => g.lineStyle(3, ok ? 0xff7a1a : 0xff3030, 0.9).beginFill(0xff7a1a, ok ? 0.35 : 0.1).drawRect(cell[0] * s, cell[1] * s, s, s).endFill(),
-        hint: 'Это нормально: выберите клетку для пожара. Правая кнопка или Esc — отмена.'
+        hint: t('Это нормально: выберите клетку для пожара. Правая кнопка или Esc — отмена.')
     }).then(cell => {
         if (!cell) return;
         chosen.set(item.id, cell);
@@ -71,7 +72,7 @@ export async function ignite({ actorId, tokenId, sceneId, cell, formula }) {
     await combat.setFlag(MODULE_ID, FLAG, { actorId: actor.id, tokenId, origin: cell, cells: [cell], until: combat.round + ROUNDS, formula, hit: {} });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-fire"></i> Это нормально</div><p>Загорелась клетка. Огонь расходится каждый раунд — до 30 футов. ${esc(actor.name)} спокойно пьёт кофе.</p></div>`
+        content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-fire"></i> ${t('Это нормально')}</div><p>${t('Загорелась клетка. Огонь расходится каждый раунд — до 30 футов. {v} спокойно пьёт кофе.', { v: esc(actor.name) })}</p></div>`
     });
 }
 
@@ -120,10 +121,10 @@ async function scorch(combat, token, at = token) {
     if (token.actor.id === state.actorId) {
         const prof = Number(token.actor.system.attributes.prof) || 2;
         if ((token.actor.system.attributes.hp.temp ?? 0) < prof) await token.actor.update({ 'system.attributes.hp.temp': prof });
-        await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: token.actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-mug-hot"></i> Это нормально</div><p>${esc(token.name)} в огне — и всё нормально: временные ПЗ ${prof}.</p></div>` });
+        await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: token.actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-mug-hot"></i> ${t('Это нормально')}</div><p>${t('{v} в огне — и всё нормально: временные ПЗ {prof}.', { v: esc(token.name), prof })}</p></div>` });
         return;
     }
-    await blast({ actor: owner ?? token.actor, title: 'Это нормально — пожар', icon: 'fa-fire', victims: [token], formula: state.formula, type: 'fire' });
+    await blast({ actor: owner ?? token.actor, title: t('Это нормально — пожар'), icon: 'fa-fire', victims: [token], formula: state.formula, type: 'fire' });
 }
 
 Hooks.on('updateCombat', async (combat, changed) => {
@@ -134,7 +135,7 @@ Hooks.on('updateCombat', async (combat, changed) => {
     if ('round' in changed) {
         if (combat.round >= state.until) {
             await combat.unsetFlag(MODULE_ID, FLAG);
-            await ChatMessage.create({ content: '<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-fire"></i> Это нормально</div><p>Пожар догорел.</p></div>' });
+            await ChatMessage.create({ content: t('<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-fire"></i> Это нормально</div><p>Пожар догорел.</p></div>') });
             return;
         }
         await combat.update({ [`flags.${MODULE_ID}.${FLAG}.cells`]: spread(scene, state) });

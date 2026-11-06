@@ -19,6 +19,7 @@ import { isAwake } from "../../synergy/synergy.js";
 import { counterOf, counterMax, livingKind } from "./common.js";
 import { countdownsOf } from "./countdown.js";
 import { emberRadius } from "./ember.js";
+import { t } from "../../../core/i18n.js";
 
 const NAME = 'gdLivingBadge';
 const plural = (n, [one, few, many]) => (n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many);
@@ -30,39 +31,39 @@ const pips = (n, max) => '●'.repeat(Math.min(n, max)) + '○'.repeat(Math.max(
  */
 const KINDS = {
     hone: {
-        icon: '⚒', unit: ['зарубка', 'зарубки', 'зарубок'], max: item => counterMax(item, 4),
+        icon: '⚒', unit: [t('зарубка'), t('зарубки'), t('зарубок')], max: item => counterMax(item, 4),
         badge: item => (counterOf(item) ? `⚒ ${pips(counterOf(item), counterMax(item, 4))}` : null),
-        rule: item => `${counterOf(item)} из ${counterMax(item, 4)} зарубок. Зарубка — каждое попадание оружием. На полном счёте удар оружием — критическое попадание, счёт обнуляется. Держится до долгого отдыха.`,
+        rule: item => t('{v} из {v2} зарубок. Зарубка — каждое попадание оружием. На полном счёте удар оружием — критическое попадание, счёт обнуляется. Держится до долгого отдыха.', { v: counterOf(item), v2: counterMax(item, 4) }),
         ready: (item, before) => counterOf(item) >= counterMax(item, 4) && before < counterMax(item, 4),
-        readyText: () => 'рука набита — следующий удар оружием критический',
-        short: () => 'рука набита!'
+        readyText: () => t('рука набита — следующий удар оружием критический'),
+        short: () => t('рука набита!')
     },
     third: {
-        icon: '☯', unit: ['провал', 'провала', 'провалов'], max: () => 2,
+        icon: '☯', unit: [t('провал'), t('провала'), t('провалов')], max: () => 2,
         badge: item => (counterOf(item) ? `☯ ${pips(counterOf(item), 2)}` : null),
-        rule: item => `${counterOf(item)} из 2 провалов подряд. Провал — проваленная проверка или спасбросок со Сл. После двух — следующий бросок к20 с преимуществом. Успех обнуляет счёт.`,
+        rule: item => t('{v} из 2 провалов подряд. Провал — проваленная проверка или спасбросок со Сл. После двух — следующий бросок к20 с преимуществом. Успех обнуляет счёт.', { v: counterOf(item) }),
         ready: (item, before) => counterOf(item) >= 2 && before < 2,
-        readyText: () => 'следующий бросок к20 — с преимуществом',
-        short: () => 'преимущество!'
+        readyText: () => t('следующий бросок к20 — с преимуществом'),
+        short: () => t('преимущество!')
     },
     perfection: {
-        icon: '✦', unit: ['штрих', 'штриха', 'штрихов'], max: () => 7,
+        icon: '✦', unit: [t('штрих'), t('штриха'), t('штрихов')], max: () => 7,
         badge: item => (counterOf(item) ? `✦ ${pips(counterOf(item), 7)}` : null),
-        rule: item => `${counterOf(item)} из 7 штрихов. Штрих — действие нового для этого боя вида: удар, чары, навык Памяти, манёвр, помощь, приём, окружение. Ход без нового штриха — последний гаснет. Пять — +1 к броскам атаки, проверкам и спасброскам; семь — до конца следующего хода к20 не ниже 10, потом всё по новой. Гаснет с концом боя.`,
+        rule: item => t('{v} из 7 штрихов. Штрих — действие нового для этого боя вида: удар, чары, навык Памяти, манёвр, помощь, приём, окружение. Ход без нового штриха — последний гаснет. Пять — +1 к броскам атаки, проверкам и спасброскам; семь — до конца следующего хода к20 не ниже 10, потом всё по новой. Гаснет с концом боя.', { v: counterOf(item) }),
         ready: (item, before) => counterOf(item) >= 5 && before < 5,
-        readyText: () => 'почти совершенство — +1 к броскам атаки, проверкам и спасброскам',
-        short: () => 'почти!'
+        readyText: () => t('почти совершенство — +1 к броскам атаки, проверкам и спасброскам'),
+        short: () => t('почти!')
     },
     ember: {
-        icon: '🔥', unit: ['сожжён', 'сожжены', 'сожжены'], max: () => null,
-        badge: item => (counterOf(item) ? `🔥 ${emberRadius(item)} фт` : null),
+        icon: '🔥', unit: [t('сожжён'), t('сожжены'), t('сожжены')], max: () => null,
+        badge: item => (counterOf(item) ? t('🔥 {v} фт', { v: emberRadius(item) }) : null),
         rule: item => {
             const n = counterOf(item), r = emberRadius(item);
-            return `Радиус пламени ${r} футов. Каждые 3 существа, убитые вашим огнём, — радиус +5 футов, до 30. ${r >= 30 ? 'Пламя в полной силе.' : `До следующего: ${3 - (n % 3)}.`} Держится до конца забега.`;
+            return t('Радиус пламени {r} футов. Каждые 3 существа, убитые вашим огнём, — радиус +5 футов, до 30. {v} Держится до конца забега.', { r, v: r >= 30 ? t('Пламя в полной силе.') : t('До следующего: {v}.', { v: 3 - (n % 3) }) });
         },
         ready: (item, before) => emberRadius(item) > emberRadius({ flags: { [MODULE_ID]: { counter: before } } }),
-        readyText: item => `пламя разгорелось — радиус ${emberRadius(item)} футов`,
-        short: item => `пламя ${emberRadius(item)} фт!`
+        readyText: item => t('пламя разгорелось — радиус {v} футов', { v: emberRadius(item) }),
+        short: item => t('пламя {v} фт!', { v: emberRadius(item) })
     }
 };
 
@@ -180,10 +181,10 @@ Hooks.on('combatStart', async combat => {
         const lines = skillsOf(actor).map(item => {
             const kind = KINDS[livingKind(item)];
             const n = counterOf(item), max = kind.max(item);
-            const state = livingKind(item) === 'ember' ? `радиус ${emberRadius(item)} фт` : `${n} из ${max}`;
+            const state = livingKind(item) === 'ember' ? t('радиус {v} фт', { v: emberRadius(item) }) : t('{n} из {max}', { n, max });
             return `<li><b>${kind.icon} ${foundry.utils.escapeHTML(item.name)}</b> — ${state}</li>`;
         });
-        if (lines.length) await whisperOwners(actor, 'Копится', `<ul class="gd-counter-summary">${lines.join('')}</ul><p class="gd-counter-note">Правило каждого счётчика — в карточке навыка на панели Памяти.</p>`, 'fa-layer-group');
+        if (lines.length) await whisperOwners(actor, t('Копится'), `<ul class="gd-counter-summary">${lines.join('')}</ul><p class="gd-counter-note">${t('Правило каждого счётчика — в карточке навыка на панели Памяти.')}</p>`, 'fa-layer-group');
     }
 });
 
@@ -192,7 +193,7 @@ export const counterInfo = item => {
     const kind = KINDS[livingKind(item)];
     if (!kind) return null;
     const n = counterOf(item), max = kind.max(item);
-    const state = livingKind(item) === 'ember' ? `${kind.icon} ${emberRadius(item)} фт` : `${kind.icon} ${pips(n, max)}`;
+    const state = livingKind(item) === 'ember' ? t('{icon} {v} фт', { icon: kind.icon, v: emberRadius(item) }) : `${kind.icon} ${pips(n, max)}`;
     return { badge: kind.badge(item), state, rule: kind.rule(item) };
 };
 export const resetSummary = () => { summarized = false; };

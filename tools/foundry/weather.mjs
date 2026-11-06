@@ -127,11 +127,21 @@ const fog = await ev(async sceneId => {
     await applyWeather(scene, 'fog', { seed: 'fogtest' });
     const fog = d => d.getFlag('gachadnd', 'fog') !== undefined;
     const walls = scene.walls.filter(fog);
-    return { puffs: scene.tiles.filter(fog).length, walls: walls.length, sight: walls.every(w => w.sight === 10 && w.move === 0) };
+    // Клочок на экране — по центру своего кольца стен (в v14 x, y плитки — точка привязки, а не угол)
+    await new Promise(r => setTimeout(r, 1000));
+    const off = scene.tiles.filter(fog).map(tile => {
+        const b = tile.object?.mesh?.getLocalBounds?.(), m = tile.object?.mesh;
+        if (!b || !m) return 999;
+        const cx = m.x + (b.x + b.width / 2) * m.scale.x, cy = m.y + (b.y + b.height / 2) * m.scale.y;
+        const ring = walls.filter(w => w.getFlag('gachadnd', 'fog') === tile.getFlag('gachadnd', 'fog')).flatMap(w => [[w.c[0], w.c[1]], [w.c[2], w.c[3]]]);
+        const rx = ring.reduce((s, p) => s + p[0], 0) / ring.length, ry = ring.reduce((s, p) => s + p[1], 0) / ring.length;
+        return Math.round(Math.hypot(cx - rx, cy - ry));
+    });
+    return { puffs: scene.tiles.filter(fog).length, walls: walls.length, sight: walls.every(w => w.sight === 10 && w.move === 0), off };
 }, rain.id);
 const foggy = await losOf();
 check('туман: 3–5 клочьев — плитка и кольцо стен «ограниченный обзор» (шаг не держит); обзор героя у игрока меньше, чем без тумана',
-    fog.puffs >= 3 && fog.puffs <= 5 && fog.walls === fog.puffs * 14 && fog.sight && foggy > 0 && foggy < clear * 0.97, JSON.stringify({ fog, clear, foggy }));
+    fog.puffs >= 3 && fog.puffs <= 5 && fog.walls === fog.puffs * 14 && fog.sight && fog.off.every(d => d < 30) && foggy > 0 && foggy < clear * 0.97, JSON.stringify({ fog, clear, foggy }));
 await pev(async () => {
     for (const app of [...foundry.applications.instances.values()]) if (app.hasFrame && app.rendered) await app.close();
     canvas.animatePan({ x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2, scale: 0.45, duration: 0 });

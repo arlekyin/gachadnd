@@ -16,10 +16,11 @@ import { MODULE_ID } from "../core/constants.js";
 import { emit, onSocket, isActiveGM } from "../core/socket.js";
 import { onRenderChatMessage } from "../core/chat-hooks.js";
 import { hint } from "../core/prefs.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const COINS = ['pp', 'gp', 'ep', 'sp', 'cp'];
-const COIN_NAMES = { pp: 'пм', gp: 'зм', ep: 'эм', sp: 'см', cp: 'мм' };
+const COIN_NAMES = { pp: t('пм'), gp: t('зм'), ep: t('эм'), sp: t('см'), cp: t('мм') };
 /** Что можно отдать: вещи из инвентаря; контейнеры — нет (их содержимое осталось бы у владельца) */
 const GOODS = ['weapon', 'equipment', 'consumable', 'tool', 'loot'];
 
@@ -83,7 +84,7 @@ const OPS = {
         // Оба согласны, но видели разное — оба «Согласен» снимаются (у всех одинаково)
         if (trade.sides.a.ready && trade.sides.b.ready && !agreed(trade)) {
             for (const k of ['a', 'b']) Object.assign(trade.sides[k], { ready: false, sees: null });
-            if (myKey(trade)) ui.notifications.warn('Предложения разошлись, пока вы соглашались, — посмотрите ещё раз и нажмите «Согласен».');
+            if (myKey(trade)) ui.notifications.warn(t('Предложения разошлись, пока вы соглашались, — посмотрите ещё раз и нажмите «Согласен».'));
         }
         return trade;
     },
@@ -192,7 +193,7 @@ async function settle(trade) {
     if (lackA.length || lackB.length) {
         send('ready', { id: trade.id, key: 'a', ready: false });
         send('ready', { id: trade.id, key: 'b', ready: false });
-        return notifyBoth(trade, `Обмен не прошёл — не хватает: ${[...lackA.map(x => `${a.name}: ${x}`), ...lackB.map(x => `${b.name}: ${x}`)].join(', ')}.`);
+        return notifyBoth(trade, t('Обмен не прошёл — не хватает: {v}.', { v: [...lackA.map(x => `${a.name}: ${x}`), ...lackB.map(x => `${b.name}: ${x}`)].join(', ') }));
     }
     const fresh = (actor, side) => ({ ...side, items: side.items.map(entry => ({ ...entry, data: snapshot(actor.items.get(entry.id), entry.qty) })) });
     const [sa, sb] = [fresh(A, a), fresh(B, b)];
@@ -204,8 +205,8 @@ async function settle(trade) {
 /** Без Мастера: участник проверяет свою сторону и шлёт свежие снимки */
 function validateMine(trade, key) {
     const side = trade.sides[key], actor = game.actors.get(side.actorId);
-    const lack = actor ? shortage(actor, side) : ['персонажа нет'];
-    if (lack.length) ui.notifications.warn(`Обмен не прошёл — у вас не хватает: ${lack.join(', ')}.`);
+    const lack = actor ? shortage(actor, side) : [t('персонажа нет')];
+    if (lack.length) ui.notifications.warn(t('Обмен не прошёл — у вас не хватает: {v}.', { v: lack.join(', ') }));
     const items = lack.length ? side.items : side.items.map(entry => ({ ...entry, data: snapshot(actor.items.get(entry.id), entry.qty) }));
     send('valid', { id: trade.id, key, ok: !lack.length, items });
 }
@@ -222,13 +223,13 @@ async function finish(trade) {
     const list = side => {
         const coins = COINS.filter(c => side.gold[c] > 0).map(c => `${side.gold[c]} ${COIN_NAMES[c]}`);
         const items = side.items.map(e => `${e.name}${e.qty > 1 ? ` ×${e.qty}` : ''}`);
-        return [...coins, ...items].join(', ') || 'ничего';
+        return [...coins, ...items].join(', ') || t('ничего');
     };
     const { a, b } = trade.sides;
     await ChatMessage.create({
-        speaker: { alias: 'Обмен' },
+        speaker: { alias: t('Обмен') },
         content: `<div class="gd-trade-card"><div class="gd-trade-card-title"><i class="fas fa-handshake"></i> ${esc(a.name)} ⇄ ${esc(b.name)}</div>
-            <p><b>${esc(a.name)}</b> отдаёт: ${esc(list(a))}</p><p><b>${esc(b.name)}</b> отдаёт: ${esc(list(b))}</p></div>`
+            <p><b>${esc(a.name)}</b> ${t('отдаёт: {v}', { v: esc(list(a)) })}</p><p><b>${esc(b.name)}</b> ${t('отдаёт: {v}', { v: esc(list(b)) })}</p></div>`
     });
 }
 
@@ -258,10 +259,10 @@ function playerOf(actor) {
 /** Предложить обмен персонажу (game.gachadnd.trade.offer(actor)) */
 export function offerTrade(partner) {
     const mine = myActor();
-    if (!mine) return ui.notifications.warn('Назначьте себе персонажа или выберите свой токен — обмен идёт от него.');
+    if (!mine) return ui.notifications.warn(t('Назначьте себе персонажа или выберите свой токен — обмен идёт от него.'));
     if (!partner || partner.id === mine.id) return;
     const user = playerOf(partner);
-    if (!user) return ui.notifications.warn(`${partner.name}: игрока нет в игре — обмен только вживую.`);
+    if (!user) return ui.notifications.warn(t('{name}: игрока нет в игре — обмен только вживую.', { name: partner.name }));
     const trade = send('open', { trade: {
         id: foundry.utils.randomID(), created: Date.now(), state: 'open',
         sides: { a: sideOf(mine, game.user), b: sideOf(partner, user) }, valid: {}, halves: {}
@@ -275,8 +276,8 @@ function whisperGM(trade) {
     const gms = game.users.filter(u => u.isGM).map(u => u.id);
     if (!gms.length) return;
     ChatMessage.create({
-        speaker: { alias: 'Обмен' }, whisper: gms,
-        content: `<div class="gd-trade-card"><div class="gd-trade-card-title"><i class="fas fa-handshake"></i> ${esc(trade.sides.a.name)} ⇄ ${esc(trade.sides.b.name)}</div><p>Идёт обмен.</p></div>`,
+        speaker: { alias: t('Обмен') }, whisper: gms,
+        content: `<div class="gd-trade-card"><div class="gd-trade-card-title"><i class="fas fa-handshake"></i> ${esc(trade.sides.a.name)} ⇄ ${esc(trade.sides.b.name)}</div><p>${t('Идёт обмен.')}</p></div>`,
         flags: { [MODULE_ID]: { tradeWatch: trade.id } }
     });
 }
@@ -287,11 +288,11 @@ onRenderChatMessage((message, html) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'gd-trade-watch';
-    button.innerHTML = '<i class="fas fa-eye"></i> Наблюдать';
+    button.innerHTML = t('<i class="fas fa-eye"></i> Наблюдать');
     button.addEventListener('click', event => {
         event.preventDefault();
         const trade = TRADES.get(id);
-        if (!trade || trade.state !== 'open') return ui.notifications.info('Этой сделки уже нет.');
+        if (!trade || trade.state !== 'open') return ui.notifications.info(t('Этой сделки уже нет.'));
         TradeWindow.show(trade.id);
     });
     card.append(button);
@@ -322,7 +323,7 @@ export class TradeWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-trade'],
         tag: 'div',
-        window: { title: 'Обмен', icon: 'fas fa-handshake', resizable: true },
+        window: { title: t('Обмен'), icon: 'fas fa-handshake', resizable: true },
         position: { width: 760, height: 560 },
         actions: {
             add: TradeWindow.#onAdd,
@@ -355,8 +356,8 @@ export class TradeWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     get trade() { return TRADES.get(this.tradeId); }
 
     get title() {
-        const t = this.trade;
-        return t ? `Обмен · ${t.sides.a.name} ⇄ ${t.sides.b.name}` : 'Обмен';
+        const trade = this.trade;
+        return trade ? t('Обмен · {a} ⇄ {b}', { a: trade.sides.a.name, b: trade.sides.b.name }) : t('Обмен');
     }
 
     /** Чью сторону этот клиент может править: свою; Мастер — обе */
@@ -385,7 +386,7 @@ export class TradeWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             };
         };
         const l = column(left), r = column(right);
-        l.title = mine ? 'Вы отдаёте' : 'отдаёт'; r.title = mine ? 'Вы получаете' : 'отдаёт';
+        l.title = mine ? t('Вы отдаёте') : t('отдаёт'); r.title = mine ? t('Вы получаете') : t('отдаёт');
         return {
             gm: game.user.isGM && !mine, mine: !!mine, state: trade.state, columns: [l, r],
             myReady: mine ? trade.sides[mine].ready : false,
@@ -461,8 +462,8 @@ export class TradeWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         if (data?.type !== 'Item' || !data.uuid) return;
         const item = await fromUuid(data.uuid);
         const actor = game.actors.get(this.trade?.sides[key]?.actorId);
-        if (!item || item.parent?.id !== actor?.id) return ui.notifications.warn('Перетащите предмет со своего листа персонажа.');
-        if (!tradable(item)) return ui.notifications.warn('Это не отдать: только вещи из инвентаря, не из контейнера.');
+        if (!item || item.parent?.id !== actor?.id) return ui.notifications.warn(t('Перетащите предмет со своего листа персонажа.'));
+        if (!tradable(item)) return ui.notifications.warn(t('Это не отдать: только вещи из инвентаря, не из контейнера.'));
         this.#pushSide(key, items => addItem(items, item));
     }
     static #onReady() {
@@ -474,7 +475,7 @@ export class TradeWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static #onCancel() {
         const trade = this.trade;
         if (trade) send('state', { id: trade.id, state: 'cancelled' });
-        notifyBoth(trade, `Обмен ${trade.sides.a.name} ⇄ ${trade.sides.b.name} отменён.`);
+        notifyBoth(trade, t('Обмен {name} ⇄ {name2} отменён.', { name: trade.sides.a.name, name2: trade.sides.b.name }));
         this.close();
     }
     // Мастер проводит сделку сам, не дожидаясь согласий

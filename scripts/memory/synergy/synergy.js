@@ -7,6 +7,7 @@ import { getSynergyDictionary, UNIVERSAL_DC_FORMULA, TAG_KEYS } from "./synergy-
 import { duoGrants, rememberSpent } from "./duo-links.js";
 import { RECOVERY_VALUES } from "../../core/recovery.js";
 import { getSkillPack } from "../crystals.js";
+import { t } from "../../core/i18n.js";
 
 const actorUpdateLocks = new Set();
 const actorUpdatePending = new Set();
@@ -47,24 +48,24 @@ function createSynergyFeature(name, icon, description, feature) {
 
     if (feature.heal) {
         const healType = feature.heal.type ?? 'healing';
-        add('heal', healType === 'temphp' ? 'Временные ПЗ' : 'Лечение', {
+        add('heal', healType === 'temphp' ? t('Временные ПЗ') : t('Лечение'), {
             healing: { custom: { enabled: true, formula: String(feature.heal.formula) }, types: [healType] },
             ...(feature.save ? {} : template)
         });
     }
     if (feature.save) {
-        add('save', 'Спасбросок', {
+        add('save', t('Спасбросок'), {
             save: { ability: [feature.save.ability], dc: { calculation: '', formula: UNIVERSAL_DC_FORMULA } },
             damage: { onSave: feature.save.on_save ?? 'half', parts },
             ...template
         });
     } else if (parts.length) {
-        add('damage', 'Урон', { damage: { parts }, ...template });
+        add('damage', t('Урон'), { damage: { parts }, ...template });
     }
     if (feature.roll) {
-        add('utility', feature.roll.name ?? 'Бросок', { roll: { formula: feature.roll.formula, name: feature.roll.name ?? '', prompt: false, visible: true } });
+        add('utility', feature.roll.name ?? t('Бросок'), { roll: { formula: feature.roll.formula, name: feature.roll.name ?? '', prompt: false, visible: true } });
     }
-    if (!Object.keys(activities).length) add('utility', 'Применить', template);
+    if (!Object.keys(activities).length) add('utility', t('Применить'), template);
 
     const recovery = feature.uses ? RECOVERY_VALUES[feature.recovery] : null;
     return {
@@ -272,7 +273,7 @@ export async function updateActorSynergies(actor) {
         itemsToGrant.push(...await duoGrants(actor, tagCounts, SYNERGY_FEATURE_VERSION));
 
         // 1. Управление Активными Эффектами
-        const synergyMarker = "Синергия: ";
+        const synergyMarker = t("Синергия: ");
         const currentSynergyEffects = actor.effects.filter(e => e.name.startsWith(synergyMarker) && e.flags?.[MODULE_ID]?.is_synergy);
         const earnedEffectNames = earnedSynergies.map(s => `${synergyMarker}[${s.name}]`);
 
@@ -345,11 +346,11 @@ export async function updateActorSynergies(actor) {
 
         if (itemsToCreate.length > 0) {
             await actor.createEmbeddedDocuments("Item", itemsToCreate);
-            ui.notifications.info(`✨ ${actor.name}: новые способности синергий — ${itemsToCreate.map(i => i.name).join(', ')}.`);
+            ui.notifications.info(t('✨ {name}: новые способности синергий — {v}.', { name: actor.name, v: itemsToCreate.map(i => i.name).join(', ') }));
             const links = itemsToCreate.filter(i => String(i.flags[MODULE_ID].tagSource).startsWith('duo:'));
             if (links.length) await ChatMessage.create({
                 speaker: ChatMessage.getSpeaker({ actor }),
-                content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-link"></i> Связка синергий</div><p>${links.map(i => `<strong>${i.name}</strong> (${i.flags[MODULE_ID].duo.join(' + ')})`).join(', ')} — пока экипированы оба тега.</p></div>`
+                content: `<div class="gd-blast-card gd-living-card"><div class="gd-blast-title"><i class="fas fa-link"></i> ${t('Связка синергий')}</div><p>${t('{v} — пока экипированы оба тега.', { v: links.map(i => `<strong>${i.name}</strong> (${i.flags[MODULE_ID].duo.join(' + ')})`).join(', ') })}</p></div>`
             });
         }
 
@@ -513,7 +514,7 @@ export async function syncCombatChanges(actor, endedCombatId = null) {
     const existing = actor.effects.filter(e => e.flags?.[MODULE_ID]?.combat_source);
     const toDelete = existing.filter(e => !sources.some(i => i.id === e.flags[MODULE_ID].combat_source)).map(e => e.id);
     const toCreate = sources.filter(i => !existing.some(e => e.flags[MODULE_ID].combat_source === i.id)).map(item => ({
-        name: `${item.name} (в бою)`,
+        name: t('{name} (в бою)', { name: item.name }),
         img: item.img,
         origin: item.uuid,
         disabled: false,

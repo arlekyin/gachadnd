@@ -4,30 +4,32 @@
  * Камень не добавляет своего эффекта — переносит то, что способность уже сделала. Поэтому всё
  * начинается с броска урона или лечения способности (dnd5e.rollDamageV2): итог броска и цели уходят
  * Мастеру, а он выкладывает карточки — кому ещё достаётся тот же эффект:
- *   Разлёт      — всем той же стороны конфликта (враги или союзники), что цель, в 5 футах от единственной цели, столько же;
- *   Перекидка   — одному той же стороны в 10 футах от цели, половина (кандидатов несколько — выбирает игрок);
- *   Переливание — обратной стороне рядом с первой целью: урон лечит союзника, лечение ранит врага;
- *   Раскат      — в начале следующего хода героя те же цели получают половину;
- *   Мина        — эффект не применяется сразу: игрок закладывает его в точку в 30 футах (или применяет сразу);
- *                 сработает, когда туда войдут, или в начале хода героя.
+ *   Разлёт        — всем существам в 5 футах от единственной цели (героя — только лечением), столько же;
+ *   Перекидка     — ближайшему существу в 10 футах от цели, столько же;
+ *   Шальной заряд — случайному существу в 30 футах от героя, столько же;
+ *   Переливание   — рядом с героем: урон лечит союзника, лечение ранит врага;
+ *   Раскат        — в начале следующего хода героя те же цели получают половину;
+ *   Мина          — эффект не применяется сразу: игрок закладывает его в точку в 30 футах (или применяет сразу);
+ *                   сработает, когда туда войдут, или в начале хода героя.
  * Охват не множится: перескочившее не разлетается и наоборот; Раскат не повторяет сам себя.
  * Броски (docs/ogranka-stones.md, «Броски»): камень переносит только сработавшее — атака промахнулась по первой
  * цели, камни молчат (карточка «промах»). Остальным задетым атака не бросается заново: тот же бросок против КД
  * каждого. Спасбросок каждый бросает свой — кнопкой в карточке, против Сл способности. Мина замораживает бросок:
  * атака и урон — при закладке, наступивший — против своего КД или со своим спасброском. Лечение — без бросков.
  * Карточки камней пишут, что произошло и что дальше, — строкой why.
- * Цена: В долг — способность без ячейки и заряда, ПЗ уходят в начале следующего хода (вне боя — сразу);
- * Плата кровью — кнопка в карточке способности: бонусным действием за ПЗ, раз за ход.
+ * Цена: В долг — способность без ячейки и заряда, вместо них кости хитов (сразу; не хватает — цена обычная);
+ * Плата кровью — кнопка в карточке способности: без траты действия или реакции за ПЗ, раз в раунд.
  * Камни не дают ближнему бою дальности, а дальнему — безопасности (docs/ogranka-stones.md, «Риск»):
  *   Выброс — кнопка в карточке: перенос в клетку в 30 фт, ближе к цели (раз за ход; перенос — не путь, мины молчат);
- *   Мина — в пределах досягаемости или дальности способности, не дальше 30 фт; Вспышка и Конус — цель должна быть
- *   в фигуре; На бегу — цель сама: первый, мимо кого герой пробежал в этот ход (путь — moveToken);
- *   Сквозь, Луч (первая цель — как обычно), Вплетение и Проводник (ближний бой) — строкой, на честность.
+ *   Мина — в пределах досягаемости или дальности способности, не дальше 30 фт; На бегу — движение после применения,
+ *   всегда под атаки по возможности (их решает Мастер); Сквозь, Вплетение и Проводник — подсказкой, на честность.
  * Свет — форма: Луч (линия 5 × 60 фт от героя к цели), Конус (15 фт к цели), Вспышка (10 фт вокруг героя) —
- *   эффект достаётся всем той же стороны, что первая цель, в фигуре; форма — одна (facet.js, stonesFor).
+ *   эффект достаётся всем в фигуре (герою — только лечение); цель вне фигуры не задета. Цель обязательна и должна быть
+ *   в досягаемости или дальности самой способности (rangeOf): иначе применить нельзя; форма — одна (facet.js, stonesFor).
  * Движение: Разбег — герой прошёл в этот ход 20 фт и больше прямо к цели: атака с преимуществом, спасбросок
  *   цели с помехой — строкой в карточке (начало хода — флаг токена turnStart); Рокировка — кнопка в карточке:
- *   поменяться местами с союзником в 15 фт, раз за ход; На бегу — строкой.
+ *   поменяться местами с одной из целей способности в 15 фт, раз за ход; На бегу — после применения герой проходит
+ *   до половины скорости, цели сами: все, мимо кого он прошёл за это перемещение (путь — moveToken).
  * Сталь: Выверено — кости силы заменяются средним, без костей — атака 10 + бонус; Вплетение и Проводник —
  *   строкой (это экономия действий, решает игрок).
  *
@@ -40,14 +42,15 @@ import { onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { onRenderChatMessage, messageItem, messageActivity } from "../../core/chat-hooks.js";
 import { blast, around, tokenOf, esc, boom, centerOf, isDead } from "../skills/blast/common.js";
 import { STONES, TAG_COLORS, isFacetable, stonesFor, facetState } from "./facet.js";
+import { t } from "../../core/i18n.js";
 
-const CARRY = ['hop', 'spread', 'transfuse', 'echo', 'mine', 'beam', 'cone', 'flash'];
-const FORMS = { beam: 'Луч', cone: 'Конус', flash: 'Вспышка' };
+const CARRY = ['hop', 'spread', 'transfuse', 'echo', 'mine', 'beam', 'cone', 'flash', 'finish', 'switch'];
+const FORMS = { beam: t('Луч'), cone: t('Конус'), flash: t('Вспышка') };
 /** Есть ли у героя такой камень хоть где-то (горящий) */
 const facetablesWith = (actor, id) => facetState(actor).placements.some(p => p.id === id && p.active);
-const uuidOf = token => token?.document?.uuid ?? token?.uuid ?? null;
+export const uuidOf = token => token?.document?.uuid ?? token?.uuid ?? null;
 const levelOf = actor => Number(actor?.system?.details?.level) || 1;
-const tokenFrom = async uuid => { const doc = uuid ? await fromUuid(uuid) : null; return doc?.documentName === 'Token' ? doc : doc?.token ?? tokenOf(doc)?.document ?? null; };
+export const tokenFrom = async uuid => { const doc = uuid ? await fromUuid(uuid) : null; return doc?.documentName === 'Token' ? doc : doc?.token ?? tokenOf(doc)?.document ?? null; };
 const distance = (a, b) => { const p = centerOf(a), q = centerOf(b); return Math.hypot(p.x - q.x, p.y - q.y); };
 const enrich = (html, actor) => (foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor).enrichHTML(html, { rollData: actor?.getRollData?.() ?? {} });
 const gem = id => `<span class="gd-stone-gem" style="--r: ${TAG_COLORS[STONES[id].tag]}"></span>`;
@@ -56,7 +59,7 @@ const gem = id => `<span class="gd-stone-gem" style="--r: ${TAG_COLORS[STONES[id
 // БРОСКИ: попала ли способность и чем её проверяют у остальных
 // ==========================================
 
-const SAVE_OF = { str: 'Силы', dex: 'Ловкости', con: 'Телосложения', int: 'Интеллекта', wis: 'Мудрости', cha: 'Харизмы' };
+const SAVE_OF = { str: t('Силы'), dex: t('Ловкости'), con: t('Телосложения'), int: t('Интеллекта'), wis: t('Мудрости'), cha: t('Харизмы') };
 
 /** Последняя атака способности на этом клиенте: { total, nat, at } — по uuid активности; урон её забирает */
 const ATTACKS = new Map();
@@ -84,19 +87,15 @@ function checkOf(activity) {
     }
     return null;
 }
-const acOf = token => Number(token.actor?.system?.attributes?.ac?.value) || 10;
-/** Попала ли атака по этому существу: 20 на кости — всегда, 1 — никогда */
-const hits = (check, token) => check.nat === 20 || (check.nat !== 1 && check.total >= acOf(token));
+export const acOf = token => Number(token.actor?.system?.attributes?.ac?.value) || 10;
+/** Попала ли атака по этому существу: 20 на кости — всегда, 1 — никогда; Неотвратимо — всегда (auto) */
+export const hits = (check, token) => check.auto || check.nat === 20 || (check.nat !== 1 && check.total >= acOf(token));
 /** Чем проверят того, кому достанется, — строка для карточек «что дальше» (в карточке урона бросок виден и так) */
 function testLine(check) {
-    if (check?.kind === 'attack') return `Атака ${check.total} — против его КД.`;
-    if (check?.kind === 'save') return `Спасбросок ${SAVE_OF[check.ability] ?? check.ability} Сл ${check.dc}${check.half ? ', успех — половина' : ', успех — мимо'}.`;
+    if (check?.kind === 'attack') return t('Атака {total} — против его КД.', { total: check.total });
+    if (check?.kind === 'save') return t('Спасбросок {ability} Сл {dc}{v}.', { ability: SAVE_OF[check.ability] ?? check.ability, dc: check.dc, v: check.half ? t(', успех — половина') : t(', успех — мимо') });
     return '';
 }
-/** На чьей стороне первая цель — относительно героя */
-const sideOf = (first, caster) => (caster ? first.disposition === caster.disposition : first.disposition > 0)
-    ? { all: 'союзники', one: 'союзника', word: 'союзник' } : { all: 'враги', one: 'врага', word: 'враг' };
-
 // ==========================================
 // КАРТОЧКИ
 // ==========================================
@@ -105,12 +104,12 @@ const sideOf = (first, caster) => (caster ? first.disposition === caster.disposi
  * Тот же эффект ещё кому-то. why — что за камень и почему, одной строкой. check — проверка способности:
  * атака — тот же бросок против КД каждого (мимо — строкой), спасбросок — кнопкой в карточке, лечение — без проверки
  */
-async function effectCard(actor, { title, victims, amount, type, heal, why = '', check = null }) {
+export async function effectCard(actor, { title, victims, amount, type, heal, why = '', check = null }) {
     if (!victims.length || !(amount > 0)) return;
     const note = why ? `<span class="gd-stone-why">${why}</span>` : '';
     if (heal) {
         const content = await enrich(`<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-gem"></i> ${esc(title)}</div>
-            ${note ? `<p>${note}</p>` : ''}<ul class="gd-blast-list"><li>${type === 'temphp' ? 'Временные ПЗ' : 'Лечение'}: ${esc(victims.map(t => t.name).join(', '))}</li></ul>
+            ${note ? `<p>${note}</p>` : ''}<ul class="gd-blast-list"><li>${type === 'temphp' ? t('Временные ПЗ') : t('Лечение')}: ${esc(victims.map(t => t.name).join(', '))}</li></ul>
             <p class="gd-blast-rolls">[[/heal ${amount}${type === 'temphp' ? ' temphp' : ''}]]</p></div>`, actor);
         return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content });
     }
@@ -118,13 +117,13 @@ async function effectCard(actor, { title, victims, amount, type, heal, why = '',
     if (check?.kind === 'save') return blast({ ...base, victims, note, ability: check.ability, dc: check.dc, half: check.half });
     if (check?.kind === 'attack') {
         const hit = victims.filter(t => hits(check, t)), miss = victims.filter(t => !hits(check, t));
-        const missLine = miss.length ? `Атака ${check.total} — мимо: ${miss.map(t => `${esc(t.name)} (КД ${acOf(t)})`).join(', ')}.` : '';
+        const missLine = miss.length ? t('Атака {total} — мимо: {v}.', { total: check.total, v: miss.map(tok => t('{name} (КД {ac})', { name: esc(tok.name), ac: acOf(tok) })).join(', ') }) : '';
         if (!hit.length) return noteCard(actor, title, [why, missLine].filter(Boolean).join('<br>'));
-        return blast({ ...base, victims: hit, note: [note, missLine].filter(Boolean).join('<br>'), lead: `Атака ${check.total}${check.nat === 20 ? ' (20)' : ''} — попадание` });
+        return blast({ ...base, victims: hit, note: [note, missLine].filter(Boolean).join('<br>'), lead: t('Атака {total}{v} — попадание', { total: check.total, v: check.nat === 20 ? ' (20)' : '' }) });
     }
     return blast({ ...base, victims, note });
 }
-function noteCard(actor, title, text) {
+export function noteCard(actor, title, text) {
     return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-gem"></i> ${esc(title)}</div><p>${text}</p></div>` });
 }
 
@@ -133,7 +132,7 @@ async function payHp(actor, amount, why, more = '') {
     if (!actor || !(amount > 0)) return;
     const hp = actor.system.attributes.hp;
     await actor.update({ 'system.attributes.hp.value': Math.max(0, hp.value - amount) });
-    await noteCard(actor, why, `${more ? `${more}<br>` : ''}${esc(actor.name)} теряет ${amount} ПЗ.`);
+    await noteCard(actor, why, `${t('{v}{v2} теряет {amount} ПЗ.', { v: more ? `${more}<br>` : '', v2: esc(actor.name), amount })}`);
 }
 
 // ==========================================
@@ -152,69 +151,108 @@ Hooks.on('dnd5e.rollDamageV2', (rolls, data) => {
     const caster = tokenOf(actor);
     let targets = [...game.user.targets].map(uuidOf).filter(Boolean);
     if (!targets.length && heal && caster) targets = [uuidOf(caster)];
-    const check = heal ? null : checkOf(activity);
-    const payload = { actorId: actor.id, casterUuid: uuidOf(caster), name: item.name, stones, amount, type, heal, targets, check, reach: reachOf(activity) };
+    let check = heal ? null : checkOf(activity);
+    // Неотвратимо: атака — попадание всегда, спасбросок — провал (у задетых камнями — тоже, без кнопки спасброска)
+    if (check && stonesFor(activity).includes('inevitable')) check = check.kind === 'attack' ? { ...check, auto: true } : null;
+    const payload = { actorId: actor.id, casterUuid: uuidOf(caster), name: item.name, stones, amount, type, heal, targets, check, reach: reachOf(activity), range: rangeOf(activity) };
     if (stones.includes('mine')) return mineCard(actor, payload);
     requestGM('facetCast', payload);
 });
 
 onSocket('facetCast', ({ payload }) => { if (isActiveGM()) facetCast(payload).catch(error => console.error(`${MODULE_ID} | огранка: камни`, error)); });
 /** Мастер: разложить перенесённый эффект по камням (Мина сюда приходит уже сработавшей) */
-export async function facetCast({ actorId, casterUuid, name, stones, amount, type, heal, targets, check = null }) {
+export async function facetCast({ actorId, casterUuid, name, stones, amount, type, heal, targets, check = null, range = null }) {
     const actor = game.actors.get(actorId), caster = await tokenFrom(casterUuid);
     const primary = (await Promise.all((targets ?? []).map(tokenFrom))).filter(t => t?.actor);
-    if (!actor || !primary.length || !(amount > 0)) return;
-    const first = primary[0];
-    // Камень переносит только сработавшее: атака мимо первой цели — камни молчат
-    if (check?.kind === 'attack' && !hits(check, first)) {
-        return noteCard(actor, `Огранка — ${name}`, `Промах по ${esc(first.name)}: атака ${check.total} против КД ${acOf(first)} — камни не сработали.`);
+    if (!actor || !(amount > 0)) return;
+    const form = stones.find(id => FORMS[id]);
+    // Форме света нужна цель в досягаемости способности: цель задаёт и направление, и проверку дальности
+    if (!primary.length) {
+        if (form) await noteCard(actor, `${FORMS[form]} — ${name}`, t('Выберите цель в досягаемости способности.'));
+        return;
     }
-    const side = sideOf(first, caster), what = heal ? 'лечение' : 'урон';
+    const first = primary[0];
+    if (form && caster && !inRange(caster, first, range)) {
+        return noteCard(actor, `${FORMS[form]} — ${name}`, t('{v} вне досягаемости способности ({range} футов) — она не срабатывает.', { v: esc(first.name), range }));
+    }
+    // Камень переносит только сработавшее: атака мимо первой цели — камни молчат. Форма света заменяет цель — та же атака против КД каждого в фигуре
+    const missed = check?.kind === 'attack' && !hits(check, first);
+    if (missed && !form) {
+        return noteCard(actor, t('Огранка — {name}', { name }), t('Промах по {v}: атака {total} против КД {v2} — камни не сработали.', { v: esc(first.name), total: check.total, v2: acOf(first) }));
+    }
+    const what = heal ? t('лечение') : t('урон');
     const test = testLine(check);
     const taken = new Set(primary.map(t => t.id));
-    const alive = t => !isDead(t.actor);
-    // Свет — форма: все той же стороны в фигуре от героя (охват не множится: фигура — от первой цели)
-    const form = stones.find(id => FORMS[id]);
-    let shaped = [];
-    const outside = form && caster && form !== 'beam' && !inShape(form, caster, first).some(t => t.id === first.id);
-    if (outside) await noteCard(actor, `${FORMS[form]} — ${name}`, `${esc(first.name)} дальше ${form === 'flash' ? 10 : 15} футов от героя — ${FORMS[form]} не сработал${form === 'flash' ? 'а' : ''}: цель должна быть в фигуре.`);
-    if (form && caster && !outside) {
-        shaped = inShape(form, caster, first).filter(t => t.disposition === first.disposition && !taken.has(t.id) && alive(t) && (t.id !== caster.id || heal));
+    // Кого ещё может задеть: не задетый, живой; героя — только лечением
+    const free = t => !taken.has(t.id) && !isDead(t.actor) && (t.id !== caster?.id || heal);
+    let shaped = [], outside = false;
+    if (form && caster) {
+        const area = inShape(form, caster, first);
+        outside = !area.some(t => t.id === first.id);
+        if (outside) await noteCard(actor, `${FORMS[form]} — ${name}`, t('{v} вне фигуры — эффект на него не действует.', { v: esc(first.name) }));
+        shaped = area.filter(free);
         shaped.forEach(t => taken.add(t.id));
-        const where = { beam: 'на линии 60 футов от героя к цели', cone: 'в конусе 15 футов от героя к цели', flash: 'в 10 футах вокруг героя' }[form];
+        const where = { beam: t('на линии 60 футов от героя к цели'), cone: t('в конусе 15 футов от героя к цели'), flash: t('в 10 футах вокруг героя') }[form];
         await effectCard(actor, { title: `${FORMS[form]} — ${name}`, victims: shaped, amount, type, heal, check,
-            why: `${FORMS[form]}: ${side.all} ${where} получают тот же ${what}.` });
+            why: t('{v}: все {where} получают тот же {what}.', { v: FORMS[form], where, what }) });
     }
+    if (missed) return;
+    // Перенос от цели — только если она сама задета
+    const anchored = !outside;
     let spread = [];
-    if (stones.includes('spread') && primary.length === 1) {
-        spread = around(first, 5).filter(t => t.disposition === first.disposition && !taken.has(t.id) && alive(t));
+    if (stones.includes('spread') && anchored && primary.length === 1) {
+        spread = around(first, 5).filter(free);
         spread.forEach(t => taken.add(t.id));
-        await effectCard(actor, { title: `Разлёт — ${name}`, victims: spread, amount, type, heal, check,
-            why: `Разлёт: ${side.all} в 5 футах от ${esc(first.name)} получают тот же ${what}.` });
+        await effectCard(actor, { title: t('Разлёт — {name}', { name }), victims: spread, amount, type, heal, check,
+            why: t('Разлёт: все в 5 футах от {v} получают тот же {what}.', { v: esc(first.name), what }) });
     }
-    if (stones.includes('hop')) {
-        const pool = around(first, 10).filter(t => t.disposition === first.disposition && !taken.has(t.id) && alive(t));
-        const half = Math.floor(amount / 2);
-        const why = `Перекидка: половина — ${half} — перескакивает с ${esc(first.name)} ещё на одного ${side.one} в 10 футах от него.`;
-        if (pool.length === 1) await effectCard(actor, { title: `Перекидка — ${name}`, victims: pool, amount: half, type, heal, check, why: `${why} Он там один.` });
-        else if (pool.length > 1) await hopCard(actor, { name, pool, amount: half, type, heal, check, why: `${why} ${test}` });
+    if (stones.includes('hop') && anchored) {
+        const near = around(first, 10).filter(free).sort((a, b) => distance(a, first) - distance(b, first))[0];
+        if (near) {
+            taken.add(near.id);
+            await effectCard(actor, { title: t('Перекидка — {name}', { name }), victims: [near], amount, type, heal, check,
+                why: t('Перекидка: {what} перескакивает с {v} на ближайшее существо — {v2}.', { what, v: esc(first.name), v2: esc(near.name) }) });
+        }
+    }
+    if (stones.includes('finish') && anchored) {
+        // Добить: сила сверх того, что цель могла принять, — урон сверх её ПЗ, лечение сверх недостающих
+        const hp = first.actor.system.attributes.hp, max = Number(hp.effectiveMax) || Number(hp.max) || 0;
+        const rest = heal ? amount - Math.max(0, max - (Number(hp.value) || 0)) : amount - (Number(hp.value) || 0) - (Number(hp.temp) || 0);
+        if (rest > 0) {
+            const near = around(first, 30).filter(t => free(t) || primary.some(p => p.id === t.id)).sort((a, b) => distance(a, first) - distance(b, first))[0];
+            const why = t('Добить: {what} {v} — лишнее {rest}.', { what: heal ? t('лечение наполнило ПЗ:') : t('урон опустил до 0 ПЗ:'), v: esc(first.name), rest });
+            if (near) await passCard(actor, { name, target: near, amount: rest, type, heal, check, why: `${why} ${test}` });
+            else await noteCard(actor, t('Добить — {name}', { name }), t('{why} Рядом никого — лишнее пропало.', { why }));
+        }
+    }
+    if (stones.includes('switch') && caster) {
+        const pool = around(caster, 30).filter(free);
+        const stray = pool[Math.floor(Math.random() * pool.length)];
+        if (stray) {
+            taken.add(stray.id);
+            await effectCard(actor, { title: t('Шальной заряд — {name}', { name }), victims: [stray], amount, type, heal, check,
+                why: t('Шальной заряд: способность срабатывает ещё раз — случайно досталось {v}.', { v: esc(stray.name) }) });
+        } else await noteCard(actor, t('Шальной заряд — {name}', { name }), t('В 30 футах больше никого — заряд ушёл в пустоту.'));
     }
     if (stones.includes('transfuse') && caster) {
         // Обратная сторона — рядом с героем: урон лечит его союзника, лечение ранит его врага (дальнобой держится у своих)
         const want = heal ? -caster.disposition : caster.disposition;
-        const near = around(caster, 5).filter(t => t.disposition === want && t.disposition !== 0 && !taken.has(t.id) && alive(t))
+        const near = around(caster, 5).filter(t => t.disposition === want && t.disposition !== 0 && !taken.has(t.id) && !isDead(t.actor))
             .sort((a, b) => distance(a, caster) - distance(b, caster))[0];
-        if (near) await effectCard(actor, { title: `Переливание — ${name}`, victims: [near], amount, type: heal ? 'necrotic' : 'healing', heal: !heal,
-            why: heal ? `Переливание: лечение ${esc(first.name)} ранит ближайшего к герою врага — на столько же, без броска.`
-                : `Переливание: урон по ${esc(first.name)} лечит ближайшего к герою союзника — на столько же.` });
-        else await noteCard(actor, `Переливание — ${name}`, `Рядом с героем нет ${heal ? 'врага' : 'союзника'} — переливать некому.`);
+        const whom = esc(first.name);
+        if (near) await effectCard(actor, { title: t('Переливание — {name}', { name }), victims: [near], amount, type: heal ? 'necrotic' : 'healing', heal: !heal,
+            why: heal ? t('Переливание: лечение {v} ранит ближайшего к герою врага — на столько же, без броска.', { v: whom })
+                : t('Переливание: урон по {v} лечит ближайшего к герою союзника — на столько же.', { v: whom }) });
+        else await noteCard(actor, t('Переливание — {name}', { name }), t('Рядом с героем нет {v} — переливать некому.', { v: heal ? t('врага') : t('союзника') }));
     }
     if (stones.includes('echo') && game.combat?.started) {
-        const hit = [...primary, ...shaped, ...spread];
-        const echo = actor.getFlag(MODULE_ID, 'facetEcho') ?? [];
-        echo.push({ name, targets: hit.map(uuidOf), amount: Math.floor(amount / 2), type, heal, check });
-        await actor.setFlag(MODULE_ID, 'facetEcho', echo);
-        await noteCard(actor, `Раскат — ${name}`, `В начале вашего следующего хода ${esc(hit.map(t => t.name).join(', '))} получат ещё половину: ${what} ${Math.floor(amount / 2)}. ${test}`);
+        const hit = [...(outside ? [] : primary), ...shaped, ...spread];
+        if (hit.length) {
+            const echo = actor.getFlag(MODULE_ID, 'facetEcho') ?? [];
+            echo.push({ name, targets: hit.map(uuidOf), amount: Math.floor(amount / 2), type, heal, check });
+            await actor.setFlag(MODULE_ID, 'facetEcho', echo);
+            await noteCard(actor, t('Раскат — {name}', { name }), t('В начале вашего следующего хода {v} получат ещё половину: {what} {v2}. {test}', { v: esc(hit.map(t => t.name).join(', ')), what, v2: Math.floor(amount / 2), test }));
+        }
     }
 }
 
@@ -238,28 +276,26 @@ export function inShape(form, caster, target) {
     });
 }
 
-/** Перекидка — кандидатов несколько: выбирает игрок кнопкой в карточке; после выбора — кто получил */
-function hopHtml(hop) {
-    const picked = hop.used ? hop.pool.find(p => p.uuid === hop.used)?.name : null;
-    const buttons = hop.pool.map(p => `<button type="button" data-gd-hop="${p.uuid}">${esc(p.name)}</button>`).join('');
-    return `<div class="gd-blast-card gd-stone-card"><div class="gd-blast-title"><i class="fas fa-gem"></i> Перекидка — ${esc(hop.name)}</div>
-        <p class="gd-stone-why">${hop.why}</p><p>${picked ? `Перескочило на: <b>${esc(picked)}</b>.` : 'Рядом несколько — выберите, на кого перескочит:'}</p>
-        <div class="gd-stone-buttons">${buttons}</div></div>`;
+/** Добить: передать лишнее — выбор игрока, кнопкой в карточке; после нажатия — кому досталось */
+function passHtml(pass) {
+    return `<div class="gd-blast-card gd-stone-card"><div class="gd-blast-title"><i class="fas fa-gem"></i> ${t('Добить — {v}', { v: esc(pass.name) })}</div>
+        <p class="gd-stone-why">${pass.why}</p><p>${pass.used ? t('Передано: <b>{v}</b>.', { v: esc(pass.target.name) }) : t('Передать ближайшему существу — или оставить как есть:')}</p>
+        <div class="gd-stone-buttons"><button type="button" data-gd-pass="1">${esc(pass.target.name)}: ${pass.amount}</button></div></div>`;
 }
-async function hopCard(actor, { name, pool, amount, type, heal, check, why }) {
-    const hop = { actorId: actor.id, name, amount, type, heal, check, why, used: null, pool: pool.map(t => ({ uuid: uuidOf(t), name: t.name })) };
-    return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: hopHtml(hop), flags: { [MODULE_ID]: { facetHop: hop } } });
+export async function passCard(actor, { name, target, amount, type, heal, check, why }) {
+    const pass = { actorId: actor.id, name, amount, type, heal, check, why, used: false, target: { uuid: uuidOf(target), name: target.name } };
+    return ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: passHtml(pass), flags: { [MODULE_ID]: { facetPass: pass } } });
 }
-onSocket('facetHopPick', ({ payload }) => { if (isActiveGM()) hopPick(payload).catch(error => console.error(`${MODULE_ID} | огранка: перекидка`, error)); });
-async function hopPick({ messageId, uuid }) {
-    const message = game.messages.get(messageId), hop = message?.getFlag(MODULE_ID, 'facetHop');
-    if (!hop || hop.used) return;
-    const token = await tokenFrom(uuid);
+onSocket('facetPassPick', ({ payload }) => { if (isActiveGM()) passPick(payload).catch(error => console.error(`${MODULE_ID} | огранка: добить`, error)); });
+async function passPick({ messageId }) {
+    const message = game.messages.get(messageId), pass = message?.getFlag(MODULE_ID, 'facetPass');
+    if (!pass || pass.used) return;
+    const token = await tokenFrom(pass.target.uuid);
     if (!token) return;
-    const next = { ...hop, used: uuid };
-    await message.update({ content: hopHtml(next), [`flags.${MODULE_ID}.facetHop`]: next });
-    await effectCard(game.actors.get(hop.actorId), { title: `Перекидка — ${hop.name}`, victims: [token], amount: hop.amount, type: hop.type, heal: hop.heal, check: hop.check,
-        why: `Перекидка: выбран ${esc(token.name)}.` });
+    const next = { ...pass, used: true };
+    await message.update({ content: passHtml(next), [`flags.${MODULE_ID}.facetPass`]: next });
+    await effectCard(game.actors.get(pass.actorId), { title: t('Добить — {name}', { name: pass.name }), victims: [token], amount: pass.amount, type: pass.type, heal: pass.heal, check: pass.check,
+        why: t('Лишнее передано: {v}.', { v: esc(token.name) }) });
 }
 
 // ==========================================
@@ -271,21 +307,21 @@ async function hopPick({ messageId, uuid }) {
  * Бросок заморожен: атака и урон брошены при закладке
  */
 function mineHtml(payload, state, extra = '') {
-    const what = `${payload.heal ? 'лечение' : 'урон'} ${payload.amount}`;
-    const who = payload.heal ? 'союзник' : 'враг';
+    const what = `${payload.heal ? t('лечение') : t('урон')} ${payload.amount}`;
+    const who = payload.heal ? t('союзник') : t('враг');
     const test = payload.heal ? '' : ` ${testLine(payload.check)}`;
     const body = {
-        wait: `<p class="gd-stone-why">${payload.heal ? 'Лечение не применено' : 'Урон не нанесён'} — его можно заложить: ${what}${payload.check?.kind === 'attack' ? `, атака ${payload.check.total}` : ''}.</p>
-            <ol class="gd-stone-steps"><li><b>Заложить</b> — нажмите и щёлкните клетку на сцене в ${payload.reach ?? 30} футах от героя: досягаемость способности.</li>
-            <li>Первый ${who}, который встанет на эту клетку или пройдёт через неё, получит ${what} — и все ${payload.heal ? 'союзники' : 'враги'} в соседних клетках, считая диагональ. Соседние клетки мину не взрывают.${test}</li>
-            <li>Не сработала до начала вашего хода — сработает сама на тех, кто рядом.</li></ol>
-            <p><b>Сразу</b> — применить как обычно, по выбранным целям.</p>`,
-        placed: `<p class="gd-stone-why">Заложена: ${what}. Ждёт, пока войдёт ${who}.${test} В начале вашего хода сработает сама.</p>`,
-        fired: `<p class="gd-stone-why">Сработала. ${extra}</p>`,
-        now: `<p class="gd-stone-why">Применено сразу, без мины.</p>`
+        wait: `<p class="gd-stone-why">${t('{v} — его можно заложить: {what}{v2}.', { v: payload.heal ? t('Лечение не применено') : t('Урон не нанесён'), what, v2: payload.check?.kind === 'attack' ? t(', атака {total}', { total: payload.check.total }) : '' })}</p>
+            <ol class="gd-stone-steps"><li><b>${t('Заложить')}</b> ${t('— нажмите и щёлкните клетку на сцене в {v} футах от героя: досягаемость способности.', { v: payload.reach ?? 30 })}</li>
+            <li>${t('Первый {who}, который встанет на эту клетку или пройдёт через неё, получит {what} — и все {v} в соседних клетках, считая диагональ. Соседние клетки мину не взрывают.{test}', { who, what, v: payload.heal ? t('союзники') : t('враги'), test })}</li>
+            <li>${t('Не сработала до начала вашего хода — сработает сама на тех, кто рядом.')}</li></ol>
+            <p><b>${t('Сразу')}</b> ${t('— применить как обычно, по выбранным целям.')}</p>`,
+        placed: `<p class="gd-stone-why">${t('Заложена: {what}. Ждёт, пока войдёт {who}.{test} В начале вашего хода сработает сама.', { what, who, test })}</p>`,
+        fired: `<p class="gd-stone-why">${t('Сработала. {extra}', { extra })}</p>`,
+        now: `<p class="gd-stone-why">${t('Применено сразу, без мины.')}</p>`
     }[state];
-    const buttons = state === 'wait' ? `<div class="gd-stone-buttons"><button type="button" data-gd-mine="place"><i class="fas fa-location-crosshairs"></i> Заложить</button><button type="button" data-gd-mine="now">Сразу</button></div>` : '';
-    return `<div class="gd-blast-card gd-stone-card"><div class="gd-blast-title"><i class="fas fa-gem"></i> Мина — ${esc(payload.name)}</div>${body}${buttons}</div>`;
+    const buttons = state === 'wait' ? `<div class="gd-stone-buttons"><button type="button" data-gd-mine="place"><i class="fas fa-location-crosshairs"></i> ${t('Заложить')}</button><button type="button" data-gd-mine="now">${t('Сразу')}</button></div>` : '';
+    return `<div class="gd-blast-card gd-stone-card"><div class="gd-blast-title"><i class="fas fa-gem"></i> ${t('Мина — {v}', { v: esc(payload.name) })}</div>${body}${buttons}</div>`;
 }
 function mineCard(actor, payload) {
     return ChatMessage.create({
@@ -314,16 +350,49 @@ function reachOf(activity) {
     return Math.min(30, feet);
 }
 
+/**
+ * Полная досягаемость или дальность способности, футы; null — без предела. Оружие ближнего боя — досягаемость (метательное —
+ * дальность броска), дальнобойное — дальняя дистанция; способность «на себя» с областью — размер области, касание — 5
+ */
+function rangeOf(activity) {
+    const item = activity.item, range = item.system?.range ?? {};
+    if (item.type === 'weapon') {
+        if (/R$/.test(item.system.type?.value ?? '') || item.system.properties?.has?.('thr')) return Number(range.long) || Number(range.value) || 30;
+        return Number(range.reach) || (item.system.properties?.has?.('rch') ? 10 : 5);
+    }
+    const r = activity.range?.units ? activity.range : range;
+    if (r.units === 'ft') return Number(r.value) || 5;
+    if (r.units === 'mi') return (Number(r.value) || 1) * 5280;
+    if (r.units === 'self') return Number(activity.target?.template?.size) || 5;
+    if (r.units === 'touch' || !r.units) return 5;
+    return null;
+}
+/** В пределах ли дальности: сам герой — всегда; null — без предела */
+const inRange = (caster, target, range) => range == null || target.id === caster.id || around(caster, range).some(t => t.id === target.id);
+
+// Форма света: цель дальше досягаемости способности — применить нельзя, цена цела. Выброс переносит героя уже после
+// применения, На бегу сам меняет цель: для них дальность проверяется при броске (facetCast)
+Hooks.on('dnd5e.preUseActivity', activity => {
+    const stones = stonesFor(activity);
+    if (!stones.some(id => FORMS[id]) || stones.includes('cast') || stones.includes('run')) return;
+    const caster = tokenOf(activity.item.actor)?.document, target = firstTarget();
+    if (!caster || !target) return;
+    const range = rangeOf(activity);
+    if (inRange(caster, target, range)) return;
+    ui.notifications.warn(t('{v} вне досягаемости способности ({range} футов).', { v: target.name, range }));
+    return false;
+});
+
 /** Игрок щёлкает клетку на сцене; дальше досягаемости способности — нельзя */
 function pickPoint(actor, messageId, reach = 30) {
     const caster = tokenOf(actor)?.document;
-    if (!canvas?.ready || !caster || caster.parent?.id !== canvas.scene.id) return ui.notifications.warn('Герой не на этой сцене.');
-    ui.notifications.info(`Щёлкните клетку на сцене — в ${reach} футах от героя.`);
+    if (!canvas?.ready || !caster || caster.parent?.id !== canvas.scene.id) return ui.notifications.warn(t('Герой не на этой сцене.'));
+    ui.notifications.info(t('Щёлкните клетку на сцене — в {reach} футах от героя.', { reach }));
     canvas.stage.once('pointerdown', event => {
         const point = event.getLocalPosition?.(canvas.stage) ?? event.data?.getLocalPosition?.(canvas.stage) ?? canvas.mousePosition;
         const grid = canvas.scene.grid, c = centerOf(caster), cell = grid.getCenterPoint?.(point) ?? point;
         const feet = Math.hypot(cell.x - c.x, cell.y - c.y) / grid.size * grid.distance;
-        if (feet > reach + grid.distance / 2) return ui.notifications.warn(`Дальше ${reach} футов — досягаемость способности, мину туда не заложить.`);
+        if (feet > reach + grid.distance / 2) return ui.notifications.warn(t('Дальше {reach} футов — досягаемость способности, мину туда не заложить.', { reach }));
         requestGM('facetMinePlace', { messageId, sceneId: canvas.scene.id, x: Math.round(point.x), y: Math.round(point.y) });
     });
 }
@@ -368,16 +437,16 @@ export async function detonateMine(scene, mineId, entering = null) {
     const victims = mineVictims(scene, mine);
     if (entering && !victims.some(t => t.id === entering.id)) victims.push(entering);
     const actor = game.actors.get(mine.payload.actorId), check = mine.payload.check;
-    const how = entering ? `${esc(entering.name)} вошёл в точку.` : 'Начался ход героя — сработала сама.';
+    const how = entering ? t('{v} вошёл в точку.', { v: esc(entering.name) }) : t('Начался ход героя — сработала сама.');
     const message = game.messages.get(mine.messageId), card = message?.getFlag(MODULE_ID, 'facetMine');
-    if (card) await mineState(message, card, 'fired', victims.length ? how : `${how} Рядом никого — впустую.`);
+    if (card) await mineState(message, card, 'fired', victims.length ? how : t('{how} Рядом никого — впустую.', { how }));
     boom({ sceneId: scene.id, x: mine.x, y: mine.y, radius: scene.grid.size * 1.5, color: mine.payload.heal ? 0x7dd87a : 0xff7a1a });
-    if (!victims.length) return noteCard(actor, `Мина — ${mine.payload.name}`, `${how} Рядом никого — сработала впустую.`);
-    await effectCard(actor, { title: `Мина — ${mine.payload.name}`, victims, amount: mine.payload.amount, type: mine.payload.type, heal: mine.payload.heal, check,
-        why: `Мина: ${how}` });
+    if (!victims.length) return noteCard(actor, t('Мина — {name}', { name: mine.payload.name }), t('{how} Рядом никого — сработала впустую.', { how }));
+    await effectCard(actor, { title: t('Мина — {name}', { name: mine.payload.name }), victims, amount: mine.payload.amount, type: mine.payload.type, heal: mine.payload.heal, check,
+        why: t('Мина: {how}', { how }) });
     // Остальные камни — от тех, кого мина задела (атака мимо — не задела)
     const hit = check?.kind === 'attack' && !mine.payload.heal ? victims.filter(t => hits(check, t)) : victims;
-    if (hit.length) await facetCast({ ...mine.payload, targets: hit.map(uuidOf) });
+    if (hit.length) await facetCast({ ...mine.payload, range: null, targets: hit.map(uuidOf) });
 }
 
 /**
@@ -439,40 +508,43 @@ Hooks.on('updateScene', (scene, changes) => { if (scene.id === canvas?.scene?.id
 // ЦЕНА: В долг, Плата кровью
 // ==========================================
 
-// В долг — ячейка и заряды не тратятся
-Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
-    if (!stonesFor(activity).includes('debt') || !usage) return;
-    if (usage.consume === false) return;
-    usage.consume = { ...(typeof usage.consume === 'object' ? usage.consume : {}), resources: [], spellSlot: false };
-});
-Hooks.on('dnd5e.postUseActivity', (activity, usage) => {
-    const actor = activity?.item?.actor;
-    if (!actor || !stonesFor(activity).includes('debt')) return;
-    const item = activity.item;
-    let amount = 0;
+/** В долг: сколько костей хитов стоит способность — по кости за уровень ячейки, кость вместо заряда; без цены — 0 */
+function debtDice(activity, usage) {
+    const item = activity.item, actor = item.actor;
     if (item.type === 'spell' && (item.system.level ?? 0) > 0) {
         const slot = usage?.spell?.slot ?? '';
         const level = slot === 'pact' ? Number(actor.system.spells?.pact?.level) : Number(String(slot).match(/\d+/)?.[0]);
-        amount = 5 * (level || item.system.level);
-    } else if (activity.consumption?.targets?.length || item.system.uses?.max) amount = levelOf(actor);
-    if (amount) requestGM('facetDebt', { actorId: actor.id, amount, name: item.name });
-});
-onSocket('facetDebt', ({ payload }) => { if (isActiveGM()) takeDebt(payload).catch(error => console.error(`${MODULE_ID} | огранка: долг`, error)); });
-async function takeDebt({ actorId, amount, name }) {
-    const actor = game.actors.get(actorId);
-    if (!actor) return;
-    const inCombat = game.combat?.started && game.combat.combatants.some(c => c.actorId === actorId);
-    if (!inCombat) return shrinkMax(actor, amount, `В долг — ${name}`);
-    await actor.setFlag(MODULE_ID, 'facetDebt', (actor.getFlag(MODULE_ID, 'facetDebt') ?? 0) + amount);
-    await noteCard(actor, `В долг — ${name}`, `Без ячейки и заряда. В начале следующего хода максимум ПЗ ${esc(actor.name)} уменьшится на ${amount} — до долгого отдыха.`);
+        return level || item.system.level;
+    }
+    return activity.consumption?.targets?.length || item.system.uses?.max ? 1 : 0;
 }
-/** Долг — максимум ПЗ меньше до долгого отдыха (временный максимум dnd5e, долгий отдых его снимает); лечением не вернуть */
-async function shrinkMax(actor, amount, why) {
-    if (!actor || !(amount > 0)) return;
-    const hp = actor.system.attributes.hp;
-    const max = (Number(hp.effectiveMax) || (Number(hp.max) || 0) + (Number(hp.tempmax) || 0)) - amount;
-    await actor.update({ 'system.attributes.hp.tempmax': (Number(hp.tempmax) || 0) - amount, 'system.attributes.hp.value': Math.min(Number(hp.value) || 0, Math.max(0, max)) });
-    await noteCard(actor, why, `Максимум ПЗ ${esc(actor.name)} меньше на ${amount} — до долгого отдыха.`);
+const hitDiceLeft = actor => Object.values(actor.classes ?? {}).reduce((sum, cls) => sum + (Number(cls.system.hd?.value) || 0), 0);
+
+// В долг — уже после окна применения: ячейка выбрана. Хватает костей — ячейка и заряды не тратятся; не хватает — цена обычная
+Hooks.on('dnd5e.preActivityConsumption', (activity, usage) => {
+    if (!stonesFor(activity).includes('debt') || !usage || usage.consume === false) return;
+    const dice = debtDice(activity, usage);
+    if (!dice) return;
+    if (dice > hitDiceLeft(activity.item.actor)) return void ui.notifications.warn(t('В долг: не хватает костей хитов ({dice}) — цена обычная.', { dice }));
+    usage.consume = { ...(typeof usage.consume === 'object' ? usage.consume : { action: true }), resources: [], spellSlot: false };
+    usage.gdDebtDice = dice;
+});
+Hooks.on('dnd5e.postUseActivity', (activity, usage) => {
+    const actor = activity?.item?.actor;
+    if (actor && usage?.gdDebtDice) spendHitDice(actor, usage.gdDebtDice, activity.item.name).catch(error => console.error(`${MODULE_ID} | огранка: долг`, error));
+});
+/** Кости хитов — сначала меньшие; долгий отдых возвращает их как обычно */
+async function spendHitDice(actor, dice, name) {
+    const faces = cls => Number(String(cls.system.hd.denomination).slice(1)) || 0;
+    const left = hitDiceLeft(actor) - dice, updates = [];
+    let need = dice;
+    for (const cls of Object.values(actor.classes).sort((a, b) => faces(a) - faces(b))) {
+        const take = Math.min(need, Number(cls.system.hd.value) || 0);
+        if (take) updates.push({ _id: cls.id, 'system.hd.spent': (Number(cls.system.hd.spent) || 0) + take });
+        need -= take;
+    }
+    await actor.updateEmbeddedDocuments('Item', updates);
+    await noteCard(actor, t('В долг — {name}', { name }), t('Без ячейки и заряда: потрачено костей хитов — {dice}, осталось {left}.', { dice, left }));
 }
 
 /** Цена Платы кровью: уровень героя, у заклинания с ячейкой — ещё 5 × уровень ячейки (два огненных шара за ход дороги) */
@@ -482,13 +554,13 @@ function bloodCost(message, actor) {
     return levelOf(actor) + (item?.type === 'spell' && slot > 0 ? 5 * slot : 0);
 }
 
-// Плата кровью — игрок сам решает, что применил бонусным действием: кнопка в карточке, раз за ход
+// Плата кровью — игрок сам отмечает, что применил без траты действия или реакции: кнопка в карточке, раз в раунд
 async function payBlood(message, actor) {
-    const key = game.combat?.started ? `${game.combat.round}.${game.combat.turn}` : null;
-    if (key && actor.getFlag(MODULE_ID, 'facetPaid') === key) return ui.notifications.warn('Плата кровью — раз за ход.');
+    const key = game.combat?.started ? `${game.combat.round}` : null;
+    if (key && actor.getFlag(MODULE_ID, 'facetPaid') === key) return ui.notifications.warn(t('Плата кровью — раз в раунд.'));
     if (key) await actor.setFlag(MODULE_ID, 'facetPaid', key);
     await message.setFlag(MODULE_ID, 'facetPaidHere', true);
-    await payHp(actor, bloodCost(message, actor), `Плата кровью — ${messageItem(message)?.name ?? ''}`, 'Это применение — бонусным действием вместо обычного (реакция — второй за раунд). Раз за ход.');
+    await payHp(actor, bloodCost(message, actor), t('Плата кровью — {v}', { v: messageItem(message)?.name ?? '' }), t('Это применение — без траты действия или реакции. Раз в раунд.'));
 }
 
 // ==========================================
@@ -538,24 +610,24 @@ function jump(token, x, y) {
  */
 function blinkPick(message, actor) {
     const caster = tokenOf(actor)?.document, combat = game.combat;
-    if (!canvas?.ready || !caster || caster.parent?.id !== canvas.scene.id) return ui.notifications.warn('Герой не на этой сцене.');
+    if (!canvas?.ready || !caster || caster.parent?.id !== canvas.scene.id) return ui.notifications.warn(t('Герой не на этой сцене.'));
     const key = combat?.started ? `${combat.round}.${combat.turn}` : null;
-    if (key && actor.getFlag(MODULE_ID, 'facetBlink') === key) return ui.notifications.warn('Выброс — раз за ход.');
+    if (key && actor.getFlag(MODULE_ID, 'facetBlink') === key) return ui.notifications.warn(t('Выброс — раз за ход.'));
     const target = firstTarget();
-    if (!target) return ui.notifications.warn('Сначала выберите цель: Выброс переносит ближе к ней.');
-    ui.notifications.info('Щёлкните клетку в 30 футах, ближе к цели, — герой перенесётся туда.');
+    if (!target) return ui.notifications.warn(t('Сначала выберите цель: Выброс переносит ближе к ней.'));
+    ui.notifications.info(t('Щёлкните клетку в 30 футах, ближе к цели, — герой перенесётся туда.'));
     canvas.stage.once('pointerdown', async event => {
         const point = event.getLocalPosition?.(canvas.stage) ?? event.data?.getLocalPosition?.(canvas.stage) ?? canvas.mousePosition;
         const grid = canvas.scene.grid, size = grid.size;
         const cell = grid.getCenterPoint?.(point) ?? point, from = centerOf(caster);
         const feet = Math.hypot(cell.x - from.x, cell.y - from.y) / size * grid.distance;
-        if (feet > 30 + grid.distance / 2) return ui.notifications.warn('Дальше 30 футов — туда не перенестись.');
+        if (feet > 30 + grid.distance / 2) return ui.notifications.warn(t('Дальше 30 футов — туда не перенестись.'));
         // Рывок, а не отход: клетка ближе к цели, чем герой стоит
-        const t = centerOf(target);
-        if (Math.hypot(cell.x - t.x, cell.y - t.y) >= Math.hypot(from.x - t.x, from.y - t.y)) return ui.notifications.warn('Только ближе к цели, чем вы стоите.');
+        const aim = centerOf(target);
+        if (Math.hypot(cell.x - aim.x, cell.y - aim.y) >= Math.hypot(from.x - aim.x, from.y - aim.y)) return ui.notifications.warn(t('Только ближе к цели, чем вы стоите.'));
         // Клетка свободна: ни одного токена, кроме самого героя
-        const busy = canvas.scene.tokens.some(t => t.id !== caster.id && !t.hidden && cell.x >= t.x && cell.x < t.x + (t.width || 1) * size && cell.y >= t.y && cell.y < t.y + (t.height || 1) * size);
-        if (busy) return ui.notifications.warn('Клетка занята.');
+        const busy = canvas.scene.tokens.some(tok => tok.id !== caster.id && !tok.hidden && cell.x >= tok.x && cell.x < tok.x + (tok.width || 1) * size && cell.y >= tok.y && cell.y < tok.y + (tok.height || 1) * size);
+        if (busy) return ui.notifications.warn(t('Клетка занята.'));
         if (key) await actor.setFlag(MODULE_ID, 'facetBlink', key);
         requestGM('facetBlink', { messageId: message.id, sceneId: canvas.scene.id, tokenId: caster.id, actorId: actor.id, x: cell.x, y: cell.y, feet: Math.round(feet / 5) * 5 });
     });
@@ -566,57 +638,69 @@ async function blink({ messageId, sceneId, tokenId, actorId, x, y, feet }) {
     if (!token) return;
     await jump(token, x - (token.width || 1) * size / 2, y - (token.height || 1) * size / 2);
     await game.messages.get(messageId)?.setFlag(MODULE_ID, 'facetBlinkDone', true);
-    await noteCard(game.actors.get(actorId), 'Выброс', `${esc(token.name)} перенёсся на ${feet} футов — способность применяется отсюда: бросайте атаку или урон из карточки. Он остаётся здесь, рядом с теми, кого задел.`);
+    await noteCard(game.actors.get(actorId), t('Выброс'), t('{v} перенёсся на {feet} футов — способность применяется отсюда: бросайте атаку или урон из карточки. Он остаётся здесь, рядом с теми, кого задел.', { v: esc(token.name), feet }));
 }
 
 /**
- * На бегу: путь героя в этот ход — у каждого клиента (moveToken), в бою — по ходам, вне боя — последнее движение.
- * Способность бьёт по первому, мимо кого герой пробежал (в 5 фт от пути, с диагональю): урон — врага, лечение —
- * союзника; модуль сам переводит прицел на него
+ * На бегу: срабатывает от применения — считается только движение после него, до половины скорости. Прицел сам переходит
+ * на всех, мимо кого герой прошёл (в 5 фт от пути, с диагональю). Забег живёт у применившего клиента и заканчивается
+ * его броском атаки или урона, новым применением или концом хода
  */
-const PATHS = new Map();
-const pathKey = () => game.combat?.started ? `${game.combat.id}.${game.combat.round}.${game.combat.turn}` : null;
-Hooks.on('moveToken', (token, movement, operation) => {
-    const key = pathKey(), old = PATHS.get(token.id);
-    const track = old && key && old.key === key ? old : { key, pts: [] };
-    track.pts.push(...pathOf(token, movement, operation).filter(p => !p.jump));
-    PATHS.set(token.id, track);
-});
-function passedBy(caster, heal) {
-    const track = PATHS.get(caster.id);
-    if (!track?.pts.length || track.key !== pathKey()) return null;
-    const scene = caster.parent, size = scene.grid.size;
-    const w = (caster.width || 1) * size, h = (caster.height || 1) * size;
-    const pool = scene.tokens.filter(t => t.id !== caster.id && t.actor && !t.hidden && !isDead(t.actor) && (heal ? t.disposition === caster.disposition : t.disposition === -caster.disposition));
-    for (const p of track.pts) {
-        const cx = p.x + w / 2, cy = p.y + h / 2;
-        const near = pool.find(t => cx >= t.x - size && cx < t.x + (t.width || 1) * size + size && cy >= t.y - size && cy < t.y + (t.height || 1) * size + size);
-        if (near) return near;
-    }
-    return null;
-}
+const RUNS = new Map();
+const turnKey = () => game.combat?.started ? `${game.combat.id}.${game.combat.round}.${game.combat.turn}` : null;
 Hooks.on('dnd5e.postUseActivity', (activity, usage, results) => {
     const actor = activity?.item?.actor, message = results?.message;
     if (!actor || !stonesFor(activity).includes('run')) return;
     const caster = tokenOf(actor)?.document;
     if (!caster) return;
-    const hit = passedBy(caster, activity.type === 'heal');
-    if (hit) hit.object?.setTarget(true, { releaseOthers: true });
-    message?.setFlag?.(MODULE_ID, 'facetRun', hit?.name ?? '');
+    // Скорость 0 (схвачен, опутан) — бежать некуда
+    const speed = Number(actor.system.attributes?.movement?.walk ?? 30) || 0;
+    RUNS.set(caster.id, { key: turnKey(), left: Math.floor(speed / 2), hit: new Set(), message });
+    message?.setFlag?.(MODULE_ID, 'facetRun', '');
 });
+Hooks.on('moveToken', (token, movement, operation) => {
+    const run = RUNS.get(token.id);
+    if (!run) return;
+    if (run.key !== turnKey()) return void RUNS.delete(token.id);
+    const scene = token.parent, size = scene.grid.size, ftPerPx = scene.grid.distance / size;
+    const w = (token.width || 1) * size, h = (token.height || 1) * size;
+    const pool = scene.tokens.filter(t => t.id !== token.id && t.actor && !t.hidden && !isDead(t.actor));
+    let at = movement?.origin ?? { x: token.x, y: token.y };
+    for (const p of pathOf(token, movement, operation)) {
+        if (p.jump) { at = p; continue; }
+        run.left -= Math.hypot(p.x - at.x, p.y - at.y) * ftPerPx;
+        if (run.left < -0.01) break;
+        at = p;
+        const cx = p.x + w / 2, cy = p.y + h / 2;
+        for (const t of pool) if (cx >= t.x - size && cx < t.x + (t.width || 1) * size + size && cy >= t.y - size && cy < t.y + (t.height || 1) * size + size) run.hit.add(t.id);
+    }
+    const hit = pool.filter(t => run.hit.has(t.id));
+    if (!hit.length) return;
+    hit.forEach((t, i) => t.object?.setTarget(true, { releaseOthers: i === 0 }));
+    run.message?.setFlag?.(MODULE_ID, 'facetRun', hit.map(t => t.name).join(', '));
+});
+const endRun = (rolls, data) => {
+    const activity = data?.subject;
+    if (!stonesFor(activity).includes('run')) return;
+    const id = tokenOf(activity.item.actor)?.document?.id;
+    if (id) RUNS.delete(id);
+};
+Hooks.on('dnd5e.rollAttackV2', endRun);
+Hooks.on('dnd5e.rollDamageV2', endRun);
 
-/** Рокировка: союзники в 15 фт — на выбор; меняется местами Мастер */
+/** Рокировка: цели способности в 15 фт — на выбор; меняется местами Мастер */
 async function swapDialog(message, actor) {
     const caster = tokenOf(actor)?.document, combat = game.combat;
-    if (!caster) return ui.notifications.warn('Герой не на сцене.');
+    if (!caster) return ui.notifications.warn(t('Герой не на сцене.'));
     const key = combat?.started ? `${combat.round}.${combat.turn}` : null;
-    if (key && actor.getFlag(MODULE_ID, 'facetSwap') === key) return ui.notifications.warn('Рокировка — раз за ход.');
-    const allies = around(caster, 15).filter(t => t.disposition === caster.disposition && !isDead(t.actor));
-    if (!allies.length) return ui.notifications.warn('Союзников в 15 футах нет.');
+    if (key && actor.getFlag(MODULE_ID, 'facetSwap') === key) return ui.notifications.warn(t('Рокировка — раз за ход.'));
+    const aimed = new Set([...game.user.targets].map(tok => tok.id));
+    const pool = around(caster, 15).filter(tok => aimed.has(tok.id));
+    if (!pool.length) return ui.notifications.warn(t('В 15 футах нет целей этой способности.'));
     const pick = await foundry.applications.api.DialogV2.wait({
-        window: { title: 'Рокировка' },
-        content: '<p>С кем поменяться местами?</p>',
-        buttons: allies.map(t => ({ action: t.id, label: t.name })),
+        window: { title: t('Рокировка') },
+        content: t('<p>С кем поменяться местами?</p>'),
+        buttons: pool.map(tok => ({ action: tok.id, label: tok.name })),
         rejectClose: false
     }).catch(() => null);
     if (!pick) return;
@@ -630,7 +714,7 @@ async function swapPlaces({ sceneId, a, b, actorId }) {
     const [ax, ay, bx, by] = [x.x, x.y, y.x, y.y];
     await jump(x, bx, by);
     await jump(y, ax, ay);
-    await noteCard(game.actors.get(actorId), 'Рокировка', `${esc(x.name)} и ${esc(y.name)} поменялись местами.`);
+    await noteCard(game.actors.get(actorId), t('Рокировка'), t('{v} и {v2} поменялись местами.', { v: esc(x.name), v2: esc(y.name) }));
 }
 
 // ==========================================
@@ -642,14 +726,16 @@ Hooks.on('dnd5e.preRollDamageV2', config => {
     if (!stonesFor(config?.subject).includes('steady')) return;
     for (const roll of config.rolls ?? []) roll.parts = (roll.parts ?? []).map(average);
 });
+/** Есть ли у способности кости урона: «+1» безоружного удара — не кость; значение из @ может быть костью */
+const hasDamageDice = activity => (activity?.damage?.parts ?? []).some(part => /\dd\d|\bd\d|@/i.test(String(part.formula ?? '')));
 Hooks.on('dnd5e.preRollAttackV2', config => {
     const activity = config?.subject;
-    if (!stonesFor(activity).includes('steady') || activity?.damage?.parts?.length) return;
+    if (!stonesFor(activity).includes('steady') || hasDamageDice(activity)) return;
     for (const roll of config.rolls ?? []) Object.assign((roll.options ??= {}), { minimum: 10, maximum: 10 });
 });
 
 // ==========================================
-// ХОДЫ: долг, Раскат и мины — в начале хода героя
+// ХОДЫ: Раскат и мины — в начале хода героя
 // ==========================================
 
 Hooks.on('combatTurnChange', (combat, prev, cur) => {
@@ -665,29 +751,25 @@ async function startTurn(combatant) {
         const c = centerOf(token);
         await token.setFlag(MODULE_ID, 'turnStart', { x: c.x, y: c.y, round: combat.round, turn: combat.turn });
     }
-    const debt = actor.getFlag(MODULE_ID, 'facetDebt');
-    if (debt) { await actor.unsetFlag(MODULE_ID, 'facetDebt'); await shrinkMax(actor, debt, 'В долг: расплата'); }
     const echo = actor.getFlag(MODULE_ID, 'facetEcho');
     if (echo?.length) {
         await actor.unsetFlag(MODULE_ID, 'facetEcho');
         for (const e of echo) {
             const victims = (await Promise.all(e.targets.map(tokenFrom))).filter(t => t?.actor && !isDead(t.actor));
-            await effectCard(actor, { title: `Раскат — ${e.name}`, victims, amount: e.amount, type: e.type, heal: e.heal, check: e.check,
-                why: `Раскат: начался ваш ход — те же цели получают ещё половину.` });
+            await effectCard(actor, { title: t('Раскат — {name}', { name: e.name }), victims, amount: e.amount, type: e.type, heal: e.heal, check: e.check,
+                why: t('Раскат: начался ваш ход — те же цели получают ещё половину.') });
         }
     }
     const scene = combatant.token?.parent;
     for (const mine of (scene?.getFlag(MODULE_ID, 'facetMines') ?? []).filter(m => m.payload.actorId === actor.id)) await detonateMine(scene, mine.id);
 }
-// Конец боя: долг — сразу, Раскат и мины — уходят
+// Конец боя: Раскат и мины уходят
 Hooks.on('deleteCombat', combat => {
     if (!isActiveGM()) return;
     (async () => {
         for (const combatant of combat.combatants) {
             const actor = combatant.actor;
             if (!actor) continue;
-            const debt = actor.getFlag(MODULE_ID, 'facetDebt');
-            if (debt) { await actor.unsetFlag(MODULE_ID, 'facetDebt'); await shrinkMax(actor, debt, 'В долг: расплата'); }
             if (actor.getFlag(MODULE_ID, 'facetEcho')) await actor.unsetFlag(MODULE_ID, 'facetEcho');
         }
         if (combat.scene?.getFlag(MODULE_ID, 'facetMines')?.length) await combat.scene.unsetFlag(MODULE_ID, 'facetMines');
@@ -708,16 +790,16 @@ onRenderChatMessage((message, html) => {
     const actor = activity.item.actor;
     const line = document.createElement('div');
     line.className = 'gd-facet-line';
-    line.innerHTML = `<i class="fas fa-gem"></i> Огранка: ${stones.map(id => `<span data-tooltip="${esc(STONES[id].text)}">${gem(id)}<b>${STONES[id].name}</b></span>`).join(', ')}`
-        + (message.getFlag(MODULE_ID, 'facetCharge') ? ' · <b>Разбег</b>: атака с преимуществом, спасбросок цели с помехой' : '')
+    line.innerHTML = `<i class="fas fa-gem"></i> ${t('Огранка: {v}', { v: stones.map(id => `<span data-tooltip="${esc(STONES[id].text)}">${gem(id)}<b>${STONES[id].name}</b></span>`).join(', ') })}`
+        + (message.getFlag(MODULE_ID, 'facetCharge') ? t(' · <b>Разбег</b>: атака с преимуществом, спасбросок цели с помехой') : '')
         + (message.getFlag(MODULE_ID, 'facetRun') === undefined ? '' : message.getFlag(MODULE_ID, 'facetRun')
-            ? ` · <b>На бегу</b>: цель — ${esc(message.getFlag(MODULE_ID, 'facetRun'))}, мимо кого вы пробежали`
-            : ' · <b>На бегу</b>: в этот ход вы ни мимо кого не пробежали — цель как обычно')
+            ? ` · <b>${t('На бегу')}</b>${t(': цели — все, мимо кого вы прошли: {v}', { v: esc(message.getFlag(MODULE_ID, 'facetRun')) })}`
+            : t(' · <b>На бегу</b>: можно пройти до половины скорости, цели станут все, мимо кого вы пройдёте; это перемещение всегда провоцирует атаки по возможности'))
         + (stones.includes('pay') && actor?.isOwner && !message.getFlag(MODULE_ID, 'facetPaidHere')
-            ? ` <button type="button" class="gd-stone-pay"><i class="fas fa-droplet"></i> Бонусным действием — ${bloodCost(message, actor)} ПЗ</button>` : '')
-        + (stones.includes('swap') && actor?.isOwner ? ` <button type="button" class="gd-stone-swap"><i class="fas fa-people-arrows"></i> Рокировка</button>` : '')
+            ? ` <button type="button" class="gd-stone-pay"><i class="fas fa-droplet"></i> ${t('Без траты действия — {v} ПЗ', { v: bloodCost(message, actor) })}</button>` : '')
+        + (stones.includes('swap') && actor?.isOwner ? ` <button type="button" class="gd-stone-swap"><i class="fas fa-people-arrows"></i> ${t('Рокировка')}</button>` : '')
         + (stones.includes('cast') && actor?.isOwner && !message.getFlag(MODULE_ID, 'facetBlinkDone')
-            ? ` <button type="button" class="gd-stone-blink" data-tooltip="Сначала перенос в клетку в 30 футах, ближе к цели, потом бросок — уже оттуда"><i class="fas fa-person-running"></i> Выброс: перенестись</button>` : '');
+            ? ` <button type="button" class="gd-stone-blink" data-tooltip="${t('Сначала перенос в клетку в 30 футах, ближе к цели, потом бросок — уже оттуда')}"><i class="fas fa-person-running"></i> ${t('Выброс: перенестись')}</button>` : '');
     line.querySelector('.gd-stone-pay')?.addEventListener('click', event => { event.preventDefault(); event.currentTarget.disabled = true; payBlood(message, actor); });
     line.querySelector('.gd-stone-swap')?.addEventListener('click', event => { event.preventDefault(); swapDialog(message, actor); });
     line.querySelector('.gd-stone-blink')?.addEventListener('click', event => { event.preventDefault(); blinkPick(message, actor); });
@@ -727,13 +809,13 @@ onRenderChatMessage((message, html) => {
 });
 
 function bindStoneButtons(message, html) {
-    const hop = message.getFlag?.(MODULE_ID, 'facetHop');
-    if (hop) {
-        const owner = game.user.isGM || game.actors.get(hop.actorId)?.isOwner;
-        html.querySelectorAll('[data-gd-hop]').forEach(b => {
-            b.disabled = !owner || !!hop.used;
-            b.classList.toggle('on', hop.used === b.dataset.gdHop);
-            b.addEventListener('click', event => { event.preventDefault(); requestGM('facetHopPick', { messageId: message.id, uuid: b.dataset.gdHop }); });
+    const pass = message.getFlag?.(MODULE_ID, 'facetPass');
+    if (pass) {
+        const owner = game.user.isGM || game.actors.get(pass.actorId)?.isOwner;
+        html.querySelectorAll('[data-gd-pass]').forEach(b => {
+            b.disabled = !owner || pass.used;
+            b.classList.toggle('on', pass.used);
+            b.addEventListener('click', event => { event.preventDefault(); requestGM('facetPassPick', { messageId: message.id }); });
         });
     }
     const mine = message.getFlag?.(MODULE_ID, 'facetMine');

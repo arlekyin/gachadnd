@@ -21,29 +21,30 @@ import { getStash } from "../memory/stash.js";
 import { addSkillToMemory } from "../memory/inventory.js";
 import { currentSkillName } from "../memory/crystals.js";
 import { findBoss } from "./moon-boons.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /** Вес навыка по редкости; кристалл из Хранилища — вдвое легче */
 export const WEIGHT = { gray: 1, green: 2, blue: 3, purple: 5, red: 8 };
-const RARITY_LABEL = { gray: 'серый', green: 'зелёный', blue: 'синий', purple: 'фиолетовый', red: 'красный' };
+const RARITY_LABEL = { gray: t('серый'), green: t('зелёный'), blue: t('синий'), purple: t('фиолетовый'), red: t('красный') };
 const RARITY_COLOR = { gray: '#9ea3ad', green: '#5fbf6a', blue: '#4f8fe0', purple: '#a46ae8', red: '#e0485c' };
 // Уникальные (фиолетовые и красные) не копируются и не сплавляются: у них личный эффект
 const COMMON = ['gray', 'green', 'blue'];
 
 export const LOTS = {
-    copy: { name: 'Чужая память', price: 5, icon: 'fa-clone', text: 'копия навыка товарища' },
-    devour: { name: 'Натравить Пожирателя', price: 6, icon: 'fa-paw', text: 'однажды он придёт за вашими врагами' },
-    echo: { name: 'Отголосок Босса', price: 7, icon: 'fa-crown', text: 'однажды он встанет на вашу сторону' },
-    fuse: { name: 'Сплав', price: 9, icon: 'fa-link', text: 'два навыка — одна память, один слот' }
+    copy: { name: t('Чужая память'), price: 5, icon: 'fa-clone', text: t('копия навыка товарища') },
+    devour: { name: t('Натравить Пожирателя'), price: 6, icon: 'fa-paw', text: t('однажды он придёт за вашими врагами') },
+    echo: { name: t('Отголосок Босса'), price: 7, icon: 'fa-crown', text: t('однажды он встанет на вашу сторону') },
+    fuse: { name: t('Сплав'), price: 9, icon: 'fa-link', text: t('два навыка — одна память, один слот') }
 };
 
 /** Тело и золото: вес и подписи */
 const BODY = {
-    hd: { label: 'Кость Хитов', short: 'Кость Хитов', w: 2, icon: 'fa-bone' },
-    hp: { label: '−5 к максимуму ПЗ', short: '−5 ПЗ', w: 2, icon: 'fa-droplet' },
-    slot: { label: '−1 к пределу Памяти', short: 'осколок маски', w: 6, icon: 'fa-masks-theater' },
-    gold: { label: 'золото', short: '½ Базы', w: 1, icon: 'fa-coins' }
+    hd: { label: t('Кость Хитов'), short: t('Кость Хитов'), w: 2, icon: 'fa-bone' },
+    hp: { label: t('−5 к максимуму ПЗ'), short: t('−5 ПЗ'), w: 2, icon: 'fa-droplet' },
+    slot: { label: t('−1 к пределу Памяти'), short: t('осколок маски'), w: 6, icon: 'fa-masks-theater' },
+    gold: { label: t('золото'), short: t('½ Базы'), w: 1, icon: 'fa-coins' }
 };
 const HP_LOSS = 5;
 const goldChunk = () => Math.round(floorBase() * 0.5);
@@ -126,7 +127,7 @@ export function sacrifices(actor, offers = []) {
         const rarity = flagsOf(item).rarity;
         const w = WEIGHT[rarity] + (partner ? WEIGHT[flagsOf(partner).rarity] ?? 0 : 0);
         list.push({ kind: 'skill', ref: item.id, w, rarity, color: RARITY_COLOR[rarity],
-            label: `${RARITY_LABEL[rarity]} «${item.name}»${partner ? ` и «${partner.name}»` : ''}`, short: item.name });
+            label: `${RARITY_LABEL[rarity]} «${item.name}»${partner ? t(' и «{name}»', { name: partner.name }) : ''}`, short: item.name });
     }
 
     const hdMax = Number(actor.system.attributes?.hd?.max) || 0;
@@ -142,11 +143,11 @@ export function sacrifices(actor, offers = []) {
         const left = (Number(entry.system?.quantity) || 1) - mine.filter(o => o.kind === 'stash' && o.ref === key).length;
         if (left <= 0) continue;
         list.push({ kind: 'stash', ref: key, w: WEIGHT[rarity] / 2, rarity, color: RARITY_COLOR[rarity],
-            label: `кристалл «${String(entry.name).replace(/^Кристалл:\s*/, '')}» из Хранилища`, short: String(entry.name).replace(/^Кристалл:\s*/, ''), left });
+            label: t('кристалл «{v}» из Хранилища', { v: String(entry.name).replace(/^Кристалл:\s*/, '') }), short: String(entry.name).replace(/^Кристалл:\s*/, ''), left });
     }
 
     if (wealth(actor) >= goldChunk() * (count('gold') + 1)) {
-        list.push({ kind: 'gold', ref: 'gold', ...BODY.gold, label: `${goldChunk()} зм` });
+        list.push({ kind: 'gold', ref: 'gold', ...BODY.gold, label: t('{v} зм', { v: goldChunk() }) });
     }
     return list;
 }
@@ -177,8 +178,8 @@ async function takeFrom(actor, offers) {
         } else {
             // Максимум считается по классам: эффект на листе, видно, сколько забрала луна
             const data = {
-                name: 'Луна: забранная плоть', img: 'icons/svg/blood.svg',
-                description: `<p>Луна забрала ${total} ПЗ максимума — навсегда.</p>`,
+                name: t('Луна: забранная плоть'), img: 'icons/svg/blood.svg',
+                description: `<p>${t('Луна забрала {total} ПЗ максимума — навсегда.', { total })}</p>`,
                 changes: [{ key: 'system.attributes.hp.bonuses.overall', mode: 2, value: `-${total}` }],
                 flags: { [MODULE_ID]: { moonHp: true } }
             };
@@ -247,25 +248,25 @@ async function chooseGrant(lot, offers) {
     const { DialogV2 } = foundry.applications.api;
     if (lot === 'copy') {
         const options = copyOptions(offers);
-        if (!options.length) return ui.notifications.warn('Чужая память: копировать нечего — у товарищей нет обычных навыков, которых нет у получателя.'), null;
+        if (!options.length) return ui.notifications.warn(t('Чужая память: копировать нечего — у товарищей нет обычных навыков, которых нет у получателя.')), null;
         const choice = await DialogV2.prompt({
-            window: { title: 'Чужая память' },
-            content: `<p>Кто получит копию и чей навык:</p><select name="pick" style="width:100%">${options.map((o, i) => `<option value="${i}">${esc(o.label)}</option>`).join('')}</select>`,
-            ok: { label: 'Выбрать', callback: (event, button) => Number(button.form.elements.pick.value) },
+            window: { title: t('Чужая память') },
+            content: `<p>${t('Кто получит копию и чей навык:')}</p><select name="pick" style="width:100%">${options.map((o, i) => `<option value="${i}">${esc(o.label)}</option>`).join('')}</select>`,
+            ok: { label: t('Выбрать'), callback: (event, button) => Number(button.form.elements.pick.value) },
             rejectClose: false
         });
         return choice == null ? null : options[choice];
     }
     if (lot === 'fuse') {
         const groups = fuseOptions(offers);
-        if (!groups.length) return ui.notifications.warn('Сплав: ни у кого нет двух экипированных обычных навыков вне пар.'), null;
+        if (!groups.length) return ui.notifications.warn(t('Сплав: ни у кого нет двух экипированных обычных навыков вне пар.')), null;
         const pairs = groups.flatMap(({ actor, skills }) => skills.flatMap((a, i) => skills.slice(i + 1).map(b => ({
             actorId: actor.id, a: a.id, b: b.id, label: `${actor.name}: «${a.name}» + «${b.name}»`
         }))));
         const choice = await DialogV2.prompt({
-            window: { title: 'Сплав' },
-            content: `<p>Какие два навыка сплавить:</p><select name="pick" style="width:100%">${pairs.map((p, i) => `<option value="${i}">${esc(p.label)}</option>`).join('')}</select>`,
-            ok: { label: 'Сплавить', callback: (event, button) => Number(button.form.elements.pick.value) },
+            window: { title: t('Сплав') },
+            content: `<p>${t('Какие два навыка сплавить:')}</p><select name="pick" style="width:100%">${pairs.map((p, i) => `<option value="${i}">${esc(p.label)}</option>`).join('')}</select>`,
+            ok: { label: t('Сплавить'), callback: (event, button) => Number(button.form.elements.pick.value) },
             rejectClose: false
         });
         return choice == null ? null : pairs[choice];
@@ -278,7 +279,7 @@ async function grant(lot, params, deal) {
     if (lot === 'copy') {
         const target = game.actors.get(params.targetId);
         const result = await addSkillToMemory(target, params.name, { forced: true });
-        return `${esc(target.name)} получает копию «${esc(params.name)}»${result.status === 'replaced' ? ` (вытеснен «${esc(result.replacedName)}»)` : ''}.`;
+        return t('{v} получает копию «{v2}»{v3}.', { v: esc(target.name), v2: esc(params.name), v3: result.status === 'replaced' ? t(' (вытеснен «{v}»)', { v: esc(result.replacedName) }) : '' });
     }
     if (lot === 'fuse') {
         const actor = game.actors.get(params.actorId);
@@ -286,7 +287,7 @@ async function grant(lot, params, deal) {
         await a.setFlag(MODULE_ID, 'fused', { partner: b.id });
         await b.setFlag(MODULE_ID, 'fused', { partner: a.id, secondary: true });
         await updateActorSynergies(actor);
-        return `${esc(actor.name)}: «${esc(a.name)}» и «${esc(b.name)}» сплавлены — один слот на двоих.`;
+        return t('{v}: «{v2}» и «{v3}» сплавлены — один слот на двоих.', { v: esc(actor.name), v2: esc(a.name), v3: esc(b.name) });
     }
     // Отголосок Босса и Натравить Пожирателя — на следующий этаж: отметка у отряда, вызывает Мастер
     const boons = foundry.utils.deepClone(game.settings.get(MODULE_ID, 'moonBoons') ?? []);
@@ -294,8 +295,8 @@ async function grant(lot, params, deal) {
     boons.push({ type: lot, floor: (deal.floor ?? getFloor()) + 1, used: false, ...(lot === 'echo' ? { boss: findBoss() } : {}) });
     await game.settings.set(MODULE_ID, 'moonBoons', boons);
     return lot === 'echo'
-        ? 'Однажды на следующем этаже Босс встанет на сторону отряда — на один ход.'
-        : 'Однажды на следующем этаже Пожиратель придёт за врагами отряда — и унесёт кристалл из добычи.';
+        ? t('Однажды на следующем этаже Босс встанет на сторону отряда — на один ход.')
+        : t('Однажды на следующем этаже Пожиратель придёт за врагами отряда — и унесёт кристалл из добычи.');
 }
 
 // ==========================================
@@ -318,7 +319,7 @@ async function performDealOp({ op, userId, ...data }) {
         const actor = game.actors.get(data.actorId);
         if (!actor || !owns(actor)) return;
         const option = sacrifices(actor, deal.offers).find(s => s.kind === data.kind && s.ref === data.ref);
-        if (!option) return notifyUser(userId, 'Этого луне уже не отдать.');
+        if (!option) return notifyUser(userId, t('Этого луне уже не отдать.'));
         deal.offers.push({ id: foundry.utils.randomID(), actorId: actor.id, kind: option.kind, ref: option.ref, w: option.w,
             label: option.label, color: option.color ?? null, icon: option.icon ?? null });
         return saveDeal(found, deal);
@@ -335,11 +336,11 @@ async function performDealOp({ op, userId, ...data }) {
         await saveDeal(found, deal);
         emit('closeDeal');
         DealWindow.close();
-        return ChatMessage.create({ speaker: { alias: 'Луна' }, content: `<div class="gd-moon-card"><i class="fas fa-moon"></i> Отряд отверг сделку. Луна отворачивается — пока.</div>` });
+        return ChatMessage.create({ speaker: { alias: t('Луна') }, content: `<div class="gd-moon-card"><i class="fas fa-moon"></i> ${t('Отряд отверг сделку. Луна отворачивается — пока.')}</div>` });
     }
     if (op === 'seal') {
         const lot = LOTS[deal.lot];
-        if (weightOf(deal) < lot.price) return notifyUser(userId, `На весах ${weightOf(deal)} из ${lot.price} — луна не согласна.`);
+        if (weightOf(deal) < lot.price) return notifyUser(userId, t('На весах {v} из {price} — луна не согласна.', { v: weightOf(deal), price: lot.price }));
         const params = data.params ?? {};
         // Жертвы — по персонажам; лот выдаётся после: навыки на весах в Сплав и копию не попадают
         const byActor = new Map();
@@ -358,9 +359,9 @@ async function performDealOp({ op, userId, ...data }) {
         emit('dealSealed');
         DealWindow.sealed();
         return ChatMessage.create({
-            speaker: { alias: 'Луна' },
-            content: `<div class="gd-moon-card"><div class="gd-moon-title"><i class="fas fa-moon"></i> Сделка луны — ${esc(lot.name)}</div>
-                <p>Луна забрала:</p><ul>${taken.join('')}</ul><p>${result}</p></div>`
+            speaker: { alias: t('Луна') },
+            content: `<div class="gd-moon-card"><div class="gd-moon-title"><i class="fas fa-moon"></i> ${t('Сделка луны — {v}', { v: esc(lot.name) })}</div>
+                <p>${t('Луна забрала:')}</p><ul>${taken.join('')}</ul><p>${result}</p></div>`
         });
     }
 }
@@ -421,7 +422,7 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: ID,
         classes: ['gachadnd-moon-deal'],
         tag: 'div',
-        window: { title: 'Сделка луны', icon: 'fas fa-moon', resizable: false },
+        window: { title: t('Сделка луны'), icon: 'fas fa-moon', resizable: false },
         position: { width: 1120, height: 760 },
         actions: {
             lot: DealWindow.#onLot,
@@ -439,8 +440,8 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static async open() {
         if (!game.user.isGM) return DealWindow.show();
         const found = currentDealNode();
-        if (!found) return ui.notifications.warn('Сделка луны — только на узле Босса, после боя.');
-        if (found.node.deal && found.node.deal.status !== 'open') return ui.notifications.warn('На этом этаже луна уже предлагала сделку.');
+        if (!found) return ui.notifications.warn(t('Сделка луны — только на узле Босса, после боя.'));
+        if (found.node.deal && found.node.deal.status !== 'open') return ui.notifications.warn(t('На этом этаже луна уже предлагала сделку.'));
         if (!found.node.deal) await saveDeal(found, newDeal());
         emit('openDeal');
         return DealWindow.show();
@@ -519,8 +520,8 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         root.querySelector('.gd-md-shadow').style.left = `${-4 + ratio * 104}%`;
         root.querySelector('.gd-md-moon').classList.toggle('full', ratio >= 1);
         root.querySelector('.gd-weight').innerHTML = ratio >= 1
-            ? 'полнолуние<small>луна согласна</small>'
-            : `${fmt(weight)} из ${lot.price}<small>до полнолуния</small>`;
+            ? t('полнолуние<small>луна согласна</small>')
+            : `${t('{v} из {price}', { v: fmt(weight), price: lot.price })}<small>${t('до полнолуния')}</small>`;
 
         // Весы
         const tilt = Math.max(-12, Math.min(12, (weight - lot.price) * 2));
@@ -538,7 +539,7 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             el.classList.toggle('own', own);
             el.style.setProperty('--c', o.color ?? '#d9dbe8');
             if (own) Object.assign(el.dataset, { action: 'retract', offer: o.id });
-            el.dataset.tooltip = `${game.actors.get(o.actorId)?.name ?? ''}: ${o.label}${own ? ' — щёлкните, чтобы забрать' : ''}`;
+            el.dataset.tooltip = `${game.actors.get(o.actorId)?.name ?? ''}: ${o.label}${own ? t(' — щёлкните, чтобы забрать') : ''}`;
             el.textContent = fmt(o.w);
             return el;
         }));
@@ -551,7 +552,7 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             const pickable = game.user.isGM || actor.isOwner;
             return `<div class="gd-member${actor.id === hand?.id ? ' active' : ''}" ${pickable ? `data-action="hand" data-actor="${actor.id}"` : ''}>
                 <div class="gd-portrait" style="background-image:url('${esc(actor.img)}')">${shards}</div>
-                <div><div class="gd-name">${esc(actor.name)}</div><div class="gd-paid" data-tooltip="${esc(offers.map(o => o.label).join(', '))}">${offers.length ? offers.map(o => esc(o.label)).join(', ') : 'пока ничего'}</div></div></div>`;
+                <div><div class="gd-name">${esc(actor.name)}</div><div class="gd-paid" data-tooltip="${esc(offers.map(o => o.label).join(', '))}">${offers.length ? offers.map(o => esc(o.label)).join(', ') : t('пока ничего')}</div></div></div>`;
         }).join('');
 
         // Рука: навыки веером и жетоны тела
@@ -565,8 +566,8 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         const tokens = [...options.filter(o => o.kind === 'stash'), ...['hd', 'hp', 'slot', 'gold'].map(k => options.find(o => o.kind === k) ?? { kind: k, ...BODY[k], gone: true })];
         root.querySelector('.gd-tokens').innerHTML = tokens.map(o => o.kind === 'stash'
             ? `<div class="gd-token crystal" style="--c:${o.color}" data-action="offer" data-kind="stash" data-ref="${o.ref}" data-tooltip="${esc(o.label)}"><i class="fas fa-gem"></i><b>${fmt(o.w)}</b><small>${esc(o.short)}${o.left > 1 ? ` ×${o.left}` : ''}</small></div>`
-            : `<div class="gd-token${o.gone ? ' gone' : ''}" ${o.gone ? '' : `data-action="offer" data-kind="${o.kind}" data-ref="${o.ref}"`} data-tooltip="${esc(o.gone ? `${BODY[o.kind].label}: луне больше не отдать` : o.label)}"><i class="fas ${BODY[o.kind].icon}"></i><b>${fmt(BODY[o.kind].w)}</b><small>${esc(o.kind === 'gold' ? `${goldChunk()} зм` : BODY[o.kind].short)}</small></div>`).join('');
-        root.querySelector('.gd-hint').textContent = hand ? `${hand.name}: отдайте луне часть себя — щёлкните` : 'у вас нет персонажа в отряде';
+            : `<div class="gd-token${o.gone ? ' gone' : ''}" ${o.gone ? '' : `data-action="offer" data-kind="${o.kind}" data-ref="${o.ref}"`} data-tooltip="${esc(o.gone ? t('{label}: луне больше не отдать', { label: BODY[o.kind].label }) : o.label)}"><i class="fas ${BODY[o.kind].icon}"></i><b>${fmt(BODY[o.kind].w)}</b><small>${esc(o.kind === 'gold' ? t('{v} зм', { v: goldChunk() }) : BODY[o.kind].short)}</small></div>`).join('');
+        root.querySelector('.gd-hint').textContent = hand ? t('{name}: отдайте луне часть себя — щёлкните', { name: hand.name }) : t('у вас нет персонажа в отряде');
 
         root.querySelector('.gd-seal')?.classList.toggle('ready', ratio >= 1);
         this.#threads();
@@ -615,7 +616,7 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         const deal = currentDealNode()?.node.deal;
         if (!deal) return;
         const lot = LOTS[deal.lot];
-        if (weightOf(deal) < lot.price) return ui.notifications.warn(`На весах ${fmt(weightOf(deal))} из ${lot.price} — луна не согласна.`);
+        if (weightOf(deal) < lot.price) return ui.notifications.warn(t('На весах {v} из {price} — луна не согласна.', { v: fmt(weightOf(deal)), price: lot.price }));
         const params = await chooseGrant(deal.lot, deal.offers);
         if (!params) return;
         request({ op: 'seal', params });
@@ -623,7 +624,7 @@ export class DealWindow extends HandlebarsApplicationMixin(ApplicationV2) {
 
     static async #onRefuse() {
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: 'Отвергнуть сделку' }, content: '<p>Луна отвернётся до следующего этажа. Жертвы останутся при отряде.</p>', rejectClose: false
+            window: { title: t('Отвергнуть сделку') }, content: t('<p>Луна отвернётся до следующего этажа. Жертвы останутся при отряде.</p>'), rejectClose: false
         });
         if (ok) request({ op: 'refuse' });
     }

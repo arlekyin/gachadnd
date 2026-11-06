@@ -2,7 +2,8 @@
 Генератор арен — подготовка арта: python tools/battlemap/prepare.py [биом] [имена…]
 
 Берёт картинки из assets/battlemap/<биом>/_src/ (как пришли из генератора) и кладёт готовые в assets/battlemap/<биом>/:
-- ground-*      — бесшовная текстура 1024×1024 (стык краёв смешивается со сдвинутой копией);
+- ground-*, wall-* — бесшовная текстура 1024×1024 (wall — масса стены подземелья) (стык краёв смешивается со сдвинутой копией); у биома с тоном (TONE)
+                  средний цвет подгоняется к выбранному — генератор не держит цвет от раза к разу;
 - scatter-*     — лист мелочи на белом фоне режется на отдельные штуки: scatter-tufts-1-1.webp, -1-2 …;
 - *-sheet       — лист вариантов любого предмета (2×2, 3×3 на белом): rock-2-sheet → rock-2-1.webp, rock-2-2 …;
 - остальное     — предмет: белый фон, связанный с краями, становится прозрачным (мягкий край), обрезка по предмету,
@@ -16,6 +17,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 BIOME = sys.argv[1] if len(sys.argv) > 1 else 'forest'
 # Только названные картинки (имя без расширения) — чтобы не пережимать весь биом ради одной замены
 ONLY = set(sys.argv[2:])
+# Средний цвет текстур по началу имени — когда генератор увёл тон новой текстуры от уже принятых: {'биом': {'ground-…': (r, g, b)}}.
+# Пещеры: пол темнее, чем рисует генератор, — около светлоты плит катакомб, с тем же сиреневым отливом
+TONE = {'caves': {'ground-cave': (92, 84, 88)}}
 SRC = os.path.join(ROOT, 'assets', 'battlemap', BIOME, '_src')
 OUT = os.path.join(ROOT, 'assets', 'battlemap', BIOME)
 
@@ -138,6 +142,15 @@ def seamless(im, size=1024):
     return a
 
 
+def tone(im, name):
+    """Подогнать средний цвет к тону биома (по каждому каналу множителем — разница плит между собой остаётся)"""
+    target = next((c for k, c in TONE.get(BIOME, {}).items() if name.startswith(k)), None)
+    if not target: return im
+    rgb = im.convert('RGB')
+    mean = [sum(i * v for i, v in enumerate(h)) / max(1, sum(h)) for h in (rgb.getchannel(c).histogram() for c in range(3))]
+    return Image.merge('RGB', [rgb.getchannel(c).point(lambda v, k=target[c] / max(1, mean[c]): min(255, round(v * k))) for c in range(3)])
+
+
 def split_sheet(im, grow=15):
     """Лист мелочи: отдельные штуки — связные пятна непрозрачного (с расширением, чтобы части одной штуки слиплись)."""
     cut = cutout(im)
@@ -175,8 +188,8 @@ def main():
         name, _ = os.path.splitext(os.path.basename(path))
         if ONLY and name not in ONLY: continue
         im = Image.open(path)
-        if name.startswith('ground-'):
-            seamless(im).save(os.path.join(OUT, f'{name}.webp'), quality=90)
+        if name.startswith(('ground-', 'wall-')):
+            seamless(tone(im, name)).save(os.path.join(OUT, f'{name}.webp'), quality=90)
             print('земля', name)
         elif name.startswith('scatter-'):
             for f in glob.glob(os.path.join(OUT, f'{name}-*.webp')): os.remove(f)

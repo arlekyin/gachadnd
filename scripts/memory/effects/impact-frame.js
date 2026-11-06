@@ -34,6 +34,7 @@ import { cleanupOverlays as cleanupImpact } from "../../cutscene/overlay.js";
 import { stowWindows } from "../../cutscene/windows.js";
 import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../../core/prefs.js";
 import { placedTemplate, shapeOf } from "../../core/templates.js";
+import { t } from "../../core/i18n.js";
 
 // Отлёт цели Сайтамы, футы
 const KNOCK_FEET = 30;
@@ -58,24 +59,24 @@ const BINS = 720;
 
 export function registerImpactSettings() {
     game.settings.register(MODULE_ID, 'impactFrames', {
-        name: 'Импакт-кадры навыков',
-        hint: 'Стоп-кадр во весь экран, когда ультимейт решает исход: цель погибла или потеряла половину ПЗ.',
+        name: t('Импакт-кадры навыков'),
+        hint: t('Стоп-кадр во весь экран, когда ультимейт решает исход: цель погибла или потеряла половину ПЗ.'),
         scope: 'client',
         config: false,
         type: Boolean,
         default: true
     });
     game.settings.register(MODULE_ID, 'impactCalm', {
-        name: 'Импакт-кадры без вспышек',
-        hint: 'Без белой вспышки и инверсии кадра. Снимите галочку, чтобы видеть полный эффект.',
+        name: t('Импакт-кадры без вспышек'),
+        hint: t('Без белой вспышки и инверсии кадра. Снимите галочку, чтобы видеть полный эффект.'),
         scope: 'client',
         config: false,
         type: Boolean,
         default: true
     });
     game.settings.register(MODULE_ID, 'impactSlow', {
-        name: 'Импакт-кадры: замедление',
-        hint: 'Во сколько раз медленнее показывать кадры — чтобы рассмотреть их. 1 — обычная скорость.',
+        name: t('Импакт-кадры: замедление'),
+        hint: t('Во сколько раз медленнее показывать кадры — чтобы рассмотреть их. 1 — обычная скорость.'),
         scope: 'client',
         config: false,
         type: Number,
@@ -83,8 +84,8 @@ export function registerImpactSettings() {
         default: 1
     });
     game.settings.register(MODULE_ID, 'impactSound', {
-        name: 'Звук импакт-кадра',
-        hint: 'Путь к звуковому файлу, например modules/gachadnd/assets/sounds/explosion.ogg. Пусто — взрыв синтезируется в браузере.',
+        name: t('Звук импакт-кадра'),
+        hint: t('Путь к звуковому файлу, например modules/gachadnd/assets/sounds/explosion.ogg. Пусто — взрыв синтезируется в браузере.'),
         scope: 'world',
         config: false,
         type: String,
@@ -118,7 +119,7 @@ onSocket('impactArm', message => arm(message));
 
 function arm({ actorId, art, style = null, tokenId, line = null }) {
     armed.set(actorId, { art, style, tokenId, line, until: Date.now() + ARM_MS });
-    trace(`взведён ${game.actors.get(actorId)?.name ?? actorId}${style ? ` (${style})` : ''}, ждёт урона ${ARM_MS / 60000} мин${tokenId ? '' : '; токена на сцене нет'}`);
+    trace(t('взведён {v}{v2}, ждёт урона {v3} мин{v4}', { v: game.actors.get(actorId)?.name ?? actorId, v2: style ? ` (${style})` : '', v3: ARM_MS / 60000, v4: tokenId ? '' : t('; токена на сцене нет') }));
 }
 
 /**
@@ -130,7 +131,7 @@ export function knockback(casterId, targetId, feet) {
     const caster = canvas?.tokens?.get(casterId), target = canvas?.tokens?.get(targetId);
     const dims = canvas?.dimensions;
     if (!caster || !target || !dims?.distance) {
-        console.info(`${MODULE_ID} | импакт: отлёта не будет — ${!caster ? 'нет токена нанёсшего удар на сцене' : !target ? 'нет токена цели на сцене' : 'у сцены нет масштаба'}`);
+        console.info(`${MODULE_ID} | импакт: отлёта не будет — ${!caster ? t('нет токена нанёсшего удар на сцене') : !target ? t('нет токена цели на сцене') : t('у сцены нет масштаба')}`);
         return null;
     }
     const a = caster.center, b = target.center;
@@ -191,12 +192,12 @@ function tokenLine(fromId, toPoint) {
 // (урон часто применяют уже после передачи хода)
 function armedSource() {
     const now = Date.now();
-    for (const [id, a] of armed) if (a.until < now) { armed.delete(id); trace(`взвод ${game.actors.get(id)?.name ?? id} истёк`); }
+    for (const [id, a] of armed) if (a.until < now) { armed.delete(id); trace(t('взвод {v} истёк', { v: game.actors.get(id)?.name ?? id })); }
     if (!armed.size) return null;
     const turn = game.combat?.started ? game.combat.combatant?.actor?.id : null;
     if (turn && armed.has(turn)) return [turn, armed.get(turn)];
     if (!turn || armed.size === 1) return armed.entries().next().value;
-    trace('взведено несколько персонажей, ход ни одного из них — неясно, чей урон');
+    trace(t('взведено несколько персонажей, ход ни одного из них — неясно, чей урон'));
     return null;
 }
 
@@ -214,8 +215,8 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
     const { art, style, tokenId: casterId, line } = source[1];
     const hp = actor.system.attributes?.hp;
     // Кулаки — сам удар Сайтамы: кадр после любого урона; остальные — только после решающего
-    if (style !== 'fists' && (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2))) return trace(`урон ${amount} по ${actor.name} не решающий — кадр ждёт дальше`);
-    trace(`урон ${amount} по ${actor.name} — кадр`);
+    if (style !== 'fists' && (!hp || (hp.value > 0 && amount < (hp.max ?? Infinity) / 2))) return trace(t('урон {amount} по {name} не решающий — кадр ждёт дальше', { amount, name: actor.name }));
+    trace(t('урон {amount} по {name} — кадр', { amount, name: actor.name }));
     armed.delete(source[0]);
     const point = tokenPoint(actor);
     const data = {
@@ -223,7 +224,7 @@ Hooks.on('dnd5e.applyDamage', (actor, amount) => {
         line: style === 'slash' ? line ?? tokenLine(casterId, point) : null,
         knock: style === 'fists' ? knockback(casterId, tokenId(actor), KNOCK_FEET) : null
     };
-    if (style === 'fists' && !casterId) trace('у нанёсшего удар не было токена на сцене при использовании навыка');
+    if (style === 'fists' && !casterId) trace(t('у нанёсшего удар не было токена на сцене при использовании навыка'));
     if (style === 'fists') return strikeSaitama(data);
     emit('impactFrame', data);
     playImpact(data);
@@ -238,17 +239,17 @@ const frames = () => game.modules.get('impact-frames')?.active ? game.modules.ge
  */
 function strikeSaitama({ sceneId, tokens, knock, disarm }) {
     emit('impactFrame', { disarm, skip: true });
-    if (!knock) return trace('отлёта нет: не вычислена точка (см. выше)');
+    if (!knock) return trace(t('отлёта нет: не вычислена точка (см. выше)'));
     const api = frames();
     if (api?.launch) return api.launch({ casterId: knock.casterId ?? tokens?.[0], targetId: knock.tokenId, knock, move: true, everyone: true });
-    trace('модуль impact-frames не включён — только отлёт цели');
+    trace(t('модуль impact-frames не включён — только отлёт цели'));
     moveKnocked(sceneId, knock);
 }
 
 // Рухнул слой памяти Пожирателя (Мастер отметил заряд особенности «Слои памяти»)
 Hooks.on('updateItem', (item, changes) => {
     const actor = item.parent;
-    if (actor?.flags?.[MODULE_ID]?.creature !== 'devourer' || item.name !== 'Слои памяти') return;
+    if (actor?.flags?.[MODULE_ID]?.creature !== 'devourer' || item.name !== 'Слои памяти') return;  // i18n: данные
     // Только трата заряда: сброс слоёв перед новой встречей кадра не даёт
     if (!(Number(foundry.utils.getProperty(changes, 'system.uses.spent')) > 0) || !game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
     const data = { art: actor.img, sceneId: canvas?.scene?.id ?? null, point: tokenPoint(actor), tokens: [tokenId(actor)].filter(Boolean) };
@@ -422,7 +423,7 @@ async function artPair(src) {
  */
 async function portraitFrames(src, W, H) {
     const img = await loadImage(src);
-    if (!img.width || !img.height) throw new Error('пустой портрет');
+    if (!img.width || !img.height) throw new Error(t('пустой портрет'));
     // Фигура — 82 % высоты экрана, не шире 60 % ширины
     let fh = Math.round(H * 0.82), fw = Math.round(fh * img.width / img.height);
     if (fw > W * 0.6) { fw = Math.round(W * 0.6); fh = Math.round(fw * img.height / img.width); }
@@ -837,18 +838,18 @@ function playEngineSlash({ sceneId, point, tokens, line }) {
  */
 export function impactTest(style = 'fists', { move = false, everyone = false } = {}) {
     const caster = canvas?.tokens?.controlled[0], target = game.user.targets.first();
-    if (!caster || !target) return ui.notifications.warn('Выделите токен нанёсшего удар и возьмите цель клавишей T.');
-    if (move && !game.user.isGM) return ui.notifications.warn('Переносить цель может только Мастер.');
+    if (!caster || !target) return ui.notifications.warn(t('Выделите токен нанёсшего удар и возьмите цель клавишей T.'));
+    if (move && !game.user.isGM) return ui.notifications.warn(t('Переносить цель может только Мастер.'));
     const point = { x: target.center.x, y: target.center.y };
     const data = {
         art: caster.actor?.img ?? caster.document.texture.src, style, sceneId: canvas.scene.id, point, tokens: [caster.id, target.id],
         line: style === 'slash' ? tokenLine(caster.id, point) : null,
         knock: style === 'fists' ? knockback(caster.id, target.id, KNOCK_FEET) : null
     };
-    trace(`проверка ${style ?? 'кадра'}: ${caster.name} → ${target.name}${move ? ', с переносом цели' : ''}`);
+    trace(t('проверка {v}: {name} → {name2}{v2}', { v: style ?? t('кадра'), name: caster.name, name2: target.name, v2: move ? t(', с переносом цели') : '' }));
     if (style === 'fists') {
         const api = frames();
-        if (!api?.launch) return ui.notifications.warn('Удар Сайтамы показывает модуль Impact Frames — включите его в мире.');
+        if (!api?.launch) return ui.notifications.warn(t('Удар Сайтамы показывает модуль Impact Frames — включите его в мире.'));
         return api.launch({ casterId: caster.id, targetId: target.id, knock: data.knock, move, everyone });
     }
     if (everyone) emit('impactFrame', data);
@@ -950,15 +951,15 @@ function moveKnocked(sceneId, knock) {
 }
 
 export async function playImpact({ art, style = null, sceneId, point, tokens, line = null }) {
-    if (playing) return trace('предыдущий кадр ещё идёт — этот пропущен');
-    if (!fxOn()) return trace('импакт-кадры выключены в настройках клиента');
+    if (playing) return trace(t('предыдущий кадр ещё идёт — этот пропущен'));
+    if (!fxOn()) return trace(t('импакт-кадры выключены в настройках клиента'));
     startPlaying();
     // Сторож: кадр, который по какой-то причине не закончился, не должен заблокировать следующие
     const id = ++playId;
     const slowFactor = fxSlow();
     setTimeout(() => {
         if (!playing || id !== playId) return;
-        trace('кадр не закончился вовремя — экран возвращён');
+        trace(t('кадр не закончился вовремя — экран возвращён'));
         cleanupImpact();
         stopPlaying();
     }, WATCHDOG_MS * slowFactor);

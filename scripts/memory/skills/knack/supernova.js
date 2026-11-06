@@ -16,6 +16,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { addTurnEffect } from "../turn-effects.js";
 import { isKnack, knackSkill, ref, actorFrom, tokenOf, esc, noTemplate, dcOf, areaOf, around, boom, boomAt, combatOf, hpOf, card } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const FLAG = 'supernova';
 const ICON = 'icons/svg/sun.svg';
@@ -26,8 +27,8 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     const item = activity?.item, actor = item?.actor;
     if (!isKnack(item, 'supernova') || !actor) return;
     noTemplate(usage);
-    if (!tokenOf(actor)) { ui.notifications.warn('Сверхновая: токена персонажа нет на сцене.'); return false; }
-    if (!storedOf(actor)) { ui.notifications.warn('Сверхновая: копить пока нечего — получите урон в бою.'); return false; }
+    if (!tokenOf(actor)) { ui.notifications.warn(t('Сверхновая: токена персонажа нет на сцене.')); return false; }
+    if (!storedOf(actor)) { ui.notifications.warn(t('Сверхновая: копить пока нечего — получите урон в бою.')); return false; }
 });
 
 Hooks.on('dnd5e.postUseActivity', (activity) => {
@@ -43,9 +44,9 @@ onSocket('knackSupernova', ({ payload }) => {
 async function show(actor, stored) {
     const effect = actor.effects.find(e => e.flags?.[MODULE_ID]?.supernova);
     if (!stored) return effect?.delete();
-    const name = `Сверхновая: ${stored}`;
+    const name = t('Сверхновая: {stored}', { stored });
     if (effect) { if (effect.name !== name) await effect.update({ name }); return; }
-    await actor.createEmbeddedDocuments('ActiveEffect', [{ name, img: ICON, showIcon: 2, description: '<p>Накопленный урон — выйдет взрывом.</p>', flags: { [MODULE_ID]: { supernova: true } } }]);
+    await actor.createEmbeddedDocuments('ActiveEffect', [{ name, img: ICON, showIcon: 2, description: t('<p>Накопленный урон — выйдет взрывом.</p>'), flags: { [MODULE_ID]: { supernova: true } } }]);
 }
 
 // Накопление: убыль ПЗ владельца в его бою
@@ -83,11 +84,11 @@ export async function explode({ actorId, tokenId, sceneId, dc, radius }) {
     await show(actor, 0);
     boom({ ...boomAt(token, radius), color: 0xfff1c4 });
     const caught = around(token, radius);
-    await card(actor, 'Сверхновая', `<p>${esc(actor.name)} выпускает накопленное: <strong>${stored}</strong>.</p>
-        <p>${caught.length ? `В ${radius} футах: ${esc(caught.map(t => t.name).join(', '))} — спасбросок Ловкости (Сл ${dc}) кнопкой из карточки навыка, успех — половина урона.` : 'Рядом никого.'}</p>
+    await card(actor, t('Сверхновая'), `<p>${t('{v} выпускает накопленное:', { v: esc(actor.name) })} <strong>${stored}</strong>.</p>
+        <p>${caught.length ? t('В {radius} футах: {v} — спасбросок Ловкости (Сл {dc}) кнопкой из карточки навыка, успех — половина урона.', { radius, v: esc(caught.map(t => t.name).join(', ')), dc }) : t('Рядом никого.')}</p>
         <p>[[/damage ${stored} force]]</p>`, { icon: 'fa-sun', flags: { supernova: { stored, dc } } });
     const combat = game.combat?.started ? game.combat : null;
-    const stun = { name: 'Сверхновая: ошеломлён', img: ICON, statuses: ['stunned'], description: '<p>После взрыва — ошеломлён до конца своего следующего хода.</p>' };
+    const stun = { name: t('Сверхновая: ошеломлён'), img: ICON, statuses: ['stunned'], description: t('<p>После взрыва — ошеломлён до конца своего следующего хода.</p>') };
     if (combat?.combatants.some(c => c.tokenId === token.id)) await addTurnEffect(actor, combat, stun, { until: 'nextTurn', tokenId: token.id });
     else await actor.createEmbeddedDocuments('ActiveEffect', [{ ...stun, showIcon: 2, duration: { rounds: 1 } }]);
 }

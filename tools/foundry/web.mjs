@@ -74,6 +74,26 @@ const drawn = await ev(() => {
 });
 check('паутина — слой вместо окна: все узлы и пути, 4 медальона ступеней на ободе, глаз Босса, часы; вход — любой узел внешней зоны', drawn.overlay && drawn.canvas && !drawn.window && drawn.nodes === shape.count && drawn.lines > shape.count - 2 && drawn.stages === 4 && drawn.eye && /Шаг 0/.test(drawn.clock) && drawn.reachable === shape.zones.outer, JSON.stringify(drawn));
 await f.shot('web-1-drawn');
+// Подсказки медальонов и Босса — целиком на экране; медальон — только своя ступень, весь список — у Босса
+const tips = await ev(() => {
+    const app = foundry.applications.instances.get('gachadnd-web-overlay'), stage = app.stage, tip = app.element.querySelector('.gd-wo-tip');
+    const box = app.element.getBoundingClientRect();
+    const boss = [...stage.nodes.values()].find(v => v.data.type === 'boss').node;
+    const out = [...stage.medalBox, boss].map(m => {
+        m.emit('pointerover', {});
+        const r = tip.getBoundingClientRect(), y = m.getGlobalPosition().y;
+        const row = { y: Math.round(y), top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), stages: tip.querySelectorAll('.st').length, inside: !tip.hidden && r.top >= box.top && r.bottom <= box.bottom && r.left >= box.left && r.right <= box.right };
+        m.emit('pointerout', {});
+        return row;
+    });
+    // Самый верхний медальон — для снимка
+    [...stage.medalBox].sort((a, b) => a.getGlobalPosition().y - b.getGlobalPosition().y)[0].emit('pointerover', {});
+    return out;
+});
+check('подсказки медальонов и Босса не вылезают за край экрана', tips.length === 5 && tips.every(row => row.inside), JSON.stringify(tips));
+check('медальон не повторяет список Босса: короткая подсказка своей ступени, все ступени — у самого Босса', tips.slice(0, 4).every(row => !row.stages && row.bottom - row.top < 160) && tips[4].stages === 4, JSON.stringify(tips.map(row => [row.stages, row.bottom - row.top])));
+await f.shot('web-1-medal-tip');
+await ev(() => { const stage = foundry.applications.instances.get('gachadnd-web-overlay').stage; for (const m of stage.medalBox) m.emit('pointerout', {}); });
 // Появление: Туман слева, кристаллы, нити — кадры по ходу
 await ev(async () => { await foundry.applications.instances.get('gachadnd-web-overlay').close(); await new Promise(r => setTimeout(r, 300)); });
 const opened = Date.now();

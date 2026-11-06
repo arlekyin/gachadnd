@@ -3,6 +3,8 @@
  */
 
 import { MODULE_ID } from "./constants.js";
+import { tagLabel, categoryLabel } from "./ids.js";
+import { t } from "./i18n.js";
 
 Hooks.on('renderCompendium', async (app, html, data) => {
     const compendium = app.collection;
@@ -24,7 +26,7 @@ Hooks.on('renderCompendium', async (app, html, data) => {
     const filterDiv = document.createElement('div');
     filterDiv.className = 'gachadnd-compendium-filters';
     filterDiv.style.cssText = 'display: flex; gap: 6px; padding: 6px 8px; background: rgba(0, 0, 0, 0.3); border-bottom: 1px solid var(--color-border-light-primary); flex-wrap: wrap; align-items: center;';
-    filterDiv.innerHTML = `<div style="color: #888; font-size: 12px; width: 100%; text-align: center; font-style: italic;">Анализ Тумана...</div>`;
+    filterDiv.innerHTML = `<div style="color: #888; font-size: 12px; width: 100%; text-align: center; font-style: italic;">${t('Анализ Тумана...')}</div>`;
     header.insertAdjacentElement('afterend', filterDiv);
 
     // 3. Запрашиваем индекс и флаги
@@ -51,22 +53,22 @@ Hooks.on('renderCompendium', async (app, html, data) => {
 
     filterDiv.innerHTML = `
         <select id="gacha-filter-cat" style="flex: 1; min-width: 80px; height: 26px; font-size: 13px; background: rgba(0,0,0,0.6); color: #f0f0e0; border: 1px solid #555; border-radius: 3px; cursor: pointer; outline: none;">
-            <option value="all">Все категории</option>
-            ${Array.from(categories).sort().map(c => `<option value="${c}">${c}</option>`).join('')}
+            <option value="all">${t('Все категории')}</option>
+            ${Array.from(categories).sort().map(c => `<option value="${c}">${categoryLabel(c)}</option>`).join('')}
         </select>
         <select id="gacha-filter-tag" style="flex: 1; min-width: 80px; height: 26px; font-size: 13px; background: rgba(0,0,0,0.6); color: #f0f0e0; border: 1px solid #555; border-radius: 3px; cursor: pointer; outline: none;">
-            <option value="all">Все теги</option>
-            ${Array.from(tags).sort().map(t => `<option value="${t}">[${t}]</option>`).join('')}
+            <option value="all">${t('Все теги')}</option>
+            ${Array.from(tags).sort().map(tag => `<option value="${tag}">[${tagLabel(tag)}]</option>`).join('')}
         </select>
         ${hasRarity ? `
         <select id="gacha-filter-rarity" style="flex: 1; min-width: 80px; height: 26px; font-size: 13px; background: rgba(0,0,0,0.6); color: #f0f0e0; border: 1px solid #555; border-radius: 3px; cursor: pointer; outline: none;">
-            <option value="all">Все редкости</option>
-            <option value="gray" style="color: #9d9d9d;">Серые</option>
-            <option value="green" style="color: #1eff00;">Зеленые</option>
-            <option value="blue" style="color: #0070dd;">Синие</option>
-            <option value="purple" style="color: #a335ee;">Фиолетовые</option>
-            <option value="red" style="color: #ff003c;">Красные</option>
-            <option value="orange" style="color: #ff8000;">Оранжевые</option>
+            <option value="all">${t('Все редкости')}</option>
+            <option value="gray" style="color: #9d9d9d;">${t('Серые')}</option>
+            <option value="green" style="color: #1eff00;">${t('Зеленые')}</option>
+            <option value="blue" style="color: #0070dd;">${t('Синие')}</option>
+            <option value="purple" style="color: #a335ee;">${t('Фиолетовые')}</option>
+            <option value="red" style="color: #ff003c;">${t('Красные')}</option>
+            <option value="orange" style="color: #ff8000;">${t('Оранжевые')}</option>
         </select>
         ` : ''}
     `;

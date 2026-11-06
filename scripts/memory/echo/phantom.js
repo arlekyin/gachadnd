@@ -18,6 +18,7 @@
 import { MODULE_ID } from "../../core/constants.js";
 import { voiceOf, voiceWhisper } from "./echo.js";
 import { visionActor, visionPower, visionMode, peekActor } from "./vision.js";
+import { t } from "../../core/i18n.js";
 
 const FLAG = 'echoPhantoms';
 const MIRAGE = 0x9cc4ff;  // так Мастер видит фантом: цвет голоса разума
@@ -26,7 +27,7 @@ let layer = null;
 let turn = null;          // id фантома, чей ход сейчас идёт на этом экране
 let pending = null;       // ударили по фантому: { actor, ids, attack } — рассеять после броска
 let queue = Promise.resolve();
-const run = fn => (queue = queue.then(fn).catch(e => console.error('gachadnd | фантом', e)));
+const run = fn => (queue = queue.then(fn).catch(e => console.error(`gachadnd | фантом`, e)));
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 const gs = () => canvas.grid.size;
@@ -163,7 +164,7 @@ async function draw(entry, actor) {
     if (mirage) {
         // Мастеру: в имени — чей это мираж; правый щелчок — рассеять; перетащить — мышью
         const refreshName = token._refreshNameplate;
-        token._refreshNameplate = function () { refreshName.call(this); this.nameplate.text = `${this.document.name}\n· мираж: ${actor.name} ·`; };
+        token._refreshNameplate = function () { refreshName.call(this); this.nameplate.text = t('{name}\\n· мираж: {name2} ·', { name: this.document.name, name2: actor.name }); };
         token._canHUD = user => user.isGM;
         token._onClickRight = event => { event?.stopPropagation?.(); menu(entry.id); };
     } else token._canHUD = () => false;
@@ -225,12 +226,12 @@ async function menu(id) {
     const p = live.get(id);
     if (!p || !game.user.isGM) return;
     const choice = await foundry.applications.api.DialogV2.wait({
-        window: { title: `Мираж: ${p.entry.name}` },
-        content: `<p>Этого врага видит только <strong>${foundry.utils.escapeHTML(p.actor.name)}</strong> — его рисует Эхо разума. Для игрока он неотличим от настоящего.</p>`,
+        window: { title: t('Мираж: {name}', { name: p.entry.name }) },
+        content: `<p>${t('Этого врага видит только')} <strong>${foundry.utils.escapeHTML(p.actor.name)}</strong> ${t('— его рисует Эхо разума. Для игрока он неотличим от настоящего.')}</p>`,
         buttons: [
-            { action: 'whisper', label: 'Рассеять (голос шепнёт)', icon: 'fas fa-wind', default: true },
-            { action: 'quiet', label: 'Рассеять молча', icon: 'fas fa-eye-slash' },
-            { action: 'cancel', label: 'Оставить', icon: 'fas fa-xmark' }
+            { action: 'whisper', label: t('Рассеять (голос шепнёт)'), icon: 'fas fa-wind', default: true },
+            { action: 'quiet', label: t('Рассеять молча'), icon: 'fas fa-eye-slash' },
+            { action: 'cancel', label: t('Оставить'), icon: 'fas fa-xmark' }
         ],
         rejectClose: false
     });
@@ -350,8 +351,8 @@ function rows() {
         const name = row.querySelector('.name'); if (name) name.textContent = entry.name;
         if (token.mirage) {
             row.classList.add('gd-phantom-mirage');
-            row.dataset.tooltip = `Мираж Эха разума: этого врага видит только ${actor.name}. Правый щелчок по токену — рассеять, токен можно перетащить.`;
-            name?.insertAdjacentHTML('beforeend', ` <span class="gd-phantom-tag">мираж: ${foundry.utils.escapeHTML(actor.name)}</span>`);
+            row.dataset.tooltip = t('Мираж Эха разума: этого врага видит только {name}. Правый щелчок по токену — рассеять, токен можно перетащить.', { name: actor.name });
+            name?.insertAdjacentHTML('beforeend', ` <span class="gd-phantom-tag">${t('мираж: {v}', { v: foundry.utils.escapeHTML(actor.name) })}</span>`);
         }
         const fx = row.querySelector('.token-effects'); if (fx) fx.replaceChildren();
         const init = Math.floor(entry.init), input = row.querySelector('.token-initiative input');

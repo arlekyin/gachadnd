@@ -2,13 +2,13 @@
     {{!-- Холст WebGL (web-stage.js): дым, пути, узлы, пряди Пожирателя --}}
     <div class="gd-wo-canvas-slot"></div>
     <header class="gd-wo-top">
-        <div class="gd-wo-title">Паутина <span>Этаж {{floorRoman}}</span></div>
+        <div class="gd-wo-title">{{t "Паутина"}} <span>{{t "Этаж {floorRoman}" floorRoman=floorRoman}}</span></div>
         {{#if web}}
         {{!-- Числа — Мастеру; игрокам — образ: часы на ободе и глаз Босса говорят сами --}}
         {{#if isGM}}
-        <div class="gd-wo-clock" data-tooltip="Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые {{web.every}} шага. Видит только Мастер.">
-            <i class="fas fa-hourglass-half"></i> Шаг {{web.ticks}} ·
-            {{#if web.calm}}тишина ещё {{web.calm}}{{else}}{{#if web.toNext}}до ступени Босса {{web.toNext}}{{else}}Босс в полной силе{{/if}}{{/if}}{{#if web.eaten}} · съедено {{web.eaten}}{{/if}}
+        <div class="gd-wo-clock" data-tooltip="{{t 'Часы этажа: каждый шаг — тик. После тишины Босс крепнет каждые {every} шага. Видит только Мастер.' every=web.every}}">
+            <i class="fas fa-hourglass-half"></i> {{t "Шаг {ticks} ·" ticks=web.ticks}}
+            {{#if web.calm}}{{t "тишина ещё {calm}" calm=web.calm}}{{else}}{{#if web.toNext}}{{t "до ступени Босса {toNext}" toNext=web.toNext}}{{else}}{{t "Босс в полной силе"}}{{/if}}{{/if}}{{#if web.eaten}} {{t "· съедено {eaten}" eaten=web.eaten}}{{/if}}
         </div>
         {{else}}
         <div class="gd-wo-clock"><i class="fas fa-eye"></i> {{web.mood}}</div>
@@ -16,15 +16,15 @@
         {{/if}}
     </header>
     <div class="gd-wo-buttons">
-        <button type="button" data-action="terminal" data-tooltip="Терминал Тумана"><i class="fas fa-brain"></i></button>
-        <button type="button" class="on" data-tooltip="Карта этажа"><i class="fas fa-circle-nodes"></i></button>
-        {{#if isGM}}<button type="button" data-action="tools" class="{{#if tools}}on{{/if}}" data-tooltip="Панель Мастера"><i class="fas fa-sliders"></i></button>{{/if}}
-        <button type="button" data-action="close" data-tooltip="Закрыть (Esc)"><i class="fas fa-xmark"></i></button>
+        <button type="button" data-action="terminal" data-tooltip="{{t 'Терминал Тумана'}}"><i class="fas fa-brain"></i></button>
+        <button type="button" class="on" data-tooltip="{{t 'Карта этажа'}}"><i class="fas fa-circle-nodes"></i></button>
+        {{#if isGM}}<button type="button" data-action="tools" class="{{#if tools}}on{{/if}}" data-tooltip="{{t 'Панель Мастера'}}"><i class="fas fa-sliders"></i></button>{{/if}}
+        <button type="button" data-action="close" data-tooltip="{{t 'Закрыть (Esc)'}}"><i class="fas fa-xmark"></i></button>
     </div>
     {{#if legend}}
     <div class="gd-wo-legend">{{#each legend}}<span style="--node: {{color}}" data-tooltip="{{label}}"><i class="fas {{icon}}"></i> {{count}}</span>{{/each}}</div>
     {{/if}}
-    <div class="gd-wo-hint">{{#if hasBoard}}{{hint}}{{else}}Паутина этажа ещё не начерчена.{{/if}}</div>
+    <div class="gd-wo-hint">{{#if hasBoard}}{{hint}}{{else}}{{t "Паутина этажа ещё не начерчена."}}{{/if}}</div>
     <div class="gd-wo-tip" hidden></div>
     {{#if gm}}{{> "modules/gachadnd/templates/map/web-gm.hbs"}}{{/if}}
 </div>

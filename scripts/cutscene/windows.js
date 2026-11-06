@@ -4,6 +4,7 @@
  * интерфейс без рамки (боковая панель, панель макросов) не меняется.
  */
 
+
 function openWindows() {
     const apps = new Set([...(foundry.applications?.instances?.values?.() ?? []), ...Object.values(globalThis.ui?.windows ?? {})]);
     return [...apps].filter(app => {
@@ -22,7 +23,7 @@ export function stowWindows() {
         stowed = openWindows();
         for (const app of stowed) Promise.resolve(app.minimize()).catch(() => {});
     } catch (error) {
-        console.warn('gachadnd | окна на время катсцены', error);
+        console.warn(`gachadnd | окна на время катсцены`, error);
     }
     let done = false;
     return () => {

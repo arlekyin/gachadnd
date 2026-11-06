@@ -10,11 +10,13 @@
  */
 
 import { MODULE_ID, CRYSTAL_WEIGHT } from "../core/constants.js";
+import { tagsLabel, categoryLabel } from "../core/ids.js";
 import { getSkillPack } from "./crystals.js";
+import { t } from "../core/i18n.js";
 
 const RARITY = {
-    gray: ['Серый', '#9d9d9d'], green: ['Зелёный', '#1eff00'], blue: ['Синий', '#0070dd'],
-    purple: ['Фиолетовый', '#a335ee'], red: ['Красный', '#ff003c'], orange: ['Оранжевый', '#ff8000']
+    gray: [t('Серый'), '#9d9d9d'], green: [t('Зелёный'), '#1eff00'], blue: [t('Синий'), '#0070dd'],
+    purple: [t('Фиолетовый'), '#a335ee'], red: [t('Красный'), '#ff003c'], orange: [t('Оранжевый'), '#ff8000']
 };
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -28,10 +30,10 @@ async function peekHtml(skillId) {
         const [label, color] = RARITY[flags.rarity] ?? RARITY.gray;
         const editor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
         const body = await editor.enrichHTML(skill.system?.description?.value ?? '', { relativeTo: skill, rollData: skill.getRollData?.() });
-        const weight = `вес ${CRYSTAL_WEIGHT[flags.rarity] ?? 1}`;
-        const meta = [label, weight, flags.category, (flags.tags ?? []).join(', ')].filter(Boolean).map(esc).join(' · ');
-        const duo = flags.duo ? `<small class="gd-peek-duo">связка синергий: ${flags.duo.map(esc).join(' + ')} — по 2 экипированных навыка каждого тега</small>` : '';
-        return `<div class="gd-peek-head" style="--rarity: ${color}"><strong>${esc(skill.name)}</strong><small>${meta}</small>${duo}</div><div class="gd-peek-body">${body || '<p>Описание отсутствует.</p>'}</div>`;
+        const weight = t('вес {v}', { v: CRYSTAL_WEIGHT[flags.rarity] ?? 1 });
+        const meta = [label, weight, flags.category && categoryLabel(flags.category), tagsLabel(flags.tags)].filter(Boolean).map(esc).join(' · ');
+        const duo = flags.duo ? `<small class="gd-peek-duo">${t('связка синергий: {v} — по 2 экипированных навыка каждого тега', { v: flags.duo.map(esc).join(' + ') })}</small>` : '';
+        return `<div class="gd-peek-head" style="--rarity: ${color}"><strong>${esc(skill.name)}</strong><small>${meta}</small>${duo}</div><div class="gd-peek-body">${body || t('<p>Описание отсутствует.</p>')}</div>`;
     })();
     cache.set(skillId, task);
     return task;

@@ -26,17 +26,18 @@ import { randomFromPack } from "./shop.js";
 import { getHorseman, isCleansed, addCleanseProgress, partyActors } from "./horsemen.js";
 import { onSocket, requestGM, isActiveGM } from "../core/socket.js";
 import { addTokenTools } from "../core/controls.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-export const TIERS = { small: 'Малая', notable: 'Заметная', rare: 'Редкая' };
+export const TIERS = { small: t('Малая'), notable: t('Заметная'), rare: t('Редкая') };
 // «По этажу»: шансы уровней растут с этажом
 const FLOOR_TIER_WEIGHTS = [
     { upTo: 1, weights: { small: 70, notable: 30, rare: 0 } },
     { upTo: 3, weights: { small: 30, notable: 55, rare: 15 } },
     { upTo: Infinity, weights: { small: 10, notable: 55, rare: 35 } }
 ];
-const RARITY_LABELS = { gray: 'серый', green: 'зелёный', blue: 'синий', purple: 'фиолетовый' };
+const RARITY_LABELS = { gray: t('серый'), green: t('зелёный'), blue: t('синий'), purple: t('фиолетовый') };
 
 const esc = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const hp = actor => actor.system.attributes?.hp ?? {};
@@ -60,7 +61,7 @@ const POOL = {
         weight: () => 10,
         roll: (actor, floor) => {
             const gold = Math.max(1, Math.round(floorBase(floor) * (0.1 + Math.random() * 0.15)));
-            return { label: `${gold} зм`, gold };
+            return { label: t('{gold} зм', { gold }), gold };
         },
         apply: (actor, o) => addGold(actor, o.gold)
     },
@@ -83,7 +84,7 @@ const POOL = {
     hitDie: {
         tier: 'small', icon: 'fa-heart',
         weight: actor => spentHitDice(actor) > 0 ? (spentHitDice(actor) * 2 >= (actor.system.attributes?.hd?.max ?? 1) ? 20 : 10) : 0,
-        roll: () => ({ label: '1 Кость Хитов' }),
+        roll: () => ({ label: t('1 Кость Хитов') }),
         apply: actor => restoreHitDice(actor, 1)
     },
     heal: {
@@ -92,7 +93,7 @@ const POOL = {
         weight: actor => hp(actor).value >= hp(actor).max ? 0 : hp(actor).value < hp(actor).max / 2 ? 30 : 10,
         roll: actor => {
             const amount = Math.max(1, Math.floor(hp(actor).max / 4));
-            return { label: `Лечение: ${amount} ПЗ`, amount };
+            return { label: t('Лечение: {amount} ПЗ', { amount }), amount };
         },
         apply: (actor, o) => actor.applyDamage([{ value: o.amount, type: 'healing' }])
     },
@@ -101,7 +102,7 @@ const POOL = {
         weight: () => 10,
         roll: (actor, floor) => {
             const rarity = tagCrystalRarity(floor);
-            return { label: `Кристалл выбранного тега (${RARITY_LABELS[rarity]})`, rarity };
+            return { label: t('Кристалл выбранного тега ({v})', { v: RARITY_LABELS[rarity] }), rarity };
         },
         choice: 'tag',
         apply: async (actor, o, choice) => {
@@ -121,19 +122,19 @@ const POOL = {
         tier: 'notable', icon: 'fa-broom',
         // Память почти заполнена — чаще
         weight: actor => actor.items.filter(isMemorySkill).length >= getMemoryCapacity(actor) - 1 ? 20 : 10,
-        roll: () => ({ label: 'Скидка 50% на следующую Очистку' }),
+        roll: () => ({ label: t('Скидка 50% на следующую Очистку') }),
         apply: actor => actor.setFlag(MODULE_ID, 'cleanse_vouchers', (Number(actor.getFlag(MODULE_ID, 'cleanse_vouchers')) || 0) + 1)
     },
     rerollVoucher: {
         tier: 'notable', icon: 'fa-rotate',
         weight: () => 10,
-        roll: () => ({ label: 'Бесплатное обновление ассортимента' }),
+        roll: () => ({ label: t('Бесплатное обновление ассортимента') }),
         apply: actor => actor.setFlag(MODULE_ID, 'reroll_vouchers', (Number(actor.getFlag(MODULE_ID, 'reroll_vouchers')) || 0) + 1)
     },
     horsemanProgress: {
         tier: 'notable', icon: 'fa-horse-head',
         weight: actor => cursedHorseman(actor) ? 15 : 0,
-        roll: actor => ({ label: `Прогресс сращивания: ${cursedHorseman(actor).name}` }),
+        roll: actor => ({ label: t('Прогресс сращивания: {name}', { name: cursedHorseman(actor).name }) }),
         apply: async actor => { const h = cursedHorseman(actor); if (h) await addCleanseProgress(h, 1); }
     },
     purpleCrystal: {
@@ -141,7 +142,7 @@ const POOL = {
         weight: () => 10,
         roll: async () => {
             const crystal = await randomCrystal('purple');
-            return crystal ? { label: `${crystal.name} (фиолетовый)`, skillId: crystal.flags[MODULE_ID].skill_id, crystal } : null;
+            return crystal ? { label: t('{name} (фиолетовый)', { name: crystal.name }), skillId: crystal.flags[MODULE_ID].skill_id, crystal } : null;
         },
         apply: async (actor, o) => {
             const crystal = o.crystal ?? await randomCrystal('purple');
@@ -151,7 +152,7 @@ const POOL = {
     tempSlot: {
         tier: 'rare', icon: 'fa-brain',
         weight: () => 10,
-        roll: () => ({ label: '+1 слот Памяти до конца этажа' }),
+        roll: () => ({ label: t('+1 слот Памяти до конца этажа') }),
         apply: async (actor) => {
             await actor.update({
                 [`flags.${MODULE_ID}.extra_slots`]: (Number(actor.getFlag(MODULE_ID, 'extra_slots')) || 0) + 1,
@@ -163,7 +164,7 @@ const POOL = {
     liftDrawback: {
         tier: 'rare', icon: 'fa-unlock',
         weight: actor => drawbackSkills(actor).length ? 10 : 0,
-        roll: () => ({ label: 'Снять штраф с навыка' }),
+        roll: () => ({ label: t('Снять штраф с навыка') }),
         choice: 'drawback',
         apply: async (actor, o, choice) => {
             const item = actor.items.get(choice);
@@ -238,7 +239,7 @@ function cardContent(actor, title, options, claimed = null) {
     return `<div class="gachadnd-event-reward">
         <div class="gd-reward-title">${esc(title)} · <strong>${esc(actor.name)}</strong></div>
         <div class="gd-reward-list">${rows}</div>
-        <div class="gd-reward-foot">${claimed ? `Выбрано: ${esc(options[claimed.index].label)}` : 'Выберите одну награду.'}</div>
+        <div class="gd-reward-foot">${claimed ? t('Выбрано: {v}', { v: esc(options[claimed.index].label) }) : t('Выберите одну награду.')}</div>
     </div>`;
 }
 
@@ -246,15 +247,15 @@ function cardContent(actor, title, options, claimed = null) {
  * Предложить награды персонажам: каждому своя карточка (видят владельцы и Мастер).
  * @param {{ actors?: Actor[], tier?: string, count?: number, title?: string }} config
  */
-export async function offerEventRewards({ actors, tier = 'floor', count = 3, title = 'Награда события' } = {}) {
-    if (!game.user.isGM) return ui.notifications.warn('Награды событий выдаёт Мастер.');
+export async function offerEventRewards({ actors, tier = 'floor', count = 3, title = t('Награда события') } = {}) {
+    if (!game.user.isGM) return ui.notifications.warn(t('Награды событий выдаёт Мастер.'));
     actors = actors?.length ? actors : partyActors();
     for (const actor of actors) {
         const options = await rollRewardOptions(actor, tier, count);
         if (!options.length) continue;
         // Брошенный заранее кристалл хранится как данные: его и выдаст Мастер
         await ChatMessage.create({
-            speaker: { alias: 'Лабиринт' },
+            speaker: { alias: t('Лабиринт') },
             whisper: ownerIds(actor),
             content: cardContent(actor, title, options),
             flags: { [MODULE_ID]: { eventReward: { actorId: actor.id, title, options, claimed: null } } }
@@ -268,17 +269,17 @@ async function chooseReward(message, index) {
     const option = data?.options?.[index];
     const actor = game.actors.get(data?.actorId);
     if (!option || !actor || data.claimed) return;
-    if (!actor.isOwner) return ui.notifications.warn('Награду выбирает владелец персонажа.');
+    if (!actor.isOwner) return ui.notifications.warn(t('Награду выбирает владелец персонажа.'));
     let choice = null;
     if (option.choice === 'tag') {
         // Только теги, у которых есть навыки обещанной редкости
         const available = new Set(await tagsWithRarity(option.rarity));
         const tags = Object.keys(getSynergyDictionary()).filter(t => available.has(t));
-        if (!tags.length) return ui.notifications.warn('Нет навыков этой редкости ни с одним тегом.');
+        if (!tags.length) return ui.notifications.warn(t('Нет навыков этой редкости ни с одним тегом.'));
         choice = await foundry.applications.api.DialogV2.prompt({
-            window: { title: 'Тег кристалла' },
-            content: `<p>Кристалл какого тега?</p><select name="tag">${tags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select>`,
-            ok: { label: 'Выбрать', callback: (event, button) => button.form.elements.tag.value },
+            window: { title: t('Тег кристалла') },
+            content: `<p>${t('Кристалл какого тега?')}</p><select name="tag">${tags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select>`,
+            ok: { label: t('Выбрать'), callback: (event, button) => button.form.elements.tag.value },
             rejectClose: false
         });
         if (!choice) return;
@@ -286,9 +287,9 @@ async function chooseReward(message, index) {
     if (option.choice === 'drawback') {
         const skills = drawbackSkills(actor);
         choice = await foundry.applications.api.DialogV2.prompt({
-            window: { title: 'Снять штраф' },
-            content: `<p>С какого навыка снять штраф?</p><select name="skill">${skills.map(s => `<option value="${s.id}">${esc(s.name)} — ${esc(s.flags[MODULE_ID].drawback)}</option>`).join('')}</select>`,
-            ok: { label: 'Снять', callback: (event, button) => button.form.elements.skill.value },
+            window: { title: t('Снять штраф') },
+            content: `<p>${t('С какого навыка снять штраф?')}</p><select name="skill">${skills.map(s => `<option value="${s.id}">${esc(s.name)} — ${esc(s.flags[MODULE_ID].drawback)}</option>`).join('')}</select>`,
+            ok: { label: t('Снять'), callback: (event, button) => button.form.elements.skill.value },
             rejectClose: false
         });
         if (!choice) return;
@@ -333,7 +334,7 @@ export async function expireFloorSlots(floor = getFloor()) {
         if (!slots || actor.getFlag(MODULE_ID, 'extra_slots_floor') === floor) continue;
         await actor.update({ [`flags.${MODULE_ID}.extra_slots`]: 0, [`flags.${MODULE_ID}.extra_slots_floor`]: null });
         Hooks.callAll('gachadnd.synergyUpdated', actor);
-        ui.notifications.info(`${actor.name}: временный слот Памяти закрылся вместе с этажом.`);
+        ui.notifications.info(t('{name}: временный слот Памяти закрылся вместе с этажом.', { name: actor.name }));
     }
 }
 
@@ -346,7 +347,7 @@ export class EventRewardsWindow extends HandlebarsApplicationMixin(ApplicationV2
         id: 'gachadnd-event-rewards',
         classes: ['gachadnd-event-rewards-window'],
         tag: 'div',
-        window: { title: 'Награды события', icon: 'fas fa-gift' },
+        window: { title: t('Награды события'), icon: 'fas fa-gift' },
         position: { width: 380, height: 'auto' },
         actions: { send: EventRewardsWindow.#onSend }
     };
@@ -365,12 +366,12 @@ export class EventRewardsWindow extends HandlebarsApplicationMixin(ApplicationV2
     static async #onSend() {
         const root = this.element;
         const actors = [...root.querySelectorAll('input[name="actor"]:checked')].map(i => game.actors.get(i.value)).filter(Boolean);
-        if (!actors.length) return ui.notifications.warn('Выберите хотя бы одного персонажа.');
+        if (!actors.length) return ui.notifications.warn(t('Выберите хотя бы одного персонажа.'));
         await offerEventRewards({
             actors,
             tier: root.querySelector('[name="tier"]').value,
             count: Math.min(4, Math.max(1, Number(root.querySelector('[name="count"]').value) || 3)),
-            title: root.querySelector('[name="title"]').value || 'Награда события'
+            title: root.querySelector('[name="title"]').value || t('Награда события')
         });
         this.close();
     }
@@ -380,7 +381,7 @@ Hooks.on('getSceneControlButtons', (controls) => {
     if (!game.user?.isGM) return;
     addTokenTools(controls, [{
         name: 'gachadnd-event-rewards',
-        title: 'Награды события (Мастер)',
+        title: t('Награды события (Мастер)'),
         icon: 'fas fa-gift',
         visible: true,
         button: true,

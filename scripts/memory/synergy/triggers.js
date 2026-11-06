@@ -36,6 +36,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { onRenderChatMessage } from "../../core/chat-hooks.js";
 import { getSynergyDictionary, UNIVERSAL_DC_FORMULA } from "./synergy-data.js";
 import { onSocket, emit } from "../../core/socket.js";
+import { t } from "../../core/i18n.js";
 
 const SETTING = 'automation';
 const PREFS = 'automationPrefs';
@@ -45,8 +46,8 @@ const NEEDS_TARGET = ['target_bloodied', 'hostile_target', 'target_anomaly'];
 
 export function registerTriggerSettings() {
     game.settings.register(MODULE_ID, SETTING, {
-        name: 'Автоматизация синергий и навыков',
-        hint: 'Доп. урон «1 раз в ход» добавляется к броску урона сам, лечение после броска применяется само, реакции на урон и действия в начале хода и боя предлагаются владельцу окном. Выключите, чтобы пользоваться только кнопками.',
+        name: t('Автоматизация синергий и навыков'),
+        hint: t('Доп. урон «1 раз в ход» добавляется к броску урона сам, лечение после броска применяется само, реакции на урон и действия в начале хода и боя предлагаются владельцу окном. Выключите, чтобы пользоваться только кнопками.'),
         scope: 'world', config: true, type: Boolean, default: true
     });
     // Личные галочки игрока: в v13 — за пользователем на сервере, в v12 — в браузере
@@ -104,12 +105,12 @@ export const TRIGGER_EVENTS = ['damage_roll', 'damaged', 'turn_start', 'combat_s
 // По умолчанию доп. урон добавляется сам, остальное спрашивается
 const DEFAULT_ASK = { damage_roll: false, damaged: true, turn_start: true, combat_start: true, zero_hp: false, kill: false };
 export const KIND_LABELS = {
-    damage_roll: trigger => trigger.heal_self ? 'лечение после урона' : 'доп. урон',
-    damaged: () => 'реакция на урон',
-    turn_start: () => 'начало хода',
-    combat_start: () => 'начало боя',
-    zero_hp: () => 'вместо падения до 0 ПЗ',
-    kill: () => 'убийство врага'
+    damage_roll: trigger => trigger.heal_self ? t('лечение после урона') : t('доп. урон'),
+    damaged: () => t('реакция на урон'),
+    turn_start: () => t('начало хода'),
+    combat_start: () => t('начало боя'),
+    zero_hp: () => t('вместо падения до 0 ПЗ'),
+    kill: () => t('убийство врага')
 };
 
 export function readPrefs() {
@@ -173,7 +174,7 @@ const firstTarget = () => game.user?.targets?.first?.() ?? [...(game.user?.targe
 function isAnomaly(actor) {
     const type = actor?.system?.details?.type ?? {};
     const text = `${type.custom ?? ''} ${type.subtype ?? ''}`.toLowerCase();
-    return type.value === 'aberration' || text.includes('аномал');
+    return type.value === 'aberration' || text.includes('аномал');  // i18n: данные
 }
 
 const CONDITIONS = {
@@ -219,7 +220,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
     const flags = item?.flags?.[MODULE_ID] ?? {};
     if (!enabled() || !actor?.isOwner || flags.trigger?.once !== 'primed' || !flags.is_active) return;
     primed.set(`${actor.id}:skill:${item.id}`, turnKey(actor) ?? FREE);
-    ui.notifications.info(`${item.name}: следующая атака в этом ходу получит доп. урон.`);
+    ui.notifications.info(t('{name}: следующая атака в этом ходу получит доп. урон.', { name: item.name }));
 });
 
 // Урон атакой или заклинанием — не лечение и не кнопки самих синергий, навыков и кристаллов
@@ -255,7 +256,7 @@ Hooks.on('dnd5e.preRollDamageV2', (config) => {
         if (source.skill && !hasUse(source.item)) continue;
         if (!conditionsMet((trigger.when ?? []).filter(w => !NEEDS_TARGET.includes(w)), ctx)) continue;
         if (!ctx.target && (trigger.when ?? []).some(w => NEEDS_TARGET.includes(w))) {
-            ui.notifications.info(`${source.name}: выделите цель перед броском урона, иначе срабатывание пропадёт.`);
+            ui.notifications.info(t('{name}: выделите цель перед броском урона, иначе срабатывание пропадёт.', { name: source.name }));
             continue;
         }
         if (!conditionsMet(trigger.when, ctx)) continue;
@@ -288,16 +289,16 @@ Hooks.on('dnd5e.rollDamageV2', async (rolls, { subject } = {}) => {
             continue;
         }
         const heal = source.trigger.heal_self;
-        if (heal && source.ask && !await confirm(source.name, `<p>${actor.name}: восстановить ${shownFormula(heal.formula, actor)} ПЗ?</p>`)) continue;
+        if (heal && source.ask && !await confirm(source.name, `<p>${t('{name}: восстановить {v} ПЗ?', { name: actor.name, v: shownFormula(heal.formula, actor) })}</p>`)) continue;
         await commitUse(actor, source, key);
         if (!heal) continue;
         try {
             const roll = await new Roll(heal.formula, actor.getRollData()).evaluate();
-            await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${source.name}: лечение` });
+            await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: t('{name}: лечение', { name: source.name }) });
             await actor.applyDamage([{ value: roll.total, type: 'healing' }]);
         } catch (err) {
             console.error(`${MODULE_ID} | ${source.name}:`, err);
-            ui.notifications.error(`${source.name}: лечение не применилось — подробности в консоли (F12).`);
+            ui.notifications.error(t('{name}: лечение не применилось — подробности в консоли (F12).', { name: source.name }));
         }
     }
 });
@@ -318,17 +319,17 @@ async function offerBonusCard(actor, source, key) {
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
         whisper: [game.user.id],
-        content: `<div class="gachadnd-trigger-offer"><p><strong>${source.name}</strong>: добавить ${shownFormula(source.offer.formula, actor)} (${label})?</p>
-            <button type="button" data-gd-offer="${id}"><i class="fas fa-dice-d20"></i> Бросить урон</button></div>`
+        content: `<div class="gachadnd-trigger-offer"><p><strong>${source.name}</strong>${t(': добавить {v} ({label})?', { v: shownFormula(source.offer.formula, actor), label })}</p>
+            <button type="button" data-gd-offer="${id}"><i class="fas fa-dice-d20"></i> ${t('Бросить урон')}</button></div>`
     });
 }
 
 async function acceptOffer(id, button) {
     const offer = offers.get(id);
-    if (!offer) return ui.notifications.warn('Предложение устарело — оно действует до перезагрузки и только в своём ходу.');
+    if (!offer) return ui.notifications.warn(t('Предложение устарело — оно действует до перезагрузки и только в своём ходу.'));
     const { actor, source, key, bonus } = offer;
-    if (source.trigger.once !== 'none' && key !== null && key !== turnKey(actor)) return ui.notifications.warn(`${source.name}: ход уже закончился.`);
-    if (usedNow(actor, source, key) && (source.trigger.once ?? 'turn') === 'turn') return ui.notifications.warn(`${source.name}: уже использовано в этом ходу.`);
+    if (source.trigger.once !== 'none' && key !== null && key !== turnKey(actor)) return ui.notifications.warn(t('{name}: ход уже закончился.', { name: source.name }));
+    if (usedNow(actor, source, key) && (source.trigger.once ?? 'turn') === 'turn') return ui.notifications.warn(t('{name}: уже использовано в этом ходу.', { name: source.name }));
     offers.delete(id);
     if (button) button.disabled = true;
     await commitUse(actor, source, key);
@@ -407,31 +408,31 @@ async function offerReaction(message, local = null) {
     const { amount } = message;
     const { reduce, use } = source.trigger;
     const left = usesLeft(source.item);
-    const charges = left === null ? '' : ` Осталось зарядов: ${left}.`;
+    const charges = left === null ? '' : t(' Осталось зарядов: {left}.', { left });
 
     const ask = getPref(source).ask;
     // Навык, который просто используется реакцией (Блинк)
     if (use) {
-        if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Использовать «${source.name}» реакцией?${charges}</p>`)) return;
+        if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> ${t('получает {amount} урона.', { amount })}</p><p>${t('Использовать «{name}» реакцией?{charges}', { name: source.name, charges })}</p>`)) return;
         await source.item.use();
         return;
     }
 
     const formula = reduce.from === 'roll' ? activityOf(source.item)?.roll?.formula : reduce.formula;
-    const what = reduce.half ? `половину урона (${Math.floor(amount / 2)})` : shownFormula(formula, actor);
-    if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> получает ${amount} урона.</p><p>Реакцией уменьшить его на ${what}?${charges}</p>`)) return;
+    const what = reduce.half ? t('половину урона ({v})', { v: Math.floor(amount / 2) }) : shownFormula(formula, actor);
+    if (ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> ${t('получает {amount} урона.', { amount })}</p><p>${t('Реакцией уменьшить его на {what}?{charges}', { what, charges })}</p>`)) return;
 
     let restored;
     if (reduce.half) {
         restored = Math.floor(amount / 2);
         await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
-            content: `<strong>${source.name}:</strong> ${actor.name} перенаправляет ${restored} урона атакующему — примените его к атакующему.`
+            content: `<strong>${source.name}:</strong> ${t('{name} перенаправляет {restored} урона атакующему — примените его к атакующему.', { name: actor.name, restored })}`
         });
     } else {
         const roll = await new Roll(formula, actor.getRollData()).evaluate();
         restored = Math.min(roll.total, amount);
-        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${source.name}: урон уменьшен на ${restored}` });
+        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: t('{name}: урон уменьшен на {restored}', { name: source.name, restored }) });
     }
     await spendUse(source.item);
     if (restored > 0) await actor.applyDamage([{ value: restored, type: 'healing' }]);
@@ -461,17 +462,17 @@ async function offerTurnTriggers(actor, on) {
         if (use) {
             if (!hasUse(source.item)) continue;
             const drawback = source.item.flags?.[MODULE_ID]?.drawback_lifted ? null : source.item.flags?.[MODULE_ID]?.drawback;
-            const when = on === 'combat_start' ? 'Начало боя' : 'Начало хода';
-            const ok = !ask || await confirm(source.name, `<p>${when}: использовать «${source.name}»?</p>${drawback ? `<p><strong>Штраф:</strong> ${drawback}</p>` : ''}`);
+            const when = on === 'combat_start' ? t('Начало боя') : t('Начало хода');
+            const ok = !ask || await confirm(source.name, `<p>${t('{when}: использовать «{name}»?', { when, name: source.name })}</p>${drawback ? `<p><strong>${t('Штраф:')}</strong> ${drawback}</p>` : ''}`);
             if (ok) await source.item.use();
             continue;
         }
         if (pay) {
             const shown = shownFormula(pay.formula, actor);
-            const gain = advantage === 'attacks' ? ' Тогда до конца хода ваши броски атаки совершаются с преимуществом.' : '';
-            if (ask && !await confirm(source.name, `<p>${actor.name}: получить ${shown} урона (его нельзя уменьшить или предотвратить)?${gain}</p>`)) continue;
+            const gain = advantage === 'attacks' ? t(' Тогда до конца хода ваши броски атаки совершаются с преимуществом.') : '';
+            if (ask && !await confirm(source.name, `<p>${t('{name}: получить {shown} урона (его нельзя уменьшить или предотвратить)?{gain}', { name: actor.name, shown, gain })}</p>`)) continue;
             const roll = await new Roll(pay.formula, actor.getRollData()).evaluate();
-            await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${source.name}: плата` });
+            await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: t('{name}: плата', { name: source.name }) });
             // Число без типа: dnd5e применяет его без сопротивлений и иммунитетов
             await actor.applyDamage(roll.total);
             if (advantage === 'attacks') await actor.setFlag(MODULE_ID, 'advantage_turn', turnKey(actor) ?? FREE);
@@ -512,19 +513,19 @@ async function onZeroHp(actor) {
     for (const source of activeTriggers(actor, 'zero_hp')) {
         if (!reactionReady(source)) continue;
         const { revive, burst } = source.trigger;
-        if (getPref(source).ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> падает до 0 ПЗ.</p><p>Использовать «${source.name}»: остаться с 1 ПЗ и восстановить ${shownFormula(revive.formula, actor)}?</p>`)) continue;
+        if (getPref(source).ask && !await confirm(source.name, `<p><strong>${actor.name}</strong> ${t('падает до 0 ПЗ.')}</p><p>${t('Использовать «{name}»: остаться с 1 ПЗ и восстановить {v}?', { name: source.name, v: shownFormula(revive.formula, actor) })}</p>`)) continue;
         const roll = await new Roll(revive.formula, actor.getRollData()).evaluate();
         const hp = actor.system.attributes.hp;
         await spendUse(source.item);
         await actor.update({ 'system.attributes.hp.value': Math.min(hp.max, 1 + roll.total) });
-        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${source.name}: вместо падения до 0 ПЗ — 1 ПЗ и лечение` });
+        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: t('{name}: вместо падения до 0 ПЗ — 1 ПЗ и лечение', { name: source.name }) });
         if (burst) {
             const dc = (await new Roll(UNIVERSAL_DC_FORMULA, actor.getRollData()).evaluate()).total;
             const ability = CONFIG.DND5E?.abilities?.[burst.save]?.label ?? burst.save;
             const type = CONFIG.DND5E?.damageTypes?.[burst.type]?.label ?? burst.type;
             await ChatMessage.create({
                 speaker: ChatMessage.getSpeaker({ actor }),
-                content: `<strong>${source.name}:</strong> враги в пределах ${burst.radius} футов от ${actor.name} совершают спасбросок ${game.i18n.localize(ability)} Сл ${dc}: урон ${game.i18n.localize(type)} ${roll.total}, при успехе ${Math.floor(roll.total / 2)}.`
+                content: `<strong>${source.name}:</strong> ${t('враги в пределах {radius} футов от {name} совершают спасбросок {v} Сл {dc}: урон {v2} {total}, при успехе {v3}.', { radius: burst.radius, name: actor.name, v: game.i18n.localize(ability), dc, v2: game.i18n.localize(type), total: roll.total, v3: Math.floor(roll.total / 2) })}`
             });
         }
         return;
@@ -536,11 +537,11 @@ async function onKill(killer, victim) {
         if (!reactionReady(source)) continue;
         const cr = Number(victim.system.details?.cr ?? 0);
         if (cr < (source.trigger.min_cr ?? 0)) continue;
-        if (getPref(source).ask && !await confirm(source.name, `<p>${killer.name} убивает ${victim.name}.</p><p>Использовать «${source.name}»?</p>`)) continue;
+        if (getPref(source).ask && !await confirm(source.name, `<p>${t('{name} убивает {name2}.', { name: killer.name, name2: victim.name })}</p><p>${t('Использовать «{name}»?', { name: source.name })}</p>`)) continue;
         await spendUse(source.item);
         await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor: killer }),
-            content: `<strong>${source.name}:</strong> ${killer.name} убивает ${victim.name} и сразу получает одно дополнительное действие.`
+            content: `<strong>${source.name}:</strong> ${t('{name} убивает {name2} и сразу получает одно дополнительное действие.', { name: killer.name, name2: victim.name })}`
         });
     }
 }

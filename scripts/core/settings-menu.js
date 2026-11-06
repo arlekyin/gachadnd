@@ -8,6 +8,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { HINTS } from "./prefs.js";
+import { t } from "./i18n.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 const esc = text => foundry.utils.escapeHTML?.(String(text ?? '')) ?? String(text ?? '');
@@ -15,28 +16,28 @@ const esc = text => foundry.utils.escapeHTML?.(String(text ?? '')) ?? String(tex
 /** Группы подменю: ключи настроек по порядку */
 export const MENUS = {
     economyMenu: {
-        label: 'Экономика забега', icon: 'fas fa-coins', restricted: true,
-        hint: 'Золото, цены Магазина, кровь Погибели, компендиумы товаров.',
+        label: t('Экономика забега'), icon: 'fas fa-coins', restricted: true,
+        hint: t('Золото, цены Магазина, кровь Погибели, компендиумы товаров.'),
         keys: ['goldBase', 'goldGrowth', 'crystalPrices', 'cleansePrice', 'rerollPrice', 'doomHorseBlood', 'doomCurseBlood', 'shopConsumables', 'shopMagicItems']
     },
     soundsMenu: {
-        label: 'Звуки и эффекты', icon: 'fas fa-volume-high', restricted: false,
-        hint: 'Звуки Терминала и их файлы, звук импакт-кадров, тема героя, замедление кадров, звуки паутины, фон арены.',
+        label: t('Звуки и эффекты'), icon: 'fas fa-volume-high', restricted: false,
+        hint: t('Звуки Терминала и их файлы, звук импакт-кадров, тема героя, замедление кадров, звуки паутины, фон арены.'),
         keys: ['soundsEnabled', 'soundsVolume', 'sound_equip', 'sound_unequip', 'sound_merge', 'impactSound', 'auraTheme', 'auraMusicVolume', 'impactSlow', 'webSounds', 'arenaAmbience', 'arenaAmbienceVolume']
     },
     hintsMenu: {
-        label: 'Подсказки Мастеру', icon: 'fas fa-ear-listen', restricted: true,
-        hint: 'Какие шёпоты и строки атмосферы присылать.',
+        label: t('Подсказки Мастеру'), icon: 'fas fa-ear-listen', restricted: true,
+        hint: t('Какие шёпоты и строки атмосферы присылать.'),
         keys: Object.keys(HINTS)
     },
     namesMenu: {
-        label: 'Свои названия навыков', icon: 'fas fa-signature', restricted: true,
-        hint: 'Вернуть столу любимые названия: «Название из модуля = Своё». Хранится в мире, с модулем не уходит.',
+        label: t('Свои названия навыков'), icon: 'fas fa-signature', restricted: true,
+        hint: t('Вернуть столу любимые названия: «Название из модуля = Своё». Хранится в мире, с модулем не уходит.'),
         keys: ['skillNames']
     },
     riskMenu: {
-        label: 'Испытания Риска', icon: 'fas fa-dice', restricted: true,
-        hint: 'Свой файл испытаний и только свои испытания.',
+        label: t('Испытания Риска'), icon: 'fas fa-dice', restricted: true,
+        hint: t('Свой файл испытаний и только свои испытания.'),
         keys: ['riskCustomFile', 'riskOnlyCustom']
     }
 };
@@ -62,7 +63,7 @@ function field(key) {
     } else if (type === 'Number') {
         input = `<input type="number" name="${name}" value="${esc(value)}" step="any">`;
     } else if (config.multiline) {
-        input = `<textarea name="${name}" rows="10" placeholder="Серия обычных ударов = Сайтама">${esc(value)}</textarea>`;
+        input = `<textarea name="${name}" rows="10" placeholder="${t('Серия обычных ударов = Сайтама')}">${esc(value)}</textarea>`;
     } else if (config.filePicker) {
         input = `<file-picker name="${name}" type="${config.filePicker === true ? 'any' : config.filePicker}" value="${esc(value)}"></file-picker>`;
     } else {
@@ -90,8 +91,8 @@ function menuClass(id, menu) {
 
         async _renderHTML() {
             const keys = this.constructor.visibleKeys();
-            return `<div class="gd-settings-body">${keys.map(field).join('') || '<p class="hint">Здесь нет настроек, доступных вам.</p>'}</div>
-                <footer class="form-footer"><button type="submit"><i class="fas fa-save"></i> Сохранить</button></footer>`;
+            return `<div class="gd-settings-body">${keys.map(field).join('') || t('<p class="hint">Здесь нет настроек, доступных вам.</p>')}</div>
+                <footer class="form-footer"><button type="submit"><i class="fas fa-save"></i> ${t('Сохранить')}</button></footer>`;
         }
 
         _replaceHTML(html, content) {
@@ -108,7 +109,7 @@ function menuClass(id, menu) {
                 if (type === 'Number') value = Number(value);
                 if (value !== game.settings.get(MODULE_ID, key)) await game.settings.set(MODULE_ID, key, value);
             }
-            ui.notifications.info(`${menu.label}: сохранено.`);
+            ui.notifications.info(t('{label}: сохранено.', { label: menu.label }));
         }
     };
 }

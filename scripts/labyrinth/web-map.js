@@ -13,6 +13,7 @@ import { scentThresholds, partyScent } from "./anchor.js";
 import { getSatiety } from "./devourer-state.js";
 import { getFloor } from "./economy.js";
 import { buildConnectedWeb, speedFor, advanceWeb as advance, WEB, BOSS_STAGES } from "./web-graph.js";
+import { t } from "../core/i18n.js";
 
 export { WEB, BOSS_STAGES, activeStages, moveDevourer, webStage, ticksToNextStage, webMoves, distance, devourerDistance, sealed, devourerLeaves, omenFor, nodeOf, isEaten, touchedSet, nextStepToward } from "./web-graph.js";
 
@@ -29,7 +30,7 @@ export function registerWebSettings() {
     Hooks.once('setup', apply);
     // Звуки паутины (web-sound.js) — у каждого свои; в подменю «Звуки и эффекты»
     game.settings.register(MODULE_ID, 'webSounds', {
-        name: 'Звуки паутины', hint: 'Гул астролябии, звон кристаллов, шаги фонаря и укусы Пожирателя на карте-паутине. Громкость — «Звуки интерфейса».',
+        name: t('Звуки паутины'), hint: t('Гул астролябии, звон кристаллов, шаги фонаря и укусы Пожирателя на карте-паутине. Громкость — «Звуки интерфейса».'),
         scope: 'client', config: false, type: Boolean, default: true
     });
 }

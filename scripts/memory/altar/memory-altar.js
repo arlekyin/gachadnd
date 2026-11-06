@@ -18,6 +18,7 @@
  */
 
 import { MODULE_ID } from "../../core/constants.js";
+import { tagsLabel } from "../../core/ids.js";
 import { keepPhase, softenToggles } from "../../core/anim-phase.js";
 import { isMemorySkill, naturalSlotCap } from "../synergy/synergy.js";
 import { getSynergyDictionary } from "../synergy/synergy-data.js";
@@ -32,14 +33,15 @@ import { StashWindow } from "../stash.js";
 import { MindPhysics } from "./mind-physics.js";
 import { AltarSynapses, ResonanceWeave } from "./altar-synapses.js";
 import { MindCore } from "./altar-core.js";
+import { t } from "../../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const RARITY = {
-    gray: { label: 'Серый', color: '#9d9d9d' },
-    green: { label: 'Зелёный', color: '#1eff00' },
-    blue: { label: 'Синий', color: '#0070dd' },
-    purple: { label: 'Фиолетовый', color: '#a335ee' }
+    gray: { label: t('Серый'), color: '#9d9d9d' },
+    green: { label: t('Зелёный'), color: '#1eff00' },
+    blue: { label: t('Синий'), color: '#0070dd' },
+    purple: { label: t('Фиолетовый'), color: '#a335ee' }
 };
 // Нити навыков в ядре — и красные, и оранжевые: в ритуалах они не участвуют, но в сознании есть
 const THREAD_COLORS = { ...Object.fromEntries(Object.entries(RARITY).map(([k, r]) => [k, r.color])), red: '#ff003c', orange: '#ff8000' };
@@ -79,10 +81,10 @@ function memoryCardHead(item, kind) {
     const crystal = kind === 'crystal';
     const max = flags.max_rank ?? 1;
     return {
-        kind: crystal ? `Кристалл · ${rarity.label.toLowerCase()}` : `Навык Памяти · ${rarity.label.toLowerCase()}${flags.is_active ? ' · экипирован' : ''}`,
+        kind: crystal ? t('Кристалл · {v}', { v: rarity.label.toLowerCase() }) : t('Навык Памяти · {v}{v2}', { v: rarity.label.toLowerCase(), v2: flags.is_active ? t(' · экипирован') : '' }),
         name: crystal ? currentSkillName(flags, item.name) : item.name,
         color: rarity.color,
-        rank: !crystal && (max > 1 || flags.stacking) ? `Ранг ${romanRank(flags.rank ?? 1)}${max > 1 ? ` из ${romanRank(max)}` : ''}` : '',
+        rank: !crystal && (max > 1 || flags.stacking) ? t('Ранг {v}{v2}', { v: romanRank(flags.rank ?? 1), v2: max > 1 ? t(' из {v}', { v: romanRank(max) }) : '' }) : '',
         tags: flags.tags ?? []
     };
 }
@@ -102,7 +104,7 @@ function crystalBanner(label, crystal, rarity) {
     const tags = flags.tags ?? [];
     return {
         label, title: currentSkillName(flags, crystal.name), color: RARITY[rarity]?.color ?? '#c9a75d',
-        sub: `${RARITY[rarity]?.label ?? ''} кристалл${tags.length ? ` · ${tags.join(', ')}` : ''}`
+        sub: t('{v} кристалл{v2}', { v: RARITY[rarity]?.label ?? '', v2: tags.length ? ` · ${tagsLabel(tags)}` : '' })
     };
 }
 
@@ -117,10 +119,10 @@ async function chat(actor, content) {
 
 // Ритуалы: порядок в дуге, подписи, глагол кнопки и цвет свечения сознания
 const RITUALS = {
-    merge: { name: 'Слияние', verb: 'Слить', icon: 'fa-link', glow: '#e8c26a', text: 'Повторный кристалл растворяется в навыке Памяти и повышает его ранг.' },
-    smelt: { name: 'Переплавка', verb: 'Переплавить', icon: 'fa-fire', glow: '#ff7a3c', text: '3 воспоминания одной редкости сливаются в случайный кристалл следующей редкости.' },
-    resonate: { name: 'Резонанс', verb: 'Настроить', icon: 'fa-wave-square', glow: '#b066ff', text: 'Кристалл перестраивается на частоту выбранного тега — той же редкости.' },
-    split: { name: 'Расщепление', verb: 'Отпустить', icon: 'fa-wind', glow: '#5fe0b8', text: 'Кристалл рассеивается в туман и возвращает телу Кости Хитов.' }
+    merge: { name: t('Слияние'), verb: t('Слить'), icon: 'fa-link', glow: '#e8c26a', text: t('Повторный кристалл растворяется в навыке Памяти и повышает его ранг.') },
+    smelt: { name: t('Переплавка'), verb: t('Переплавить'), icon: 'fa-fire', glow: '#ff7a3c', text: t('3 воспоминания одной редкости сливаются в случайный кристалл следующей редкости.') },
+    resonate: { name: t('Резонанс'), verb: t('Настроить'), icon: 'fa-wave-square', glow: '#b066ff', text: t('Кристалл перестраивается на частоту выбранного тега — той же редкости.') },
+    split: { name: t('Расщепление'), verb: t('Отпустить'), icon: 'fa-wind', glow: '#5fe0b8', text: t('Кристалл рассеивается в туман и возвращает телу Кости Хитов.') }
 };
 
 // Геометрия сознания в процентах поля: ядро, орбита Памяти, точки фокуса
@@ -346,7 +348,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-memory-altar'],
         tag: 'div',
-        window: { title: 'Алтарь Памяти', icon: 'fas fa-campground', resizable: false },
+        window: { title: t('Алтарь Памяти'), icon: 'fas fa-campground', resizable: false },
         actions: {
             ritual: MemoryAltar.#onRitual,
             tag: MemoryAltar.#onTag,
@@ -367,16 +369,16 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
 
     static open(actor) {
         actor ??= game.user.character ?? canvas.tokens?.controlled[0]?.actor;
-        if (!actor) return ui.notifications.warn('Выберите своего персонажа.');
-        if (!actor.isOwner) return ui.notifications.warn('Алтарь открывается только для своего персонажа.');
-        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn('Алтарь Памяти доступен только в Якоре.');
+        if (!actor) return ui.notifications.warn(t('Выберите своего персонажа.'));
+        if (!actor.isOwner) return ui.notifications.warn(t('Алтарь открывается только для своего персонажа.'));
+        if (!isAtRest() && !game.user.isGM) return ui.notifications.warn(t('Алтарь Памяти доступен только в Якоре.'));
         const existing = foundry.applications.instances?.get(`gachadnd-memory-altar-${actor.id}`);
         if (existing) return existing.render({ force: true });
         return new MemoryAltar(actor, { position: MemoryAltar.#fullscreen() }).render({ force: true });
     }
 
     get title() {
-        return `Алтарь Памяти — ${this.actor.name}`;
+        return t('Алтарь Памяти — {name}', { name: this.actor.name });
     }
 
     // Ингредиенты, подходящие выбранному ритуалу
@@ -399,28 +401,28 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         const hd = availableHitDice(this.actor);
         if (this.ritual === 'merge') {
             const item = this.actor.items.get(this.mergeId);
-            if (!item) return { ready: false, note: 'Выберите навык Памяти, для которого в инвентаре есть повторный кристалл.' };
+            if (!item) return { ready: false, note: t('Выберите навык Памяти, для которого в инвентаре есть повторный кристалл.') };
             const next = (item.flags[MODULE_ID].rank ?? 1) + 1;
             const cost = FORGE_COST[next] ?? 2;
-            return { ready: hd >= cost, cost, note: `${item.name} → ранг ${romanRank(next)}`, short: hd < cost ? 'Не хватает Костей Хитов' : null };
+            return { ready: hd >= cost, cost, note: t('{name} → ранг {v}', { name: item.name, v: romanRank(next) }), short: hd < cost ? t('Не хватает Костей Хитов') : null };
         }
         if (this.ritual === 'smelt') {
             const rarity = slotted[0]?.rarity;
             const weight = slotted.reduce((sum, i) => sum + i.weight, 0);
-            if (!rarity) return { ready: false, note: 'Притяните из тумана 3 воспоминания одной редкости.' };
-            if (slotted.some(i => i.rarity !== rarity)) return { ready: false, note: 'Все воспоминания в фокусе должны быть одной редкости.' };
+            if (!rarity) return { ready: false, note: t('Притяните из тумана 3 воспоминания одной редкости.') };
+            if (slotted.some(i => i.rarity !== rarity)) return { ready: false, note: t('Все воспоминания в фокусе должны быть одной редкости.') };
             const smelt = SMELT[rarity];
-            if (weight < 3) return { ready: false, cost: smelt.cost, note: `Ещё ${3 - weight} — нужно 3 кристалла редкости «${RARITY[rarity].label}».` };
-            return { ready: hd >= smelt.cost, cost: smelt.cost, note: `Случайный кристалл редкости «${RARITY[smelt.to].label}»`, short: hd < smelt.cost ? 'Не хватает Костей Хитов' : null };
+            if (weight < 3) return { ready: false, cost: smelt.cost, note: t('Ещё {v} — нужно 3 кристалла редкости «{label}».', { v: 3 - weight, label: RARITY[rarity].label }) };
+            return { ready: hd >= smelt.cost, cost: smelt.cost, note: t('Случайный кристалл редкости «{label}»', { label: RARITY[smelt.to].label }), short: hd < smelt.cost ? t('Не хватает Костей Хитов') : null };
         }
         if (this.ritual === 'resonate') {
             const ing = slotted[0];
-            if (!ing) return { ready: false, cost: RESONANCE_COST, note: 'Притяните из тумана одно воспоминание и выберите тег.' };
-            return { ready: hd >= RESONANCE_COST, cost: RESONANCE_COST, note: `Случайный кристалл редкости «${RARITY[ing.rarity].label}» с тегом «${this.tag}»`, short: hd < RESONANCE_COST ? 'Не хватает Костей Хитов' : null };
+            if (!ing) return { ready: false, cost: RESONANCE_COST, note: t('Притяните из тумана одно воспоминание и выберите тег.') };
+            return { ready: hd >= RESONANCE_COST, cost: RESONANCE_COST, note: t('Случайный кристалл редкости «{label}» с тегом «{tag}»', { label: RARITY[ing.rarity].label, tag: this.tag }), short: hd < RESONANCE_COST ? t('Не хватает Костей Хитов') : null };
         }
         const ing = slotted[0];
-        if (!ing) return { ready: false, note: 'Притяните из тумана зелёное, синее или фиолетовое воспоминание.' };
-        return { ready: true, gain: SPLIT[ing.rarity], note: `Кости Хитов: +${SPLIT[ing.rarity]}` };
+        if (!ing) return { ready: false, note: t('Притяните из тумана зелёное, синее или фиолетовое воспоминание.') };
+        return { ready: true, gain: SPLIT[ing.rarity], note: t('Кости Хитов: +{v}', { v: SPLIT[ing.rarity] }) };
     }
 
     // Прогноз под ядром: что получится из того, что сейчас в фокусе
@@ -431,20 +433,20 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             const item = memory.find(i => i.id === this.mergeId);
             if (!item) return null;
             const rank = item.flags[MODULE_ID].rank ?? 1;
-            return { style, color: RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#e8c26a', text: `${item.name}: ранг ${romanRank(rank)} → ${romanRank(rank + 1)}` };
+            return { style, color: RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#e8c26a', text: t('{name}: ранг {v} → {v2}', { name: item.name, v: romanRank(rank), v2: romanRank(rank + 1) }) };
         }
         if (this.ritual === 'smelt') {
             const rarity = slotted[0]?.rarity;
             if (!rarity) return null;
             const weight = Math.min(3, slotted.reduce((sum, i) => sum + i.weight, 0));
-            if (slotted.some(i => i.rarity !== rarity)) return { style, color: '#ff8a7a', text: 'Редкости не совпадают' };
+            if (slotted.some(i => i.rarity !== rarity)) return { style, color: '#ff8a7a', text: t('Редкости не совпадают') };
             const to = SMELT[rarity]?.to;
-            return { style, color: RARITY[to]?.color, text: `→ ${RARITY[to]?.label.toLowerCase()} кристалл`, sub: 'навык выпадет случайно', pips: [0, 1, 2].map(n => n < weight) };
+            return { style, color: RARITY[to]?.color, text: t('→ {v} кристалл', { v: RARITY[to]?.label.toLowerCase() }), sub: t('навык выпадет случайно'), pips: [0, 1, 2].map(n => n < weight) };
         }
         const ing = slotted[0];
         if (!ing) return null;
-        if (this.ritual === 'resonate') return { style, color: RARITY[ing.rarity].color, text: `→ ${RARITY[ing.rarity].label.toLowerCase()} кристалл`, sub: `тег «${this.tag}»` };
-        return { style, color: '#5fe0b8', text: `Кости Хитов ${hd} → ${Math.min(hdMax, hd + SPLIT[ing.rarity])}`, sub: 'кристалл рассеется в туман' };
+        if (this.ritual === 'resonate') return { style, color: RARITY[ing.rarity].color, text: t('→ {v} кристалл', { v: RARITY[ing.rarity].label.toLowerCase() }), sub: t('тег «{tag}»', { tag: this.tag }) };
+        return { style, color: '#5fe0b8', text: t('Кости Хитов {hd} → {v}', { hd, v: Math.min(hdMax, hd + SPLIT[ing.rarity]) }), sub: t('кристалл рассеется в туман') };
     }
 
     #slotLimit() {
@@ -461,7 +463,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             return this.#model();
         } catch (err) {
             console.error(`${MODULE_ID} | Алтарь Памяти:`, err);
-            ui.notifications.error('Алтарь Памяти: ошибка отрисовки, выбор сброшен. Подробности в консоли (F12).');
+            ui.notifications.error(t('Алтарь Памяти: ошибка отрисовки, выбор сброшен. Подробности в консоли (F12).'));
             Object.assign(this, { ritual: 'smelt', slots: [], mergeId: null, result: null });
             return this.#model();
         }
@@ -557,7 +559,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.#cards = new Map([
             ...fogItems.map(ing => [ing.key, {
                 ...memoryCard(ing.item, ing.kind),
-                note: ing.kind === 'skill' ? 'Навык из Памяти: бросьте в него повторный кристалл' : ''
+                note: ing.kind === 'skill' ? t('Навык из Памяти: бросьте в него повторный кристалл') : ''
             }]),
             ...equipped.map(item => [item.id, memoryCard(item, 'skill')])
         ]);
@@ -600,7 +602,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             core: { style: `${at(CORE)}; --heat: ${heat.toFixed(2)}` },
             ring: merge ? { filled: equipped.length, cap } : null,
             sockets: merge ? Array.from({ length: sockets - equipped.length }, (_, n) => ({ style: at(orbitAt(equipped.length + n)) })) : [],
-            cost: recipe.gain ? `+${recipe.gain} КХ` : recipe.cost ? `−${recipe.cost} КХ` : '',
+            cost: recipe.gain ? t('+{gain} КХ', { gain: recipe.gain }) : recipe.cost ? t('−{cost} КХ', { cost: recipe.cost }) : '',
             hd: { value: hdValue, max: hdMax, pips: Array.from({ length: hdMax }, (_, i) => i < hdValue) },
             // Баннер итога: продолжает с того же места при перерисовке, через 5 секунд исчезает
             result: this.result && Date.now() - this.result.at < BANNER_MS ? { ...this.result, delay: Date.now() - this.result.at } : null,
@@ -920,7 +922,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
             this.#pick(key);
             return true;
         }
-        if (target.type === 'tap' && el.classList.contains('dim')) ui.notifications.info('Это воспоминание не подходит выбранному ритуалу.');
+        if (target.type === 'tap' && el.classList.contains('dim')) ui.notifications.info(t('Это воспоминание не подходит выбранному ритуалу.'));
         return false;
     }
 
@@ -983,7 +985,7 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         this.mergeId = null;
         this.#flareId = item.id;
         const max = item.flags[MODULE_ID].max_rank ?? rank;
-        return { label: 'Слияние', title: item.name, sub: `Ранг ${romanRank(rank)} из ${romanRank(max)}`, color: RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#e8c26a' };
+        return { label: t('Слияние'), title: item.name, sub: t('Ранг {v} из {v2}', { v: romanRank(rank), v2: romanRank(max) }), color: RARITY[item.flags[MODULE_ID].rarity]?.color ?? '#e8c26a' };
     }
 
     async #smelt(slotted) {
@@ -999,12 +1001,12 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         }
         if (weight < 3) return null;
         const result = await randomCrystal(smelt.to);
-        if (!result) return ui.notifications.error('Не удалось получить кристалл: компендиум навыков недоступен.') && null;
-        if (!(await spendHitDice(this.actor, smelt.cost))) return ui.notifications.warn('Не хватает Костей Хитов.') && null;
+        if (!result) return ui.notifications.error(t('Не удалось получить кристалл: компендиум навыков недоступен.')) && null;
+        if (!(await spendHitDice(this.actor, smelt.cost))) return ui.notifications.warn(t('Не хватает Костей Хитов.')) && null;
         for (const ing of used) await spend(ing);
         await this.actor.createEmbeddedDocuments('Item', [result]);
-        await chat(this.actor, `<strong>Переплавка:</strong> ${used.map(i => esc(i.name)).join(', ')} → <strong>${esc(result.name)}</strong>`);
-        return crystalBanner('Переплавка', result, smelt.to);
+        await chat(this.actor, `<strong>${t('Переплавка:')}</strong> ${used.map(i => esc(i.name)).join(', ')} → <strong>${esc(result.name)}</strong>`);
+        return crystalBanner(t('Переплавка'), result, smelt.to);
     }
 
     async #resonate(slotted) {
@@ -1012,14 +1014,14 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!ing) return null;
         const result = await randomCrystalWithTag(ing.rarity, this.tag);
         if (!result) {
-            ui.notifications.warn(`Нет навыков редкости «${RARITY[ing.rarity].label}» с тегом «${this.tag}».`);
+            ui.notifications.warn(t('Нет навыков редкости «{label}» с тегом «{tag}».', { label: RARITY[ing.rarity].label, tag: this.tag }));
             return null;
         }
-        if (!(await spendHitDice(this.actor, RESONANCE_COST))) return ui.notifications.warn('Не хватает Костей Хитов.') && null;
+        if (!(await spendHitDice(this.actor, RESONANCE_COST))) return ui.notifications.warn(t('Не хватает Костей Хитов.')) && null;
         await spend(ing);
         await this.actor.createEmbeddedDocuments('Item', [result]);
-        await chat(this.actor, `<strong>Резонанс «${esc(this.tag)}»:</strong> ${esc(ing.name)} → <strong>${esc(result.name)}</strong>`);
-        return crystalBanner(`Резонанс · ${this.tag}`, result, ing.rarity);
+        await chat(this.actor, `<strong>${t('Резонанс «{v}»:', { v: esc(this.tag) })}</strong> ${esc(ing.name)} → <strong>${esc(result.name)}</strong>`);
+        return crystalBanner(t('Резонанс · {tag}', { tag: this.tag }), result, ing.rarity);
     }
 
     async #split(slotted) {
@@ -1028,14 +1030,14 @@ export class MemoryAltar extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!gain) return null;
         const spent = [...(this.actor.system.attributes?.hd?.classes ?? [])].reduce((sum, c) => sum + (c.system.hd?.spent ?? 0), 0);
         if (!spent) {
-            ui.notifications.warn('Все Кости Хитов и так на месте — расщеплять нечего.');
+            ui.notifications.warn(t('Все Кости Хитов и так на месте — расщеплять нечего.'));
             return null;
         }
         await spend(ing);
         const restored = await restoreHitDice(this.actor, gain);
-        await chat(this.actor, `<strong>Расщепление:</strong> ${esc(ing.name)} → +${restored} КХ`);
+        await chat(this.actor, `<strong>${t('Расщепление:')}</strong> ${t('{v} → +{restored} КХ', { v: esc(ing.name), restored })}`);
         const hd = availableHitDice(this.actor);
-        return { label: 'Расщепление', title: `Кости Хитов +${restored}`, sub: `${ing.name} рассеялся в тумане · Кости Хитов ${hd}`, color: '#5fe0b8' };
+        return { label: t('Расщепление'), title: t('Кости Хитов +{restored}', { restored }), sub: t('{name} рассеялся в тумане · Кости Хитов {hd}', { name: ing.name, hd }), color: '#5fe0b8' };
     }
 }
 

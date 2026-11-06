@@ -13,6 +13,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { knackSkill, hpOf, alive, adjacent, sourceOf, card, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const pending = new WeakMap();
 
@@ -37,8 +38,8 @@ async function offer(victim, { source, over }) {
     const sourceToken = source.getActiveTokens()[0]?.document;
     const next = token ? adjacent(token).filter(t => alive(t.actor) && t.id !== sourceToken?.id) : [];
     const buttons = next.map(t => `<button type="button" class="gd-knack-btn" data-gd-through="${t.id}"><i class="fas fa-arrow-right"></i> ${esc(t.name)}</button>`).join('');
-    return card(source, 'Навылет', `<p>${esc(victim.name)} пал — лишний урон: <strong>${over}</strong>.</p>`
-        + (next.length ? `<p>Кому достанется остаток:</p><div class="gd-knack-buttons">${buttons}</div>` : '<p>Рядом с убитым никого — остаток ушёл в пустоту.</p>'),
+    return card(source, t('Навылет'), `<p>${t('{v} пал — лишний урон:', { v: esc(victim.name) })} <strong>${over}</strong>.</p>`
+        + (next.length ? `<p>${t('Кому достанется остаток:')}</p><div class="gd-knack-buttons">${buttons}</div>` : t('<p>Рядом с убитым никого — остаток ушёл в пустоту.</p>')),
         { icon: 'fa-arrows-to-dot', flags: { through: { over, sceneId: token?.parent?.id ?? null, sourceId: source.id, done: !next.length } } });
 }
 
@@ -71,6 +72,6 @@ export async function pass({ messageId, tokenId }) {
     const before = hpOf(target.actor);
     await target.actor.applyDamage(data.over, { gachadndThrough: true });
     const lost = before - hpOf(target.actor);
-    const content = message.content.replace(/<div class="gd-knack-buttons">[\s\S]*?<\/div>/, `<p>Остаток прошёл навылет: <strong>${esc(target.name)}</strong> −${lost}.</p>`);
+    const content = message.content.replace(/<div class="gd-knack-buttons">[\s\S]*?<\/div>/, `<p>${t('Остаток прошёл навылет:')} <strong>${esc(target.name)}</strong> −${lost}.</p>`);
     await message.update({ content, [`flags.${MODULE_ID}.through.done`]: true });
 }

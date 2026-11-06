@@ -9,6 +9,7 @@
  */
 
 import { livingSkill, counterOf, setCounter } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const KIND = 'third';
 const READY = 2;
@@ -21,7 +22,7 @@ function boost(actor, config) {
     if (!skill || counterOf(skill) < READY) return;
     config.advantage = true;
     boosted.add(actor.id);
-    ui.notifications.info(`${skill.name}: преимущество на этот бросок.`);
+    ui.notifications.info(t('{name}: преимущество на этот бросок.', { name: skill.name }));
 }
 for (const hook of ['dnd5e.preRollSkillV2', 'dnd5e.preRollToolCheckV2', 'dnd5e.preRollAbilityCheckV2', 'dnd5e.preRollSavingThrowV2']) {
     Hooks.on(hook, config => boost(config?.subject, config));

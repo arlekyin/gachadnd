@@ -20,13 +20,15 @@ import { MODULE_ID } from "../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { COLORS, ENEMIES_TO_BLAST, findGroup, shapeCells } from "./tetris-pieces.js";
 import { TetrisPanel, queueOf, advanceQueue } from "./tetris-panel.js";
+import { t } from "../../core/i18n.js";
+import { tileData } from "../../core/tiles.js";
 
 export const BLOCK_SRC = `modules/${MODULE_ID}/assets/tetris/block.svg`;
 const isTetris = item => !!item?.flags?.[MODULE_ID]?.tetris;
 
 export function openTetris(actor) {
     const skill = actor?.items.find(isTetris);
-    if (!skill) return ui.notifications.warn('У персонажа нет навыка «Догони меня... Кирпичи?».');
+    if (!skill) return ui.notifications.warn(t('У персонажа нет навыка «Догони меня... Кирпичи?».'));
     return TetrisPanel.open(actor, { item: skill });
 }
 
@@ -38,11 +40,11 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isTetris(item) || !item.actor) return;
     if (!canvas?.ready || !canvas.grid?.isSquare) {
-        ui.notifications.warn('Кирпичи ставятся только на сцену с квадратной сеткой.');
+        ui.notifications.warn(t('Кирпичи ставятся только на сцену с квадратной сеткой.'));
         return false;
     }
     if (!item.actor.getActiveTokens?.()[0]) {
-        ui.notifications.warn('Токена персонажа нет на сцене: фигуре не от кого отсчитывать дальность.');
+        ui.notifications.warn(t('Токена персонажа нет на сцене: фигуре не от кого отсчитывать дальность.'));
         return false;
     }
 });
@@ -172,7 +174,7 @@ async function placeFigure(actor, item, range) {
         const spent = Number(item.system.uses?.spent ?? 0);
         if (spent > 0) await item.update({ 'system.uses.spent': spent - 1 });
         panel.render();
-        ui.notifications.info('Кирпичи отменены, заряд возвращён.');
+        ui.notifications.info(t('Кирпичи отменены, заряд возвращён.'));
     };
     const onKey = event => {
         if (event.target?.closest?.('input, textarea, [contenteditable]')) return;
@@ -182,7 +184,7 @@ async function placeFigure(actor, item, range) {
     const onConfirm = async event => {
         if (event.button === 2 || (event.data?.button ?? 0) === 2) return;
         event.stopPropagation();
-        if (!ok) return ui.notifications.warn(`Сюда нельзя: центр фигуры — не дальше ${range} футов, клетки — свободны от существ и блоков.`);
+        if (!ok) return ui.notifications.warn(t('Сюда нельзя: центр фигуры — не дальше {range} футов, клетки — свободны от существ и блоков.', { range }));
         finish();
         requestGM('tetrisDrop', { actorId: actor.id, sceneId: canvas.scene.id, type, cells: current.map(c => ({ x: c.x, y: c.y })) });
         await advanceQueue(actor);
@@ -193,7 +195,7 @@ async function placeFigure(actor, item, range) {
     canvas.app.view.oncontextmenu = cancel;
     canvas.app.view.onwheel = onWheel;
     document.addEventListener('keydown', onKey, true);
-    ui.notifications.info('Кирпичи: колесо или R — повернуть, клик — обрушить, правая кнопка или Esc — отмена.');
+    ui.notifications.info(t('Кирпичи: колесо или R — повернуть, клик — обрушить, правая кнопка или Esc — отмена.'));
 }
 
 // ==========================================
@@ -214,9 +216,9 @@ async function dropFigure({ actorId, sceneId, type, cells, userId }) {
     const before = fieldOf([...scene.tiles], [...scene.tokens], size, caster?.disposition ?? 1);
     const result = outcome(cells, before, size);
     // Клетки заняли, пока летел запрос
-    if (!result.free) return ui.notifications.warn('Кирпичи: клетки фигуры уже заняты — обрушение отменено.');
+    if (!result.free) return ui.notifications.warn(t('Кирпичи: клетки фигуры уже заняты — обрушение отменено.'));
 
-    await scene.createEmbeddedDocuments('Tile', cells.map(c => ({
+    await scene.createEmbeddedDocuments('Tile', cells.map(c => tileData({
         texture: { src: BLOCK_SRC, tint: COLORS[type] ?? '#ffffff' }, x: c.x, y: c.y, width: size, height: size,
         flags: { [MODULE_ID]: { tetris: actorId } }
     })));
@@ -225,7 +227,7 @@ async function dropFigure({ actorId, sceneId, type, cells, userId }) {
         const text = ids.map(id => scene.tokens.get(id)?.name ?? '?').join(', ');
         return foundry.utils.escapeHTML?.(text) ?? text;
     };
-    let content = '<strong>Кирпичи</strong> — фигура обрушилась.';
+    let content = t('<strong>Кирпичи</strong> — фигура обрушилась.');
     if (result.blast) {
         // Детонация: блоки группы исчезают, враги в ней — цели
         // Вспыхивают блоки и враги группы; союзник в ней только связывал и не горит
@@ -238,9 +240,9 @@ async function dropFigure({ actorId, sceneId, type, cells, userId }) {
         if (ids.length) await scene.deleteEmbeddedDocuments('Tile', ids);
         if (userId === game.user.id) game.user.updateTokenTargets?.(result.victims);
         else emit('tetrisTargets', { userId, ids: result.victims });
-        content += `<br><strong>Детонация!</strong> Сгорело блоков: ${ids.length}. В группе: ${names(result.victims)} — цели спасброска Ловкости по карточке навыка.`;
+        content += `<br><strong>${t('Детонация!')}</strong> ${t('Сгорело блоков: {length}. В группе: {v} — цели спасброска Ловкости по карточке навыка.', { length: ids.length, v: names(result.victims) })}`;
     } else if (result.victims.length) {
-        content += `<br>Сцеплен ${names(result.victims)} — нужен ещё хотя бы один враг в группе.`;
+        content += `<br>${t('Сцеплен {v} — нужен ещё хотя бы один враг в группе.', { v: names(result.victims) })}`;
     }
     await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-tetris-card">${content}</div>` });
 }

@@ -13,13 +13,14 @@
 import { MODULE_ID } from "../core/constants.js";
 import { stageFilter } from "../cutscene/stage.js";
 import { fxCalm } from "../core/prefs.js";
+import { t } from "../core/i18n.js";
 
 export const OMEN_STAGES = {
-    off: { label: 'Нет', frost: 0, tint: 0, fog: 0, blur: 0 },
-    3: { label: '3', frost: 0.45, tint: 0, fog: 0, blur: 0, text: 'Лёгкий холод касается пальцев и покалывает кончики.' },
-    2: { label: '2', frost: 0.85, tint: 0.12, fog: 0, blur: 0, text: 'Холод пробирает сильнее. В воздухе — запах гнили и металла.' },
-    1: { label: '1', frost: 0.85, tint: 0.75, fog: 0.15, blur: 0, text: 'Цвета уходят из мира. Всё вокруг — мёртвая бирюза, как свет со дна.' },
-    here: { label: 'Здесь', frost: 0.3, tint: 0.75, fog: 1, blur: 1, text: 'Ткань узла рвётся. Из тумана по краям мира выходит Пожиратель.' }
+    off: { label: t('Нет'), frost: 0, tint: 0, fog: 0, blur: 0 },
+    3: { label: '3', frost: 0.45, tint: 0, fog: 0, blur: 0, text: t('Лёгкий холод касается пальцев и покалывает кончики.') },
+    2: { label: '2', frost: 0.85, tint: 0.12, fog: 0, blur: 0, text: t('Холод пробирает сильнее. В воздухе — запах гнили и металла.') },
+    1: { label: '1', frost: 0.85, tint: 0.75, fog: 0.15, blur: 0, text: t('Цвета уходят из мира. Всё вокруг — мёртвая бирюза, как свет со дна.') },
+    here: { label: t('Здесь'), frost: 0.3, tint: 0.75, fog: 1, blur: 1, text: t('Ткань узла рвётся. Из тумана по краям мира выходит Пожиратель.') }
 };
 const ORDER = ['off', '3', '2', '1', 'here'];
 const FADE_MS = 2500;
@@ -138,13 +139,13 @@ export function getOmen() {
 
 /** Мастер ставит стадию: 'off', '3', '2', '1', 'here'. Игрокам — строка ощущений в чат */
 export async function setOmen(stage) {
-    if (!game.user.isGM) return ui.notifications.warn('Предвестия Пожирателя ставит Мастер.');
+    if (!game.user.isGM) return ui.notifications.warn(t('Предвестия Пожирателя ставит Мастер.'));
     stage = String(stage);
     if (!OMEN_STAGES[stage] || stage === getOmen()) return;
     await game.settings.set(MODULE_ID, 'devourerOmen', stage);
     const text = OMEN_STAGES[stage].text;
     if (text) await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Туман' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Туман') }),
         content: `<div class="gd-scent-chat gd-omen-chat"><i class="fas fa-snowflake"></i> <em>${text}</em></div>`
     });
 }

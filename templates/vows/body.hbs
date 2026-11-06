@@ -1,0 +1,43 @@
+<div class="gd-vows">
+    {{#if active}}
+    <p class="gd-vows-lead">{{t "Чем больше обетов вы примете, тем больше получите за победу. Отмечать может каждый."}}</p>
+    <div class="gd-vows-groups">
+        {{#each groups}}
+        <section class="gd-vows-group">
+            <h3><i class="fas {{icon}}"></i> {{label}}</h3>
+            {{#each vows}}
+            <div class="gd-vow {{#if on}}on{{/if}}">
+                <button type="button" class="gd-vow-main" data-action="toggle" data-id="{{id}}" aria-pressed="{{#if on}}true{{else}}false{{/if}}">
+                    <i class="gd-vow-icon fas {{icon}}"></i>
+                    <span class="gd-vow-text"><strong>{{name}}</strong><small>{{text}}</small></span>
+                    <span class="gd-vow-pips" title="{{t 'Вес {v}' v=weight}}">{{#each pips}}<b></b>{{/each}}</span>
+                </button>
+                {{#if ../../isGM}}<button type="button" class="gd-vow-swap" data-action="reroll" data-id="{{id}}" title="{{t 'Заменить другим обетом'}}"><i class="fas fa-rotate"></i></button>{{/if}}
+            </div>
+            {{/each}}
+        </section>
+        {{/each}}
+    </div>
+    <div class="gd-vows-reward">
+        <ol class="gd-vows-ladder">
+            {{#each ladder}}<li class="{{#if reached}}reached{{/if}} {{#if on}}on{{/if}}">{{min}}</li>{{/each}}
+        </ol>
+        <div class="gd-vows-now">
+            <strong>{{t "Вес {v}" v=weight}}</strong> · {{t "за победу: {v}" v=reward}}
+            {{#if next}}<small>{{next}}</small>{{/if}}
+        </div>
+    </div>
+    <footer class="gd-vows-foot">
+        <ul class="gd-vows-party">
+            {{#each players}}<li class="{{#if ready}}ready{{/if}}" title="{{name}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if ready}}<i class="fas fa-check"></i>{{/if}}</li>{{/each}}
+        </ul>
+        {{#if isGM}}
+        <button type="button" class="gd-vows-seal {{#if allReady}}lit{{/if}}" data-action="seal"><i class="fas fa-dragon"></i> {{#if weight}}{{t "В бой"}}{{else}}{{t "В бой без обетов"}}{{/if}}</button>
+        {{else}}
+        <button type="button" class="gd-vows-ready {{#if mineReady}}on{{/if}}" data-action="ready"><i class="fas fa-check"></i> {{#if mineReady}}{{t "Готовы — ждём Мастера"}}{{else}}{{t "Готовы"}}{{/if}}</button>
+        {{/if}}
+    </footer>
+    {{else}}
+    <p class="gd-draft-empty">{{t "Обеты не выбираются."}}</p>
+    {{/if}}
+</div>

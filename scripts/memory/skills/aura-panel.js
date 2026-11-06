@@ -11,6 +11,7 @@
 import { MODULE_ID } from "../../core/constants.js";
 import { MAX, FINALE, TIERS, DEBTS, PRICES, isAura, auraOf, poseOf, canPose, declarePose, cancelPose, requestStart, adjust } from "./aura.js";
 import { refresh } from "./aura-fx.js";
+import { t } from "../../core/i18n.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 const esc = text => foundry.utils.escapeHTML?.(String(text ?? '')) ?? String(text ?? '');
@@ -19,7 +20,7 @@ export class AuraPanel extends ApplicationV2 {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-aura'],
         tag: 'div',
-        window: { title: 'Счётчик ауры', icon: 'fas fa-crown', resizable: false },
+        window: { title: t('Счётчик ауры'), icon: 'fas fa-crown', resizable: false },
         position: { width: 340, height: 'auto' }
     };
 
@@ -35,7 +36,7 @@ export class AuraPanel extends ApplicationV2 {
             return app;
         } catch (error) {
             console.error(`${MODULE_ID} | Аура: панель не открылась`, error);
-            ui.notifications.error(`Счётчик ауры: панель не открылась — ${error?.message ?? error}. Подробности в консоли (F12).`);
+            ui.notifications.error(t('Счётчик ауры: панель не открылась — {v}. Подробности в консоли (F12).', { v: error?.message ?? error }));
             return null;
         }
     }
@@ -46,7 +47,7 @@ export class AuraPanel extends ApplicationV2 {
     }
 
     get title() {
-        return `Счётчик ауры — ${this.actor.name}`;
+        return t('Счётчик ауры — {name}', { name: this.actor.name });
     }
 
     async _renderHTML() {
@@ -57,25 +58,25 @@ export class AuraPanel extends ApplicationV2 {
         const tiers = TIERS.map(t => `<li class="${value >= t.at ? 'on' : ''}"><b>${t.at}</b> <strong>${t.name}.</strong> ${t.text}</li>`).join('');
         const debts = DEBTS.map(t => `<li class="${value <= t.at ? 'on debt' : ''}"><b>${t.at}</b> <strong>${t.name}.</strong> ${t.text}</li>`).join('');
         if (!aura) {
-            return `<div class="gd-aura"><div class="gd-aura-gems off">${gems}</div><p class="gd-aura-note">Аура не горит. Используйте навык в бою, чтобы включить её.</p><ul class="gd-aura-tiers">${tiers}${debts}</ul></div>`;
+            return `<div class="gd-aura"><div class="gd-aura-gems off">${gems}</div><p class="gd-aura-note">${t('Аура не горит. Используйте навык в бою, чтобы включить её.')}</p><ul class="gd-aura-tiers">${tiers}${debts}</ul></div>`;
         }
         const pose = poseOf(this.actor);
         const ready = pose?.status === 'ready';
         const blocked = canPose(this.actor);
         const poseLine = ready
-            ? `<p class="gd-aura-pose">Поза: <strong>${PRICES[pose.price]?.label}</strong> — ждёт ближайшего броска к20. <button type="button" data-action="cancel">Отменить</button></p>`
-            : `<button type="button" class="gd-aura-pose-btn" data-action="pose" ${blocked ? 'disabled' : ''}><i class="fas fa-star"></i> Позёрство</button>${blocked ? `<p class="gd-aura-note">${esc(blocked)}</p>` : ''}`;
+            ? `<p class="gd-aura-pose">${t('Поза:')} <strong>${PRICES[pose.price]?.label}</strong> ${t('— ждёт ближайшего броска к20.')} <button type="button" data-action="cancel">${t('Отменить')}</button></p>`
+            : `<button type="button" class="gd-aura-pose-btn" data-action="pose" ${blocked ? 'disabled' : ''}><i class="fas fa-star"></i> ${t('Позёрство')}</button>${blocked ? `<p class="gd-aura-note">${esc(blocked)}</p>` : ''}`;
         const gm = game.user.isGM
-            ? `<div class="gd-aura-gm"><span>Мастер:</span><button type="button" data-action="minus">−1 аура</button><button type="button" data-action="plus">+1 аура</button></div>`
+            ? `<div class="gd-aura-gm"><span>${t('Мастер:')}</span><button type="button" data-action="minus">${t('−1 аура')}</button><button type="button" data-action="plus">${t('+1 аура')}</button></div>`
             : '';
         return `<div class="gd-aura ${debt ? 'debt' : ''}">
             <div class="gd-aura-head"><span class="gd-aura-value">${value < 0 ? `−${-value}` : value}<small>/${MAX}</small></span><div class="gd-aura-gems">${gems}</div></div>
-            ${debt ? `<p class="gd-aura-debt">Долг по ауре: ${-value}</p>` : ''}
-            <p class="gd-aura-note">${aura.gained ? 'С начала хода аура уже была — убывания не будет.' : 'С начала хода ауры не было: в начале следующего хода −1.'} Аура горит до конца боя.</p>
+            ${debt ? `<p class="gd-aura-debt">${t('Долг по ауре: {v}', { v: -value })}</p>` : ''}
+            <p class="gd-aura-note">${t('{v} Аура горит до конца боя.', { v: aura.gained ? t('С начала хода аура уже была — убывания не будет.') : t('С начала хода ауры не было: в начале следующего хода −1.') })}</p>
             ${poseLine}
             ${gm}
             <ul class="gd-aura-tiers">${tiers}${debts}</ul>
-            <p class="gd-aura-finale ${value >= FINALE ? 'on' : ''}"><strong>Не в этой арке</strong> — при уроне по вам с аурой ${FINALE}+ можно потратить всю ауру: урон не проходит, аура — 0.</p>
+            <p class="gd-aura-finale ${value >= FINALE ? 'on' : ''}"><strong>${t('Не в этой арке')}</strong> ${t('— при уроне по вам с аурой {FINALE}+ можно потратить всю ауру: урон не проходит, аура — 0.', { FINALE })}</p>
         </div>`;
     }
 
@@ -94,17 +95,17 @@ export async function poseDialog(actor) {
     if (reason) return ui.notifications.warn(reason);
     const prices = Object.entries(PRICES).map(([key, p], n) => `<label class="gd-aura-price-opt">
         <input type="radio" name="price" value="${key}" ${n === 0 ? 'checked' : ''}>
-        <strong>${p.label}</strong> — ${p.hint}<br><small>удалось: +${p.gain} аура${p.loss ? `, не удалось: −${p.loss}` : ', не удалось: без потерь'}</small></label>`).join('');
+        <strong>${p.label}</strong> — ${p.hint}<br><small>${t('удалось: +{gain} аура{v}', { gain: p.gain, v: p.loss ? t(', не удалось: −{loss}', { loss: p.loss }) : t(', не удалось: без потерь') })}</small></label>`).join('');
     const answer = await foundry.applications.api.DialogV2.prompt({
-        window: { title: `Позёрство — ${actor.name}` },
+        window: { title: t('Позёрство — {name}', { name: actor.name }) },
         content: `<div class="gd-aura-form">
-            <p>Как это выглядит?</p>
-            <textarea name="text" rows="2" placeholder="Не оборачиваясь, я…"></textarea>
+            <p>${t('Как это выглядит?')}</p>
+            <textarea name="text" rows="2" placeholder="${t('Не оборачиваясь, я…')}"></textarea>
             <div class="gd-aura-prices">${prices}</div>
-            <p class="gd-aura-note">Цена ляжет на ближайший бросок к20: атаку, проверку или спасбросок.</p>
+            <p class="gd-aura-note">${t('Цена ляжет на ближайший бросок к20: атаку, проверку или спасбросок.')}</p>
         </div>`,
         ok: {
-            label: 'Позёрство',
+            label: t('Позёрство'),
             callback: (event, button) => ({ text: button.form.elements.text.value, price: button.form.elements.price.value })
         },
         rejectClose: false
@@ -123,7 +124,7 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     }
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id)) {
-        ui.notifications.warn('Счётчик ауры включается только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Счётчик ауры включается только в бою, в котором участвует персонаж.'));
         return false;
     }
 });
@@ -158,7 +159,7 @@ Hooks.on('renderTokenHUD', (hud, html) => {
     if (!column || column.querySelector('.gd-aura-hud')) return;
     const button = document.createElement('div');
     button.className = 'control-icon gd-aura-hud';
-    button.dataset.tooltip = 'Аура: левый клик +1, правый −1, Shift — панель';
+    button.dataset.tooltip = t('Аура: левый клик +1, правый −1, Shift — панель');
     const label = () => { button.innerHTML = `<i class="fas fa-crown"></i><span>${auraOf(actor)?.value ?? 0}</span>`; };
     label();
     const act = (event, delta) => {

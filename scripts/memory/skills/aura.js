@@ -23,6 +23,7 @@ import { emit, onSocket, requestGM, isActiveGM } from "../../core/socket.js";
 import { onRenderChatMessage } from "../../core/chat-hooks.js";
 import { addTurnEffect } from "./turn-effects.js";
 import { saveCard } from "./blast/common.js";
+import { t } from "../../core/i18n.js";
 
 export const MAX = 5;
 export const MIN = -5;
@@ -32,22 +33,22 @@ const FEAR_FT = 15;
 const ASK_MS = 45000;
 
 export const TIERS = [
-    { at: 2, name: 'Уверенность', text: '+1 к броскам атаки и к проверкам Запугивания.' },
-    { at: 4, name: 'Давление', text: `Враги в ${PRESSURE_FT} футах от вас совершают спасброски с помехой.` },
-    { at: 5, name: 'Главный герой', text: `Враг, начинающий ход в ${FEAR_FT} футах от вас, совершает спасбросок Мудрости (Сл 8 + бонус мастерства + модификатор Харизмы); провал — испуган до конца своего хода.` }
+    { at: 2, name: t('Уверенность'), text: t('+1 к броскам атаки и к проверкам Запугивания.') },
+    { at: 4, name: t('Давление'), text: t('Враги в {PRESSURE_FT} футах от вас совершают спасброски с помехой.', { PRESSURE_FT }) },
+    { at: 5, name: t('Главный герой'), text: t('Враг, начинающий ход в {FEAR_FT} футах от вас, совершает спасбросок Мудрости (Сл 8 + бонус мастерства + модификатор Харизмы); провал — испуган до конца своего хода.', { FEAR_FT }) }
 ];
 /** Долг по ауре: дебафы от −2 */
 export const DEBTS = [
-    { at: -2, name: 'Кринж', text: '−1 к броскам атаки и проверкам Харизмы.' },
-    { at: -4, name: 'Позор', text: 'Ваши спасброски — с помехой.' },
-    { at: -5, name: 'Массовка', text: 'Атаки по вам совершаются с преимуществом.' }
+    { at: -2, name: t('Кринж'), text: t('−1 к броскам атаки и проверкам Харизмы.') },
+    { at: -4, name: t('Позор'), text: t('Ваши спасброски — с помехой.') },
+    { at: -5, name: t('Массовка'), text: t('Атаки по вам совершаются с преимуществом.') }
 ];
 
 export const PRICES = {
-    casual: { label: 'Небрежно', hint: 'помеха на бросок', dis: true, gain: 1, loss: 1 },
-    onehand: { label: 'Одной левой', hint: '−5 к броску', penalty: 5, gain: 1, loss: 1 },
-    open: { label: 'Открыться', hint: 'КД −2 до начала вашего следующего хода, бросок обычный', ac: 2, gain: 1, loss: 0 },
-    allin: { label: 'Ва-банк', hint: 'помеха и КД −2', dis: true, ac: 2, gain: 2, loss: 2 }
+    casual: { label: t('Небрежно'), hint: t('помеха на бросок'), dis: true, gain: 1, loss: 1 },
+    onehand: { label: t('Одной левой'), hint: t('−5 к броску'), penalty: 5, gain: 1, loss: 1 },
+    open: { label: t('Открыться'), hint: t('КД −2 до начала вашего следующего хода, бросок обычный'), ac: 2, gain: 1, loss: 0 },
+    allin: { label: t('Ва-банк'), hint: t('помеха и КД −2'), dis: true, ac: 2, gain: 2, loss: 2 }
 };
 
 const esc = text => foundry.utils.escapeHTML?.(String(text ?? '')) ?? String(text ?? '');
@@ -106,12 +107,12 @@ const save = (actor, state) => actor.update({ [`flags.${MODULE_ID}.aura`]: state
 const stamp = (delta, reason) => ({ delta, reason, at: Date.now() + Math.random() });
 
 async function gmStart(actor, combat) {
-    const state = { active: true, value: 1, gained: true, combatId: combat?.id ?? null, round: combat?.round ?? 0, last: stamp(1, 'Аура включена') };
+    const state = { active: true, value: 1, gained: true, combatId: combat?.id ?? null, round: combat?.round ?? 0, last: stamp(1, t('Аура включена')) };
     await save(actor, state);
     await syncTier(actor, state.value);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-aura-card"><div class="gd-aura-title"><i class="fas fa-crown"></i> Счётчик ауры включён</div><p>Аура: 1 из ${MAX}. Горит до конца боя; каждый ход без ауры стоит −1, ниже нуля — долг по ауре.</p></div>`
+        content: `<div class="gd-aura-card"><div class="gd-aura-title"><i class="fas fa-crown"></i> ${t('Счётчик ауры включён')}</div><p>${t('Аура: 1 из {MAX}. Горит до конца боя; каждый ход без ауры стоит −1, ниже нуля — долг по ауре.', { MAX })}</p></div>`
     });
 }
 
@@ -123,7 +124,7 @@ async function gmEnd(actor, reason) {
     if (poseOf(actor)) await actor.unsetFlag(MODULE_ID, 'auraPose');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-aura-card off"><div class="gd-aura-title"><i class="fas fa-crown"></i> Аура погасла</div><p>${esc(reason)}.</p></div>`
+        content: `<div class="gd-aura-card off"><div class="gd-aura-title"><i class="fas fa-crown"></i> ${t('Аура погасла')}</div><p>${esc(reason)}.</p></div>`
     });
 }
 
@@ -141,9 +142,9 @@ export async function gmChange(actor, delta, reason) {
 const attackBonus = value => ['mwak', 'rwak', 'msak', 'rsak'].map(k => ({ key: `system.bonuses.${k}.attack`, mode: 2, value }));
 // Пассивные эффекты по ауре: Уверенность (2+) и Кринж (−2 и ниже)
 const PASSIVE = {
-    auraTier: { on: v => v >= TIERS[0].at, name: 'Аура: Уверенность', img: 'icons/svg/aura.svg', text: TIERS[0].text,
+    auraTier: { on: v => v >= TIERS[0].at, name: t('Аура: Уверенность'), img: 'icons/svg/aura.svg', text: TIERS[0].text,
         changes: () => [...attackBonus('+1'), { key: 'system.skills.itm.bonuses.check', mode: 2, value: '+1' }] },
-    auraDebt: { on: v => v <= DEBTS[0].at, name: 'Долг по ауре: Кринж', img: 'icons/svg/downgrade.svg', text: DEBTS[0].text,
+    auraDebt: { on: v => v <= DEBTS[0].at, name: t('Долг по ауре: Кринж'), img: 'icons/svg/downgrade.svg', text: DEBTS[0].text,
         changes: () => [...attackBonus('-1'), { key: 'system.abilities.cha.bonuses.check', mode: 2, value: '-1' }] }
 };
 
@@ -179,9 +180,9 @@ onSocket('auraFinale', ({ payload }) => {
     if (!state) return;
     ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-aura-card finale"><div class="gd-aura-title"><i class="fas fa-crown"></i> Не в этой арке</div><p>${esc(actor.name)} тратит всю ауру (${state.value}) — урон ${payload.amount} не прошёл.</p></div>`
+        content: `<div class="gd-aura-card finale"><div class="gd-aura-title"><i class="fas fa-crown"></i> ${t('Не в этой арке')}</div><p>${t('{v} тратит всю ауру ({value}) — урон {amount} не прошёл.', { v: esc(actor.name), value: state.value, amount: payload.amount })}</p></div>`
     });
-    gmChange(actor, -state.value, 'Не в этой арке').catch(error => console.error(`${MODULE_ID} | Аура`, error));
+    gmChange(actor, -state.value, t('Не в этой арке')).catch(error => console.error(`${MODULE_ID} | Аура`, error));
 });
 
 export const requestStart = actor => requestGM('auraStart', ref(actor));
@@ -189,7 +190,7 @@ export const requestChange = (actor, delta, reason) => requestGM('auraChange', {
 /** Решение Мастера: ±1 */
 export function adjust(actor, delta) {
     if (!game.user.isGM || !auraOf(actor)) return;
-    return requestChange(actor, delta, 'Решение Мастера');
+    return requestChange(actor, delta, t('Решение Мастера'));
 }
 
 // ==========================================
@@ -202,8 +203,8 @@ Hooks.on('updateCombat', async (combat, changed) => {
     const actor = current?.actor;
     const state = auraOf(actor);
     if (state) {
-        if (state.combatId && state.combatId !== combat.id) await gmEnd(actor, 'Бой окончен');
-        else if (!state.gained) await gmChange(actor, -1, 'Ход без ауры');
+        if (state.combatId && state.combatId !== combat.id) await gmEnd(actor, t('Бой окончен'));
+        else if (!state.gained) await gmChange(actor, -1, t('Ход без ауры'));
         else await save(actor, { ...state, gained: false });
     }
     await fear(combat, current);
@@ -220,9 +221,9 @@ async function fear(combat, combatant) {
         const dc = 8 + (source.system?.attributes?.prof ?? 2) + (source.system?.abilities?.cha?.mod ?? 0);
         // Как у способностей dnd5e: враг бросает спасбросок сам (кнопка в карточке), испуг — на провале
         await saveCard({
-            actor: source, title: 'Главный герой', icon: 'fa-crown', tokens: [enemy.document], ability: 'wis', dc,
-            note: `${esc(enemy.name)} начинает ход рядом с главным героем. Провал — испуган до конца своего хода (модуль наложит сам).`,
-            onFail: { effect: { name: 'Испуган аурой', img: 'icons/svg/terror.svg', statuses: ['frightened'], description: `Аура ${source.name}: испуган до конца своего хода.` }, until: 'thisTurn' }
+            actor: source, title: t('Главный герой'), icon: 'fa-crown', tokens: [enemy.document], ability: 'wis', dc,
+            note: t('{v} начинает ход рядом с главным героем. Провал — испуган до конца своего хода (модуль наложит сам).', { v: esc(enemy.name) }),
+            onFail: { effect: { name: t('Испуган аурой'), img: 'icons/svg/terror.svg', statuses: ['frightened'], description: t('Аура {name}: испуган до конца своего хода.', { name: source.name }) }, until: 'thisTurn' }
         });
         return;
     }
@@ -243,7 +244,7 @@ Hooks.on('updateActor', (actor, changes) => {
     const hero = tokenOf(owner), victim = tokenOf(actor);
     if (!hero || !victim || !hostile(hero, victim)) return;
     killed.add(key);
-    gmChange(owner, 1, 'Добивание').catch(error => console.error(`${MODULE_ID} | Аура`, error));
+    gmChange(owner, 1, t('Добивание')).catch(error => console.error(`${MODULE_ID} | Аура`, error));
 });
 
 Hooks.on('deleteCombat', async combat => {
@@ -251,7 +252,7 @@ Hooks.on('deleteCombat', async combat => {
     if (!isActiveGM()) return;
     for (const combatant of combat.combatants) {
         const actor = combatant.actor;
-        if (auraOf(actor)) await gmEnd(actor, 'Бой окончен');
+        if (auraOf(actor)) await gmEnd(actor, t('Бой окончен'));
     }
 });
 
@@ -261,12 +262,12 @@ Hooks.on('deleteCombat', async combat => {
 
 /** Можно ли объявить позу: причина отказа или null */
 export function canPose(actor) {
-    if (!auraOf(actor)) return 'Аура не включена.';
+    if (!auraOf(actor)) return t('Аура не включена.');
     const combat = game.combat;
-    if (!combat?.started) return 'Позёрство — только в бою.';
+    if (!combat?.started) return t('Позёрство — только в бою.');
     const pose = poseOf(actor);
-    if (pose?.status === 'ready') return 'Поза уже объявлена — ждёт броска.';
-    if (pose && pose.combatId === combat.id && pose.round === combat.round) return 'В этом раунде поза уже была.';
+    if (pose?.status === 'ready') return t('Поза уже объявлена — ждёт броска.');
+    if (pose && pose.combatId === combat.id && pose.round === combat.round) return t('В этом раунде поза уже была.');
     return null;
 }
 
@@ -311,9 +312,9 @@ Hooks.on('dnd5e.preRollD20TestV2', (config) => {
         if (price.ac) {
             const combat = game.combat;
             addTurnEffect(actor, combat, {
-                name: `Позёрство: ${price.label}`, img: 'icons/svg/downgrade.svg',
+                name: t('Позёрство: {label}', { label: price.label }), img: 'icons/svg/downgrade.svg',
                 changes: [{ key: 'system.attributes.ac.bonus', mode: 2, value: `-${price.ac}` }],
-                description: `КД −${price.ac} до начала вашего следующего хода.`
+                description: t('КД −{ac} до начала вашего следующего хода.', { ac: price.ac })
             }, { until: 'nextStart', tokenId: tokenOf(actor)?.document?.id ?? null });
         }
     }
@@ -361,9 +362,9 @@ function poseCard(actor, pose, result) {
     const price = PRICES[pose.price];
     const text = pose.text ? `<blockquote>${esc(pose.text)}</blockquote>` : '';
     const line = result === null
-        ? '<p class="gd-aura-wait">Сложность броска неизвестна — итог за Мастером.</p><div class="gd-aura-buttons"><button type="button" data-aura-pose="win">Удалось</button><button type="button" data-aura-pose="fail">Не удалось</button></div>'
-        : `<p class="gd-aura-result ${result ? 'win' : 'fail'}">${result ? `Удалось: ${auraText(price.gain)}` : (price.loss ? `Не удалось: ${auraText(-price.loss)}` : 'Не удалось — но аура не упала')}</p>`;
-    return `<div class="gd-aura-card pose"><div class="gd-aura-title"><i class="fas fa-crown"></i> Позёрство — ${price.label}</div>${text}<p class="gd-aura-price">Цена: ${price.hint}.</p>${line}</div>`;
+        ? t('<p class="gd-aura-wait">Сложность броска неизвестна — итог за Мастером.</p><div class="gd-aura-buttons"><button type="button" data-aura-pose="win">Удалось</button><button type="button" data-aura-pose="fail">Не удалось</button></div>')
+        : `<p class="gd-aura-result ${result ? 'win' : 'fail'}">${result ? t('Удалось: {v}', { v: auraText(price.gain) }) : (price.loss ? t('Не удалось: {v}', { v: auraText(-price.loss) }) : t('Не удалось — но аура не упала'))}</p>`;
+    return `<div class="gd-aura-card pose"><div class="gd-aura-title"><i class="fas fa-crown"></i> ${t('Позёрство — {label}', { label: price.label })}</div>${text}<p class="gd-aura-price">${t('Цена: {hint}.', { hint: price.hint })}</p>${line}</div>`;
 }
 
 function onRoll(rolls, data, kind) {
@@ -381,12 +382,12 @@ function onRoll(rolls, data, kind) {
             content: poseCard(actor, pose, result),
             flags: { [MODULE_ID]: { auraPose: { ...ref(actor), price: pose.price, text: pose.text, resolved: result !== null } } }
         });
-        if (result === true) requestChange(actor, price.gain, `Позёрство: ${price.label}`);
-        else if (result === false && price.loss) requestChange(actor, -price.loss, `Позёрство не удалось: ${price.label}`);
+        if (result === true) requestChange(actor, price.gain, t('Позёрство: {label}', { label: price.label }));
+        else if (result === false && price.loss) requestChange(actor, -price.loss, t('Позёрство не удалось: {label}', { label: price.label }));
         return;
     }
-    if (kind === 'attack' && roll.isCritical) requestChange(actor, 1, 'Критическое попадание');
-    else if (roll.isFumble) requestChange(actor, -1, 'Натуральная 1');
+    if (kind === 'attack' && roll.isCritical) requestChange(actor, 1, t('Критическое попадание'));
+    else if (roll.isFumble) requestChange(actor, -1, t('Натуральная 1'));
 }
 
 // dnd5e 5.2: у атаки, навыка и инструмента — хук и его V2, у спасброска и проверки характеристики —
@@ -425,8 +426,8 @@ export async function resolvePoseCard(message, win) {
         content: poseCard(actor, { price: flag.price, text: flag.text }, win),
         [`flags.${MODULE_ID}.auraPose.resolved`]: true
     });
-    if (win) await gmChange(actor, price.gain, `Позёрство: ${price.label}`);
-    else if (price.loss) await gmChange(actor, -price.loss, `Позёрство не удалось: ${price.label}`);
+    if (win) await gmChange(actor, price.gain, t('Позёрство: {label}', { label: price.label }));
+    else if (price.loss) await gmChange(actor, -price.loss, t('Позёрство не удалось: {label}', { label: price.label }));
 }
 
 // ==========================================
@@ -483,9 +484,9 @@ function askFinale(actor, amount, value) {
 
 function finaleDialog(actor, amount, value) {
     return foundry.applications.api.DialogV2.confirm({
-        window: { title: `Не в этой арке — ${actor.name}` },
-        content: `<p>${esc(actor.name)} получает <strong>${amount}</strong> урона.</p><p>Потратить всю ауру (${value}), чтобы урон не прошёл? Навык погаснет.</p>`,
-        yes: { label: 'Не в этой арке' }, no: { label: 'Принять урон' },
+        window: { title: t('Не в этой арке — {name}', { name: actor.name }) },
+        content: `<p>${t('{v} получает', { v: esc(actor.name) })} <strong>${amount}</strong> ${t('урона.')}</p><p>${t('Потратить всю ауру ({value}), чтобы урон не прошёл? Навык погаснет.', { value })}</p>`,
+        yes: { label: t('Не в этой арке') }, no: { label: t('Принять урон') },
         rejectClose: false
     }).then(yes => !!yes).catch(() => false);
 }

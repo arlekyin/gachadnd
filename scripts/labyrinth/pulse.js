@@ -16,14 +16,15 @@ import { MODULE_ID } from "../core/constants.js";
 import { isActiveGM } from "../core/socket.js";
 import { hint as hintOn } from "../core/prefs.js";
 import { partyActors } from "./horsemen.js";
+import { t } from "../core/i18n.js";
 
-const STEPS = ['низкий', 'умеренный', 'высокий', 'высокий+', 'высокий++'];
+const STEPS = [t('низкий'), t('умеренный'), t('высокий'), t('высокий+'), t('высокий++')];
 // Базовая ступень узла: индекс в STEPS
 const BASE = { mob: 1, elite: 2, outpost: 2, boss: 3 };
 const RESULTS = {
-    easy: { label: 'легко', color: '#4fae5a' },
-    even: { label: 'ровно', color: '#8c8275' },
-    hard: { label: 'тяжело', color: '#c0392b' }
+    easy: { label: t('легко'), color: '#4fae5a' },
+    even: { label: t('ровно'), color: '#8c8275' },
+    hard: { label: t('тяжело'), color: '#c0392b' }
 };
 const EMPTY = { offset: 0, easyStreak: 0, last: null };
 
@@ -51,12 +52,12 @@ export function pulseView() {
     const last = pulse.last ? RESULTS[pulse.last.result] : null;
     const shift = pulse.offset > 0 ? `+${pulse.offset}` : String(pulse.offset);
     return {
-        last: last ? `${last.label}${pulse.easyStreak > 1 ? ` ×${pulse.easyStreak}` : ''}` : 'боёв не было',
+        last: last ? `${last.label}${pulse.easyStreak > 1 ? ` ×${pulse.easyStreak}` : ''}` : t('боёв не было'),
         color: last?.color ?? '#8c8275',
         offset: pulse.offset,
-        shift: pulse.offset ? `ступень ${shift}` : 'базовая ступень',
+        shift: pulse.offset ? t('ступень {shift}', { shift }) : t('базовая ступень'),
         mob: pulseStep('mob', pulse), elite: pulseStep('elite', pulse), boss: pulseStep('boss', pulse),
-        detail: pulse.last ? `Последний бой: ${pulse.last.rounds} р., минимум ПЗ ${Math.round(pulse.last.minHp * 100)} %, падений ${pulse.last.downs}` : ''
+        detail: pulse.last ? t('Последний бой: {rounds} р., минимум ПЗ {v} %, падений {downs}', { rounds: pulse.last.rounds, v: Math.round(pulse.last.minHp * 100), downs: pulse.last.downs }) : ''
     };
 }
 
@@ -90,6 +91,8 @@ Hooks.on('updateActor', async (actor, changes) => {
 
 Hooks.on('deleteCombat', async combat => {
     if (!isActiveGM() || !combat.started || (combat.round ?? 0) < 1) return;
+    // Бой под обетами трудный по выбору отряда: о силе отряда он не говорит
+    if (combat.getFlag(MODULE_ID, 'vows')?.ids?.length) return;
     const actors = combat.combatants.map(cb => cb.actor).filter(Boolean);
     const party = actors.filter(isParty);
     const hostile = combat.combatants.some(cb => cb.token?.disposition === CONST.TOKEN_DISPOSITIONS.HOSTILE);
@@ -117,9 +120,9 @@ Hooks.on('deleteCombat', async combat => {
     if (!hintOn('hintPulse')) return;
     const view = pulseView();
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Пульс отряда' }),
+        speaker: ChatMessage.getSpeaker({ alias: t('Пульс отряда') }),
         whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id),
-        content: `<div class="gd-scent-chat"><i class="fas fa-heart-pulse"></i> Бой — <strong style="color: ${RESULTS[result].color}">${RESULTS[result].label}</strong>: ${rounds} р., минимум ПЗ ${Math.round(minHp * 100)} %, падений ${downs}.<br>Следующий бой (${view.shift}): Монстры — ${view.mob}, Элита и Застава — ${view.elite}, Босс — ${view.boss}.</div>`
+        content: `<div class="gd-scent-chat"><i class="fas fa-heart-pulse"></i> ${t('Бой —')} <strong style="color: ${RESULTS[result].color}">${RESULTS[result].label}</strong>${t(': {rounds} р., минимум ПЗ {v} %, падений {downs}.', { rounds, v: Math.round(minHp * 100), downs })}<br>${t('Следующий бой ({shift}): Монстры — {mob}, Элита и Застава — {elite}, Босс — {boss}.', { shift: view.shift, mob: view.mob, elite: view.elite, boss: view.boss })}</div>`
     });
 });
 

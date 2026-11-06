@@ -8,6 +8,7 @@
  * из папки с тем же именем. Работает и в OfflineAudioContext — звук можно отрисовать в файл.
  */
 
+
 // Эффекты шины (только для синтеза): провал в тишину, тишина перед репликой
 export const FX = ['dip', 'hush'];
 
@@ -292,7 +293,7 @@ export function duckScene(level = 0.15, fadeIn = 250, fadeOut = 900) {
             for (const ps of playlist.sounds?.filter(s => s.playing) ?? []) if (ps.sound) sounds.push(ps.sound);
         }
         for (const ambient of globalThis.canvas?.sounds?.placeables ?? []) if (ambient.sound?.playing) sounds.push(ambient.sound);
-    } catch (error) { console.warn('gachadnd | приглушение звуков сцены', error); }
+    } catch (error) { console.warn(`gachadnd | приглушение звуков сцены`, error); }
     const ducked = sounds.map(sound => {
         const volume = sound.volume;
         try { sound.fade ? sound.fade(volume * level, { duration: fadeIn }) : (sound.volume = volume * level); } catch { /* звук уже остановлен */ }

@@ -76,7 +76,7 @@ let rippleCache = null;
 export function rippleFor(W, H) {
     if (rippleCache?.W !== W || rippleCache?.H !== H) {
         let renderer = null;
-        try { renderer = rippleRenderer(W, H); } catch (error) { console.warn('gachadnd | волны', error); }
+        try { renderer = rippleRenderer(W, H); } catch (error) { console.warn(`gachadnd | волны`, error); }
         rippleCache = { W, H, renderer };
     }
     return rippleCache.renderer;

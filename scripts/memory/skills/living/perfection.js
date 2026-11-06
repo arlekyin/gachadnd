@@ -16,16 +16,17 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { requestGM, onSocket, isActiveGM } from "../../../core/socket.js";
 import { isMemorySkill } from "../../synergy/synergy.js";
 import { livingSkill, note, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const KIND = 'perfection';
 export const STROKES = [
-    { id: 'strike', name: 'Удар', icon: 'fa-hand-fist', hint: 'атака оружием или безоружная', auto: true },
-    { id: 'spell', name: 'Чары', icon: 'fa-wand-sparkles', hint: 'заклинание или заговор', auto: true },
-    { id: 'memory', name: 'Память', icon: 'fa-brain', hint: 'навык Памяти или связка', auto: true },
-    { id: 'move', name: 'Манёвр', icon: 'fa-person-running', hint: 'Рывок, Отход или Уклонение' },
-    { id: 'help', name: 'Помощь', icon: 'fa-handshake-angle', hint: 'Помощь, лечение или защита союзника' },
-    { id: 'trick', name: 'Приём', icon: 'fa-hand-back-fist', hint: 'толчок, захват, обезоруживание, подножка' },
-    { id: 'prop', name: 'Окружение', icon: 'fa-flask', hint: 'предмет, зелье, бочка, рычаг, дверь' }
+    { id: 'strike', name: t('Удар'), icon: 'fa-hand-fist', hint: t('атака оружием или безоружная'), auto: true },
+    { id: 'spell', name: t('Чары'), icon: 'fa-wand-sparkles', hint: t('заклинание или заговор'), auto: true },
+    { id: 'memory', name: t('Память'), icon: 'fa-brain', hint: t('навык Памяти или связка'), auto: true },
+    { id: 'move', name: t('Манёвр'), icon: 'fa-person-running', hint: t('Рывок, Отход или Уклонение') },
+    { id: 'help', name: t('Помощь'), icon: 'fa-handshake-angle', hint: t('Помощь, лечение или защита союзника') },
+    { id: 'trick', name: t('Приём'), icon: 'fa-hand-back-fist', hint: t('толчок, захват, обезоруживание, подножка') },
+    { id: 'prop', name: t('Окружение'), icon: 'fa-flask', hint: t('предмет, зелье, бочка, рычаг, дверь') }
 ];
 export const ALMOST = 5;
 const ALL = STROKES.length;
@@ -66,10 +67,10 @@ async function gmLight(item, id, { on = true, by = 'auto' } = {}) {
     const next = [...strokes, id];
     const turnLit = isTurnOf(combat, actor) ? true : !!flags(item).turnLit;
     await save(item, { strokes: next, turnLit });
-    await note(actor, `${item.name}: ${stroke.name}`, `<p>Штрих ${next.length} из ${ALL}${by === 'gm' ? ' — отметил Мастер' : ''}.${next.length === ALMOST ? ' <strong>Почти</strong> — +1 к броскам атаки, проверкам и спасброскам.' : ''}</p>`, stroke.icon);
+    await note(actor, `${item.name}: ${stroke.name}`, `<p>${t('Штрих {length} из {ALL}{v}.{v2}', { length: next.length, ALL, v: by === 'gm' ? t(' — отметил Мастер') : '', v2: next.length === ALMOST ? t(' <strong>Почти</strong> — +1 к броскам атаки, проверкам и спасброскам.') : '' })}</p>`, stroke.icon);
     if (next.length >= ALL) {
         await save(item, { perfect: { combatId: combat.id, round: combat.round, combatantId: combat.combatant?.actor?.id === actor.id ? combat.combatant.id : null } });
-        await note(actor, 'Само совершенство', `<p>Все семь штрихов. До конца следующего хода ${esc(actor.name)} — к20 не ниже ${MIN_D20}. Потом огранка погаснет, и всё по новой.</p>`, 'fa-gem');
+        await note(actor, t('Само совершенство'), `<p>${t('Все семь штрихов. До конца следующего хода {v} — к20 не ниже {MIN_D20}. Потом огранка погаснет, и всё по новой.', { v: esc(actor.name), MIN_D20 })}</p>`, 'fa-gem');
     }
 }
 
@@ -98,9 +99,9 @@ async function applyAlmost(actor, item) {
     const effects = [...actor.effects].filter(e => e.flags?.[MODULE_ID]?.perfectionAlmost);
     if (on && !effects.length) {
         await actor.createEmbeddedDocuments('ActiveEffect', [{
-            name: 'Почти совершенство', img: 'icons/svg/aura.svg', showIcon: 2,
+            name: t('Почти совершенство'), img: 'icons/svg/aura.svg', showIcon: 2,
             changes: [...attackBonus('+1'), { key: 'system.bonuses.abilities.check', mode: 2, value: '+1' }, { key: 'system.bonuses.abilities.save', mode: 2, value: '+1' }],
-            description: '+1 к броскам атаки, проверкам и спасброскам.', flags: { [MODULE_ID]: { perfectionAlmost: true } }
+            description: t('+1 к броскам атаки, проверкам и спасброскам.'), flags: { [MODULE_ID]: { perfectionAlmost: true } }
         }]);
     } else if (!on && effects.length) {
         await actor.deleteEmbeddedDocuments('ActiveEffect', effects.map(e => e.id));
@@ -125,14 +126,14 @@ Hooks.on('updateCombat', async (combat, changed) => {
             const sameTurn = perfect.combatantId === prev.id && perfect.round === combat.previous.round;
             if (sameTurn && !perfect.ended) return save(item, { perfect: { ...perfect, ended: true }, turnLit: false });
             await save(item, { strokes: [], perfect: null, turnLit: false });
-            return note(actor, 'Всё по новой', '<p>Совершенство погасло — огранка пуста.</p>', 'fa-rotate-left');
+            return note(actor, t('Всё по новой'), t('<p>Совершенство погасло — огранка пуста.</p>'), 'fa-rotate-left');
         }
         const strokes = strokesOf(item);
         const helpless = HELPLESS.some(s => actor.statuses?.has(s)) || (Number(actor.system?.attributes?.hp?.value) || 0) <= 0;
         if (!flags(item).turnLit && strokes.length && !helpless) {
             const gone = STROKES.find(s => s.id === strokes.at(-1));
             await save(item, { strokes: strokes.slice(0, -1), turnLit: false });
-            return note(actor, 'Небрежно', `<p>Ход без нового штриха — погас «${gone?.name}». Осталось ${strokes.length - 1} из ${ALL}.</p>`, 'fa-face-meh');
+            return note(actor, t('Небрежно'), `<p>${t('Ход без нового штриха — погас «{name}». Осталось {v} из {ALL}.', { name: gone?.name, v: strokes.length - 1, ALL })}</p>`, 'fa-face-meh');
         }
         if (flags(item).turnLit) await save(item, { turnLit: false });
     } catch (error) {
@@ -200,15 +201,15 @@ export async function openFacets(item) {
     const rows = STROKES.map(s => {
         const on = lit.includes(s.id);
         const can = gm || (!s.auto && !on && inCombat && !perfectOf(item));
-        return `<li class="${on ? 'on' : ''}"><i class="fas ${s.icon}"></i> <strong>${s.name}</strong> <small>${s.hint}${s.auto && !gm ? ' — сам' : ''}</small>
-            ${can ? `<button type="button" data-stroke="${s.id}" data-on="${on ? 0 : 1}">${on ? 'Погасить' : 'Зажечь'}</button>` : ''}</li>`;
+        return `<li class="${on ? 'on' : ''}"><i class="fas ${s.icon}"></i> <strong>${s.name}</strong> <small>${s.hint}${s.auto && !gm ? t(' — сам') : ''}</small>
+            ${can ? `<button type="button" data-stroke="${s.id}" data-on="${on ? 0 : 1}">${on ? t('Погасить') : t('Зажечь')}</button>` : ''}</li>`;
     }).join('');
-    const state = perfectOf(item) ? `<p class="gd-perfection-state"><strong>Само совершенство</strong> — к20 не ниже ${MIN_D20} до конца следующего хода.</p>`
-        : `<p class="gd-perfection-state">${lit.length} из ${ALL}${lit.length >= ALMOST ? ' — <strong>Почти</strong>: +1 к броскам' : ''}.${inCombat ? '' : ' Штрихи горят только в бою.'}</p>`;
+    const state = perfectOf(item) ? `<p class="gd-perfection-state"><strong>${t('Само совершенство')}</strong> ${t('— к20 не ниже {MIN_D20} до конца следующего хода.', { MIN_D20 })}</p>`
+        : `<p class="gd-perfection-state">${t('{length} из {ALL}{v}.{v2}', { length: lit.length, ALL, v: lit.length >= ALMOST ? t(' — <strong>Почти</strong>: +1 к броскам') : '', v2: inCombat ? '' : t(' Штрихи горят только в бою.') })}</p>`;
     const dialog = new foundry.applications.api.DialogV2({
         window: { title: `${item.name} — ${actor.name}`, icon: 'fas fa-gem' },
-        content: `<div class="gd-perfection">${state}<ul class="gd-perfection-strokes">${rows}</ul><p class="gd-perfection-note">Ход без нового штриха — «Небрежно»: последний гаснет.</p></div>`,
-        buttons: [{ action: 'close', label: 'Закрыть', default: true }]
+        content: `<div class="gd-perfection">${state}<ul class="gd-perfection-strokes">${rows}</ul><p class="gd-perfection-note">${t('Ход без нового штриха — «Небрежно»: последний гаснет.')}</p></div>`,
+        buttons: [{ action: 'close', label: t('Закрыть'), default: true }]
     });
     await dialog.render({ force: true });
     dialog.element.querySelectorAll('[data-stroke]').forEach(b => b.addEventListener('click', async () => {

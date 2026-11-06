@@ -1,6 +1,6 @@
 <div class="gd-portal {{#if ready}}ready{{/if}} {{#if closing}}closing{{/if}} {{#if breaking}}breaking{{/if}}">
     {{#unless atRest}}
-    <p class="gd-portal-empty">Портал открывается только на Привале.</p>
+    <p class="gd-portal-empty">{{t "Портал открывается только на Привале."}}</p>
     {{else}}
     <div class="gd-circle">
         {{!-- Каждое кольцо — свой слой: браузер поворачивает его готовой картинкой, не перерисовывая свечение рун --}}
@@ -41,30 +41,30 @@
             <i class="gd-soul s1"></i><i class="gd-soul s2"></i><i class="gd-soul s3"></i>
             <i class="gd-moon"></i>
             {{#if isGM}}
-            <button type="button" class="gd-circle-seal" data-action="open" {{#unless ready}}disabled{{/unless}} title="{{#if ready}}Открыть портал{{else}}Нужно ещё {{missing}}{{/if}}">
-                <i class="fas fa-hurricane"></i><span>{{#if ready}}Открыть{{else}}{{total}} / {{toll}}{{/if}}</span>
+            <button type="button" class="gd-circle-seal" data-action="open" {{#unless ready}}disabled{{/unless}} title="{{#if ready}}{{t 'Открыть портал'}}{{else}}{{t 'Нужно ещё'}} {{missing}}{{/if}}">
+                <i class="fas fa-hurricane"></i><span>{{#if ready}}{{t "Открыть"}}{{else}}{{total}} / {{toll}}{{/if}}</span>
             </button>
             {{else}}
-            <span class="gd-circle-state">{{#if ready}}Круг замкнут{{else}}{{total}} / {{toll}}{{/if}}</span>
+            <span class="gd-circle-state">{{#if ready}}{{t "Круг замкнут"}}{{else}}{{total}} / {{toll}}{{/if}}</span>
             {{/if}}
         </div>
     </div>
-    <p class="gd-portal-hint">{{#if ready}}Круг замкнут — портал открывает Мастер{{else}}Щелчок — отдать кристалл кругу, правый щелчок — забрать. Нужно ещё {{missing}}{{/if}}{{#if over}} · лишнего {{over}}{{/if}}</p>
+    <p class="gd-portal-hint">{{#if ready}}{{t "Круг замкнут — портал открывает Мастер"}}{{else}}{{t "Щелчок — отдать кристалл кругу, правый щелчок — забрать. Нужно ещё {missing}" missing=missing}}{{/if}}{{#if over}} {{t "· лишнего {over}" over=over}}{{/if}}</p>
     <div class="gd-portal-party">
         {{#each party}}
         <section class="gd-portal-member {{#unless editable}}locked{{/unless}}">
-            <header><img src="{{img}}" alt=""><span>{{name}}</span>{{#if given}}<b title="Вклад в плату">{{given}}</b>{{/if}}</header>
+            <header><img src="{{img}}" alt=""><span>{{name}}</span>{{#if given}}<b title="{{t 'Вклад в плату'}}">{{given}}</b>{{/if}}</header>
             <div class="gd-portal-shelf">
                 {{#each crystals}}
                 <button type="button" class="gd-offering {{#if pledged}}pledged{{/if}}" style="--rarity: {{color}}" data-gd-skill="{{skillId}}"
                     {{#if ../editable}}data-action="pledge" data-actor-id="{{../id}}" data-item-id="{{id}}"{{else}}aria-disabled="true"{{/if}}>
                     <img src="{{img}}" alt="">
-                    <span class="gd-offering-weight" title="Вес">{{weight}}</span>
+                    <span class="gd-offering-weight" title="{{t 'Вес'}}">{{weight}}</span>
                     {{#if (gt quantity 1)}}<span class="gd-offering-count">×{{quantity}}</span>{{/if}}
                     {{#if pledged}}<span class="gd-offering-given">{{pledged}}</span>{{/if}}
                 </button>
                 {{else}}
-                <span class="gd-portal-none">нет кристаллов</span>
+                <span class="gd-portal-none">{{t "нет кристаллов"}}</span>
                 {{/each}}
             </div>
         </section>

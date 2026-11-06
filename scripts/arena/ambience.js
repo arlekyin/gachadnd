@@ -15,6 +15,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { volumeMaster } from "../core/prefs.js";
+import { t } from "../core/i18n.js";
 
 const DIR = `modules/${MODULE_ID}/assets/sounds/arena`;
 const FLAG = 'arenaAmbience';
@@ -25,14 +26,14 @@ const SOUND_EXT = /\.(ogg|mp3|wav|flac|m4a|webm|opus)$/i;
 
 Hooks.once('init', () => {
     game.settings.register(MODULE_ID, 'arenaAmbience', {
-        name: 'Фон арены в бою',
-        hint: 'Фон арены (лес, ночь, ливень, ветер, туман) в начале боя: тише, выключить или оставить как есть. До боя и после — обычной громкости.',
+        name: t('Фон арены в бою'),
+        hint: t('Фон арены (лес, ночь, ливень, ветер, туман) в начале боя: тише, выключить или оставить как есть. До боя и после — обычной громкости.'),
         scope: 'world', config: false, type: String, default: 'quiet',
-        choices: { quiet: 'Тише — еле слышно', off: 'Выключить', same: 'Как есть' },
+        choices: { quiet: t('Тише — еле слышно'), off: t('Выключить'), same: t('Как есть') },
         onChange: () => sync()
     });
     game.settings.register(MODULE_ID, 'arenaAmbienceVolume', {
-        name: 'Громкость фона арены', hint: '0 — фон арены не играет у вас.',
+        name: t('Громкость фона арены'), hint: t('0 — фон арены не играет у вас.'),
         scope: 'client', config: false, type: Number, range: { min: 0, max: 1, step: 0.05 }, default: 1,
         onChange: () => sync()
     });
@@ -40,15 +41,17 @@ Hooks.once('init', () => {
     game.settings.register(MODULE_ID, 'arenaAmbienceLast', { scope: 'world', config: false, type: Object, default: {} });
 });
 
-/** Фон без погоды: ночь — насекомые, топь — лягушки (если есть такой файл), иначе лес днём */
+/** Фон без погоды: подземелье — своё (катакомбы, пещеры), ночь — насекомые, топь — лягушки (если есть такой файл), иначе лес днём */
 export function ambienceKey(scene) {
     const arena = scene?.getFlag(MODULE_ID, 'arena') ?? {};
     const weather = scene?.getFlag(MODULE_ID, 'arenaWeather')?.kind;
     if (weather) return weather;
+    if (arena.biome === 'crypt' || arena.biome === 'caves') return arena.biome;
     if (arena.scheme === 'swamp') return arena.mood === 'night' ? 'swamp-night' : 'swamp';
     return arena.mood === 'night' ? 'forest-night' : 'forest-day';
 }
-// Запасной фон, если своего файла нет: топь — как лес
+// Запасной фон, если своего файла нет: топь — как лес. Подземелье без своего файла — тишина, не лес; у пещер фона
+// пока нет вовсе
 const FALLBACK = { swamp: 'forest-day', 'swamp-night': 'forest-night' };
 
 let listing = null;

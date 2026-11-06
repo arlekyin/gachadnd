@@ -13,12 +13,14 @@ const ids = await scene(page, { hero: { level: 3 }, enemies: [{ name: 'Враг'
 const since = f.log.length;
 const back = await ev(() => canvas.scene.id);
 
-const lightOf = {};
+const lightOf = {}, srcOf = {};
 let nightInfo = null, dayInfo = null;
-for (const mood of ['day', 'night', 'fog', 'rot', 'blood']) {
-    const r = await ev(async ({ mood, hero, enemies }) => {
+// Пробуждение Босса — ступени 2 (без пепла) и 4 (пепельная пелена); файл фона несёт ступень
+for (const [mood, stage] of [['day'], ['night'], ['fog'], ['rot'], ['blood', 2], ['blood', 4]]) {
+    const look = `${mood}${stage ?? ''}`;
+    const r = await ev(async ({ mood, stage, hero, enemies }) => {
         const t0 = performance.now();
-        const { scene, plan } = await game.gachadnd.arena.generate({ seed: 'proto', mood, party: [hero], enemies });
+        const { scene, plan } = await game.gachadnd.arena.generate({ seed: 'proto', mood, stage, party: [hero], enemies });
         await new Promise(r => setTimeout(r, 2500));
         const src = scene.background?.src ?? scene.levels?.contents?.[0]?.background?.src;
         // Что на самом деле нарисовано: картинки арены в текстурах холста (второй бой подряд не должен идти на старой)
@@ -43,10 +45,22 @@ for (const mood of ['day', 'night', 'fog', 'rot', 'blood']) {
             drawn: [...drawn],
             ms: Math.round(performance.now() - t0), viewed: canvas.scene?.id === scene.id, src,
             walls: scene.walls.size, lights: scene.lights.size, tokens: scene.tokens.size, objects: plan.objects.length, cover: plan.cover,
-            weather: scene.weather, size: `${scene.width}x${scene.height}`
+            weather: scene.weather, size: `${scene.width}x${scene.height}`, ash: scene.getFlag('gachadnd', 'arena').ash,
+            pale: scene.tiles.find(t => t.getFlag('gachadnd', 'awaken'))?.texture.src ?? null,
+            // Где бледная плитка на экране: прямоугольник сетки в координатах сцены — должен совпасть со сценой
+            paleBox: (() => {
+                const m = canvas.tiles.placeables.find(t => t.document.getFlag('gachadnd', 'awaken'))?.mesh;
+                if (!m) return null;
+                const b = m.getLocalBounds();
+                return [m.x + b.x * m.scale.x, m.y + b.y * m.scale.y, b.width * m.scale.x, b.height * m.scale.y].map(Math.round).join(',');
+            })(),
+            flakes: canvas.weather?.weatherEffects?.children?.length ?? null
         };
-    }, { mood, hero: ids.hero, enemies: ids.enemies });
-    check(`арена «${mood}»: нарисован фон этого настроения, стены, свет, отряд и враги на местах`, r.viewed && r.src?.endsWith(`arena-proto-${mood}.webp`) && r.drawn.length === 1 && r.drawn[0] === `arena-proto-${mood}.webp` && r.walls > 40 && r.lights > (mood === 'night' ? 0 : 3) && r.tokens === 3 && (mood !== 'fog' || r.weather === 'fog'), JSON.stringify(r));
+    }, { mood, stage, hero: ids.hero, enemies: ids.enemies });
+    // Пробуждение: фон — обычная картинка, бледная копия ступени — плиткой поверх
+    const drawn = [`arena-proto-${mood}.webp`, ...(stage ? [`arena-proto-${look}.webp`] : [])];
+    check(`арена «${look}»: нарисован фон этого настроения${stage ? ' и бледная плитка ступени' : ''}, стены, свет, отряд и враги на местах`, r.viewed && r.src?.endsWith(`arena-proto-${mood}.webp`) && (!stage || (r.pale?.endsWith(`arena-proto-${look}.webp`) && r.paleBox === `0,0,${3920},${2800}`)) && r.drawn.sort().join() === drawn.sort().join() && r.walls > 40 && r.lights > (mood === 'night' ? 0 : 3) && r.tokens === 3 && (mood !== 'fog' || r.weather === 'fog'), JSON.stringify(r));
+    if (mood === 'blood') check(`пробуждение, ступень ${stage}: ${stage >= 3 ? 'пепельная пелена — погода сцены' : 'пепла ещё нет'}`, stage >= 3 ? r.weather === 'gachadndAsh4' && r.ash === 'gachadndAsh4' : !r.weather?.startsWith('gachadndAsh') && !r.ash, JSON.stringify({ weather: r.weather, ash: r.ash, flakes: r.flakes }));
     await ev(() => { if (game.paused) game.togglePause(false, { broadcast: true }); document.getElementById('pause')?.classList.remove('paused'); });
     await ev(() => { canvas.animatePan({ x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2, scale: Math.min(window.innerWidth / canvas.dimensions.sceneWidth, window.innerHeight / canvas.dimensions.sceneHeight) * 0.98, duration: 0 }); document.querySelectorAll('#notifications li, #notifications .notification').forEach(n => n.remove()); });
     // Большая картинка на программной отрисовке (swiftshader) встаёт на экран через 5–10 секунд после сборки
@@ -54,13 +68,14 @@ for (const mood of ['day', 'night', 'fog', 'rot', 'blood']) {
     // Яркость того, что на экране перед снимком: средний цвет нарисованной сцены
     if (mood === 'night') nightInfo = r;
     if (mood === 'day') dayInfo = r;
-    lightOf[mood] = await ev(() => {
+    srcOf[look] = r.pale ?? r.src;
+    lightOf[look] = await ev(() => {
         const r = canvas.app.renderer, px = r.extract.pixels(canvas.stage), d = px.pixels ?? px, w = px.width ?? r.width, h = px.height ?? r.height;
         let sum = 0, n = 0;
         for (let y = Math.round(h * 0.15); y < h * 0.85; y += 9) for (let x = Math.round(w * 0.15); x < w * 0.75; x += 9) { const i = (y * w + x) * 4; sum += d[i] + d[i + 1] + d[i + 2]; n++; }
         return Math.round(sum / n / 3);
     });
-    await f.shot(`arena-${mood}`);
+    await f.shot(`arena-${look}`);
 }
 // Пересборка подряд: на экране фон этого боя, а не прошлого — ночь темнее дня, следующий за ней туман светлее ночи
 check('пересборка подряд: на экране фон этого боя — ночь темнее дня, туман светлее ночи', lightOf.night < lightOf.day * 0.85 && lightOf.fog > lightOf.night * 1.1, JSON.stringify(lightOf));
@@ -85,6 +100,65 @@ const leaves = await ev(async ({ hero }) => {
     return out;
 }, { hero: ids.hero });
 check('лесистая арена: листья фоном; ливень их сменяет, после снятия погоды листья снова', leaves.calm === 'leaves' && leaves.flag && leaves.rain === 'rain' && leaves.after === 'leaves', JSON.stringify(leaves));
+
+// Пепел пробуждения и погода боя: ливень его сменяет, после снятия погоды пепел снова; насыщенность картинки
+// падает по ступеням (средняя насыщенность фона — по снимкам выше)
+const ash = await ev(async ({ hero }) => {
+    const { applyWeather, clearWeather } = await gdt.mod('arena/weather.js');
+    const { scene } = await game.gachadnd.arena.generate({ seed: 'ash', mood: 'blood', stage: 3, party: [hero], enemies: [], view: false });
+    const out = { calm: scene.weather, registered: ['gachadndAsh3', 'gachadndAsh4'].every(k => CONFIG.weatherEffects[k]?.effects?.length === 2) };
+    await applyWeather(scene, 'rain', { seed: 'a' });
+    out.rain = scene.weather;
+    await clearWeather(scene);
+    out.after = scene.weather;
+    return out;
+}, { hero: ids.hero });
+check('пепел пробуждения — своя погода (хлопья и дымка); ливень его сменяет, после снятия погоды пепел снова', ash.registered && ash.calm === 'gachadndAsh3' && ash.rain === 'rain' && ash.after === 'gachadndAsh3', JSON.stringify(ash));
+const sat = await ev(async srcOf => {
+    const one = async src => {
+        const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+        const c = document.createElement('canvas'); c.width = 200; c.height = Math.round(200 * img.height / img.width);
+        const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height);
+        const d = x.getImageData(0, 0, c.width, c.height).data;
+        let s = 0; for (let i = 0; i < d.length; i += 4) { const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]); s += mx ? (mx - mn) / mx : 0; }
+        return Math.round(s / (d.length / 4) * 100) / 100;
+    };
+    return { day: await one(srcOf.day), blood2: await one(srcOf.blood2), blood4: await one(srcOf.blood4) };
+}, srcOf);
+check('пробуждение бледнит этаж по ступеням: насыщенность день > 2-я ступень > 4-я, но 4-я — не полное ч/б', sat.day > sat.blood2 && sat.blood2 > sat.blood4 && sat.blood4 > 0.03, JSON.stringify(sat));
+
+// Прорыв Пожирателя на арену пробуждённого Босса: эффекты не складываются — бледность и пепел мягко сходят за
+// катсцену (снимок посередине), потом их нет и в документах; погода — пустая
+await ev(async ({ hero }) => {
+    await game.gachadnd.arena.generate({ seed: 'proto', mood: 'blood', stage: 4, party: [hero], enemies: [] });
+    await new Promise(r => setTimeout(r, 2500));
+    if (game.paused) game.togglePause(false, { broadcast: true });
+    document.getElementById('pause')?.classList.remove('paused');
+    await canvas.animatePan({ x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2, scale: Math.min(window.innerWidth / canvas.dimensions.sceneWidth, window.innerHeight / canvas.dimensions.sceneHeight) * 0.98, duration: 0 });
+    window.__gdHad = game.actors.filter(a => a.getFlag('gachadnd', 'creature') === 'devourer').map(a => a.id);
+    // Луна натравила — предвестие и хроника не меняются
+    window.__gdBreachDone = (await gdt.mod('labyrinth/breach.js')).startBreach({ ally: true, point: { x: canvas.dimensions.width * 0.6, y: canvas.dimensions.height / 2 } }).then(() => true);
+}, { hero: ids.hero });
+const sample = () => ev(() => {
+    const tile = canvas.tiles.placeables.find(t => t.document.getFlag('gachadnd', 'awaken'));
+    return { tile: tile ? Math.round(tile.mesh.alpha * 100) / 100 : null, ash: Math.round((canvas.weather?.weatherEffects?.children?.[0]?.alpha ?? -1) * 100) / 100 };
+});
+const before = await sample();
+await page.waitForTimeout(2300);
+const mid = await sample();
+await f.shot('arena-breach-mid');
+await ev(() => window.__gdBreachDone);
+await page.waitForTimeout(1000);
+const after = await ev(async () => {
+    const scene = canvas.scene, arena = scene.getFlag('gachadnd', 'arena');
+    const out = { tiles: scene.tiles.filter(t => t.getFlag('gachadnd', 'awaken')).length, weather: scene.weather, ash: arena.ash ?? null, stage: arena.stage ?? null, devourer: scene.tokens.some(t => t.actor?.getFlag('gachadnd', 'creature') === 'devourer') };
+    // Пожиратель из компендиума, если его привёл прорыв, — убрать
+    for (const a of game.actors.filter(a => a.getFlag('gachadnd', 'creature') === 'devourer' && !window.__gdHad.includes(a.id))) await a.delete();
+    return out;
+});
+await f.shot('arena-breach-after');
+check('прорыв на арене пробуждения: бледность и пепел сходят мягко — посередине катсцены полупрозрачны', before.tile === 1 && mid.tile > 0.05 && mid.tile < 0.95 && mid.ash < 0.95, JSON.stringify({ before, mid }));
+check('после прорыва: бледной плитки и пепла нет, погода пустая, Пожиратель на поле', after.tiles === 0 && after.weather === '' && !after.ash && !after.stage && after.devourer, JSON.stringify(after));
 
 // Брод: ручей и камни брода — снимок воды крупно
 const ford = await ev(async ({ hero, enemies }) => {

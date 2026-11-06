@@ -14,6 +14,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage } from "../../../core/chat-hooks.js";
 import { isBlast, blastSkill, tokenOf, esc, damageOf, around, blast, boomAt } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const FLAG = 'phoenixAsh';
 const ASH = 'icons/magic/fire/explosion-embers-orange.webp';
@@ -27,7 +28,7 @@ const usesLeft = item => {
 Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isBlast(item, 'phoenix')) return;
-    ui.notifications.info(usesLeft(item) > 0 ? 'Феникс сработает сам, когда ПЗ опустятся до 0 в бою.' : 'Феникс уже сгорал — он восстановится после долгого отдыха.');
+    ui.notifications.info(usesLeft(item) > 0 ? t('Феникс сработает сам, когда ПЗ опустятся до 0 в бою.') : t('Феникс уже сгорал — он восстановится после долгого отдыха.'));
     return false;
 });
 
@@ -44,7 +45,7 @@ Hooks.on('updateActor', async (actor, changes) => {
     await token.update({ 'texture.src': ASH });
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div class="gd-blast-card phoenix"><div class="gd-blast-title"><i class="fas fa-feather"></i> Феникс</div><p>${esc(actor.name)} сгорает дотла. В начале своего хода — возродится из пепла.</p><div class="gd-blast-buttons"><button type="button" data-phoenix-stomp="${actor.id}"><i class="fas fa-shoe-prints"></i> Растоптать пепел</button></div></div>`,
+        content: `<div class="gd-blast-card phoenix"><div class="gd-blast-title"><i class="fas fa-feather"></i> ${t('Феникс')}</div><p>${t('{v} сгорает дотла. В начале своего хода — возродится из пепла.', { v: esc(actor.name) })}</p><div class="gd-blast-buttons"><button type="button" data-phoenix-stomp="${actor.id}"><i class="fas fa-shoe-prints"></i> ${t('Растоптать пепел')}</button></div></div>`,
         flags: { [MODULE_ID]: { phoenix: { actorId: actor.id } } }
     });
 });
@@ -67,7 +68,7 @@ export async function rise(actor) {
     const phoenix = blastSkill(actor, 'phoenix');
     const damage = damageOf(phoenix, { formula: '4d6', type: 'fire' });
     const victims = token ? around(token, 5) : [];
-    await blast({ actor, title: `Феникс: ${actor.name} возрождается из пепла`, icon: 'fa-feather', victims, formula: damage.formula, type: 'fire', at: token ? boomAt(token, 10) : null });
+    await blast({ actor, title: t('Феникс: {name} возрождается из пепла', { name: actor.name }), icon: 'fa-feather', victims, formula: damage.formula, type: 'fire', at: token ? boomAt(token, 10) : null });
 }
 
 Hooks.on('updateCombat', async (combat, changed) => {
@@ -86,7 +87,7 @@ export async function stomp({ actorId }) {
     const flag = actor?.getFlag(MODULE_ID, FLAG);
     if (!flag) return;
     await restore(actor, flag);
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card phoenix"><div class="gd-blast-title"><i class="fas fa-shoe-prints"></i> Феникс</div><p>Пепел растоптан — ${esc(actor.name)} не возродится и лежит без сознания.</p></div>` });
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card phoenix"><div class="gd-blast-title"><i class="fas fa-shoe-prints"></i> ${t('Феникс')}</div><p>${t('Пепел растоптан — {v} не возродится и лежит без сознания.', { v: esc(actor.name) })}</p></div>` });
 }
 
 onRenderChatMessage((message, html) => {

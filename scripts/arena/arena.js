@@ -8,23 +8,34 @@
  * вода, топь и подлесок — трудная местность (регионы dnd5e); отряд — у левой кромки, враги — строем у правой: ближний бой впереди, стрелки сзади,
  * вожак в глубине по центру; у Монстров стая иногда заходит с флангов.
  *
- * game.gachadnd.arena.generate({ seed, mood, cols, rows, party: [actorId…], enemies: [actorId…], encounter, weather })
+ * game.gachadnd.arena.generate({ seed, mood, stage, cols, rows, party: [actorId…], enemies: [actorId…], encounter, weather }) — stage: ступень
+ * пробуждения Босса 1–4 для настроения blood (по умолчанию 4); dark — темнота подземелья ('full'|'cond') вместо настройки
  * weather — 'rain'|'fog'|'wind' (weather.js): ставится поверх готовой арены, снимается кнопкой Мастера
  * encounter: { node: 'mob'|'elite'|'outpost'|'boss', leader: actorId, ranged: 0–1 } — схему и строй выбирает по нему;
  * ranged без значения — по атакам врагов
+ *
+ * Подземелье (biome 'crypt' или 'caves'): планировка, картинка, стены с дверями, свет и темнота — dungeon.js;
+ * темнота — настройка мира «Темнота подземелий» (по встрече, всегда условная, всегда полная); погода боя под
+ * землёй пока не ставится
  */
 
 import { MODULE_ID } from "../core/constants.js";
 import { layout, connected, startCells, passable, reachable, rng, ribbon, VIGNETTES } from "./layout.js";
-import { paint } from "./paint.js";
+import { paint, awakened } from "./paint.js";
 import { applyWeather, WEATHER } from "./weather.js";
 import { setAmbience } from "./ambience.js";
+import { clamp01, smooth } from "../cutscene/math.js";
+import { t } from "../core/i18n.js";
+import { tileData } from "../core/tiles.js";
+import { DUNGEON_BIOMES, DUNGEON_ART, DARK, planDungeon, paintDungeon, dungeonWalls, dungeonLights, dungeonRegions, dungeonCells } from "./dungeon.js";
 
 const CELL = 140;
 const FLAG = 'arena';
 // Цвет «живой мути» по настроению
-const MURK = { day: '#0f2a24', night: '#0a1426', fog: '#1d2422', rot: '#062420', blood: '#3f0d0d' };
+const MURK = { day: '#0f2a24', night: '#0a1426', fog: '#1d2422', rot: '#062420', blood: '#1c1918' };
 const MOOD_WEATHER = { fog: 'fog' };
+/** Пробуждение Босса на 3–4 ступенях — пепельная пелена (weather.js, ASH) */
+const moodWeather = (mood, stage) => mood === 'blood' && stage >= 3 ? `gachadndAsh${Math.min(4, stage)}` : MOOD_WEATHER[mood];
 // Лесистая арена (деревьев на клетку не меньше) — падающие листья фоном, без погоды
 const LEAFY = 0.07;
 const WALL = { NONE: 0, LIMITED: 10, NORMAL: 20 };
@@ -32,9 +43,9 @@ const WALL = { NONE: 0, LIMITED: 10, NORMAL: 20 };
 const NIGHT = { darkness: 0.6, pulse: { dim: 25, bright: 10 }, crystal: { dim: 25, bright: 8 } };
 // Трудная местность: регион на вид — тип dnd5e и цвет (виден Мастеру на слое регионов)
 const TERRAIN = {
-    water: { name: 'Вода', type: 'liquid', color: '#3a7fa8' },
-    mire: { name: 'Топь', type: 'mud', color: '#6b5a2e' },
-    brush: { name: 'Подлесок', type: 'plants', color: '#4f8a3a' }
+    water: { name: t('Вода'), type: 'liquid', color: '#3a7fa8' },
+    mire: { name: t('Топь'), type: 'mud', color: '#6b5a2e' },
+    brush: { name: t('Подлесок'), type: 'plants', color: '#4f8a3a' }
 };
 
 const filePicker = () => foundry.applications?.apps?.FilePicker?.implementation ?? FilePicker;
@@ -177,8 +188,8 @@ function regionsOf(plan) {
         // Заперт: на слое регионов (он открывается и при шаблоне заклинания в v14) не показывается, правило работает
         name: TERRAIN[kind].name, color: TERRAIN[kind].color, shapes: list, locked: true,
         behaviors: [dnd
-            ? { name: 'Трудная местность', type: 'dnd5e.difficultTerrain', system: { types: [TERRAIN[kind].type] } }
-            : { name: 'Трудная местность', type: 'modifyMovementCost', system: { difficulties: Object.fromEntries(Object.keys(CONFIG.Token.movement?.actions ?? { walk: 1 }).map(a => [a, 2])) } }],
+            ? { name: t('Трудная местность'), type: 'dnd5e.difficultTerrain', system: { types: [TERRAIN[kind].type] } }
+            : { name: t('Трудная местность'), type: 'modifyMovementCost', system: { difficulties: Object.fromEntries(Object.keys(CONFIG.Token.movement?.actions ?? { walk: 1 }).map(a => [a, 2])) } }],
         flags: { [MODULE_ID]: { terrain: kind } }
     }));
 }
@@ -206,33 +217,47 @@ function lightsOf(plan, mood) {
  * Собрать арену: новая планировка, картинка, сцена, стены, свет, токены. Только Мастер.
  * @returns {Promise<{ scene, plan }>}
  */
-export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true, scheme = null, weather = null } = {}) {
-    if (!game.user.isGM) return ui.notifications.warn('Арену собирает Мастер.');
+export async function generateArena({ seed = foundry.utils.randomID(8), mood = 'day', stage = 4, biome = 'forest', cols = 28, rows = 20, encounter = {}, party = [], enemies = [], view = true, scheme = null, weather = null, dark = null } = {}) {
+    if (!game.user.isGM) return ui.notifications.warn(t('Арену собирает Мастер.'));
     // Планировка: если путь от отряда к врагам перекрыт — другой сид
-    const art = await loadArt(biome);
+    const under = DUNGEON_BIOMES.has(biome);
+    const art = await loadArt(under ? DUNGEON_ART : biome);
     const foes = enemies.map(id => game.actors.get(id)).filter(Boolean);
     encounter = { ...encounter, ranged: encounter.ranged ?? (foes.length ? foes.filter(isRanged).length / foes.length : undefined) };
-    const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
-    const night = mood === 'night';
-    let plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme, night });
-    for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme, night });
-    const picture = paint(plan, { cell: CELL, mood, art });
-    const leafy = plan.objects.filter(o => ['tree', 'pine', 'deadtree'].includes(o.kind)).length / (plan.cols * plan.rows) >= LEAFY;
-    const blob = await new Promise(resolve => picture.toBlob(resolve, 'image/webp', 0.9));
+    let plan, picture;
+    if (under) {
+        // Подземелье: свой генератор; путь между строями он проверяет сам (запасные сиды)
+        plan = planDungeon({ cols, rows, seed, scheme, encounter, dark: dark ?? game.settings.get(MODULE_ID, 'dungeonDark') });
+        picture = paintDungeon(plan, { cell: CELL, art });
+        weather = null;
+    } else {
+        const vignettes = Object.keys(VIGNETTES).filter(n => art[`vignette-${n}-1`] || art[`vignette-${n}`]);
+        const night = mood === 'night';
+        plan = layout({ cols, rows, seed, biome, encounter, vignettes, scheme, night });
+        for (let i = 1; i < 8 && !connected(plan); i++) plan = layout({ cols, rows, seed: `${seed}-${i}`, biome, encounter, vignettes, scheme, night });
+        picture = paint(plan, { cell: CELL, mood, art });
+    }
+    const leafy = !under && plan.objects.filter(o => ['tree', 'pine', 'deadtree'].includes(o.kind)).length / (plan.cols * plan.rows) >= LEAFY;
     const dir = `worlds/${game.world.id}/gachadnd-arena`;
     const FP = filePicker();
     await FP.createDirectory('data', dir).catch(() => {});
-    const name = `arena-${plan.seed}-${mood}.webp`;
-    await FP.upload('data', dir, new File([blob], name, { type: 'image/webp' }), {}, { notify: false });
-    const src = `${dir}/${name}`;
+    const upload = async (image, name) => {
+        const blob = await new Promise(resolve => image.toBlob(resolve, 'image/webp', 0.9));
+        await FP.upload('data', dir, new File([blob], name, { type: 'image/webp' }), {}, { notify: false });
+        return `${dir}/${name}`;
+    };
+    const src = await upload(picture, `arena-${plan.seed}-${under ? plan.scheme : ''}${mood}.webp`);
+    // Пробуждение Босса — бледная копия плиткой поверх фона (прорыв Пожирателя её снимает)
+    const awake = mood === 'blood' && stage > 0 ? Math.min(4, Math.round(stage)) : 0;
+    const paleSrc = awake ? await upload(awakened(picture, awake), `arena-${plan.seed}-${mood}${awake}.webp`) : null;
 
     // Одна сцена «Арена» — перестраивается на каждый бой, мир не пухнет
     const data = {
-        name: 'Арена', width: cols * CELL, height: rows * CELL, padding: 0,
+        name: t('Арена'), width: cols * CELL, height: rows * CELL, padding: 0,
         grid: { size: CELL, distance: 5, units: 'ft', type: 1, alpha: 0.12 },
-        background: { src }, tokenVision: true, weather: MOOD_WEATHER[mood] ?? (leafy ? 'leaves' : ''),
-        environment: mood === 'night' ? { darknessLevel: NIGHT.darkness, globalLight: { enabled: false } } : { darknessLevel: 0, globalLight: { enabled: true } },
-        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null, terrain: terrainOf(plan), leaves: leafy && !MOOD_WEATHER[mood] }
+        background: { src }, tokenVision: true, weather: moodWeather(mood, stage) ?? (leafy ? 'leaves' : ''),
+        environment: under ? DARK[plan.dark] : mood === 'night' ? { darknessLevel: NIGHT.darkness, globalLight: { enabled: false } } : { darknessLevel: 0, globalLight: { enabled: true } },
+        [`flags.${MODULE_ID}.${FLAG}`]: { seed: plan.seed, mood, stage: awake || null, biome, cols, rows, scheme: plan.scheme, node: encounter.node ?? null, terrain: under ? null : terrainOf(plan), dark: plan.dark ?? null, leaves: leafy && !moodWeather(mood, stage), ash: moodWeather(mood, stage)?.startsWith('gachadndAsh') ? moodWeather(mood, stage) : null }
     };
     // v14 держит фон в уровне сцены. Уровень — раньше сцены: смена фона уровня сама перерисовывает арену у всех, кто
     // на ней, и тогда перерисовка одна — уже с новым фоном (сцена следом меняет только флаги и погоду)
@@ -247,7 +272,7 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
         await scene.deleteEmbeddedDocuments('AmbientLight', scene.lights.map(l => l.id));
         await scene.deleteEmbeddedDocuments('Token', scene.tokens.map(t => t.id));
         await scene.deleteEmbeddedDocuments('Region', scene.regions.map(r => r.id));
-        await scene.deleteEmbeddedDocuments('Tile', scene.tiles.filter(t => t.getFlag(MODULE_ID, 'weather')).map(t => t.id));
+        await scene.deleteEmbeddedDocuments('Tile', scene.tiles.filter(t => t.getFlag(MODULE_ID, 'weather') || t.getFlag(MODULE_ID, AWAKEN)).map(t => t.id));
         await setLevel(scene);
         // Погода прошлого боя не переходит в новый
         await scene.update({ ...data, [`flags.${MODULE_ID}.-=arenaWeather`]: null });
@@ -256,15 +281,19 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
         await setLevel(scene);
     }
 
-    await scene.createEmbeddedDocuments('Wall', wallsOf(plan));
-    await scene.createEmbeddedDocuments('AmbientLight', lightsOf(plan, mood));
-    await scene.createEmbeddedDocuments('Region', regionsOf(plan));
+    if (paleSrc) await scene.createEmbeddedDocuments('Tile', [tileData({
+        texture: { src: paleSrc }, x: 0, y: 0, width: cols * CELL, height: rows * CELL, sort: -1000, locked: true, flags: { [MODULE_ID]: { [AWAKEN]: awake } }
+    })]);
+    await scene.createEmbeddedDocuments('Wall', under ? dungeonWalls(plan, CELL) : wallsOf(plan));
+    await scene.createEmbeddedDocuments('AmbientLight', under ? dungeonLights(plan, CELL) : lightsOf(plan, mood));
+    await scene.createEmbeddedDocuments('Region', under ? dungeonRegions(plan, CELL, MODULE_ID) : regionsOf(plan));
     if (WEATHER[weather]) await applyWeather(scene, weather, { seed: plan.seed });
     else await setAmbience(scene);
 
     // Токены. Существо крупнее клетки занимает w×w клеток: место — где все они проходимы и свободны, иначе большие
     // токены налезают друг на друга
-    const open = passable(plan), taken = new Set();
+    const spots = under ? dungeonCells(plan) : null;
+    const open = under ? spots.open : passable(plan), taken = new Set();
     const fits = (x, y, w) => {
         for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) if (!open[y + dy]?.[x + dx] || taken.has(`${x + dx},${y + dy}`)) return false;
         return true;
@@ -278,17 +307,18 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     };
     const tokens = [];
     // Отряд — у левой кромки
-    const partyCells = startCells(plan, 'party', plan.cols * plan.rows);
+    const partyCells = under ? spots.party : startCells(plan, 'party', plan.cols * plan.rows);
     for (const actor of party.map(id => game.actors.get(id)).filter(Boolean)) {
         const t = await tokenAt(actor, partyCells);
         if (t) tokens.push(t);
     }
     // Враги — строем: вожак, стрелки, ближний бой; у Монстров от трёх бойцов ближнего боя — треть заходит с флангов
-    const cells = formation(plan), R = rng(`${plan.seed}|formation`);
+    const cells = under ? spots.enemy : formation(plan), R = rng(`${plan.seed}|formation`);
     const roles = foes.map((actor, i) => ({ actor, role: encounter.leader && actor.id === encounter.leader && !foes.slice(0, i).some(a => a.id === actor.id) ? 'leader' : isRanged(actor) ? 'ranged' : 'melee' }));
     const melee = roles.filter(r => r.role === 'melee');
-    const flank = encounter.node === 'mob' && melee.length >= 3 && R() < 0.4;
-    if (flank) melee.slice(-Math.max(1, Math.floor(melee.length / 3))).forEach((r, i) => { r.role = i % 2 ? 'flankBottom' : 'flankTop'; });
+    // Обет «Клещи» (encounter.pincers): с флангов всегда и половина ближнего боя
+    const flank = !under && (encounter.pincers ? melee.length >= 1 : encounter.node === 'mob' && melee.length >= 3 && R() < 0.4);
+    if (flank) melee.slice(-Math.max(1, encounter.pincers ? Math.ceil(melee.length / 2) : Math.floor(melee.length / 3))).forEach((r, i) => { r.role = i % 2 ? 'flankBottom' : 'flankTop'; });
     const order = { leader: 0, ranged: 1, melee: 2, flankTop: 3, flankBottom: 3 };
     for (const { actor, role } of roles.sort((a, b) => order[a.role] - order[b.role])) {
         const t = await tokenAt(actor, cells[role]) ?? await tokenAt(actor, cells.any);
@@ -300,6 +330,62 @@ export async function generateArena({ seed = foundry.utils.randomID(8), mood = '
     if (!viewing && view) await scene.view();
     if (viewing || view) await settled(scene.id);
     return { scene, plan };
+}
+
+// ==========================================
+// ПРОБУЖДЕНИЕ И ПРОРЫВ: эффекты Босса и Пожирателя не складываются. Узел Пожирателя — своя «порча» без бледности;
+// когда Пожиратель прорывается на арену пробуждённого Босса, бледность и пепел мягко сходят у всех на сцене за
+// время катсцены (breach.js), потом Мастер их убирает. Предвестия ложатся поверх любой сцены, как и раньше
+// ==========================================
+
+const AWAKEN = 'awaken';
+// Плитки, которые сейчас гаснут: доля видимости — перерисовка плитки не должна вернуть её из документа
+const fading = new Map();
+Hooks.on('refreshTile', tile => {
+    const k = fading.get(tile.id);
+    if (k !== undefined && tile.mesh) tile.mesh.alpha = tile.document.alpha * k;
+});
+Hooks.on('deleteTile', doc => fading.delete(doc.id));
+
+/** Что на сцене от пробуждения: бледная плитка и пепел */
+function awakeningOf(scene) {
+    return {
+        tiles: scene?.tiles.filter(t => t.getFlag(MODULE_ID, AWAKEN)) ?? [],
+        ash: String(scene?.weather ?? '').startsWith('gachadndAsh')
+    };
+}
+
+/**
+ * Мягко погасить пробуждение у себя на экране: бледная плитка и пепел сходят за duration мс после delay.
+ * Документы не меняет — это делает Мастер (dispelAwakening)
+ */
+export function fadeAwakening(scene, { delay = 0, duration = 3000 } = {}) {
+    if (!scene || canvas.scene?.id !== scene.id || !canvas.ready) return;
+    const { tiles, ash } = awakeningOf(scene);
+    const placed = tiles.map(t => t.object).filter(Boolean);
+    const effects = ash ? [...(canvas.weather?.weatherEffects?.children ?? [])] : [];
+    if (!placed.length && !effects.length) return;
+    const t0 = performance.now() + delay;
+    const step = now => {
+        const k = 1 - smooth(clamp01((now - t0) / duration));
+        for (const tile of placed) {
+            if (tile.destroyed) continue;
+            fading.set(tile.id, k);
+            if (tile.mesh) tile.mesh.alpha = tile.document.alpha * k;
+        }
+        for (const effect of effects) if (!effect.destroyed) effect.alpha = k;
+        if (k > 0) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+}
+
+/** Снять пробуждение со сцены насовсем: плитку и пепел; после погоды боя пепел уже не вернётся. Только Мастер */
+export async function dispelAwakening(scene) {
+    if (!game.user.isGM || !scene) return;
+    const { tiles, ash } = awakeningOf(scene);
+    if (tiles.length) await scene.deleteEmbeddedDocuments('Tile', tiles.map(t => t.id));
+    const arena = scene.getFlag(MODULE_ID, FLAG);
+    if (ash || arena?.ash || arena?.stage) await scene.update({ ...(ash ? { weather: '' } : {}), [`flags.${MODULE_ID}.${FLAG}.ash`]: null, [`flags.${MODULE_ID}.${FLAG}.stage`]: null });
 }
 
 /**
@@ -321,6 +407,16 @@ function purgeRegionHighlights() {
 }
 const purgeSoon = foundry.utils.debounce(purgeRegionHighlights, 400);
 for (const hook of ['canvasReady', 'createRegion', 'deleteRegion']) Hooks.on(hook, () => purgeSoon());
+
+// Темнота подземелий — решение стола, общее для мира
+Hooks.once('init', () => {
+    game.settings.register(MODULE_ID, 'dungeonDark', {
+        name: t('Темнота подземелий'),
+        hint: t('Полная — видно только освещённое: факелы, жаровни, свет героев и тёмное зрение. Условная — картинка ночная, но видно всё. По встрече: рядовые бои — условная, Застава и Босс — чаще полная.'),
+        scope: 'world', config: true, type: String, default: 'auto',
+        choices: { auto: t('По встрече'), cond: t('Всегда условная'), full: t('Всегда полная') }
+    });
+});
 
 Hooks.once('ready', () => {
     game.gachadnd = Object.assign(game.gachadnd ?? {}, { arena: { generate: generateArena, layout } });

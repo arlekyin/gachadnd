@@ -11,6 +11,7 @@ import { MODULE_ID } from "../core/constants.js";
 import { mapScene } from "./scene-travel.js";
 import { isMemorySkill } from "../memory/synergy/synergy.js";
 import { getFloor } from "./economy.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const WINDOW_ID = 'gachadnd-graveyard';
@@ -73,8 +74,8 @@ export async function devour(actor) {
     const tokens = canvas.scene?.tokens.filter(t => t.actorId === actor.id).map(t => t.id) ?? [];
     if (tokens.length) await canvas.scene.deleteEmbeddedDocuments('Token', tokens);
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Предел' }),
-        content: `<div class="gd-scent-chat"><i class="fas fa-cross"></i> Тело <strong>${foundry.utils.escapeHTML(actor.name)}</strong> осталось на узле. Туман смыкается над ним, и Предел забирает своё. У Якоря встаёт новое надгробие.</div>`
+        speaker: ChatMessage.getSpeaker({ alias: t('Предел') }),
+        content: `<div class="gd-scent-chat"><i class="fas fa-cross"></i> ${t('Тело')} <strong>${foundry.utils.escapeHTML(actor.name)}</strong> ${t('осталось на узле. Туман смыкается над ним, и Предел забирает своё. У Якоря встаёт новое надгробие.')}</div>`
     });
 }
 
@@ -84,11 +85,11 @@ export async function leaveBodies() {
     for (const actor of deadBodies()) {
         const name = foundry.utils.escapeHTML(actor.name);
         const choice = await foundry.applications.api.DialogV2.wait({
-            window: { title: 'Тело на узле', icon: 'fas fa-cross' },
-            content: `<p>Тело <strong>${name}</strong> осталось на узле. Отряд забирает его?</p><p><small>Оставленное тело Предел пожирает: воскресить персонажа будет нельзя, у Якоря встанет надгробие.</small></p>`,
+            window: { title: t('Тело на узле'), icon: 'fas fa-cross' },
+            content: `<p>${t('Тело')} <strong>${name}</strong> ${t('осталось на узле. Отряд забирает его?')}</p><p><small>${t('Оставленное тело Предел пожирает: воскресить персонажа будет нельзя, у Якоря встанет надгробие.')}</small></p>`,
             buttons: [
-                { action: 'carry', label: 'Забрать тело', icon: 'fas fa-people-carry-box', default: true },
-                { action: 'leave', label: 'Оставить', icon: 'fas fa-cross' }
+                { action: 'carry', label: t('Забрать тело'), icon: 'fas fa-people-carry-box', default: true },
+                { action: 'leave', label: t('Оставить'), icon: 'fas fa-cross' }
             ],
             rejectClose: false
         });
@@ -107,7 +108,7 @@ export class GraveyardWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: WINDOW_ID,
         classes: ['gachadnd-graveyard'],
         tag: 'div',
-        window: { title: 'Кладбище Предела', icon: 'fas fa-cross', resizable: true },
+        window: { title: t('Кладбище Предела'), icon: 'fas fa-cross', resizable: true },
         position: { width: 640, height: 560 },
         actions: {
             remove: GraveyardWindow.#onRemove
@@ -132,8 +133,8 @@ export class GraveyardWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         const grave = getGraves().find(g => g.id === target.dataset.id);
         if (!grave) return;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: 'Убрать надгробие' },
-            content: `<p>Убрать надгробие <strong>${foundry.utils.escapeHTML(grave.name)}</strong>?</p>`,
+            window: { title: t('Убрать надгробие') },
+            content: `<p>${t('Убрать надгробие')} <strong>${foundry.utils.escapeHTML(grave.name)}</strong>?</p>`,
             rejectClose: false
         });
         if (ok) await removeGrave(grave.id);

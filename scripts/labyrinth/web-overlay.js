@@ -23,6 +23,8 @@ import { isWeb, webMoves, isEaten, touchedSet, nextStepToward, webStage, ticksTo
 import { WebStage } from "./web-stage.js";
 import { fogLayer } from "./fog-layer.js";
 import { editHistory, undoEdit, linkNodes, unlinkNodes, moveParty, eatNode, cleanNode, shiftClock } from "./web-edit.js";
+import { mapVotes, toggleVote } from "./map-votes.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ID = 'gachadnd-web-overlay';
@@ -31,16 +33,16 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'
 // Важность узла: обычные — чуть мельче, Заставы и Босс — крупнее
 // Режимы правки: значок и текст полосы сверху
 const EDIT_MODES = {
-    devourer: { icon: 'fa-location-crosshairs', text: 'дважды щёлкните узел — Пожиратель встанет туда' },
-    paint: { icon: 'fa-palette', text: 'дважды щёлкните узел — он сменит тип' },
-    link: { icon: 'fa-link', text: 'щёлкните два узла — между ними протянется нить' },
-    unlink: { icon: 'fa-link-slash', text: 'щёлкните два узла — нить между ними порвётся' },
-    move: { icon: 'fa-person-walking-arrow-right', text: 'дважды щёлкните узел — отряд окажется там без шага' },
-    eat: { icon: 'fa-droplet', text: 'дважды щёлкните узел — Пожиратель съест его' },
-    clean: { icon: 'fa-sun', text: 'дважды щёлкните узел — порча сойдёт' }
+    devourer: { icon: 'fa-location-crosshairs', text: t('дважды щёлкните узел — Пожиратель встанет туда') },
+    paint: { icon: 'fa-palette', text: t('дважды щёлкните узел — он сменит тип') },
+    link: { icon: 'fa-link', text: t('щёлкните два узла — между ними протянется нить') },
+    unlink: { icon: 'fa-link-slash', text: t('щёлкните два узла — нить между ними порвётся') },
+    move: { icon: 'fa-person-walking-arrow-right', text: t('дважды щёлкните узел — отряд окажется там без шага') },
+    eat: { icon: 'fa-droplet', text: t('дважды щёлкните узел — Пожиратель съест его') },
+    clean: { icon: 'fa-sun', text: t('дважды щёлкните узел — порча сойдёт') }
 };
 /** «12 шагов», «2 шага», «1 шаг» */
-const steps = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'шаг' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'шага' : 'шагов'}`;
+const steps = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? t('шаг') : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? t('шага') : t('шагов')}`;
 const TIER = { mob: 'minor', event: 'minor', elite: 'major', shop: 'major', rest: 'major', risk: 'major', doom: 'major', outpost: 'seal', boss: 'boss' };
 
 /** Модель паутины для рисовальщика: узлы с состоянием, пути, след Пожирателя */
@@ -112,8 +114,8 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             bossReward: () => game.settings.set(MODULE_ID, 'webBossReward', !game.settings.get(MODULE_ID, 'webBossReward')),
             generate: function () { return drawFloorFrom(this.element); },
             omen: (event, target) => (target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage)),
-            satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер'),
-            devourerGone: () => devourerGone('по решению Мастера'),
+            satiety: (event, target) => addSatiety(Number(target.dataset.delta), t('Мастер')),
+            devourerGone: () => devourerGone(t('по решению Мастера')),
             // Терминал — вкладка того же слоя: Туман остаётся, меняется содержимое
             // Токен выбирать не нужно: свой персонаж или первый подконтрольный, дальше — листалка в Терминале
             terminal: async function () {
@@ -182,6 +184,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
         const counts = {};
         for (const n of map.nodes) counts[n.type] = (counts[n.type] ?? 0) + 1;
         this.model = webModel(map);
+        this.model.votes = mapVotes(map);
         this.draft ??= { floor: map.visitedNodes?.length ? floor + 1 : floor, mode: 'web', length: 7 };
         const enabled = new Set(activeStages().map(s => s.id));
         const PAINT = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost'];
@@ -189,18 +192,18 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
             hasBoard: true,
             web: {
                 ticks, stage, toNext: ticksToNextStage(ticks), calm: Math.max(0, WEB.CALM - ticks), eaten: (map.web?.eaten ?? []).length, every: WEB.EVERY,
-                mood: ['Босс спит', 'Босс ворочается во сне', 'Босс проснулся', 'Босс в ярости', 'Босс в полной силе'][Math.min(4, Math.round((stage / Math.max(1, activeStages().length)) * 4))],
+                mood: [t('Босс спит'), t('Босс ворочается во сне'), t('Босс проснулся'), t('Босс в ярости'), t('Босс в полной силе')][Math.min(4, Math.round((stage / Math.max(1, activeStages().length)) * 4))],
                 stages: activeStages().map((s, i) => ({ ...s, on: i < stage })), devourer: !!map.web?.devourer, max: activeStages().length
             },
             mode: this.mode,
             editing: isGM && EDIT_MODES[this.mode] ? { ...EDIT_MODES[this.mode], mode: this.mode } : null,
             gm: isGM && this.tools ? {
                 calm: WEB.CALM, every: WEB.EVERY, tab: this.tab, collapsed: this.collapsed,
-                calmText: `Босс спит первые ${steps(WEB.CALM)}`, everyText: `Потом крепнет каждые ${steps(WEB.EVERY)}`,
+                calmText: t('Босс спит первые {v}', { v: steps(WEB.CALM) }), everyText: t('Потом крепнет каждые {v}', { v: steps(WEB.EVERY) }),
                 scent: this.#scentBar(context.scent),
                 huntAlert: context.scent?.state === 'hunt',
                 pulse: { ...context.pulse, steps: [-1, 0, 1, 2].map(o => o <= (context.pulse?.offset ?? 0)) },
-                satiety: { ...context.satiety, dots: Array.from({ length: context.satiety.cap }, (_, i) => i < context.satiety.value), speed: (n => n === 1 ? '1 узел за шаг' : `${n} узла за шаг`)(1 + Math.floor(Math.min(5, context.satiety.value) / 2)) },
+                satiety: { ...context.satiety, dots: Array.from({ length: context.satiety.cap }, (_, i) => i < context.satiety.value), speed: (n => n === 1 ? t('1 узел за шаг') : t('{n} узла за шаг', { n }))(1 + Math.floor(Math.min(5, context.satiety.value) / 2)) },
                 omenOn: !!getOmen(),
                 undo: editHistory()[0] ?? null, history: editHistory().slice(0, 6),
                 draft: this.draft, reward: !!game.settings.get(MODULE_ID, 'webBossReward'),
@@ -208,10 +211,10 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                 paint: PAINT.map(t => ({ type: t, label: MAP_DATA.LABELS[t], icon: MAP_DATA.ICONS[t], color: MAP_DATA.COLORS[t], on: this.mode === 'paint' && this.paintType === t }))
             } : null,
             legend: ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost', 'boss'].filter(t => counts[t]).map(t => ({ label: MAP_DATA.LABELS[t], icon: MAP_DATA.ICONS[t], color: MAP_DATA.COLORS[t], count: counts[t] })),
-            hint: isGM && EDIT_MODES[this.mode] ? `Режим правки: ${this.mode === 'paint' ? `дважды щёлкните узел — он станет «${MAP_DATA.LABELS[this.paintType]}»` : EDIT_MODES[this.mode].text}. Esc — выход.`
+            hint: isGM && EDIT_MODES[this.mode] ? t('Режим правки: {text}. Esc — выход.', { text: this.mode === 'paint' ? t('дважды щёлкните узел — он станет «{v}»', { v: MAP_DATA.LABELS[this.paintType] }) : EDIT_MODES[this.mode].text })
                 : isGM
-                ? (map.currentNodeId ? 'Щёлкните кристалл, затем ещё раз — отряд пойдёт туда. Янтарные нити — куда можно за этот шаг.' : 'Щёлкните кристалл внешнего кольца, затем ещё раз — отряд войдёт на этаж.')
-                : 'Куда идти — решаете вслух, отряд ведёт Мастер. Янтарные нити — куда можно за этот шаг.'
+                ? (map.currentNodeId ? t('Щёлкните кристалл, затем ещё раз — отряд пойдёт туда. Янтарные нити — куда можно за этот шаг.') : t('Щёлкните кристалл внешнего кольца, затем ещё раз — отряд войдёт на этаж.'))
+                : t('Щёлкните кристалл, чтобы отметить, куда хотите идти; ещё щелчок снимает отметку. Отряд ведёт Мастер. Янтарные нити — куда можно за этот шаг.')
         });
     }
 
@@ -252,7 +255,7 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                 resizeTo: this.element,
                 fog: fogLayer,
                 onStep: (id, held) => {
-                    if (!game.user.isGM) return ui.notifications.info('Отряд ведёт Мастер — скажите ему, куда идти.');
+                    if (!game.user.isGM) return ui.notifications.info(t('Отряд уже здесь.'));
                     if (!held) return;
                     if (this.mode === 'devourer') return gmDevourer(id);
                     if (this.mode === 'paint') return setWebNodeType(id, this.paintType);
@@ -262,7 +265,8 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                     if (this.mode === 'link' || this.mode === 'unlink') return;
                     return stepTo(id);
                 },
-                onHover: (n, p, r) => this.#tooltip(n, p, r)
+                onHover: (n, p, r) => this.#tooltip(n, p, r),
+                onVote: n => toggleVote(n.id)
             });
             // Со вкладки — астролябия сразу на месте, без долгого появления
             if (this.handoff) this.stage.introPending = false;
@@ -280,10 +284,10 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
                 const hint = this.element?.querySelector('.gd-wo-hint');
                 if (!hint) return;
                 hint.dataset.base ??= hint.textContent;
-                const then = { devourer: 'Пожиратель встанет сюда', paint: 'узел сменится', move: 'отряд окажется здесь', eat: 'узел будет съеден', clean: 'порча сойдёт' }[this.mode];
+                const then = { devourer: t('Пожиратель встанет сюда'), paint: t('узел сменится'), move: t('отряд окажется здесь'), eat: t('узел будет съеден'), clean: t('порча сойдёт') }[this.mode];
                 hint.textContent = !n ? hint.dataset.base
-                    : this.mode === 'link' || this.mode === 'unlink' ? `${n.label}: теперь щёлкните второй узел.`
-                    : `${n.label}: щёлкните ещё раз — ${then ?? 'отряд пойдёт сюда'}.`;
+                    : this.mode === 'link' || this.mode === 'unlink' ? t('{label}: теперь щёлкните второй узел.', { label: n.label })
+                    : t('{label}: щёлкните ещё раз — {v}.', { label: n.label, v: then ?? t('отряд пойдёт сюда') });
                 hint.classList.toggle('armed', !!n);
             };
         }
@@ -311,34 +315,50 @@ export class WebOverlay extends HandlebarsApplicationMixin(ApplicationV2) {
     #tooltip(n, p, r) {
         const tip = this.element?.querySelector('.gd-wo-tip');
         if (!tip) return;
-        if (!n) { tip.hidden = true; tip.classList.remove('boss'); return; }
+        tip.classList.remove('boss', 'medal');
+        if (!n) { tip.hidden = true; return; }
         const boss = this.model?.boss;
-        // Медальон ступени и сам Босс — карточка Босса; игрокам — образ, Мастеру — числа
-        if (n.medal || (n.type === 'boss' && boss)) {
+        // Медальон — только своя ступень и когда она придёт: полный список — у самого Босса
+        if (n.medal) {
             const esc = v => foundry.utils.escapeHTML(String(v ?? ''));
-            const mood = ['Босс спит', 'Босс ворочается во сне', 'Босс проснулся', 'Босс в ярости', 'Босс в полной силе'][Math.min(4, boss.stage)];
+            const when = n.on ? t('Уже действует')
+                : n.gm ? (n.next ? t('Через {n} шаг.', { n: n.toNext }) : t('На шаге {n}', { n: n.at }))
+                : n.next && n.toNext <= 2 ? t('Вот-вот проснётся') : '';
+            tip.innerHTML = `<b>${esc(n.label)}</b><small>${esc(n.text)}</small>${when ? `<small class="when ${n.on ? 'on' : ''}">${when}</small>` : ''}`;
+            tip.classList.add('medal');
+            return this.#placeTip(tip, p, r);
+        }
+        // Сам Босс — вся карточка: игрокам образ, Мастеру числа
+        if (n.type === 'boss' && boss) {
+            const esc = v => foundry.utils.escapeHTML(String(v ?? ''));
+            const mood = [t('Босс спит'), t('Босс ворочается во сне'), t('Босс проснулся'), t('Босс в ярости'), t('Босс в полной силе')][Math.min(4, boss.stage)];
             const rows = boss.stages.map((st, i) => `<div class="st ${i < boss.stage ? 'on' : ''}"><i class="fas ${st.icon}"></i><b>${esc(st.name)}</b><span>${esc(st.text)}</span></div>`).join('');
-            const reward = boss.reward ? `<div class="rw">Добыча с Босса: <b>+${boss.reward} крист.</b>${boss.purple ? ', один фиолетовый' : ''}</div>` : '<div class="rw">Каждая ступень — ещё кристалл в добыче Босса</div>';
-            const next = boss.toNext ? (boss.gm ? `Через ${boss.toNext} шаг. — ${esc(boss.stages[boss.stage]?.name)}` : boss.toNext <= 2 ? 'Босс вот-вот наберёт силу' : '') : '';
-            tip.innerHTML = `<b>${n.medal ? esc(n.label) : 'Босс этажа'}</b><small>${mood}</small>${rows}${reward}${next ? `<div class="nx"><i class="fas fa-hourglass-half"></i> ${next}</div>` : ''}${boss.gm ? `<div class="gm">Мастеру: шаг ${boss.ticks} · тишина ${boss.calm} · ступень каждые ${boss.every}</div>` : ''}`;
+            const reward = boss.reward ? `<div class="rw">${t('Добыча с Босса:')} <b>${t('+{reward} крист.', { reward: boss.reward })}</b>${boss.purple ? t(', один фиолетовый') : ''}</div>` : t('<div class="rw">Каждая ступень — ещё кристалл в добыче Босса</div>');
+            const next = boss.toNext ? (boss.gm ? t('Через {toNext} шаг. — {v}', { toNext: boss.toNext, v: esc(boss.stages[boss.stage]?.name) }) : boss.toNext <= 2 ? t('Босс вот-вот наберёт силу') : '') : '';
+            tip.innerHTML = `<b>${t('Босс этажа')}</b><small>${mood}</small>${rows}${reward}${next ? `<div class="nx"><i class="fas fa-hourglass-half"></i> ${next}</div>` : ''}${boss.gm ? `<div class="gm">${t('Мастеру: шаг {ticks} · тишина {calm} · ступень каждые {every}', { ticks: boss.ticks, calm: boss.calm, every: boss.every })}</div>` : ''}`;
             tip.classList.add('boss');
-            tip.style.left = `${p.x}px`;
-            tip.style.top = `${p.y - r - 14}px`;
-            tip.hidden = false;
-            return;
+            return this.#placeTip(tip, p, r);
         }
-        tip.classList.remove('boss');
         if (this.model?.devourer === n.id) {
-            const m = this.model, sat = ['голоден', 'сыт едва', 'сыт', 'насытился', 'обожрался', 'раздут'][Math.min(5, m.satiety)];
-            tip.innerHTML = `<b>Пожиратель</b><small>${sat} · ${m.speed === 1 ? 'идёт 1 узел за шаг' : `идёт ${m.speed} узла за шаг`}${game.user.isGM ? ` · Насыщение ${m.satiety}` : ''}</small><small>${n.label}: съеден</small>`;
-            tip.style.left = `${p.x}px`; tip.style.top = `${p.y - r - 14}px`; tip.hidden = false;
-            return;
+            const m = this.model, sat = [t('голоден'), t('сыт едва'), t('сыт'), t('насытился'), t('обожрался'), t('раздут')][Math.min(5, m.satiety)];
+            tip.innerHTML = `<b>${t('Пожиратель')}</b><small>${sat} · ${m.speed === 1 ? t('идёт 1 узел за шаг') : t('идёт {speed} узла за шаг', { speed: m.speed })}${game.user.isGM ? t(' · Насыщение {satiety}', { satiety: m.satiety }) : ''}</small><small>${t('{label}: съеден', { label: n.label })}</small>`;
+            return this.#placeTip(tip, p, r);
         }
-        const state = n.eaten ? 'съеден: награды нет, вход — прорыв' : n.touched ? 'тронут Пожирателем' : n.state === 'visited' ? 'пройден' : n.state === 'reachable' ? 'можно за этот шаг' : n.state === 'current' ? 'здесь отряд' : '';
-        tip.innerHTML = `<b>${n.label}</b>${state ? `<small>${state}</small>` : ''}`;
-        tip.style.left = `${p.x}px`;
-        tip.style.top = `${p.y - r - 14}px`;
+        const state = n.eaten ? t('съеден: награды нет, вход — прорыв') : n.touched ? t('тронут Пожирателем') : n.state === 'visited' ? t('пройден') : n.state === 'reachable' ? t('можно за этот шаг') : n.state === 'current' ? t('здесь отряд') : '';
+        const voters = this.model?.votes?.get(n.id)?.map(v => foundry.utils.escapeHTML(v.name)).join(', ');
+        tip.innerHTML = `<b>${n.label}</b>${state ? `<small>${state}</small>` : ''}${voters ? `<small>${t('Выбрали: {names}', { names: voters })}</small>` : ''}`;
+        this.#placeTip(tip, p, r);
+    }
+
+    /** Подсказка над точкой; сверху нет места — под ней; весь текст всегда внутри слоя */
+    #placeTip(tip, p, r) {
         tip.hidden = false;
+        const W = this.element.clientWidth, H = this.element.clientHeight, w = tip.offsetWidth, h = tip.offsetHeight, gap = 14, edge = 8;
+        const above = p.y - r - gap, below = p.y + r + gap + h;
+        // Нижний край подсказки: сдвиг translate(-50%, -100%) ставит её над этой точкой
+        const bottom = above - h >= edge ? above : Math.min(below, H - edge);
+        tip.style.left = `${Math.max(w / 2 + edge, Math.min(W - w / 2 - edge, p.x))}px`;
+        tip.style.top = `${Math.max(h + edge, bottom)}px`;
     }
 
     /**
@@ -390,6 +410,13 @@ Hooks.on('updateScene', (scene, changes) => {
     app.render();
 });
 const refresh = () => { const app = foundry.applications.instances?.get(ID); if (app?.rendered) app.render(); };
+// Голос — только перерисовка голосов: кристаллы и наведение не трогаем
+Hooks.on('gachadnd.mapVotes', () => {
+    const app = foundry.applications.instances?.get(ID);
+    if (!app?.rendered || !app.model || !app.stage) return;
+    app.model.votes = mapVotes(mapScene()?.getFlag(MODULE_ID, 'floorMap'));
+    app.stage.setVotes(app.model.votes);
+});
 Hooks.on('gachadnd.omenChanged', refresh);
 Hooks.on('updateSetting', setting => { if ([`${MODULE_ID}.devourerSatiety`, `${MODULE_ID}.runFloor`, `${MODULE_ID}.webCalm`, `${MODULE_ID}.webEvery`, `${MODULE_ID}.webStages`, `${MODULE_ID}.webBossReward`].includes(setting.key)) refresh(); });
 let timer = null;

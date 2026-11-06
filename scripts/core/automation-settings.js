@@ -11,6 +11,7 @@ import { MODULE_ID } from "./constants.js";
 import { getSynergyDictionary } from "../memory/synergy/synergy-data.js";
 import { getSkillPack } from "../memory/crystals.js";
 import { readPrefs, getPref, savePrefs, KIND_LABELS, TRIGGER_EVENTS } from "../memory/synergy/triggers.js";
+import { t } from "./i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -19,7 +20,7 @@ export class AutomationSettings extends HandlebarsApplicationMixin(ApplicationV2
         id: 'gachadnd-automation-settings',
         tag: 'form',
         classes: ['gachadnd-automation-settings'],
-        window: { title: 'Срабатывания синергий и навыков', icon: 'fas fa-bolt', resizable: true },
+        window: { title: t('Срабатывания синергий и навыков'), icon: 'fas fa-bolt', resizable: true },
         position: { width: 560, height: 640 },
         form: { handler: AutomationSettings.#onSubmit, submitOnChange: false, closeOnSubmit: true },
         actions: { reset: AutomationSettings.#onReset }
@@ -53,8 +54,8 @@ export class AutomationSettings extends HandlebarsApplicationMixin(ApplicationV2
         const row = source => ({ ...source, kind: KIND_LABELS[source.trigger.on](source.trigger), ...getPref(source) });
         return {
             groups: [
-                { title: 'Синергии', rows: synergies.map(row) },
-                { title: 'Навыки', rows: skills.map(row) }
+                { title: t('Синергии'), rows: synergies.map(row) },
+                { title: t('Навыки'), rows: skills.map(row) }
             ].filter(g => g.rows.length),
             masterOff: !game.settings.get(MODULE_ID, 'automation')
         };
@@ -77,7 +78,7 @@ export class AutomationSettings extends HandlebarsApplicationMixin(ApplicationV2
             prefs[key] = { enabled: !!value.enabled, ask: !!value.ask };
         }
         await savePrefs(prefs);
-        ui.notifications.info('Срабатывания сохранены.');
+        ui.notifications.info(t('Срабатывания сохранены.'));
     }
 
     static async #onReset() {
@@ -88,9 +89,9 @@ export class AutomationSettings extends HandlebarsApplicationMixin(ApplicationV2
 
 export function registerAutomationMenu() {
     game.settings.registerMenu(MODULE_ID, 'automationMenu', {
-        name: 'Срабатывания синергий и навыков',
-        label: 'Настроить',
-        hint: 'Личные галочки «Вкл.» и «Спрашивать» для каждого автоматического срабатывания — как у реакций в Baldur\'s Gate 3. У каждого игрока свои, перезапуск не нужен.',
+        name: t('Срабатывания синергий и навыков'),
+        label: t('Настроить'),
+        hint: t('Личные галочки «Вкл.» и «Спрашивать» для каждого автоматического срабатывания — как у реакций в Baldur\'s Gate 3. У каждого игрока свои, перезапуск не нужен.'),
         icon: 'fas fa-bolt',
         type: AutomationSettings,
         restricted: false

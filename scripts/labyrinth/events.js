@@ -31,6 +31,7 @@ import { validateEvent } from "./event-schema.js";
 import { randomCrystal, getSkillPack } from "../memory/crystals.js";
 import { addSkillToMemory } from "../memory/inventory.js";
 import { grantScar } from "../memory/skills/living/scars.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ID = 'gachadnd-event';
@@ -92,7 +93,7 @@ function abilityLabel(key) {
 function checkLabel(check) {
     if (check.skill) return `${abilityOfSkill(check.skill)} (${skillLabel(check.skill)})`;
     if (check.ability) return abilityLabel(check.ability);
-    return `спасбросок: ${abilityLabel(check.save)}`;
+    return t('спасбросок: {v}', { v: abilityLabel(check.save) });
 }
 function skillLabel(key) {
     const label = CONFIG.DND5E?.skills?.[key]?.label;
@@ -144,8 +145,8 @@ export async function applyEffects(effects = [], { one, who, title }) {
         const targets = to === 'all' ? party : to === 'one' && one ? [one] : [];
         if (key === 'note' || key === 'fight') {
             await ChatMessage.create({
-                speaker: { alias: 'Дневник Разлома' }, whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id),
-                content: `<div class="gd-scent-chat"><i class="fas ${key === 'fight' ? 'fa-skull-crossbones' : 'fa-feather'}"></i> <strong>${key === 'fight' ? 'Бой' : 'Мастеру'}:</strong> ${esc(value)}</div>`
+                speaker: { alias: t('Дневник Разлома') }, whisper: ChatMessage.getWhisperRecipients('GM').map(u => u.id),
+                content: `<div class="gd-scent-chat"><i class="fas ${key === 'fight' ? 'fa-skull-crossbones' : 'fa-feather'}"></i> <strong>${key === 'fight' ? t('Бой') : t('Мастеру')}:</strong> ${esc(value)}</div>`
             });
             continue;
         }
@@ -153,57 +154,57 @@ export async function applyEffects(effects = [], { one, who, title }) {
             const at = Math.max(0, OMEN_ORDER.indexOf(getOmen()));
             const next = OMEN_ORDER[Math.max(0, Math.min(OMEN_ORDER.length - 1, at + value))];
             if (getOmen() !== 'here' && next !== getOmen()) await setOmen(next);
-            lines.push(value > 0 ? 'Пожиратель ближе' : 'Пожиратель теряет след');
+            lines.push(value > 0 ? t('Пожиратель ближе') : t('Пожиратель теряет след'));
             continue;
         }
         if (key === 'deal_preview') {
             const lots = await rollDealLots();
-            lines.push(`луна предложит: ${lots.map(l => LOTS[l]?.name).join(', ')}`);
+            lines.push(t('луна предложит: {v}', { v: lots.map(l => LOTS[l]?.name).join(', ') }));
             continue;
         }
         if (key === 'reward') {
             await offerEventRewards({ actors: targets, tier: value.tier, count: value.count ?? 3, title });
-            lines.push(`награда события — ${targets.map(a => esc(a.name)).join(', ')}`);
+            lines.push(t('награда события — {v}', { v: targets.map(a => esc(a.name)).join(', ') }));
             continue;
         }
         for (const actor of targets) {
             if (key === 'gold') {
                 const amount = Math.round(floorBase() * Math.abs(value));
-                if (value > 0) { await addGold(actor, amount); lines.push(`${esc(actor.name)}: +${amount} зм`); }
-                else { const paid = Math.min(amount, Math.floor(wealth(actor))); await pay(actor, paid); lines.push(`${esc(actor.name)}: −${paid} зм`); }
+                if (value > 0) { await addGold(actor, amount); lines.push(t('{v}: +{amount} зм', { v: esc(actor.name), amount })); }
+                else { const paid = Math.min(amount, Math.floor(wealth(actor))); await pay(actor, paid); lines.push(t('{v}: −{paid} зм', { v: esc(actor.name), paid })); }
             } else if (key === 'take_crystal') {
                 const min = RARITY_ORDER.indexOf(value?.min ?? 'gray');
                 const item = actor.items.filter(i => isCrystalItem(i) && RARITY_ORDER.indexOf(i.flags[MODULE_ID]?.rarity) >= min)
                     .sort((a, b) => RARITY_ORDER.indexOf(a.flags[MODULE_ID].rarity) - RARITY_ORDER.indexOf(b.flags[MODULE_ID].rarity))[0];
-                if (!item) { lines.push(`${esc(actor.name)}: отдать нечего`); continue; }
+                if (!item) { lines.push(t('{v}: отдать нечего', { v: esc(actor.name) })); continue; }
                 taken.set(actor.id, item.flags[MODULE_ID].rarity);
                 const qty = Number(item.system?.quantity ?? 1);
                 if (qty > 1) await item.update({ 'system.quantity': qty - 1 }); else await item.delete();
-                lines.push(`${esc(actor.name)}: отдан «${esc(item.name)}»`);
+                lines.push(t('{v}: отдан «{v2}»', { v: esc(actor.name), v2: esc(item.name) }));
             } else if (key === 'take_skill') {
                 const pool = actor.items.filter(i => isMemorySkill(i) && !i.flags[MODULE_ID].undeletable && !i.flags[MODULE_ID].horseman && !i.flags[MODULE_ID].scar);
                 const item = pool[Math.floor(Math.random() * pool.length)];
-                if (!item) { lines.push(`${esc(actor.name)}: продать нечего`); continue; }
+                if (!item) { lines.push(t('{v}: продать нечего', { v: esc(actor.name) })); continue; }
                 const amount = Math.round(floorBase() * value.pay * (RARITY_WEIGHT[item.flags[MODULE_ID].rarity] ?? 1));
                 await item.delete({ gachadndCleanse: true });
                 await addGold(actor, amount);
-                lines.push(`${esc(actor.name)}: навык «${esc(item.name)}» продан за ${amount} зм`);
+                lines.push(t('{v}: навык «{v2}» продан за {amount} зм', { v: esc(actor.name), v2: esc(item.name), amount }));
             } else if (key === 'burn_skill') {
                 const pool = actor.items.filter(i => isMemorySkill(i) && !i.flags[MODULE_ID].undeletable && !i.flags[MODULE_ID].horseman);
                 const item = pool[Math.floor(Math.random() * pool.length)];
                 if (!item) continue;
                 await item.delete();
-                lines.push(`${esc(actor.name)}: сгорел «${esc(item.name)}»`);
+                lines.push(t('{v}: сгорел «{v2}»', { v: esc(actor.name), v2: esc(item.name) }));
             } else if (key === 'cool') {
                 const hot = actor.items.filter(i => isMemorySkill(i) && (heatOf(i).extra || heatOf(i).locked || heatOf(i).borrowed));
                 if (hot.length) await actor.updateEmbeddedDocuments('Item', hot.map(i => ({ _id: i.id, [`flags.${MODULE_ID}.heat`]: { borrowed: 0, extra: 0, locked: false } })));
-                lines.push(`${esc(actor.name)}: перегрев снят${hot.length ? '' : ' (его не было)'}`);
+                lines.push(t('{v}: перегрев снят{v2}', { v: esc(actor.name), v2: hot.length ? '' : t(' (его не было)') }));
             } else if (key === 'scar') {
-                const scar = await grantScar(actor, { kind: value === true ? null : value, reason: 'Событие оставило след' });
-                lines.push(`${esc(actor.name)}: ${scar ? `шрам «${esc(scar.name)}»` : 'шрамов больше некуда — обошлось'}`);
+                const scar = await grantScar(actor, { kind: value === true ? null : value, reason: t('Событие оставило след') });
+                lines.push(`${esc(actor.name)}: ${scar ? t('шрам «{v}»', { v: esc(scar.name) }) : t('шрамов больше некуда — обошлось')}`);
             } else if (key === 'moon_mark') {
                 await actor.setFlag(MODULE_ID, 'moonMark', { floor: getFloor(), at: Date.now() });
-                lines.push(`${esc(actor.name)}: метка луны`);
+                lines.push(t('{v}: метка луны', { v: esc(actor.name) }));
             } else if (key === 'crystal') {
                 const rarity = value.rarity === 'up' ? RARITY_ORDER[Math.min(RARITY_ORDER.length - 1, RARITY_ORDER.indexOf(taken.get(actor.id) ?? 'gray') + 1)] : value.rarity;
                 if (value.rarity === 'up' && !taken.has(actor.id)) continue;
@@ -213,7 +214,7 @@ export async function applyEffects(effects = [], { one, who, title }) {
                 const name = await randomSkillName(value.rarity);
                 if (name) {
                     const result = await addSkillToMemory(actor, name, { forced: true });
-                    lines.push(`${esc(actor.name)}: навык «${esc(name)}» в Памяти${result?.status === 'replaced' ? ` (вытеснен «${esc(result.replacedName)}»)` : ''}`);
+                    lines.push(t('{v}: навык «{v2}» в Памяти{v3}', { v: esc(actor.name), v2: esc(name), v3: result?.status === 'replaced' ? t(' (вытеснен «{v}»)', { v: esc(result.replacedName) }) : '' }));
                 }
             } else if (key === 'hit_dice') {
                 const cls = mainClass(actor);
@@ -221,12 +222,12 @@ export async function applyEffects(effects = [], { one, who, title }) {
                 const spent = Number(cls.system.hd?.spent ?? 0), levels = Number(cls.system.levels ?? 0);
                 const next = Math.max(0, Math.min(levels, spent - value));
                 await cls.update({ 'system.hd.spent': next });
-                lines.push(`${esc(actor.name)}: Кости Хитов ${value > 0 ? '+' : '−'}${Math.abs(spent - next)}`);
+                lines.push(t('{v}: Кости Хитов {v2}{v3}', { v: esc(actor.name), v2: value > 0 ? '+' : '−', v3: Math.abs(spent - next) }));
             } else if (key === 'hp') {
                 const max = Number(actor.system.attributes?.hp?.max) || 0;
                 const amount = Math.max(1, Math.round(max * Math.abs(value)));
                 await actor.applyDamage(value < 0 ? amount : -amount);
-                lines.push(`${esc(actor.name)}: ${value < 0 ? `−${amount}` : `+${amount}`} ПЗ`);
+                lines.push(t('{v}: {v2} ПЗ', { v: esc(actor.name), v2: value < 0 ? `−${amount}` : `+${amount}` }));
             }
         }
     }
@@ -240,7 +241,7 @@ export async function applyEffects(effects = [], { one, who, title }) {
 async function startEvent(found, exclude = []) {
     const ev = await pickEvent({ exclude });
     if (!ev) {
-        ui.notifications.warn(`Для биома «${BIOMES[currentBiome()]?.name}» событий нет — ведите своё.`);
+        ui.notifications.warn(t('Для биома «{name}» событий нет — ведите своё.', { name: BIOMES[currentBiome()]?.name }));
         return null;
     }
     const event = { id: ev.id, status: 'open', choice: null, actorId: null, success: null, text: null, lines: [] };
@@ -258,9 +259,9 @@ async function resolve(found, event, ev, success) {
     const seen = new Set(game.settings.get(MODULE_ID, 'eventsSeen') ?? []);
     seen.add(ev.id);
     await game.settings.set(MODULE_ID, 'eventsSeen', [...seen]);
-    const verdict = option.check ? ` · ${success ? 'успех' : 'провал'}` : '';
+    const verdict = option.check ? ` · ${success ? t('успех') : t('провал')}` : '';
     return ChatMessage.create({
-        speaker: { alias: 'Дневник Разлома' },
+        speaker: { alias: t('Дневник Разлома') },
         content: `<div class="gachadnd-map-chat gd-event-chat"><strong>${esc(ev.title)}</strong> — ${esc(option.label)}${one ? ` (${esc(one.name)})` : ''}${verdict}<br><em>${esc(outcome.text)}</em>${lines.length ? `<br><small>${lines.join(' · ')}</small>` : ''}</div>`
     });
 }
@@ -285,8 +286,8 @@ async function performOp({ op, userId, ...data }) {
         const who = option.who ?? 'one';
         const actor = who === 'none' ? null : game.actors.get(data.actorId);
         if (who !== 'none') {
-            if (!actor || !partyActors().some(a => a.id === actor.id)) return notifyUser(userId, 'Выберите персонажа отряда в строке «Кто».');
-            if (!user?.isGM && !actor.testUserPermission(user, 'OWNER')) return notifyUser(userId, `${actor.name} — не ваш персонаж.`);
+            if (!actor || !partyActors().some(a => a.id === actor.id)) return notifyUser(userId, t('Выберите персонажа отряда в строке «Кто».'));
+            if (!user?.isGM && !actor.testUserPermission(user, 'OWNER')) return notifyUser(userId, t('{name} — не ваш персонаж.', { name: actor.name }));
         }
         Object.assign(event, { choice: data.choice, actorId: actor?.id ?? null });
         if (option.check) {
@@ -322,7 +323,7 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: ID,
         classes: ['gachadnd-map', 'gachadnd-event'],
         tag: 'div',
-        window: { title: 'Дневник Разлома', icon: 'fas fa-book-open', resizable: false },
+        window: { title: t('Дневник Разлома'), icon: 'fas fa-book-open', resizable: false },
         position: { width: 1180, height: 720 },
         actions: { choose: EventWindow.#onChoose, roll: EventWindow.#onRoll, reroll: EventWindow.#onReroll, finish: EventWindow.#onFinish }
     };
@@ -336,7 +337,7 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static async open() {
         if (!game.user.isGM) return EventWindow.show();
         const found = currentEventNode();
-        if (!found) return ui.notifications.warn('Событие открывается на узле «Событие».');
+        if (!found) return ui.notifications.warn(t('Событие открывается на узле «Событие».'));
         if (!found.node.event) {
             await loadEvents();
             if (!(await startEvent(found))) return;
@@ -356,7 +357,7 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     /** Просмотр события без узла и без последствий (проверка вида): game.gachadnd.previewEvent('swamp_lights') */
     static async preview(id) {
         await loadEvents();
-        if (!byId(id)) return ui.notifications.warn(`Нет такого события: ${id}.`);
+        if (!byId(id)) return ui.notifications.warn(t('Нет такого события: {id}.', { id }));
         EventWindow.close();
         const app = new EventWindow();
         app.previewId = id;
@@ -397,7 +398,7 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             const sketch = ev.image
                 ? renderImageSketch({ ...ev.image, src: `modules/${MODULE_ID}/${ev.image.src}`, seed: ev.id, live })
                 : ev.sketch ? renderSketch(ev.sketch, ev.id)
-                : { svg: `<svg class="gd-sketch gd-ev-blank" viewBox="0 0 40 40"><path d="${DOODLES[0]}"/></svg><div class="gd-ev-blank-note">зарисовка ещё не сделана</div>`, duration: 0 };
+                : { svg: `<svg class="gd-sketch gd-ev-blank" viewBox="0 0 40 40"><path d="${DOODLES[0]}"/></svg><div class="gd-ev-blank-note">${t('зарисовка ещё не сделана')}</div>`, duration: 0 };
             this.#revealSeconds = live && ev.image ? sketch.reveal : 0;
             this.#textStart = live ? sketch.duration * 0.28 : 0;
             Object.assign(context, { sketch: sketch.svg, sketchW: size.w, sketchH: size.h, caption: ev.caption ? { text: ev.caption, at: (live ? sketch.duration : 0).toFixed(2) } : null });
@@ -409,12 +410,12 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         const option = state.choice != null ? ev.options[state.choice] : null;
         const biome = Array.isArray(ev.biome) ? ev.biome[0] : ev.biome;
         Object.assign(context, {
-            place: `Этаж ${ROMAN[floor - 1] ?? floor} · ${(BIOMES[biome] ?? BIOMES[currentBiome()]).name}`,
+            place: t('Этаж {v} · {name}', { v: ROMAN[floor - 1] ?? floor, name: (BIOMES[biome] ?? BIOMES[currentBiome()]).name }),
             title: ev.title,
             text: ev.text.map((t, i) => ({ t, at: (start + i * 1.1).toFixed(2) })),
             options: ev.options.map((o, i) => ({
                 i, label: o.label, at: (start + ev.text.length * 1.1 + 0.4 + i * 0.4).toFixed(2),
-                detail: [o.check ? `${checkLabel(o.check)}, Сл ${checkDC(o, floor)}` : null, o.detail].filter(Boolean).join(' · '),
+                detail: [o.check ? t('{v}, Сл {v2}', { v: checkLabel(o.check), v2: checkDC(o, floor) }) : null, o.detail].filter(Boolean).join(' · '),
                 chosen: state.choice === i
             })),
             open: state.status === 'open',
@@ -423,10 +424,10 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             who: mine.map(a => ({ id: a.id, name: a.name, selected: a.id === this.#actorId })),
             rolling: state.status === 'roll' ? {
                 actor: chosenActor?.name ?? '',
-                check: `${checkLabel(option.check)}, Сл ${checkDC(option, floor)}`,
+                check: t('{v}, Сл {v2}', { v: checkLabel(option.check), v2: checkDC(option, floor) }),
                 canRoll: !!chosenActor && (game.user.isGM || chosenActor.isOwner)
             } : null,
-            done: state.status === 'done' ? { text: state.text, verdict: option?.check ? (state.success ? 'успех' : 'провал') : null, lines: (state.lines ?? []).join(' · ') } : null,
+            done: state.status === 'done' ? { text: state.text, verdict: option?.check ? (state.success ? t('успех') : t('провал')) : null, lines: (state.lines ?? []).join(' · ') } : null,
             preview: !!state.preview
         });
         return context;
@@ -456,7 +457,7 @@ export class EventWindow extends HandlebarsApplicationMixin(ApplicationV2) {
             // Просмотр: только показать исход, без последствий
             const o = byId(this.previewId).options[choice];
             const out = this.element.querySelector('.gd-ev-outcome');
-            out.textContent = o.check ? `Успех: ${o.success.text} Провал: ${o.failure.text}` : o.text;
+            out.textContent = o.check ? t('Успех: {text} Провал: {text2}', { text: o.success.text, text2: o.failure.text }) : o.text;
             out.classList.add('on');
             return;
         }

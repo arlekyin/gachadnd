@@ -2027,6 +2027,24 @@
 .gachadnd-map .gd-map-node.type-boss .gd-map-mark i { font-size: 40px; -webkit-text-stroke-width: 3px; }
 .gachadnd-map .gd-map-node.type-boss .gd-map-ring { width: 100px; height: 100px; }
 
+/* Голоса игроков: кольцо в цветах голосов и портреты на орбите вокруг значка. Щелчки проходят к узлу (map-votes.js) */
+.gachadnd-map .gd-map-node:has(.gd-vote-orbit) { z-index: 4; opacity: 1; }
+.gachadnd-map .gd-vote-orbit { position: absolute; left: 50%; top: 27px; width: 0; height: 0; pointer-events: none; }
+.gachadnd-map .gd-map-node.type-boss .gd-vote-orbit { top: 34px; }
+.gachadnd-map .gd-vote-orbit::before { content: ''; position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--wash) 38%, transparent), transparent 70%); }
+.gachadnd-map .gd-vote-orbit::after { content: ''; position: absolute; left: -56px; top: -56px; width: 112px; height: 112px; border-radius: 50%; border: 1.4px solid var(--ink-soft); opacity: 0.8; }
+.gachadnd-map .gd-vote-rim { position: absolute; left: -48px; top: -48px; width: 96px; height: 96px; overflow: visible; }
+.gachadnd-map .gd-vote-rim circle { fill: none; stroke-width: 5; }
+.gachadnd-map .gd-vote-spin, .gachadnd-map .gd-vote-face { animation: gd-vote-spin 70s linear infinite var(--delay, 0s); }
+.gachadnd-map .gd-vote-spin { position: absolute; left: 0; top: 0; z-index: 1; }
+.gachadnd-map .gd-vote-seat { position: absolute; left: 0; top: 0; transform: rotate(var(--turn)) translateY(-56px) rotate(calc(var(--turn) * -1)); }
+.gachadnd-map .gd-vote-face { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; background: var(--paper); box-shadow: 0 0 0 2.6px var(--voter), 0 2px 4px rgba(20, 18, 16, 0.55); animation-direction: reverse; }
+.gachadnd-map .gd-vote-face img { width: 100%; height: 100%; object-fit: cover; border: none; border-radius: 50%; }
+.gachadnd-map .gd-vote-face.pop img { animation: gd-vote-pop 0.28s ease-out; }
+@keyframes gd-vote-spin { to { transform: rotate(360deg); } }
+@keyframes gd-vote-pop { 0% { transform: scale(0); } 65% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .gachadnd-map .gd-vote-spin, .gachadnd-map .gd-vote-face { animation: none; } }
+
 /* Подвал: где отряд и что на этаже */
 .gachadnd-map .gd-map-footer { display: flex; flex-direction: column; gap: 4px; padding: 10px 20px; font-size: 22px; }
 .gachadnd-map .gd-map-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
@@ -3039,6 +3057,9 @@
 
 
 /* Карточка Босса паутины (наведение на Босса и медальоны ступеней) */
+.gachadnd-web-overlay .gd-wo-tip.medal { width: 240px; white-space: normal; text-align: left; }
+.gachadnd-web-overlay .gd-wo-tip.medal .when { margin-top: 4px; color: #e0a090; }
+.gachadnd-web-overlay .gd-wo-tip.medal .when.on { color: #e0533f; }
 .gachadnd-web-overlay .gd-wo-tip.boss { width: 300px; white-space: normal; text-align: left; border-top-color: #c8322a; padding: 10px 14px; }
 .gachadnd-web-overlay .gd-wo-tip.boss > b { font-family: 'Modesto Condensed', Georgia, serif; font-weight: 400; font-size: 20px; color: #f0d6cf; }
 .gachadnd-web-overlay .gd-wo-tip.boss .st { display: grid; grid-template-columns: 20px 1fr; gap: 0 8px; margin-top: 6px; opacity: 0.45; }
@@ -3409,6 +3430,13 @@
 .gachadnd-dock .gd-ability-txt small i { font-size: 9px; color: var(--amber); margin-right: 2px; }
 .gachadnd-dock .gd-ability .gd-ak { left: auto; right: 6px; top: 6px; }
 .gachadnd-dock .gd-ability .gd-ch { right: 6px; top: auto; bottom: 7px; }
+/* Постоянный эффект ступени — без предмета: тише способности */
+.gachadnd-dock .gd-ability.calm { background: rgba(240,165,42,.03); border-style: dashed; border-color: rgba(201,162,74,.28); }
+.gachadnd-dock .gd-ability.calm .gd-gem { filter: saturate(.55) brightness(.85); }
+/* Строка синергии под мышью — её ступени ярче, остальные гаснут */
+.gachadnd-dock .gd-t-abil.focus .gd-ability { transition: opacity .15s, border-color .15s; }
+.gachadnd-dock .gd-t-abil.focus .gd-ability:not(.rel) { opacity: .35; }
+.gachadnd-dock .gd-t-abil.focus .gd-ability.rel { border-color: var(--amber); }
 .gachadnd-dock .gd-ability.muffled { opacity: .55; border-color: #7a3a2e; }
 .gachadnd-dock .gd-ability.muffled b { text-decoration: line-through; text-decoration-color: var(--red-l); }
 .gachadnd-dock .gd-t-detail.ability { border-color: #a07a2a; box-shadow: inset 0 1px 0 rgba(241,212,138,.3), inset 0 0 0 3px rgba(0,0,0,.35), inset 0 0 0 4px rgba(240,165,42,.18), 0 10px 26px rgba(0,0,0,.6); }
@@ -3476,6 +3504,8 @@
 .gachadnd-new-run .gd-nr-party img { width: 28px; height: 28px; border: 0; border-radius: 50%; object-fit: cover; }
 .gachadnd-new-run .gd-nr-party span { font-size: 12px; opacity: .75; }
 .gachadnd-new-run .gd-nr-party li.warn span { color: #d9822b; opacity: 1; }
+.gachadnd-new-run .gd-nr-free li { grid-template-columns: 28px 1fr minmax(0, 220px); }
+.gachadnd-new-run .gd-nr-free li > i { text-align: center; opacity: .6; }
 .gachadnd-new-run .gd-nr-warn { margin: 0; color: #d9822b; }
 .gachadnd-new-run .gd-nr-note { margin: 4px 0 0; font-size: 12px; opacity: .75; }
 .gachadnd-new-run .gd-nr-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
@@ -3541,3 +3571,48 @@
 .gd-trade-card-title { font-weight: 600; margin-bottom: 4px; }
 .gd-trade-card p { margin: 2px 0; }
 .gd-trade-card button { margin-top: 4px; }
+
+/* ---------- Обеты Элиты ---------- */
+.gachadnd-vows .window-content { padding: 0; background: #0b0a0a; color: #d0c9c0; }
+.gd-vows { display: flex; flex-direction: column; }
+.gd-vows-lead { margin: 0; padding: 12px 16px 4px; color: #a89f92; font-size: 13px; }
+.gd-vows-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding: 8px 16px 12px; }
+.gd-vows-group h3 { margin: 0 0 6px; padding: 0; border: none; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #8c8275; }
+.gd-vow { display: flex; align-items: stretch; gap: 4px; margin-bottom: 6px; }
+.gd-vow-main {
+    flex: 1; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; column-gap: 10px;
+    width: auto; height: auto; min-height: 58px; margin: 0; padding: 7px 10px; text-align: left; line-height: 1.25;
+    background: #131110; border: 1px solid #2f2a26; border-radius: 4px; color: inherit; cursor: pointer;
+}
+.gd-vow-main:hover { background: #1b1714; border-color: #5c4a2e; box-shadow: none; }
+.gd-vow-icon { color: #7a7062; font-size: 16px; text-align: center; }
+.gd-vow-text strong { display: block; color: #ede6dc; font-size: 14px; }
+.gd-vow-text small { display: block; margin-top: 2px; color: #a89f92; font-size: 12px; }
+.gd-vow-pips { display: flex; gap: 3px; }
+.gd-vow-pips b { width: 8px; height: 8px; transform: rotate(45deg); background: #4a4036; }
+.gd-vow.on .gd-vow-main { background: #2a1c0c; border-color: #ff8000; box-shadow: 0 0 8px rgba(255, 128, 0, 0.25); }
+.gd-vow.on .gd-vow-icon { color: #ff8000; }
+.gd-vow.on .gd-vow-pips b { background: #ff8000; }
+.gd-vow-swap { flex: 0 0 26px; width: 26px; height: auto; margin: 0; padding: 0; background: #131110; border: 1px solid #2f2a26; border-radius: 4px; color: #7a7062; }
+.gd-vow-swap i { margin: 0; }
+.gd-vows-reward { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-top: 1px solid #2a2626; }
+.gd-vows-ladder { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.gd-vows-ladder li { width: 26px; height: 26px; line-height: 24px; text-align: center; font-size: 12px; color: #7a7062; border: 1px solid #2f2a26; border-radius: 50%; }
+.gd-vows-ladder li.reached { color: #ffaa00; border-color: #7a5a1e; }
+.gd-vows-ladder li.on { color: #111; background: #ffaa00; border-color: #ffaa00; font-weight: 700; }
+.gd-vows-now { flex: 1; font-size: 13px; }
+.gd-vows-now strong { color: #ffaa00; }
+.gd-vows-now small { display: block; margin-top: 2px; color: #8c8275; }
+.gd-vows-foot { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid #2a2626; }
+.gd-vows-party { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.gd-vows-party li { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border: 1px solid #2a2626; border-radius: 14px; font-size: 12px; opacity: 0.6; }
+.gd-vows-party li.ready { opacity: 1; border-color: #8fdc7f; }
+.gd-vows-party li i { color: #8fdc7f; font-size: 10px; }
+.gd-vows-party img { width: 22px; height: 22px; border: none; border-radius: 50%; object-fit: cover; }
+.gd-vows-seal, .gd-vows-ready { flex: 0 0 auto; width: auto; height: 34px; margin: 0; padding: 0 18px; white-space: nowrap; }
+.gd-vows-seal { background: linear-gradient(180deg, #38250d 0%, #1a1105 100%); border: 1px solid #7a5a1e; color: #ffaa00; font-weight: 700; }
+.gd-vows-seal.lit { border-color: #ffaa00; box-shadow: 0 0 10px rgba(255, 170, 0, 0.45); }
+.gd-vows-ready.on { border-color: #8fdc7f; color: #8fdc7f; }
+.gd-vow-card ul { margin: 4px 0; padding-left: 16px; }
+.gd-vow-card li { margin-bottom: 3px; }
+.gd-vow-card p { margin: 4px 0; }

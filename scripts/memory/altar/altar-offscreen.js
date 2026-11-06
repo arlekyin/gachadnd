@@ -10,6 +10,7 @@
  * OffscreenCanvas или модульных рабочих потоков — у копии рисовальщика в основном потоке. Картинка одна.
  */
 
+
 const SUPPORTED = typeof OffscreenCanvas !== 'undefined' && typeof Worker !== 'undefined'
     && !!globalThis.HTMLCanvasElement && 'transferControlToOffscreen' in HTMLCanvasElement.prototype;
 

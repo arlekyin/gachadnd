@@ -4,18 +4,18 @@
     <div class="gd-offerer" data-actor-id="{{id}}">
         <div class="gd-offerer-portrait">
             <img src="{{img}}" alt="">
-            {{#if horseman}}<span class="gd-offerer-rider rider-{{horseman}}" title="Всадник: {{horsemanName}}"></span>{{/if}}
+            {{#if horseman}}<span class="gd-offerer-rider rider-{{horseman}}" title="{{t 'Всадник: {horsemanName}' horsemanName=horsemanName}}"></span>{{/if}}
         </div>
         <span class="gd-offerer-name">{{name}}</span>
-        <span class="gd-offerer-hp" title="{{hp}} из {{hpMax}} ПЗ"><i style="width: {{hpPct}}%"></i><em>{{hp}} / {{hpMax}}</em></span>
+        <span class="gd-offerer-hp" title="{{t '{hp} из {hpMax} ПЗ' hp=hp hpMax=hpMax}}"><i style="width: {{hpPct}}%"></i><em>{{hp}} / {{hpMax}}</em></span>
         {{#if @root.isGM}}
-        <button type="button" data-action="sacrifice" data-actor-id="{{id}}" {{#unless canSacrifice}}disabled{{/unless}} title="Отдать {{cost}} ПЗ постаменту">Жертва · −{{cost}} ПЗ</button>
+        <button type="button" data-action="sacrifice" data-actor-id="{{id}}" {{#unless canSacrifice}}disabled{{/unless}} title="{{t 'Отдать {cost} ПЗ постаменту' cost=cost}}">{{t "Жертва · −{cost} ПЗ" cost=cost}}</button>
         {{else}}
-        <span class="gd-offerer-cost">жертва — {{cost}} ПЗ</span>
+        <span class="gd-offerer-cost">{{t "жертва — {cost} ПЗ" cost=cost}}</span>
         {{/if}}
     </div>
     {{else}}
-    <p class="gd-doom-empty">В отряде нет персонажей игроков.</p>
+    <p class="gd-doom-empty">{{t "В отряде нет персонажей игроков."}}</p>
     {{/each}}
     {{/if}}
 </section>

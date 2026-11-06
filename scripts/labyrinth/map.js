@@ -6,6 +6,7 @@ import { MODULE_ID } from "../core/constants.js";
 import { INK_FORMS, DOODLES, seeded as seededRandom, inkValues, inkMotion, resetInkClock, sketchLine, brushRing, jitterPath, stroke } from "../core/ink.js";
 import { mapScene, sceneForNewMap, rememberFloorScene } from "./scene-travel.js";
 import { onNodeEntered } from "./horsemen.js";
+import { VowsWindow, getVows } from "./vows.js";
 import { DoomAltar } from "./doom-altar.js";
 import { ShopWindow } from "./shop.js";
 import { RiskWindow } from "./risk.js";
@@ -19,8 +20,10 @@ import { leaveBodies } from "./graveyard.js";
 import { OMEN_STAGES, getOmen, setOmen } from "./omen.js";
 import { addSatiety, getSatiety, satietyCap } from "./devourer-state.js";
 import { startBreach } from "./breach.js";
+import { paintVotes, toggleVote } from "./map-votes.js";
 import { WEB, activeStages, moveDevourer, sealed, touchedSet, nextStepToward, isWeb, generateWebGraph, webMoves, advanceWeb, devourerLeaves, devourerSpeed, omenFor, webStage, ticksToNextStage, isEaten, nodeOf } from "./web-map.js";
 import { HUNT_BREACH } from "./residents.js";
+import { t } from "../core/i18n.js";
 
 export const MAP_DATA = {
     NODE_START: 'start',
@@ -49,9 +52,9 @@ export const MAP_DATA = {
     },
     
     LABELS: {
-        'start': 'Вход', 'boss': 'Босс', 'mob': 'Монстры', 'elite': 'Элита',
-        'event': 'Событие', 'risk': 'Риск', 'shop': 'Магазин', 'rest': 'Привал',
-        'doom': 'Погибель', 'outpost': 'Застава'
+        'start': t('Вход'), 'boss': t('Босс'), 'mob': t('Монстры'), 'elite': t('Элита'),
+        'event': t('Событие'), 'risk': t('Риск'), 'shop': t('Магазин'), 'rest': t('Привал'),
+        'doom': t('Погибель'), 'outpost': t('Застава')
     },
     
     ICONS: {
@@ -195,12 +198,12 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TEMPLATES = 'modules/gachadnd/templates/map';
 const MAP_ID = 'gachadnd-map-terminal';
 const NODE_HINTS = {
-    shop: 'щёлкните ещё раз, чтобы открыть Магазин',
-    risk: 'щёлкните ещё раз, чтобы открыть Риск',
-    event: 'щёлкните ещё раз, чтобы открыть дневник события',
-    doom: 'щёлкните ещё раз, чтобы открыть Алтарь Погибели',
-    rest: 'щёлкните ещё раз, чтобы открыть портал в Якорь',
-    boss: 'после боя щёлкните ещё раз — Сделка луны'
+    shop: t('щёлкните ещё раз, чтобы открыть Магазин'),
+    risk: t('щёлкните ещё раз, чтобы открыть Риск'),
+    event: t('щёлкните ещё раз, чтобы открыть дневник события'),
+    doom: t('щёлкните ещё раз, чтобы открыть Алтарь Погибели'),
+    rest: t('щёлкните ещё раз, чтобы открыть портал в Якорь'),
+    boss: t('после боя щёлкните ещё раз — Сделка луны')
 };
 // Порядок типов в легенде
 const LEGEND_ORDER = ['mob', 'elite', 'event', 'risk', 'shop', 'rest', 'doom', 'outpost', 'boss'];
@@ -245,7 +248,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         id: MAP_ID,
         classes: ['gachadnd-map'],
         tag: 'div',
-        window: { title: 'Карта Разлома', icon: 'fas fa-scroll', resizable: true },
+        window: { title: t('Карта Разлома'), icon: 'fas fa-scroll', resizable: true },
         position: { width: 700, height: 920 },
         actions: {
             node: GachaMapTerminal.#onNode,
@@ -253,9 +256,9 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             // «Здесь» — прорыв: Мастер выбирает точку, у всех катсцена, затем токен
             omen: (event, target) => target.dataset.stage === 'here' ? startBreach() : setOmen(target.dataset.stage),
             // Насыщение: откуп и уход с Брюхом отмечает Мастер; 0 ПЗ и приманку модуль считает сам
-            satiety: (event, target) => addSatiety(Number(target.dataset.delta), 'Мастер'),
+            satiety: (event, target) => addSatiety(Number(target.dataset.delta), t('Мастер')),
             // Паутина: Пожиратель ушёл с карты — откуп, Брюхо, свой повод Мастера
-            devourerGone: () => devourerGone('по решению Мастера')
+            devourerGone: () => devourerGone(t('по решению Мастера'))
         }
     };
 
@@ -281,6 +284,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
             floor,
             floorRoman: ROMAN[floor - 1] ?? floor,
             nextFloor: map?.visitedNodes?.length ? floor + 1 : floor,
+            nextLength: map?.length ?? 11,
             isGM: game.user.isGM,
             hasMap: !!map?.nodes?.length,
             scent: game.user.isGM ? partyScent(undefined, floor) : null,
@@ -316,6 +320,7 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
     _onRender(context, options) {
         super._onRender(context, options);
         this.#scrollToParty();
+        if (this.map && !isWeb(this.map)) paintVotes(this.element, this.map);
         const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const now = performance.now();
         if (still) {
@@ -335,8 +340,12 @@ export class GachaMapTerminal extends HandlebarsApplicationMixin(ApplicationV2) 
         return drawFloorFrom(this.element);
     }
 
-    // Перемещение отряда: только Мастер, только по путям вперёд или на пройденный узел
+    // Перемещение отряда: только Мастер, только по путям вперёд или на пройденный узел. Щелчок игрока — голос за узел
     static async #onNode(event, target) {
+        if (!game.user.isGM) {
+            if (!toggleVote(target.dataset.nodeId, this.map)) ui.notifications.info(t('Отряд уже здесь.'));
+            return;
+        }
         return stepTo(target.dataset.nodeId, this.map);
     }
 }
@@ -373,6 +382,8 @@ export async function drawFloor({ length = 11, mode = 'rows', floor = null, scen
         const newMap = mode === 'web'
             ? generateWebGraph({ look: type => ({ label: MAP_DATA.LABELS[type], icon: MAP_DATA.ICONS[type], color: MAP_DATA.COLORS[type] }), types: buildContentTypes })
             : generateMapGraph(length);
+        // Длина — чтобы следующий этаж по умолчанию чертился такой же (шапка карты)
+        if (mode !== 'web') newMap.length = length;
         // Старая Летопись уходит вместе со старой картой: unsetFlag, иначе setFlag сольёт записи
         await scene.unsetFlag(MODULE_ID, 'floorMap');
         await scene.setFlag(MODULE_ID, 'floorMap', newMap);
@@ -388,7 +399,7 @@ export async function drawFloor({ length = 11, mode = 'rows', floor = null, scen
  * @param {object} [map]  карта этажа (по умолчанию — со сцены этажа)
  */
 export async function stepTo(nodeId, map = mapScene()?.getFlag(MODULE_ID, 'floorMap')) {
-    if (!game.user.isGM) return ui.notifications.warn('Перемещать отряд может только Мастер.');
+    if (!game.user.isGM) return ui.notifications.warn(t('Перемещать отряд может только Мастер.'));
     const mapData = foundry.utils.deepClone(map);
     if (!mapData) return;
     mapData.visitedNodes ??= [];
@@ -397,7 +408,7 @@ export async function stepTo(nodeId, map = mapScene()?.getFlag(MODULE_ID, 'floor
     if (isWeb(mapData)) return stepWeb(mapData, nodeData);
 
     if (!mapData.currentNodeId) {
-        if (nodeData.type !== MAP_DATA.NODE_START) return ui.notifications.warn('Путешествие должно начинаться с начальной точки (Вход).');
+        if (nodeData.type !== MAP_DATA.NODE_START) return ui.notifications.warn(t('Путешествие должно начинаться с начальной точки (Вход).'));
     } else {
         // Щелчок по текущему узлу снова открывает его окно
         // Босс: Сделка луны — только повторным щелчком, после боя (при входе окно не открывается)
@@ -408,7 +419,7 @@ export async function stepTo(nodeId, map = mapScene()?.getFlag(MODULE_ID, 'floor
         }
         const currentNode = mapData.nodes.find(n => n.id === mapData.currentNodeId);
         if (!currentNode.next.includes(nodeId) && !mapData.visitedNodes.includes(nodeId)) {
-            return ui.notifications.warn('Отряд может двигаться только по связанным линиям вперёд!');
+            return ui.notifications.warn(t('Отряд может двигаться только по связанным линиям вперёд!'));
         }
     }
 
@@ -432,8 +443,8 @@ export async function stepTo(nodeId, map = mapScene()?.getFlag(MODULE_ID, 'floor
 
     const label = MAP_DATA.LABELS[nodeData.type] ?? nodeData.label;
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ alias: 'Путеводитель Тумана' }),
-        content: `<div class="gachadnd-map-chat" style="--node: ${MAP_DATA.COLORS[nodeData.type]}"><i class="fas ${MAP_DATA.ICONS[nodeData.type]}"></i> Отряд входит в зону: <strong>${label}</strong></div>`
+        speaker: ChatMessage.getSpeaker({ alias: t('Путеводитель Тумана') }),
+        content: `<div class="gachadnd-map-chat" style="--node: ${MAP_DATA.COLORS[nodeData.type]}"><i class="fas ${MAP_DATA.ICONS[nodeData.type]}"></i> ${t('Отряд входит в зону:')} <strong>${label}</strong></div>`
     });
     // Нюх Пожирателя: Мастеру — Запах и узел прорыва, игрокам — атмосфера
     await announceScent(nodeData.type);
@@ -539,8 +550,8 @@ async function stepWeb(mapData, nodeData) {
     const moves = webMoves(mapData);
     if (!moves[nodeId]) {
         return ui.notifications.warn(mapData.currentNodeId
-            ? `За один шаг сюда не дойти: соседний узел или знакомые тропы — до ${WEB.RUN} пройденных узлов подряд.`
-            : 'Отряд входит на этаж с любого узла внешнего кольца.');
+            ? t('За один шаг сюда не дойти: соседний узел или знакомые тропы — до {RUN} пройденных узлов подряд.', { RUN: WEB.RUN })
+            : t('Отряд входит на этаж с любого узла внешнего кольца.'));
     }
     await leaveBodies();
     const fresh = !mapData.visitedNodes.includes(nodeId);
@@ -560,8 +571,8 @@ async function stepWeb(mapData, nodeData) {
             fed = true;
             breach = false;
             devourerLeaves(mapData);
-            await say('Нюх Пожирателя', `<div class="gd-scent-chat">${ctx.gm.join('')}</div>`, true);
-            await say('Туман', `<div class="gd-scent-chat atmosphere"><i class="fas fa-wind"></i> <em>${ctx.players[0]}</em></div>`);
+            await say(t('Нюх Пожирателя'), `<div class="gd-scent-chat">${ctx.gm.join('')}</div>`, true);
+            await say(t('Туман'), `<div class="gd-scent-chat atmosphere"><i class="fas fa-wind"></i> <em>${ctx.players[0]}</em></div>`);
         }
     }
     const scene = mapScene();
@@ -572,9 +583,9 @@ async function stepWeb(mapData, nodeData) {
     await leaveAnchor();
 
     const label = MAP_DATA.LABELS[nodeData.type] ?? nodeData.label;
-    const via = moves[nodeId].length > 1 ? ` — знакомыми тропами, через ${moves[nodeId].length - 1} пройд. узл.` : '';
-    const how = eaten ? 'Отряд ступает в съеденный узел' : fresh ? 'Отряд входит в зону' : 'Отряд возвращается в пройденную зону';
-    await say('Путеводитель Тумана', `<div class="gachadnd-map-chat" style="--node: ${MAP_DATA.COLORS[nodeData.type]}"><i class="fas ${MAP_DATA.ICONS[nodeData.type]}"></i> ${how}: <strong>${label}</strong>${via}</div>`);
+    const via = moves[nodeId].length > 1 ? t(' — знакомыми тропами, через {v} пройд. узл.', { v: moves[nodeId].length - 1 }) : '';
+    const how = eaten ? t('Отряд ступает в съеденный узел') : fresh ? t('Отряд входит в зону') : t('Отряд возвращается в пройденную зону');
+    await say(t('Путеводитель Тумана'), `<div class="gachadnd-map-chat" style="--node: ${MAP_DATA.COLORS[nodeData.type]}"><i class="fas ${MAP_DATA.ICONS[nodeData.type]}"></i> ${how}: <strong>${label}</strong>${via}</div>`);
     // Пройденный и съеденный узлы пусты: механика узла не открывается
     if (fresh && !eaten) {
         await onNodeEntered(nodeData.type);
@@ -585,14 +596,14 @@ async function stepWeb(mapData, nodeData) {
 
     if (tick.staged) {
         const stage = activeStages()[tick.stage - 1];
-        await say('Лабиринт', `<div class="gd-boss-rule"><i class="fas ${stage.icon}"></i> <strong>Босс этажа крепнет — ${stage.name}:</strong> ${stage.text}. Отряд на этаже уже ${mapData.web.ticks} шаг.</div>`);
+        await say(t('Лабиринт'), `<div class="gd-boss-rule"><i class="fas ${stage.icon}"></i> <strong>${t('Босс этажа крепнет — {name}:', { name: stage.name })}</strong> ${t('{text}. Отряд на этаже уже {ticks} шаг.', { text: stage.text, ticks: mapData.web.ticks })}</div>`);
     }
     if (tick.spawned) {
-        await say('Нюх Пожирателя', `<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>Пожиратель вышел на паутину</strong> — на краю этажа. Он идёт к отряду и съедает узлы.</div>`, true);
-        await say('Туман', '<div class="gd-scent-chat atmosphere"><i class="fas fa-wind"></i> <em>Где-то на краю этажа рвётся ткань узла. Туман за спиной темнеет — и темнота ползёт следом.</em></div>');
+        await say(t('Нюх Пожирателя'), `<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>${t('Пожиратель вышел на паутину')}</strong> ${t('— на краю этажа. Он идёт к отряду и съедает узлы.')}</div>`, true);
+        await say(t('Туман'), t('<div class="gd-scent-chat atmosphere"><i class="fas fa-wind"></i> <em>Где-то на краю этажа рвётся ткань узла. Туман за спиной темнеет — и темнота ползёт следом.</em></div>'));
     }
     if (breach) {
-        await say('Нюх Пожирателя', `<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>Прорыв:</strong> ${eaten ? 'отряд ступил в съеденный узел' : 'Пожиратель настиг отряд'}. Нажмите «Здесь» в подвале карты и выберите точку на сцене.</div>`, true);
+        await say(t('Нюх Пожирателя'), `<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>${t('Прорыв:')}</strong> ${t('{v}. Нажмите «Здесь» в подвале карты и выберите точку на сцене.', { v: eaten ? t('отряд ступил в съеденный узел') : t('Пожиратель настиг отряд') })}</div>`, true);
         if (getOmen() !== 'here') await setOmen('1');
     } else if (!fed) {
         const omen = omenFor(mapData, devourerSpeed());
@@ -608,20 +619,20 @@ export async function gmDevourer(nodeId = null) {
     const scene = mapScene();
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     if (!game.user.isGM || !isWeb(map)) return;
-    if (!nodeId && !map.web?.devourer) return ui.notifications.info('Пожирателя на паутине нет — поставьте его на узел.');
-    if (nodeId === 'boss') return ui.notifications.warn('Узел Босса Пожиратель не трогает.');
-    if (nodeId && sealed(map, nodeId)) return ui.notifications.warn('Застава держит Пожирателя, пока отряд через неё не прошёл.');
+    if (!nodeId && !map.web?.devourer) return ui.notifications.info(t('Пожирателя на паутине нет — поставьте его на узел.'));
+    if (nodeId === 'boss') return ui.notifications.warn(t('Узел Босса Пожиратель не трогает.'));
+    if (nodeId && sealed(map, nodeId)) return ui.notifications.warn(t('Застава держит Пожирателя, пока отряд через неё не прошёл.'));
     const copy = foundry.utils.deepClone(map);
     const was = copy.web.devourer;
     const result = moveDevourer(copy, nodeId);
-    if (!result.placed && !result.moved) return ui.notifications.info('Пожирателю некуда идти: отряд вне досягаемости.');
+    if (!result.placed && !result.moved) return ui.notifications.info(t('Пожирателю некуда идти: отряд вне досягаемости.'));
     await scene.setFlag(MODULE_ID, 'floorMap', copy);
     const at = nodeOf(copy, copy.web.devourer);
     const label = MAP_DATA.LABELS[at?.type] ?? at?.label ?? '';
-    const what = result.moved ? 'шагнул к отряду' : was ? 'перенесён Мастером' : 'выпущен Мастером';
-    await say('Нюх Пожирателя', `<div class="gd-scent-chat"><i class="fas fa-paw"></i> Пожиратель ${what}: <strong>${label}</strong>.</div>`, true);
+    const what = result.moved ? t('шагнул к отряду') : was ? t('перенесён Мастером') : t('выпущен Мастером');
+    await say(t('Нюх Пожирателя'), `<div class="gd-scent-chat"><i class="fas fa-paw"></i> ${t('Пожиратель {what}:', { what })} <strong>${label}</strong>.</div>`, true);
     if (result.caught) {
-        await say('Нюх Пожирателя', '<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>Прорыв:</strong> Пожиратель настиг отряд. Нажмите «Здесь» и выберите точку на сцене.</div>', true);
+        await say(t('Нюх Пожирателя'), t('<div class="gd-scent-chat"><i class="fas fa-paw"></i> <strong>Прорыв:</strong> Пожиратель настиг отряд. Нажмите «Здесь» и выберите точку на сцене.</div>'), true);
         if (getOmen() !== 'here') await setOmen('1');
     } else if (!was && getOmen() === 'off') await setOmen(omenFor(copy, devourerSpeed()));
 }
@@ -631,7 +642,7 @@ export async function setWebNodeType(nodeId, type) {
     const scene = mapScene();
     const map = scene?.getFlag(MODULE_ID, 'floorMap');
     if (!game.user.isGM || !isWeb(map) || !MAP_DATA.LABELS[type]) return;
-    if (nodeId === 'boss' || type === MAP_DATA.NODE_BOSS) return ui.notifications.warn('Босс на паутине один — в центре.');
+    if (nodeId === 'boss' || type === MAP_DATA.NODE_BOSS) return ui.notifications.warn(t('Босс на паутине один — в центре.'));
     const copy = foundry.utils.deepClone(map);
     const node = nodeOf(copy, nodeId);
     if (!node || node.type === type) return;
@@ -646,9 +657,9 @@ export async function devourerGone(reason = '') {
     if (!game.user.isGM || !isWeb(map) || !map.web?.devourer) return;
     const copy = devourerLeaves(foundry.utils.deepClone(map));
     await scene.setFlag(MODULE_ID, 'floorMap', copy);
-    await say('Нюх Пожирателя', `<div class="gd-scent-chat"><i class="fas fa-paw"></i> Пожиратель ушёл с паутины${reason ? ` — ${reason}` : ''}. ${WEB.PAUSE} шага поедание стоит.</div>`, true);
+    await say(t('Нюх Пожирателя'), `<div class="gd-scent-chat"><i class="fas fa-paw"></i> ${t('Пожиратель ушёл с паутины{v}. {PAUSE} шага поедание стоит.', { v: reason ? ` — ${reason}` : '', PAUSE: WEB.PAUSE })}</div>`, true);
 }
-Hooks.on('gachadnd.devourerDefeated', () => { if (game.users.activeGM?.isSelf) devourerGone('побеждён'); });
+Hooks.on('gachadnd.devourerDefeated', () => { if (game.users.activeGM?.isSelf) devourerGone(t('побеждён')); });
 
 // Важность узла для вида паутины: обычные — мелкие значки, важные — на медальоне, Заставы — печати, Босс — крупно
 const TIER = { mob: 'minor', event: 'minor', elite: 'major', shop: 'major', rest: 'major', risk: 'major', doom: 'major', outpost: 'seal', boss: 'boss' };
@@ -739,7 +750,7 @@ export function webBoardContext(map, floor, { size = null } = {}) {
         const marks = [eaten.has(node.id) && 'eaten', touched.has(node.id) && 'touched', web.devourer === node.id && 'devourer-here'].filter(Boolean);
         // Подписи — у отряда, Босса и соседей; узлы за знакомыми тропами — при наведении
         const labeled = node.id === currentNodeId || node.type === 'boss' || (!size && !!current && reachable.has(node.id) && moves[node.id].length === 1);
-        const status = eaten.has(node.id) ? 'съеден: награды нет, вход — прорыв' : touched.has(node.id) ? 'тронут Пожирателем' : visited.has(node.id) ? 'пройден' : null;
+        const status = eaten.has(node.id) ? t('съеден: награды нет, вход — прорыв') : touched.has(node.id) ? t('тронут Пожирателем') : visited.has(node.id) ? t('пройден') : null;
         return {
             id: node.id, ...coords[node.id], k: coords[node.id].k.toFixed(3), ...look(node), ring,
             cls: [state, ...marks, labeled && 'labeled', `type-${node.type}`, `tier-${TIER[node.type] ?? 'minor'}`].filter(Boolean).join(' '),
@@ -825,6 +836,8 @@ function openNodeWindow(type) {
     if (type === MAP_DATA.NODE_SHOP) ShopWindow.open();
     if (type === MAP_DATA.NODE_RISK) RiskWindow.open();
     if (type === MAP_DATA.NODE_EVENT && game.user.isGM) EventWindow.open();
+    // Обеты ещё выбираются, а окно закрыли — повторный щелчок по узлу его возвращает (само оно открывается в vows.js)
+    if (type === MAP_DATA.NODE_ELITE && getVows().phase === 'choose') VowsWindow.show();
 }
 
 // Запах в подвале карты у Мастера: кристаллы и навыки отряда изменились — подвал перерисовывается
@@ -845,6 +858,10 @@ const refreshFooter = () => {
     if (game.user.isGM && app?.rendered) app.render({ parts: ['footer'] });
 };
 Hooks.on('gachadnd.omenChanged', refreshFooter);
+Hooks.on('gachadnd.mapVotes', () => {
+    const app = foundry.applications.instances?.get(MAP_ID), map = app?.map;
+    if (app?.rendered && map && !isWeb(map)) paintVotes(app.element, map);
+});
 Hooks.on('updateSetting', setting => { if (setting.key === `${MODULE_ID}.devourerSatiety`) refreshFooter(); });
 
 // Карта изменилась (перемещение, новый этаж) — поле и строка состояния перерисовываются у всех

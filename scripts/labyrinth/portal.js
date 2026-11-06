@@ -25,6 +25,7 @@ import { clamp01, smooth, easeIn } from "../cutscene/math.js";
 import { registerCues, playCue, tone, noise } from "../cutscene/audio.js";
 import { bass, crackle, glass } from "../cutscene/instruments.js";
 import { fxCalm, fxSlow, soundOn, sfxVolume } from "../core/prefs.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const PORTAL_ID = 'gachadnd-portal';
@@ -123,7 +124,7 @@ function pledgedTotal(pledges = {}) {
 
 async function performPortalOp({ op, actorId, itemId, delta, userId }) {
     const found = currentRestNode();
-    if (!found) return notifyUser(userId, 'Портал открывается только на Привале.');
+    if (!found) return notifyUser(userId, t('Портал открывается только на Привале.'));
     const user = game.users.get(userId);
     const portal = foundry.utils.deepClone(found.node.portal ?? { pledges: {} });
     portal.pledges ??= {};
@@ -132,7 +133,7 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
         const actor = game.actors.get(actorId);
         const item = actor?.items.get(itemId);
         if (!actor || !item || !payable(item)) return;
-        if (!user?.isGM && !actor.testUserPermission(user, 'OWNER')) return notifyUser(userId, 'Класть в разрыв можно только кристаллы своего персонажа.');
+        if (!user?.isGM && !actor.testUserPermission(user, 'OWNER')) return notifyUser(userId, t('Класть в разрыв можно только кристаллы своего персонажа.'));
         const mine = portal.pledges[actorId] ??= {};
         const next = Math.max(0, Math.min(quantity(item), (mine[itemId] ?? 0) + Math.sign(delta)));
         if (next) mine[itemId] = next;
@@ -144,7 +145,7 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
     if (op === 'open' && user?.isGM) {
         const toll = portalToll();
         const total = pledgedTotal(portal.pledges);
-        if (total < toll) return notifyUser(userId, `Плата не набрана: ${total} из ${toll}.`);
+        if (total < toll) return notifyUser(userId, t('Плата не набрана: {total} из {toll}.', { total, toll }));
         // Сцена открытия у всех: руны — цветами вклада, как в круге
         const colors = [];
         for (const [id, items] of Object.entries(portal.pledges)) {
@@ -181,8 +182,8 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
         }
         await savePortal(found, { pledges: {} });
         await ChatMessage.create({
-            speaker: ChatMessage.getSpeaker({ alias: 'Разрыв' }),
-            content: `<div class="gd-scent-chat"><i class="fas fa-hurricane"></i> Кристаллы гаснут один за другим — вероятность рвёт ткань узла. Портал в Предел открыт.<br><small>${burned.join(' · ')}</small></div>`
+            speaker: ChatMessage.getSpeaker({ alias: t('Разрыв') }),
+            content: `<div class="gd-scent-chat"><i class="fas fa-hurricane"></i> ${t('Кристаллы гаснут один за другим — вероятность рвёт ткань узла. Портал в Предел открыт.')}<br><small>${burned.join(' · ')}</small></div>`
         });
         if (!isAnchorOpen()) await setAnchor(true, { travel: false });
     }
@@ -191,7 +192,7 @@ async function performPortalOp({ op, actorId, itemId, delta, userId }) {
 let queue = Promise.resolve();
 onSocket('portalOp', message => {
     if (!isActiveGM()) return;
-    queue = queue.then(() => performPortalOp(message.payload)).catch(err => console.error('[GachaDND] Портал:', err));
+    queue = queue.then(() => performPortalOp(message.payload)).catch(err => console.error(`[GachaDND] Портал:`, err));
     return queue;
 });
 onSocket('openPortal', () => PortalWindow.show());
@@ -209,7 +210,7 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: PORTAL_ID,
         classes: ['gachadnd-portal'],
         tag: 'div',
-        window: { title: 'Портал в Предел', icon: 'fas fa-hurricane', resizable: true },
+        window: { title: t('Портал в Предел'), icon: 'fas fa-hurricane', resizable: true },
         position: { width: 560, height: 640 },
         actions: {
             pledge: PortalWindow.#onPledge,
@@ -257,8 +258,8 @@ export class PortalWindow extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Мастер открывает окно платы у всех
     static open() {
-        if (!currentRestNode()) return ui.notifications.warn('Портал открывается только на Привале.');
-        if (isAnchorOpen()) return ui.notifications.warn('Отряд уже в Якоре.');
+        if (!currentRestNode()) return ui.notifications.warn(t('Портал открывается только на Привале.'));
+        if (isAnchorOpen()) return ui.notifications.warn(t('Отряд уже в Якоре.'));
         if (game.user.isGM) emit('openPortal');
         return PortalWindow.show();
     }

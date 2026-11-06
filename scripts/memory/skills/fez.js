@@ -19,6 +19,7 @@ import { stageCamera } from "../../cutscene/camera.js";
 import { clamp01, easeInOut } from "../../cutscene/math.js";
 import { footprint, occupied, inside, wallBetween } from "./grid.js";
 import { fxOn, fxCalm } from "../../core/prefs.js";
+import { t } from "../../core/i18n.js";
 
 const SPIN_MS = 900, FLASH_MS = 320;
 const isFez = item => !!item?.flags?.[MODULE_ID]?.fez;
@@ -27,11 +28,11 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     const item = activity?.item;
     if (!isFez(item) || !item.actor) return;
     if (!canvas?.ready || !canvas.grid?.isSquare) {
-        ui.notifications.warn('Перспектива работает только на сцене с квадратной сеткой.');
+        ui.notifications.warn(t('Перспектива работает только на сцене с квадратной сеткой.'));
         return false;
     }
     if (!item.actor.getActiveTokens?.()[0]) {
-        ui.notifications.warn('Токена персонажа нет на сцене: миру не вокруг кого поворачиваться.');
+        ui.notifications.warn(t('Токена персонажа нет на сцене: миру не вокруг кого поворачиваться.'));
         return false;
     }
 });
@@ -140,7 +141,7 @@ function chooseTurn(actor, item, range) {
         finish();
         const spent = Number(item.system.uses?.spent ?? 0);
         if (spent > 0) await item.update({ 'system.uses.spent': spent - 1 });
-        ui.notifications.info('Перспектива отменена, заряд возвращён.');
+        ui.notifications.info(t('Перспектива отменена, заряд возвращён.'));
     };
     const onKey = event => {
         if (event.target?.closest?.('input, textarea, [contenteditable]')) return;
@@ -158,7 +159,7 @@ function chooseTurn(actor, item, range) {
     canvas.app.view.oncontextmenu = cancel;
     canvas.app.view.onwheel = onWheel;
     document.addEventListener('keydown', onKey, true);
-    ui.notifications.info('Перспектива: колесо или R — сменить направление, клик — повернуть мир, правая кнопка или Esc — отмена.');
+    ui.notifications.info(t('Перспектива: колесо или R — сменить направление, клик — повернуть мир, правая кнопка или Esc — отмена.'));
 }
 
 // ==========================================
@@ -193,7 +194,7 @@ async function turnWorld({ sceneId, casterId, range, dir, ids }) {
     const names = moves.map(m => scene.tokens.get(m.id)?.name).filter(Boolean).join(', ');
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ token: caster }),
-        content: `<div class="gd-fez-card"><strong>Перспектива</strong> — мир повернулся ${dir > 0 ? 'по часовой' : 'против часовой'}. ${names ? `Сменили место: ${foundry.utils.escapeHTML?.(names) ?? names}.` : 'Никто не сдвинулся.'}</div>`
+        content: `<div class="gd-fez-card"><strong>${t('Перспектива')}</strong> ${t('— мир повернулся {v}. {v2}', { v: dir > 0 ? t('по часовой') : t('против часовой'), v2: names ? t('Сменили место: {v}.', { v: foundry.utils.escapeHTML?.(names) ?? names }) : t('Никто не сдвинулся.') })}</div>`
     });
 }
 

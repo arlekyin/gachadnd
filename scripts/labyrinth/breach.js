@@ -25,16 +25,21 @@ import { setOmen } from "./omen.js";
 import { logChronicle } from "./chronicle-log.js";
 import { fxOn, fxCalm, fxSlow, soundOn, sfxVolume } from "../core/prefs.js";
 import { syncDevourer } from "./devourer-state.js";
+import { fadeAwakening, dispelAwakening } from "../arena/arena.js";
+import { t } from "../core/i18n.js";
+// Шёпот над разрывом — переведён при загрузке: в отрисовке имя t занято временем кадра
+const WHISPER = t('ещё…');
 
 const ART = new URL('../../assets/bestiary/devourer.webp', import.meta.url).href;
 // Где на картинке морда: доля ширины и высоты — она встаёт в середину разрыва
 const FACE = { x: 0.6, y: 0.45 };
-const WHISPER = 'ещё…';
 
 // Расписание, мс: наезд, шов, разрыв, удар, схлопывание
 // Закрытие: разрыв схлопывается за SNAP, дальше по сцене идёт рябь, как от камня в воде
 const T = { focus: 700, seam: 800, tear: 900, burst: 220, close: 1400 };
 const SNAP = 180;
+// Пробуждение Босса (бледность и пепел арены) сходит с начала шва до конца ряби: Пожиратель вытесняет Босса
+const DISPEL = { delay: T.focus, duration: T.seam + T.tear + T.burst + T.close };
 // Наезд камеры (множитель масштаба), высота шва и наибольшая ширина разрыва — доли высоты экрана
 const ZOOM = 1.6, SEAM = 0.6, GAP = 0.2;
 const TEAL = [2, 251, 242], DEEP = [0, 105, 100];
@@ -88,7 +93,7 @@ function cue(name, options = {}) {
 function pickPoint() {
     const view = canvas?.app?.view ?? canvas?.app?.canvas;
     if (!canvas?.ready || !view) return Promise.resolve(null);
-    ui.notifications.info('Прорыв: щёлкните точку на сцене, где появится Пожиратель. Правый щелчок или Esc — отмена.');
+    ui.notifications.info(t('Прорыв: щёлкните точку на сцене, где появится Пожиратель. Правый щелчок или Esc — отмена.'));
     const cursor = view.style.cursor;
     view.style.cursor = 'crosshair';
     return new Promise(resolve => {
@@ -120,7 +125,7 @@ async function devourerActor() {
     const index = await pack?.getIndex({ fields: [`flags.${MODULE_ID}.creature`] });
     const entry = index?.find(e => e.flags?.[MODULE_ID]?.creature === 'devourer');
     if (!entry) return null;
-    ui.notifications.info('Пожирателя нет среди актёров мира — он импортирован из Бестиария Лабиринта.');
+    ui.notifications.info(t('Пожирателя нет среди актёров мира — он импортирован из Бестиария Лабиринта.'));
     return game.actors.importFromCompendium(pack, entry._id);
 }
 
@@ -130,7 +135,7 @@ async function devourerActor() {
  */
 async function placeDevourer(point, { ally = false } = {}) {
     const actor = await devourerActor();
-    if (!actor) { ui.notifications.warn('Актёр Пожирателя не найден ни в мире, ни в Бестиарии Лабиринта.'); return null; }
+    if (!actor) { ui.notifications.warn(t('Актёр Пожирателя не найден ни в мире, ни в Бестиарии Лабиринта.')); return null; }
     // Глубина — этаж, Насыщение — счёт модуля; раны прошлой встречи зажили
     await syncDevourer(actor, { restore: true });
     const size = canvas.grid.size;
@@ -153,19 +158,22 @@ async function placeDevourer(point, { ally = false } = {}) {
  * @returns {Promise<TokenDocument|null>}
  */
 export async function startBreach({ ally = false, point = null } = {}) {
-    if (!game.user.isGM) { ui.notifications.warn('Прорыв Пожирателя начинает Мастер.'); return null; }
+    if (!game.user.isGM) { ui.notifications.warn(t('Прорыв Пожирателя начинает Мастер.')); return null; }
     if (playing) return null;
     point ??= await pickPoint();
     if (!point) return null;
     const data = { sceneId: canvas.scene.id, point };
     emit('devourerBreach', data);
+    fadeAwakening(canvas.scene, DISPEL);
     // Токен ставится, пока идёт катсцена; проявляется он в ней
     const placed = placeDevourer(point, { ally }).catch(error => { console.error(`${MODULE_ID} | токен Пожирателя`, error); return null; });
     if (!ally) {
         await setOmen('here');
-        logChronicle('breach', 'Прорыв Пожирателя');
+        logChronicle('breach', t('Прорыв Пожирателя'));
     }
-    await playBreach(data);
+    // Пробуждение убирается, когда оно у всех уже погасло — даже если у Мастера катсцена выключена
+    await Promise.all([playBreach(data), new Promise(resolve => setTimeout(resolve, DISPEL.delay + DISPEL.duration + 200))]);
+    await dispelAwakening(game.scenes.get(data.sceneId));
     const token = await placed;
     if (token) await token.update({ alpha: token.getFlag(MODULE_ID, 'breach')?.alpha ?? 1, [`flags.${MODULE_ID}.-=breach`]: null });
     return token;
@@ -186,7 +194,10 @@ Hooks.on('refreshToken', token => {
 Hooks.on('updateToken', doc => {
     if (!doc.flags?.[MODULE_ID]?.breach) revealed.delete(doc.id);
 });
-onSocket('devourerBreach', data => playBreach(data));
+onSocket('devourerBreach', data => {
+    fadeAwakening(game.scenes.get(data.sceneId), DISPEL);
+    return playBreach(data);
+});
 
 // ==========================================
 // КАТСЦЕНА

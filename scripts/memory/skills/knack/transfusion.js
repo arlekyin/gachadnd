@@ -13,6 +13,7 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { isKnack, ref, actorFrom, tokenOf, esc, noTemplate, dcOf, targetsWithin, card } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const RANGE = 30;
 const FLAG = 'transfusionPending';
@@ -22,8 +23,8 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage) => {
     if (!isKnack(item, 'transfusion') || !actor) return;
     noTemplate(usage);
     const token = tokenOf(actor)?.document;
-    if (!token) { ui.notifications.warn('Переливание: токена персонажа нет на сцене.'); return false; }
-    if (targetsWithin(token, RANGE).length !== 1) { ui.notifications.warn(`Переливание: выберите одну цель (T) в пределах ${RANGE} футов.`); return false; }
+    if (!token) { ui.notifications.warn(t('Переливание: токена персонажа нет на сцене.')); return false; }
+    if (targetsWithin(token, RANGE).length !== 1) { ui.notifications.warn(t('Переливание: выберите одну цель (T) в пределах {RANGE} футов.', { RANGE })); return false; }
 });
 
 Hooks.on('dnd5e.postUseActivity', (activity) => {
@@ -49,7 +50,7 @@ export async function begin({ actorId, tokenId, sceneId, targetId, dc }) {
     if (!actor || !target?.actor) return;
     if (self && target.disposition === self.disposition) return swap(actor, target);
     await target.actor.setFlag(MODULE_ID, FLAG, { actorId: actor.id, tokenId, sceneId, targetId, dc });
-    return card(actor, 'Переливание', `<p>${esc(target.name)} сопротивляется: спасбросок Телосложения кнопкой из карточки навыка (Сл ${dc}). Провал — обмен долями ПЗ.</p>`, { icon: 'fa-droplet' });
+    return card(actor, t('Переливание'), `<p>${t('{v} сопротивляется: спасбросок Телосложения кнопкой из карточки навыка (Сл {dc}). Провал — обмен долями ПЗ.', { v: esc(target.name), dc })}</p>`, { icon: 'fa-droplet' });
 }
 
 // Спасбросок Телосложения цели с отметкой — у того клиента, где он брошен; решает Мастер
@@ -70,7 +71,7 @@ export async function resolve({ actorUuid, total, success }) {
     const actor = actorFrom(pending);
     const target = game.scenes.get(pending.sceneId)?.tokens.get(pending.targetId);
     if (!actor || !target) return;
-    if (success) return card(actor, 'Переливание', `<p>${esc(target.name)} не отдаёт свою кровь: спасбросок ${total} против Сл ${pending.dc}. Обмена нет.</p>`, { icon: 'fa-droplet' });
+    if (success) return card(actor, t('Переливание'), `<p>${t('{v} не отдаёт свою кровь: спасбросок {total} против Сл {dc}. Обмена нет.', { v: esc(target.name), total, dc: pending.dc })}</p>`, { icon: 'fa-droplet' });
     return swap(actor, target);
 }
 
@@ -90,7 +91,7 @@ async function swap(actor, target) {
     const exhaustion = Math.min(6, (Number(actor.system.attributes.exhaustion) || 0) + 1);
     await actor.update({ 'system.attributes.exhaustion': exhaustion });
     const pct = v => `${Math.round(v * 100)} %`;
-    return card(actor, 'Переливание', `<p>${esc(actor.name)} и ${esc(target.name)} меняются кровью:</p>
-        <ul class="gd-blast-list"><li>${esc(actor.name)}: ${pct(a)} → ${pct(b)} (${fromA} → ${nextA} ПЗ)</li><li>${esc(target.name)}: ${pct(b)} → ${pct(a)} (${fromB} → ${nextB} ПЗ)</li></ul>
-        <p>Цена: истощение ${exhaustion}.</p>`, { icon: 'fa-droplet' });
+    return card(actor, t('Переливание'), `<p>${t('{v} и {v2} меняются кровью:', { v: esc(actor.name), v2: esc(target.name) })}</p>
+        <ul class="gd-blast-list"><li>${t('{v}: {v2} → {v3} ({fromA} → {nextA} ПЗ)', { v: esc(actor.name), v2: pct(a), v3: pct(b), fromA, nextA })}</li><li>${t('{v}: {v2} → {v3} ({fromB} → {nextB} ПЗ)', { v: esc(target.name), v2: pct(b), v3: pct(a), fromB, nextB })}</li></ul>
+        <p>${t('Цена: истощение {exhaustion}.', { exhaustion })}</p>`, { icon: 'fa-droplet' });
 }

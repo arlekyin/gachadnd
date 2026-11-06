@@ -14,6 +14,7 @@ import { MODULE_ID } from "../core/constants.js";
 import { emit, onSocket } from "../core/socket.js";
 import { fogLayer } from "../cutscene/fog.js";
 import { clamp01, smooth } from "../cutscene/math.js";
+import { t } from "../core/i18n.js";
 
 export function registerSceneSettings() {
     game.settings.register(MODULE_ID, 'floorSceneId', { scope: 'world', config: false, type: String, default: '' });
@@ -21,11 +22,11 @@ export function registerSceneSettings() {
 
 // Список сцен для выбора известен только после загрузки мира
 Hooks.once('setup', () => {
-    const choices = { '': '— не переносить (Якорь без своей сцены) —' };
+    const choices = { '': t('— не переносить (Якорь без своей сцены) —') };
     for (const scene of [...game.scenes].sort((a, b) => a.name.localeCompare(b.name, 'ru'))) choices[scene.id] = scene.name;
     game.settings.register(MODULE_ID, 'anchorSceneId', {
-        name: 'Сцена Якоря',
-        hint: 'Портал переносит отряд на эту сцену, выход из Якоря возвращает на сцену этажа. Не выбрана — Якорь без смены сцены. Новые сцены появятся в списке после перезагрузки мира.',
+        name: t('Сцена Якоря'),
+        hint: t('Портал переносит отряд на эту сцену, выход из Якоря возвращает на сцену этажа. Не выбрана — Якорь без смены сцены. Новые сцены появятся в списке после перезагрузки мира.'),
         scope: 'world', config: true, type: String, default: '', choices
     });
 });

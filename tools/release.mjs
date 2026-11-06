@@ -20,7 +20,7 @@ const STAGE = path.join(OUT, "gachadnd");
 const ZIP = path.join(OUT, "gachadnd.zip");
 
 // Что входит в выпуск; внутри — что пропустить
-const INCLUDE = ["module.json", "scripts", "styles", "templates", "packs", "data", "assets", "README.md", "LICENSE", "LICENSE-CONTENT.md"];
+const INCLUDE = ["module.json", "scripts", "styles", "templates", "i18n", "packs", "data", "assets", "README.md", "LICENSE", "LICENSE-CONTENT.md"];
 const SKIP = [
     /^packs\/_old_json/, /^packs\/[^/]+\.db$/, /^packs\/[^/]+\/(LOCK|LOG|LOG\.old)$/,
     /^assets\/battlemap\/weapons\//, /^assets\/bestiary\/devourer\.png$/, /^assets\/.*\/_src\//,

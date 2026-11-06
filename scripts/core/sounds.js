@@ -1,4 +1,5 @@
 import { soundOn, sfxVolume } from "../core/prefs.js";
+import { t } from "./i18n.js";
 /**
  * Gacha Roguelike dnd5e — Звуки Терминала Тумана
  *
@@ -9,22 +10,22 @@ import { soundOn, sfxVolume } from "../core/prefs.js";
 const MODULE_ID = 'gachadnd';
 
 const SOUNDS = {
-    equip: { name: 'Звук экипировки', fallback: () => CONFIG.sounds?.notification ?? 'sounds/notify.wav' },
-    unequip: { name: 'Звук снятия', fallback: () => CONFIG.sounds?.lock ?? 'sounds/lock.wav' },
-    merge: { name: 'Звук слияния на Алтаре Памяти', fallback: () => CONFIG.sounds?.combat ?? 'sounds/drums.wav' }
+    equip: { name: t('Звук экипировки'), fallback: () => CONFIG.sounds?.notification ?? 'sounds/notify.wav' },
+    unequip: { name: t('Звук снятия'), fallback: () => CONFIG.sounds?.lock ?? 'sounds/lock.wav' },
+    merge: { name: t('Звук слияния на Алтаре Памяти'), fallback: () => CONFIG.sounds?.combat ?? 'sounds/drums.wav' }
 };
 
 export function registerSoundSettings() {
     game.settings.register(MODULE_ID, 'soundsEnabled', {
-        name: 'Звуки Терминала Тумана',
-        hint: 'Звуки экипировки, снятия и слияния навыков.',
+        name: t('Звуки Терминала Тумана'),
+        hint: t('Звуки экипировки, снятия и слияния навыков.'),
         scope: 'client',
         config: false,
         type: Boolean,
         default: true
     });
     game.settings.register(MODULE_ID, 'soundsVolume', {
-        name: 'Громкость звуков Терминала',
+        name: t('Громкость звуков Терминала'),
         scope: 'client',
         config: false,
         type: Number,
@@ -34,7 +35,7 @@ export function registerSoundSettings() {
     for (const [key, config] of Object.entries(SOUNDS)) {
         game.settings.register(MODULE_ID, `sound_${key}`, {
             name: config.name,
-            hint: 'По умолчанию — встроенный звук Foundry.',
+            hint: t('По умолчанию — встроенный звук Foundry.'),
             scope: 'world',
             config: false,
             type: String,

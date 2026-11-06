@@ -12,6 +12,7 @@ import { emit, onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { onRenderChatMessage, messageItem } from "../../../core/chat-hooks.js";
 import { feetBetween } from "../light/flash.js";
 import { esc, centerOf } from "../light/common.js";
+import { t } from "../../../core/i18n.js";
 
 export { ref, actorFrom, tokenOf, esc, centerOf, feetToPx } from "../light/common.js";
 export { feetBetween };
@@ -21,8 +22,8 @@ export const isBlast = (item, kind) => blastKind(item) === kind && !item.flags[M
 /** Экипированный навык этого вида у персонажа */
 export const blastSkill = (actor, kind) => actor?.items?.find(i => isBlast(i, kind) && i.flags[MODULE_ID].is_active) ?? null;
 
-const ABILITY = { str: 'Силы', dex: 'Ловкости', con: 'Телосложения', int: 'Интеллекта', wis: 'Мудрости', cha: 'Харизмы' };
-const DAMAGE = { fire: 'огнём', thunder: 'звуком', bludgeoning: 'дробящий', poison: 'ядом', force: 'силовым полем' };
+const ABILITY = { str: t('Силы'), dex: t('Ловкости'), con: t('Телосложения'), int: t('Интеллекта'), wis: t('Мудрости'), cha: t('Харизмы') };
+const DAMAGE = { fire: t('огнём'), thunder: t('звуком'), bludgeoning: t('дробящий'), poison: t('ядом'), force: t('силовым полем') };
 
 /**
  * Шаблон dnd5e не ставится — область навык считает сам. Карточка навыка dnd5e остаётся в чате, как у
@@ -36,7 +37,7 @@ export function quiet(usage) {
 export async function saveCard({ actor, title, icon = 'fa-shield', tokens, ability, dc, note = '', onFail = null }) {
     const TextEditor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
     const content = await TextEditor.enrichHTML(`<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>
-        ${note ? `<p>${note}</p>` : ''}<p>Спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}: ${esc(tokens.map(t => t.name).join(', '))}</p>
+        ${note ? `<p>${note}</p>` : ''}<p>${t('Спасбросок {v} Сл {dc}: {v2}', { v: ABILITY[ability] ?? ability, dc, v2: esc(tokens.map(t => t.name).join(', ')) })}</p>
         <p class="gd-blast-rolls">[[/save ${ability} ${dc}]]</p></div>`, { rollData: actor?.getRollData?.() ?? {} });
     const message = await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content });
     if (onFail) await expectSave(tokens, { ability, dc, ...onFail });
@@ -93,14 +94,14 @@ export async function blast({ actor, title, icon = 'fa-burst', victims = [], spl
     if (at) boom(at);
     const names = list => esc(list.map(t => t.name).join(', '));
     const lines = [];
-    if (victims.length) lines.push(`<li>${ability ? `Спасбросок ${ABILITY[ability] ?? ability} Сл ${dc}${half ? ' — успех: половина урона' : ' — успех: без урона'}` : (lead ?? 'Без спасброска')}: ${names(victims)}</li>`);
-    if (splash.length) lines.push(`<li>Осколки — половина урона без спасброска: ${names(splash)}</li>`);
-    if (self) lines.push(`<li>${esc(self.name)} — половина урона без спасброска</li>`);
+    if (victims.length) lines.push(`<li>${ability ? t('Спасбросок {v} Сл {dc}{v2}', { v: ABILITY[ability] ?? ability, dc, v2: half ? t(' — успех: половина урона') : t(' — успех: без урона') }) : (lead ?? t('Без спасброска'))}: ${names(victims)}</li>`);
+    if (splash.length) lines.push(`<li>${t('Осколки — половина урона без спасброска: {v}', { v: names(splash) })}</li>`);
+    if (self) lines.push(`<li>${t('{v} — половина урона без спасброска', { v: esc(self.name) })}</li>`);
     const buttons = [ability && victims.length ? `[[/save ${ability} ${dc}]]` : '', `[[/damage ${formula} ${type}]]`].filter(Boolean).join(' ');
     const TextEditor = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
     const content = await TextEditor.enrichHTML(`<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas ${icon}"></i> ${esc(title)}</div>
-        ${note ? `<p>${note}</p>` : ''}<ul class="gd-blast-list">${lines.join('') || '<li>Никого не задело.</li>'}</ul>
-        <p class="gd-blast-rolls">${buttons}</p><p class="gd-blast-hint">Урон ${DAMAGE[type] ?? type} применяет Мастер лотком под броском.</p></div>`, { rollData: actor?.getRollData?.() ?? {} });
+        ${note ? `<p>${note}</p>` : ''}<ul class="gd-blast-list">${lines.join('') || t('<li>Никого не задело.</li>')}</ul>
+        <p class="gd-blast-rolls">${buttons}</p><p class="gd-blast-hint">${t('Урон {v} применяет Мастер лотком под броском.', { v: DAMAGE[type] ?? type })}</p></div>`, { rollData: actor?.getRollData?.() ?? {} });
     const message = await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }), content,
         flags: { [MODULE_ID]: { blastCard: {

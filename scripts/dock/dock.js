@@ -15,6 +15,7 @@
  */
 
 import { MODULE_ID } from "../core/constants.js";
+import { tagsLabel } from "../core/ids.js";
 import { MemoryTerminal } from "../memory/terminal/terminal.js";
 import { isMemorySkill, isInCombat, isAwake, occupiesSlot } from "../memory/synergy/synergy.js";
 import { DUO_SOURCE } from "../memory/synergy/duo-links.js";
@@ -30,6 +31,7 @@ import { counterInfo } from "../memory/skills/living/badges.js";
 import { echoInfo, gmWhisper, voiceWhisper } from "../memory/echo/echo.js";
 import { setPeek, peekActor } from "../memory/echo/vision.js";
 import { FACET_TAGS, CATEGORIES, STONES, TAG_STONES, TAG_COLORS, SLOTS, facetState, isFacetable, formsOf, placeStone, removeStone } from "../memory/facet/facet.js";
+import { t } from "../core/i18n.js";
 
 const ID = 'gachadnd-dock';
 const TEMPLATES = 'modules/gachadnd/templates/dock';
@@ -42,12 +44,12 @@ export const TAG_ICONS = {
     'сталь': 'fa-khanda', 'казнь': 'fa-skull', 'огонь': 'fa-fire', 'яд': 'fa-flask', 'свет': 'fa-sun'
 };
 const RARITY = {
-    gray: ['серый', '#a9b1b0'], green: ['зелёный', '#5fd16e'], blue: ['синий', '#4aa3ff'],
-    purple: ['фиолетовый', '#b57bff'], red: ['красный', '#ff5a54'], orange: ['оранжевый', '#ff9a3c']
+    gray: [t('серый'), '#a9b1b0'], green: [t('зелёный'), '#5fd16e'], blue: [t('синий'), '#4aa3ff'],
+    purple: [t('фиолетовый'), '#b57bff'], red: [t('красный'), '#ff5a54'], orange: [t('оранжевый'), '#ff9a3c']
 };
 // Чем используется: значок-форма и слово
-const KIND = { a: 'действие', b: 'бонусное действие', r: 'реакция', s: 'особое', p: 'пассивный' };
-const PERIOD = { sr: 'до короткого отдыха', lr: 'до долгого отдыха', day: 'до рассвета', turn: 'на ход', round: 'на раунд', combat: 'на бой', encounter: 'на бой' };
+const KIND = { a: t('действие'), b: t('бонусное действие'), r: t('реакция'), s: t('особое'), p: t('пассивный') };
+const PERIOD = { sr: t('до короткого отдыха'), lr: t('до долгого отдыха'), day: t('до рассвета'), turn: t('на ход'), round: t('на раунд'), combat: t('на бой'), encounter: t('на бой') };
 
 /** Чем используется навык: a — действие, b — бонусное, r — реакция, s — особое (по поводу), p — пассивный */
 function kindOf(item) {
@@ -143,7 +145,7 @@ export class TerminalDock extends MemoryTerminal {
         return result;
     }
 
-    get title() { return `Терминал Тумана: ${this.actor.name}`; }
+    get title() { return t('Терминал Тумана: {name}', { name: this.actor.name }); }
 
     /** Открыть Терминал персонажа (другой персонаж — Терминал пересоздаётся) */
     static async open(actor, { mode, auto = false } = {}) {
@@ -182,7 +184,7 @@ export class TerminalDock extends MemoryTerminal {
         const muffled = hasRule(rule, 'muffle') ? rule.tag : null;
         const rules = [
             ...(muffled ? [{ icon: BOSS_RULES.muffle.icon, text: `${BOSS_RULES.muffle.name} · ${muffled}` }] : []),
-            ...(hasRule(rule, 'sleepy') && !rule.woke ? [{ icon: BOSS_RULES.sleepy.icon, text: `${BOSS_RULES.sleepy.name} · до ½ ПЗ Босса` }] : [])
+            ...(hasRule(rule, 'sleepy') && !rule.woke ? [{ icon: BOSS_RULES.sleepy.icon, text: t('{name} · до ½ ПЗ Босса', { name: BOSS_RULES.sleepy.name }) }] : [])
         ];
 
         const editor = foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor;
@@ -221,35 +223,50 @@ export class TerminalDock extends MemoryTerminal {
             };
         });
 
-        // Способности синергий и связок 2 + 2 — янтарь; откуда: «кровь · ступень II» или «кровь + щит»
+        // Что даёт каждая синергия: все достигнутые ступени по порядку тегов — способность (предмет) или постоянный
+        // эффект без предмета; связки 2 + 2 — в конце. Откуда: «кровь · ступень II» или «кровь + щит»
         const ROMAN = ['I', 'II', 'III'];
-        const abilities = await Promise.all(actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item).map(async i => {
+        const items = actor.items.filter(i => i.flags?.[MODULE_ID]?.is_synergy_item);
+        const tagOrder = synergies.map(s => s.tag);
+        const ability = async i => {
             const source = String(i.flags[MODULE_ID].tagSource ?? ''), duo = source.startsWith(DUO_SOURCE);
             const pair = duo ? source.slice(DUO_SOURCE.length).split('+') : [];
-            const step = duo ? -1 : tierList(source).findIndex(t => t.name === i.name);
+            const step = duo ? -1 : tierList(source).findIndex(t => i.name === t.name || i.name.endsWith(`: ${t.name}`));
             return {
-                id: i.id, name: i.name, duo, selected: i.id === this.abilityId,
+                id: i.id, name: i.name, duo, selected: i.id === this.abilityId, order: duo ? 1e3 : tagOrder.indexOf(source) * 10 + step,
                 icon: duo ? 'fa-link' : TAG_ICONS[source] ?? 'fa-star', tagIcons: (duo ? pair : [source]).map(t => TAG_ICONS[t] ?? 'fa-circle'),
-                source: duo ? pair.join(' + ') : `${source}${step >= 0 ? ` · ступень ${ROMAN[step]}` : ''}`,
+                source: duo ? pair.join(' + ') : `${source}${step >= 0 ? t(' · ступень {v}', { v: ROMAN[step] }) : ''}`,
                 kind: kindOf(i), kindLabel: KIND[kindOf(i)], passive: kindOf(i) === 'p', uses: usesOf(i),
-                usable: (i.system?.activities?.size ?? 0) > 0, muffled: !!muffled && (source === muffled || pair.includes(muffled)), desc: await describe(i)
+                usable: (i.system?.activities?.size ?? 0) > 0, muffled: !!muffled && (source === muffled || pair.includes(muffled)), desc: await describe(i), sheet: true,
+                tags: (duo ? pair : [source]).join(',')
             };
-        }));
+        };
+        // Ступени без способности — постоянный эффект: строка с описанием, листа у неё нет
+        const passives = synergies.flatMap((s, si) => (SYNERGIES.find(x => x.tag === s.tag)?.tiers ?? []).map((tier, step) => {
+            if (tier.feature || tier.count > s.count) return null;
+            const label = s.tag.charAt(0).toUpperCase() + s.tag.slice(1), id = `tier-${s.tag}-${step}`;
+            return {
+                id, name: `${label} ${ROMAN[step]}: ${tier.name}`, duo: false, selected: id === this.abilityId, order: si * 10 + step,
+                icon: s.icon, tagIcons: [s.icon], source: `${s.tag}${t(' · ступень {v}', { v: ROMAN[step] })}`,
+                kind: 'p', kindLabel: t('постоянно'), passive: true, uses: null, usable: false, muffled: s.muffled, desc: `<p>${foundry.utils.escapeHTML(tier.description)}</p>`, sheet: false, tags: s.tag
+            };
+        }).filter(Boolean));
+        const abilities = [...await Promise.all(items.map(ability)), ...passives].sort((a, b) => a.order - b.order);
         // Наведена или выбрана способность — в панели подробностей она, а не навык
-        const ability = abilities.find(a => a.id === this.abilityId) ?? null;
-        if (!ability) this.abilityId = null;
+        const shown = abilities.find(a => a.id === this.abilityId) ?? null;
+        if (!shown) this.abilityId = null;
 
         // Подробности выбранного навыка: знак, состояние, строки «чем, заряды, перегрев»
         const sel = memory.find(i => i.id === this.selectedId);
         const selPlate = sel ? plates.find(p => p.id === sel.id) : null;
         const detail = selPlate ? {
-            icon: selPlate.icon, kind: selPlate.kind, state: `${selPlate.rarityLabel} · ${selPlate.asleep ? 'спит' : selPlate.equipped ? 'надет' : 'в Памяти'}`,
+            icon: selPlate.icon, kind: selPlate.kind, state: `${selPlate.rarityLabel} · ${selPlate.asleep ? t('спит') : selPlate.equipped ? t('надет') : t('в Памяти')}`,
             meta: [
-                selPlate.tags.length ? `<i class="fas ${selPlate.icon}"></i>${selPlate.tags.join(', ')}` : '',
+                selPlate.tags.length ? `<i class="fas ${selPlate.icon}"></i>${tagsLabel(selPlate.tags)}` : '',
                 `<span class="gd-ak ${selPlate.kind}"></span>${selPlate.kindLabel}`,
-                selPlate.uses ? `<i class="fas fa-gem"></i>заряды ${selPlate.uses.value} из ${selPlate.uses.max}${selPlate.uses.period ? ` · ${selPlate.uses.period}` : ''}` : '',
-                selPlate.hot ? '<span class="hot"><i class="fas fa-fire"></i>заём — перегрев</span>' : '',
-                selPlate.locked ? '<span class="hot"><i class="fas fa-lock"></i>заблокирован до долгого отдыха</span>' : '',
+                selPlate.uses ? `<i class="fas fa-gem"></i>${t('заряды {value} из {max}{v}', { value: selPlate.uses.value, max: selPlate.uses.max, v: selPlate.uses.period ? ` · ${selPlate.uses.period}` : '' })}` : '',
+                selPlate.hot ? t('<span class="hot"><i class="fas fa-fire"></i>заём — перегрев</span>') : '',
+                selPlate.locked ? t('<span class="hot"><i class="fas fa-lock"></i>заблокирован до долгого отдыха</span>') : '',
                 selPlate.counter ? `<span class="cnt"><b>${foundry.utils.escapeHTML(selPlate.counter.state)}</b> ${foundry.utils.escapeHTML(selPlate.counter.rule)}</span>` : ''
             ].filter(Boolean)
         } : null;
@@ -282,7 +299,7 @@ export class TerminalDock extends MemoryTerminal {
             memoryPlates: plates.filter(p => !p.equipped),
             sockets: Array.from({ length: free }),
             mind: { sockets, filled: slotted, natural: ring.naturalCap, absolute: ring.absoluteCap, over: slotted > ring.naturalCap, extra: ring.absoluteCap > ring.naturalCap },
-            synergies, abilities, ability, detail,
+            synergies, abilities, ability: shown, detail,
             featureMergeable: !!base.cards?.find(c => c.id === base.feature?.id)?.mergeable,
             barSkills: await Promise.all(plates.filter(p => p.equipped && !p.passive).map(async p => ({ ...p, desc: await describe(actor.items.get(p.id)) }))),
             barPassive: plates.filter(p => p.equipped && p.passive),
@@ -302,7 +319,7 @@ export class TerminalDock extends MemoryTerminal {
         const weapons = all.filter(i => i.type === 'weapon').sort((a, b) => (b.system.equipped ? 1 : 0) - (a.system.equipped ? 1 : 0));
         const abilities = all.filter(i => i.type !== 'weapon');
         const rows = [
-            ...weapons.map(w => ({ where: w.id, kind: 'weapon', name: w.name, sub: /R$/.test(w.system.type?.value ?? '') ? 'дальнобойное' : 'рукопашное', imgs: [w.img] })),
+            ...weapons.map(w => ({ where: w.id, kind: 'weapon', name: w.name, sub: /R$/.test(w.system.type?.value ?? '') ? t('дальнобойное') : t('рукопашное'), imgs: [w.img] })),
             ...Object.entries(CATEGORIES).map(([key, cat]) => {
                 const members = abilities.filter(i => formsOf(i).includes(key));
                 return members.length ? { where: key, kind: key, name: cat.label, sub: members.map(i => i.name).join(', '), imgs: members.slice(0, 3).map(i => i.img) } : null;
@@ -318,8 +335,8 @@ export class TerminalDock extends MemoryTerminal {
             return { ...row, selected: row.where === this.facetWhere, socks };
         };
         const groups = [
-            { label: 'Оружие', rows: rows.filter(r => r.kind === 'weapon').map(view) },
-            { label: 'Способности', rows: rows.filter(r => r.kind !== 'weapon').map(view) }
+            { label: t('Оружие'), rows: rows.filter(r => r.kind === 'weapon').map(view) },
+            { label: t('Способности'), rows: rows.filter(r => r.kind !== 'weapon').map(view) }
         ].filter(g => g.rows.length);
         const box = FACET_TAGS.filter(tag => state.grains[tag] > 0 || state.placed[tag] > 0).map(tag => ({
             tag, icon: TAG_ICONS[tag], color: TAG_COLORS[tag],
@@ -400,7 +417,7 @@ export class TerminalDock extends MemoryTerminal {
             const on = !node.dataset.equipped, delta = on ? 1 : -1;
             el.querySelector('.gd-mind')?.classList.add(on ? 'preview' : 'preview-off');
             const head = el.querySelector('.gd-syn-head b');
-            if (head) head.textContent = `${on ? 'если надеть' : 'если снять'} «${node.dataset.name}»`;
+            if (head) head.textContent = `${on ? t('если надеть') : t('если снять')} «${node.dataset.name}»`;
             for (const tag of (node.dataset.tags ?? '').split(',').filter(Boolean)) {
                 let row = rows().find(r => r.dataset.tag === tag);
                 if (!row && on) {
@@ -453,6 +470,17 @@ export class TerminalDock extends MemoryTerminal {
             clearTimeout(this.featureTimer);
             this.featureTimer = setTimeout(() => this.render({ parts: ['feature'] }), 60);
         };
+        // Строка синергии под мышью — её ступени и связки в «Способностях» подсвечены, остальные гаснут
+        fresh('.gd-syn-row[data-tag]').forEach(node => {
+            const list = () => el.querySelector('.gd-t-abil');
+            node.addEventListener('pointerenter', () => {
+                const box = list(); if (!box) return;
+                let any = false;
+                box.querySelectorAll('.gd-ability').forEach(a => { const on = (a.dataset.tags ?? '').split(',').includes(node.dataset.tag); a.classList.toggle('rel', on); any ||= on; });
+                box.classList.toggle('focus', any);
+            });
+            node.addEventListener('pointerleave', () => { const box = list(); box?.classList.remove('focus'); box?.querySelectorAll('.gd-ability.rel').forEach(a => a.classList.remove('rel')); });
+        });
         fresh('.gd-ability[data-ability-id]').forEach(node => {
             node.addEventListener('pointerenter', () => { playWeb('hover', null, { throttle: 70 }); showAbility(node); });
             node.addEventListener('click', () => showAbility(node));
@@ -510,14 +538,14 @@ export class TerminalDock extends MemoryTerminal {
 
     // Мастер шепчет игроку голосом его эха: своя строка или строка самого голоса
     static async #onEchoWhisper() {
-        const actor = this.actor, title = echoInfo(actor)?.title || 'голос';
+        const actor = this.actor, title = echoInfo(actor)?.title || t('голос');
         const result = await foundry.applications.api.DialogV2.wait({
-            window: { title: `Шепнуть голосом: ${actor.name}` },
-            content: `<p>Строка придёт игроку как реплика «${foundry.utils.escapeHTML(title)}» — тем же оформлением; он не отличит её от модуля.</p>
-                <textarea name="line" rows="3" style="width:100%" placeholder="Подсказка, соблазн, ложь…"></textarea>`,
+            window: { title: t('Шепнуть голосом: {name}', { name: actor.name }) },
+            content: `<p>${t('Строка придёт игроку как реплика «{v}» — тем же оформлением; он не отличит её от модуля.', { v: foundry.utils.escapeHTML(title) })}</p>
+                <textarea name="line" rows="3" style="width:100%" placeholder="${t('Подсказка, соблазн, ложь…')}"></textarea>`,
             buttons: [
-                { action: 'own', label: 'Шепнуть', icon: 'fas fa-comment-dots', default: true, callback: (event, button) => button.form.elements.line.value.trim() },
-                { action: 'random', label: 'Строку голоса', icon: 'fas fa-dice' }
+                { action: 'own', label: t('Шепнуть'), icon: 'fas fa-comment-dots', default: true, callback: (event, button) => button.form.elements.line.value.trim() },
+                { action: 'random', label: t('Строку голоса'), icon: 'fas fa-dice' }
             ],
             rejectClose: false
         });

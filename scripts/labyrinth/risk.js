@@ -21,6 +21,7 @@ import { getFloor, rollGold, addGold } from "./economy.js";
 import { partyActors } from "./horsemen.js";
 import { isActiveGM, onSocket, emit, notifyUser, requestGM } from "../core/socket.js";
 import { validateRisk } from "./risk-schema.js";
+import { t } from "../core/i18n.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -50,12 +51,12 @@ async function loadChallenges() {
     const path = game.settings.get(MODULE_ID, 'riskCustomFile');
     if (path) {
         const data = await fetchJson(path);
-        if (!data) ui.notifications.error(`Свои испытания Риска: файл «${path}» не прочитан. Нужен JSON — объект испытания или список.`);
+        if (!data) ui.notifications.error(t('Свои испытания Риска: файл «{path}» не прочитан. Нужен JSON — объект испытания или список.', { path }));
         for (const [i, risk] of (Array.isArray(data) ? data : data ? [data] : []).entries()) {
             const errors = validateRisk(risk);
-            if ([...own, ...custom].some(c => c.id === risk?.id)) errors.push(`id: «${risk.id}» уже используется`);
+            if ([...own, ...custom].some(c => c.id === risk?.id)) errors.push(t('id: «{id}» уже используется', { id: risk.id }));
             if (errors.length) {
-                if (game.user.isGM) ui.notifications.error(`Испытание ${risk?.id ?? `№${i + 1}`} пропущено — ${errors[0]}`);
+                if (game.user.isGM) ui.notifications.error(t('Испытание {v} пропущено — {v2}', { v: risk?.id ?? `№${i + 1}`, v2: errors[0] }));
                 console.warn(`[GachaDND] Испытание Риска ${risk?.id ?? i} пропущено:`, errors);
             } else custom.push(risk);
         }
@@ -68,13 +69,13 @@ export function registerRiskSettings() {
     game.settings.register(MODULE_ID, 'riskHistory', { scope: 'world', config: false, type: Array, default: [] });
     const reset = () => { challenges = null; };
     game.settings.register(MODULE_ID, 'riskCustomFile', {
-        name: 'Свои испытания Риска',
-        hint: 'Путь к JSON-файлу с испытаниями (объект или список), например worlds/мой-мир/risks.json. Формат — src/risks/SCHEMA.md модуля. Добавляются к встроенным. Действует на узлы Риска, открытые после изменения.',
+        name: t('Свои испытания Риска'),
+        hint: t('Путь к JSON-файлу с испытаниями (объект или список), например worlds/мой-мир/risks.json. Формат — src/risks/SCHEMA.md модуля. Добавляются к встроенным. Действует на узлы Риска, открытые после изменения.'),
         scope: 'world', config: false, type: String, default: '', onChange: reset
     });
     game.settings.register(MODULE_ID, 'riskOnlyCustom', {
-        name: 'Только свои испытания Риска',
-        hint: 'Встроенные испытания не используются. Действует на узлы Риска, открытые после изменения.',
+        name: t('Только свои испытания Риска'),
+        hint: t('Встроенные испытания не используются. Действует на узлы Риска, открытые после изменения.'),
         scope: 'world', config: false, type: Boolean, default: false, onChange: reset
     });
 }
@@ -93,12 +94,12 @@ export function isRiskActive(scene) {
 // Подключение к Памяти: пока идёт испытание, игроки не поглощают кристаллы и не меняют навыки
 Hooks.on(HOOKS.preAbsorbCrystal, () => {
     if (!isRiskActive() || game.user.isGM) return;
-    ui.notifications.warn('Во время испытания Риска кристаллы не поглощаются.');
+    ui.notifications.warn(t('Во время испытания Риска кристаллы не поглощаются.'));
     return false;
 });
 Hooks.on(HOOKS.preChangeSkill, () => {
     if (!isRiskActive() || game.user.isGM) return;
-    ui.notifications.warn('Во время испытания Риска навыки менять нельзя.');
+    ui.notifications.warn(t('Во время испытания Риска навыки менять нельзя.'));
     return false;
 });
 
@@ -128,8 +129,8 @@ async function stageReward(index) {
 }
 
 function rewardLabel(index) {
-    return ['½ золота элитной комнаты', 'зелёный кристалл', 'синий кристалл', 'золото элитной комнаты', 'фиолетовый кристалл'][index]
-        ?? (index % 2 ? 'синий кристалл' : 'фиолетовый кристалл');
+    return [t('½ золота элитной комнаты'), t('зелёный кристалл'), t('синий кристалл'), t('золото элитной комнаты'), t('фиолетовый кристалл')][index]
+        ?? (index % 2 ? t('синий кристалл') : t('фиолетовый кристалл'));
 }
 
 // ==========================================
@@ -137,7 +138,7 @@ function rewardLabel(index) {
 // ==========================================
 
 async function chat(content) {
-    await ChatMessage.create({ speaker: { alias: 'Риск' }, content: `<div class="gachadnd-risk-chat">${content}</div>` });
+    await ChatMessage.create({ speaker: { alias: t('Риск') }, content: `<div class="gachadnd-risk-chat">${content}</div>` });
 }
 
 async function applyFail(actor, fail) {
@@ -158,7 +159,7 @@ async function spendHitDie(actor) {
     if (!cls) return null;
     const roll = await new Roll(`1${cls.system.hd.denomination}`).evaluate();
     await cls.update({ 'system.hd.spent': cls.system.hd.spent + 1 });
-    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: 'Цена крови: Кость Хитов' });
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: t('Цена крови: Кость Хитов') });
     return roll.total;
 }
 
@@ -177,7 +178,7 @@ async function succeedStage(risk, challenge, actorId, note) {
 async function deliver(risk, recipient, reason) {
     risk.active = false;
     risk.ended = reason;
-    if (!recipient) return chat(`Испытание окончено, но получатель добычи не выбран. Копилка: ${potText(risk.pot)}.`);
+    if (!recipient) return chat(t('Испытание окончено, но получатель добычи не выбран. Копилка: {v}.', { v: potText(risk.pot) }));
     const crystals = [];
     for (const c of risk.pot.crystals) {
         const data = await crystalForSkill({ skillId: c.skillId });
@@ -185,14 +186,14 @@ async function deliver(risk, recipient, reason) {
     }
     if (crystals.length) await recipient.createEmbeddedDocuments('Item', crystals);
     if (risk.pot.gold) await addGold(recipient, risk.pot.gold);
-    return chat(`Добыча испытания — <strong>${esc(recipient.name)}</strong>: ${potText(risk.pot)}.`);
+    return chat(`${t('Добыча испытания —')} <strong>${esc(recipient.name)}</strong>: ${potText(risk.pot)}.`);
 }
 
 function potText(pot) {
     const parts = [];
-    if (pot.gold) parts.push(`${pot.gold} зм`);
+    if (pot.gold) parts.push(t('{gold} зм', { gold: pot.gold }));
     pot.crystals.forEach(c => parts.push(`<span style="color: ${RARITY_COLORS[c.rarity]}">${esc(c.name)}</span>`));
-    return parts.join(', ') || 'пусто';
+    return parts.join(', ') || t('пусто');
 }
 
 async function collapse(risk, challenge) {
@@ -200,8 +201,8 @@ async function collapse(risk, challenge) {
     const keep = Math.floor(risk.pot.crystals.length / 2);
     risk.pot.crystals = risk.pot.crystals.sort(() => Math.random() - 0.5).slice(0, keep);
     for (const actor of partyActors()) if (!isDown(actor)) await applyFail(actor, challenge.collapse);
-    risk.log.push(`✖ Обвал: ${challenge.collapse.text}`);
-    await chat(`<strong>Обвал!</strong> ${esc(challenge.collapse.text)} Копилка сгорает наполовину.`);
+    risk.log.push(t('✖ Обвал: {text}', { text: challenge.collapse.text }));
+    await chat(`<strong>${t('Обвал!')}</strong> ${t('{v} Копилка сгорает наполовину.', { v: esc(challenge.collapse.text) })}`);
 }
 
 async function performRiskOp({ op, userId, actorId, helperId, approach, total, recipientId }) {
@@ -227,11 +228,11 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
 
     if (op === 'roll' && stage && !stage.group) {
         if (!owns(actor) || risk.pending) return;
-        if (actorId === risk.lastPerformer) return deny(`${actor.name} выступал на прошлом этапе и пропускает этот.`);
+        if (actorId === risk.lastPerformer) return deny(t('{name} выступал на прошлом этапе и пропускает этот.', { name: actor.name }));
         const choice = stage.approaches[approach];
         const dc = stageDC(risk.floor, choice);
         const helper = game.actors.get(helperId);
-        const note = `${actor.name} — ${choice.label} (${total} против Сл ${dc})${helper ? `, помогал ${helper.name}` : ''}`;
+        const note = t('{name} — {label} ({total} против Сл {dc}){v}', { name: actor.name, label: choice.label, total, dc, v: helper ? t(', помогал {name}', { name: helper.name }) : '' });
         if (total >= dc) {
             await succeedStage(risk, challenge, actorId, note);
             if (risk.stage >= challenge.stages.length) await deliver(risk, game.actors.get(risk.recipientId) ?? actor, 'complete');
@@ -244,9 +245,9 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
         const performer = game.actors.get(risk.pending.actorId);
         if (!owns(performer)) return;
         const bonus = await spendHitDie(performer);
-        if (bonus === null) return deny(`${performer.name}: Кости Хитов кончились.`);
+        if (bonus === null) return deny(t('{name}: Кости Хитов кончились.', { name: performer.name }));
         risk.pending.total += bonus;
-        risk.pending.note = `${risk.pending.note}, Цена крови +${bonus}`;
+        risk.pending.note = t('{note}, Цена крови +{bonus}', { note: risk.pending.note, bonus });
         if (risk.pending.total >= risk.pending.dc) {
             await succeedStage(risk, challenge, risk.pending.actorId, `${risk.pending.note} → ${risk.pending.total}`);
             if (risk.stage >= challenge.stages.length) await deliver(risk, game.actors.get(risk.recipientId) ?? performer, 'complete');
@@ -275,11 +276,11 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
             const successes = rolls.filter(r => r.success).length;
             const summary = rolls.map(r => `${r.actor.name} ${r.total}/${r.dc}`).join(', ');
             if (successes >= Math.ceil(rolls.length / 2)) {
-                await succeedStage(risk, challenge, null, `все вместе (${summary})`);
+                await succeedStage(risk, challenge, null, t('все вместе ({summary})', { summary }));
                 if (risk.stage >= challenge.stages.length) await deliver(risk, game.actors.get(risk.recipientId) ?? participants[0], 'complete');
             } else {
                 for (const r of rolls.filter(r => !r.success)) await applyFail(r.actor, stage.approaches[r.approach].fail);
-                risk.log.push(`✖ ${stage.name}: все вместе (${summary})`);
+                risk.log.push(t('✖ {name}: все вместе ({summary})', { name: stage.name, summary }));
                 risk.groupRolls = {};
                 risk.lastPerformer = null;
                 await finishFailure();
@@ -288,7 +289,7 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
     }
 
     else if (op === 'auto' && user?.isGM && stage) {
-        await succeedStage(risk, challenge, stage.group ? null : actorId, `${stage.group ? 'отряд' : actor?.name ?? 'отряд'} — автоуспех (решение Мастера)`);
+        await succeedStage(risk, challenge, stage.group ? null : actorId, t('{v} — автоуспех (решение Мастера)', { v: stage.group ? t('отряд') : actor?.name ?? t('отряд') }));
         if (risk.stage >= challenge.stages.length) await deliver(risk, game.actors.get(risk.recipientId) ?? actor ?? partyActors()[0], 'complete');
     }
 
@@ -299,7 +300,7 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
             risk.lastPerformer = actorId;
         }
         risk.groupRolls = {};
-        risk.log.push(`✖ ${stage.name}: ${stage.group ? 'отряд' : actor?.name ?? 'отряд'} — импровизация не удалась`);
+        risk.log.push(t('✖ {name}: {v} — импровизация не удалась', { name: stage.name, v: stage.group ? t('отряд') : actor?.name ?? t('отряд') }));
         await finishFailure();
     }
 
@@ -308,7 +309,7 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
     }
 
     else if (op === 'leave' && user?.isGM && !risk.pending) {
-        risk.log.push('Отряд уходит с добычей.');
+        risk.log.push(t('Отряд уходит с добычей.'));
         await deliver(risk, game.actors.get(recipientId ?? risk.recipientId), 'left');
     }
 
@@ -319,7 +320,7 @@ async function performRiskOp({ op, userId, actorId, helperId, approach, total, r
 let queue = Promise.resolve();
 onSocket('riskOp', message => {
     if (!isActiveGM()) return;
-    queue = queue.then(() => performRiskOp(message.payload)).catch(err => console.error('[GachaDND] Риск:', err));
+    queue = queue.then(() => performRiskOp(message.payload)).catch(err => console.error(`[GachaDND] Риск:`, err));
     return queue;
 });
 onSocket('openRisk', () => RiskWindow.show());
@@ -330,7 +331,7 @@ const request = payload => requestGM('riskOp', payload);
 async function startChallenge(found, exclude = null) {
     const all = await loadChallenges();
     if (!all.length) {
-        ui.notifications.error('Испытания Риска не найдены: проверьте настройки «Свои испытания Риска» или соберите модуль (npm run build).');
+        ui.notifications.error(t('Испытания Риска не найдены: проверьте настройки «Свои испытания Риска» или соберите модуль (npm run build).'));
         return false;
     }
     let history = game.settings.get(MODULE_ID, 'riskHistory') ?? [];
@@ -368,7 +369,7 @@ export class RiskWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         id: 'gachadnd-risk',
         classes: ['gachadnd-risk'],
         tag: 'div',
-        window: { title: 'Риск', icon: 'fas fa-exclamation-triangle', resizable: true },
+        window: { title: t('Риск'), icon: 'fas fa-exclamation-triangle', resizable: true },
         position: { width: 720, height: 720 },
         actions: {
             roll: RiskWindow.#onRoll,
@@ -386,7 +387,7 @@ export class RiskWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     static async open() {
         if (!game.user.isGM) return RiskWindow.show();
         const found = currentRiskNode();
-        if (!found) return ui.notifications.warn('Отряд не стоит на узле Риска.');
+        if (!found) return ui.notifications.warn(t('Отряд не стоит на узле Риска.'));
         if (!found.node.risk && !(await startChallenge(found))) return;
         emit('openRisk');
         return RiskWindow.show();
@@ -403,9 +404,9 @@ export class RiskWindow extends HandlebarsApplicationMixin(ApplicationV2) {
     async _prepareContext() {
         const found = currentRiskNode();
         const risk = found?.node.risk;
-        if (!risk) return { empty: 'Отряд не стоит на узле Риска.' };
+        if (!risk) return { empty: t('Отряд не стоит на узле Риска.') };
         const challenge = (await loadChallenges()).find(c => c.id === risk.challengeId);
-        if (!challenge) return { empty: 'Испытание не найдено.' };
+        if (!challenge) return { empty: t('Испытание не найдено.') };
         const party = partyActors();
         const stage = challenge.stages[risk.stage];
         const context = {
@@ -416,7 +417,7 @@ export class RiskWindow extends HandlebarsApplicationMixin(ApplicationV2) {
         };
 
         if (!risk.active) {
-            context.ended = { left: 'Отряд ушёл с добычей.', complete: 'Испытание пройдено до конца.', collapse: 'Обвал.' }[risk.ended] ?? 'Испытание окончено.';
+            context.ended = { left: t('Отряд ушёл с добычей.'), complete: t('Испытание пройдено до конца.'), collapse: t('Обвал.') }[risk.ended] ?? t('Испытание окончено.');
         } else if (risk.pending) {
             const performer = game.actors.get(risk.pending.actorId);
             context.pending = { ...risk.pending, mine: game.user.isGM || !!performer?.isOwner };
@@ -436,7 +437,7 @@ export class RiskWindow extends HandlebarsApplicationMixin(ApplicationV2) {
                 canRoll: !!performer && (game.user.isGM || performer.isOwner),
                 approaches: stage.approaches.map((ap, i) => ({
                     index: i, label: ap.label, skill: skillLabel(ap.skill), dc: stageDC(risk.floor, ap),
-                    fail: `${ap.fail.text}${ap.fail.hp ? ` −${ap.fail.hp} × уровень ПЗ.` : ''}`
+                    fail: `${ap.fail.text}${ap.fail.hp ? t(' −{hp} × уровень ПЗ.', { hp: ap.fail.hp }) : ''}`
                 }))
             };
         }

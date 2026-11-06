@@ -20,6 +20,7 @@ import { addTurnEffect } from "../turn-effects.js";
 import { pickCell } from "../pick.js";
 import { isBlast, ref, actorFrom, tokenOf, esc, quiet, dcOf, centerOf, feetToPx, inCircle, blast } from "./common.js";
 import { saveCard } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const FLAG = 'gas';
 const START = 10, GROW = 5, MAX = 30;
@@ -39,17 +40,17 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     const combat = game.combat;
     const caster = tokenOf(actor);
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id) || !caster) {
-        ui.notifications.warn('Утечка газа — только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Утечка газа — только в бою, в котором участвует персонаж.'));
         return false;
     }
     if (stateOf(combat)) {
-        ui.notifications.warn('Газ уже идёт.');
+        ui.notifications.warn(t('Газ уже идёт.'));
         return false;
     }
     pickCell({
         caster, range: Number(activity.range?.value) || 60,
         draw: (g, cell, ok, s) => g.lineStyle(2, ok ? 0x8bd450 : 0xff3030, 0.9).beginFill(0x8bd450, ok ? 0.25 : 0.05).drawCircle(cell[0] * s + s / 2, cell[1] * s + s / 2, feetToPx(START)).endFill(),
-        hint: 'Утечка газа: выберите клетку вентиля. Правая кнопка или Esc — отмена.'
+        hint: t('Утечка газа: выберите клетку вентиля. Правая кнопка или Esc — отмена.')
     }).then(cell => {
         if (!cell) return;
         chosen.set(item.id, cell);
@@ -67,7 +68,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
 });
 
 onSocket('blastGas', ({ payload }) => { if (isActiveGM()) open(payload).catch(error => console.error(`${MODULE_ID} | Газ`, error)); });
-onSocket('blastGasIgnite', () => { if (isActiveGM()) ignite(game.combat, 'Мастер поджёг газ').catch(error => console.error(`${MODULE_ID} | Газ`, error)); });
+onSocket('blastGasIgnite', () => { if (isActiveGM()) ignite(game.combat, t('Мастер поджёг газ')).catch(error => console.error(`${MODULE_ID} | Газ`, error)); });
 
 export async function open({ actorId, tokenId, sceneId, cell, dc }) {
     const combat = game.combat;
@@ -79,7 +80,7 @@ export async function open({ actorId, tokenId, sceneId, cell, dc }) {
     const whisper = game.users.filter(u => u.isGM || actor.testUserPermission(u, 'OWNER')).map(u => u.id);
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }), whisper,
-        content: `<div class="gd-blast-card gas"><div class="gd-blast-title"><i class="fas fa-smog"></i> Утечка газа</div><p>Вентиль открыт. Облако растёт каждый раунд, до 30 футов. Любой огонь в нём — взрыв.</p><div class="gd-blast-buttons"><button type="button" data-gas-ignite><i class="fas fa-fire"></i> Поджечь (Мастер)</button></div></div>`,
+        content: `<div class="gd-blast-card gas"><div class="gd-blast-title"><i class="fas fa-smog"></i> ${t('Утечка газа')}</div><p>${t('Вентиль открыт. Облако растёт каждый раунд, до 30 футов. Любой огонь в нём — взрыв.')}</p><div class="gd-blast-buttons"><button type="button" data-gas-ignite><i class="fas fa-fire"></i> ${t('Поджечь (Мастер)')}</button></div></div>`,
         flags: { [MODULE_ID]: { gas: true } }
     });
 }
@@ -93,8 +94,8 @@ export async function ignite(combat, reason) {
     const owner = game.actors.get(state.actorId);
     const dice = Math.floor(state.radius / 5);
     await blast({
-        actor: owner, title: 'Газ взрывается', icon: 'fa-fire', victims: inCircle(scene, state, feetToPx(state.radius, scene)),
-        formula: `${dice}d6`, type: 'fire', ability: 'dex', dc: state.dc, note: `${esc(reason)}. Радиус облака ${state.radius} футов — ${dice}d6.`,
+        actor: owner, title: t('Газ взрывается'), icon: 'fa-fire', victims: inCircle(scene, state, feetToPx(state.radius, scene)),
+        formula: `${dice}d6`, type: 'fire', ability: 'dex', dc: state.dc, note: t('{v}. Радиус облака {radius} футов — {dice}d6.', { v: esc(reason), radius: state.radius, dice }),
         at: { sceneId: scene.id, x: state.x, y: state.y, radius: feetToPx(state.radius, scene) }
     });
 }
@@ -111,16 +112,16 @@ Hooks.on('updateCombat', async (combat, changed) => {
     // Горящая клетка пожара в облаке
     const fire = combat.getFlag(MODULE_ID, 'fire');
     if (fire?.cells?.some(([x, y]) => Math.hypot(x * scene.grid.size + scene.grid.size / 2 - state.x, y * scene.grid.size + scene.grid.size / 2 - state.y) <= feetToPx(state.radius, scene))) {
-        return ignite(combat, 'Газ дошёл до пожара');
+        return ignite(combat, t('Газ дошёл до пожара'));
     }
     // Начало хода в газе: Телосложение или отравление
     const token = combat.combatant?.token;
     const actor = token?.actor;
     if (!actor || !inside(scene, state, token) || (actor.system?.attributes?.hp?.value ?? 1) <= 0) return;
     await saveCard({
-        actor: game.actors.get(state.actorId) ?? actor, title: `Утечка газа: ${token.name} в облаке`, icon: 'fa-smog', tokens: [token],
-        ability: 'con', dc: state.dc, note: 'Провал — отравлен до конца хода (модуль наложит сам).',
-        onFail: { effect: { name: 'Газ: отравлен', img: 'icons/svg/poison.svg', statuses: ['poisoned'], description: 'Наглотался газа: отравлен до конца хода.' }, until: 'thisTurn' }
+        actor: game.actors.get(state.actorId) ?? actor, title: t('Утечка газа: {name} в облаке', { name: token.name }), icon: 'fa-smog', tokens: [token],
+        ability: 'con', dc: state.dc, note: t('Провал — отравлен до конца хода (модуль наложит сам).'),
+        onFail: { effect: { name: t('Газ: отравлен'), img: 'icons/svg/poison.svg', statuses: ['poisoned'], description: t('Наглотался газа: отравлен до конца хода.') }, until: 'thisTurn' }
     });
 });
 
@@ -135,7 +136,7 @@ Hooks.on('dnd5e.applyDamage', (actor, amount, options) => {
     const combat = game.combat;
     const state = stateOf(combat);
     const token = actor.token ?? tokenOf(actor)?.document;
-    if (state && token && inside(combat.scene ?? canvas.scene, state, token)) ignite(combat, `Огонь по ${actor.name}`).catch(error => console.error(`${MODULE_ID} | Газ`, error));
+    if (state && token && inside(combat.scene ?? canvas.scene, state, token)) ignite(combat, t('Огонь по {name}', { name: actor.name })).catch(error => console.error(`${MODULE_ID} | Газ`, error));
 });
 
 onRenderChatMessage((message, html) => {

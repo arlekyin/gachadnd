@@ -14,6 +14,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { dealCards, applyCards, broadcastCards, CARDS } from "../freaky-cards.js";
 import { isLight, ref, actorFrom, tokenOf, centerOf, lightCard, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const ROUNDS = 10, SPOTS = 6, RADIUS_FT = 30;
 const COLORS = ['#ff2d95', '#00e5ff', '#ffe600', '#7cff00', '#b04dff', '#ff7a00'];
@@ -24,11 +25,11 @@ Hooks.on('dnd5e.preUseActivity', (activity) => {
     if (!isLight(item, 'disco') || !actor) return;
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id)) {
-        ui.notifications.warn('Диско-шар — только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Диско-шар — только в бою, в котором участвует персонаж.'));
         return false;
     }
     if (!tokenOf(actor)) {
-        ui.notifications.warn('Диско-шар: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Диско-шар: токена персонажа нет на сцене.'));
         return false;
     }
 });
@@ -41,7 +42,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
 
 onSocket('lightDisco', ({ payload }) => {
     if (!isActiveGM()) return;
-    start(payload).catch(error => console.error('gachadnd | Диско-шар', error));
+    start(payload).catch(error => console.error(`gachadnd | Диско-шар`, error));
 });
 
 /** Мастер: шар над персонажем и первые пятна */
@@ -55,7 +56,7 @@ export async function start({ actorId, tokenId, sceneId }) {
     if (old) await clearLights(scene, old);
     const { x, y } = centerOf(token);
     await combat.setFlag(MODULE_ID, FLAG, { actorId: actor.id, x, y, until: combat.round + ROUNDS, spots: [], lights: [], drawn: {} });
-    await lightCard(actor, 'Диско-шар', `<p>Над полем боя закружился диско-шар — до конца раунда ${combat.round + ROUNDS - 1}. Кто встанет на пятно, тянет карту.</p>`, { icon: 'fa-compact-disc', cls: 'disco' });
+    await lightCard(actor, t('Диско-шар'), `<p>${t('Над полем боя закружился диско-шар — до конца раунда {v}. Кто встанет на пятно, тянет карту.', { v: combat.round + ROUNDS - 1 })}</p>`, { icon: 'fa-compact-disc', cls: 'disco' });
     await respot(combat, scene);
     await checkTurn(combat, scene);
 }
@@ -118,7 +119,7 @@ async function draw(combat, scene, token, at = token) {
     broadcastCards({ sceneId: scene.id, dealt });
     const card = CARDS[dealt[0].card];
     const owner = actorFrom({ actorId: state.actorId, tokenId: null, sceneId: scene.id });
-    await lightCard(owner ?? token.actor, 'Диско-шар', `<p>${esc(token.name)} на пятне — карта «${esc(card.name)}» (${card.buff ? 'баф' : 'дебаф'}): ${esc(card.rules)}</p>`, { icon: 'fa-compact-disc', cls: 'disco' });
+    await lightCard(owner ?? token.actor, t('Диско-шар'), `<p>${t('{v} на пятне — карта «{v2}» ({v3}): {v4}', { v: esc(token.name), v2: esc(card.name), v3: card.buff ? t('баф') : t('дебаф'), v4: esc(card.rules) })}</p>`, { icon: 'fa-compact-disc', cls: 'disco' });
 }
 
 async function checkTurn(combat, scene) {
@@ -147,7 +148,7 @@ Hooks.on('updateCombat', async (combat, changed) => {
 function entered(token, at) {
     const combat = game.combat;
     if (!isActiveGM() || !combat?.started || combat.combatant?.tokenId !== token.id || !combat.getFlag(MODULE_ID, FLAG)) return;
-    draw(combat, token.parent, token, at).catch(error => console.error('gachadnd | Диско-шар', error));
+    draw(combat, token.parent, token, at).catch(error => console.error(`gachadnd | Диско-шар`, error));
 }
 Hooks.on('moveToken', (token, movement) => {
     if (movement?.pending?.waypoints?.length) return;

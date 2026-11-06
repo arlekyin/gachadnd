@@ -15,6 +15,7 @@ import { addTurnEffect } from "./turn-effects.js";
 import { placeToken } from "./pick.js";
 import { createCircle, deleteTemplates } from "../../core/templates.js";
 import { blast } from "./blast/common.js";
+import { t } from "../../core/i18n.js";
 
 export const HAND = 3;
 const RANGE = 30;
@@ -27,27 +28,27 @@ const attackBonus = (key, value) => ['mwak', 'rwak', 'msak', 'rsak'].map(k => ({
  * 'discard' — карта из сброса.
  */
 export const CARDS = {
-    scorch: { name: 'Казнь', icon: 'fa-fire', count: 1, target: null,
-        text: 'Существо с наибольшими ПЗ в 30 футах получает (бонус мастерства)d8 урона силовым полем.' },
-    frost: { name: 'Трескучий мороз', icon: 'fa-snowflake', count: 2, target: 'point',
-        text: 'Зона 15 футов: враги в ней — скорость вдвое меньше до конца своего следующего хода.' },
-    fog: { name: 'Непроглядный туман', icon: 'fa-smog', count: 1, target: 'point',
-        text: 'Зона 15 футов до конца боя: дальнобойные атаки в неё и из неё — с помехой.' },
-    clear: { name: 'Ясное небо', icon: 'fa-sun', count: 1, target: null,
-        text: 'Снимает все зоны погоды.' },
-    horn: { name: 'Командирский рог', icon: 'fa-bullhorn', count: 2, target: 'ally',
-        text: 'Союзник в 30 футах: +1d6 к броскам атаки и урону до конца его следующего хода.' },
-    decoy: { name: 'Чучело', icon: 'fa-people-arrows', count: 2, target: 'ally',
-        text: 'Вы и союзник в 30 футах меняетесь местами.' },
-    spy: { name: 'Шпион', icon: 'fa-user-secret', count: 1, target: null,
-        text: 'Возьмите 2 карты. До конца вашего следующего хода атаки по вам — с преимуществом.' },
-    medic: { name: 'Медик', icon: 'fa-kit-medical', count: 1, target: 'discard',
-        text: 'Верните в руку карту из сброса.' },
-    witcher: { name: 'Охотник', icon: 'fa-paw', count: 1, target: null,
-        text: 'Ваши атаки до конца этого хода наносят +2d6 урона.' }
+    scorch: { name: t('Казнь'), icon: 'fa-fire', count: 1, target: null,
+        text: t('Существо с наибольшими ПЗ в 30 футах получает (бонус мастерства)d8 урона силовым полем.') },
+    frost: { name: t('Трескучий мороз'), icon: 'fa-snowflake', count: 2, target: 'point',
+        text: t('Зона 15 футов: враги в ней — скорость вдвое меньше до конца своего следующего хода.') },
+    fog: { name: t('Непроглядный туман'), icon: 'fa-smog', count: 1, target: 'point',
+        text: t('Зона 15 футов до конца боя: дальнобойные атаки в неё и из неё — с помехой.') },
+    clear: { name: t('Ясное небо'), icon: 'fa-sun', count: 1, target: null,
+        text: t('Снимает все зоны погоды.') },
+    horn: { name: t('Командирский рог'), icon: 'fa-bullhorn', count: 2, target: 'ally',
+        text: t('Союзник в 30 футах: +1d6 к броскам атаки и урону до конца его следующего хода.') },
+    decoy: { name: t('Чучело'), icon: 'fa-people-arrows', count: 2, target: 'ally',
+        text: t('Вы и союзник в 30 футах меняетесь местами.') },
+    spy: { name: t('Шпион'), icon: 'fa-user-secret', count: 1, target: null,
+        text: t('Возьмите 2 карты. До конца вашего следующего хода атаки по вам — с преимуществом.') },
+    medic: { name: t('Медик'), icon: 'fa-kit-medical', count: 1, target: 'discard',
+        text: t('Верните в руку карту из сброса.') },
+    witcher: { name: t('Охотник'), icon: 'fa-paw', count: 1, target: null,
+        text: t('Ваши атаки до конца этого хода наносят +2d6 урона.') }
 };
 
-export const SKILL_NAME = 'Партейку?';
+export const SKILL_NAME = 'Партейку?';  // i18n: данные
 // Флаг из компендиума; навык, собранный без флага (старый компендиум), узнаётся по имени
 export const isGwent = item => {
     const flags = item?.flags?.[MODULE_ID];
@@ -117,9 +118,9 @@ Hooks.on('updateCombat', async (combat, changed) => {
 /** Можно ли разыграть карту сейчас: бой, ход персонажа, ещё не играл в этот ход */
 export function canPlay(actor) {
     const combat = game.combat;
-    if (!combat?.started) return 'Карты играются только в бою.';
-    if (combat.combatant?.actor?.id !== actor.id) return 'Карту можно сыграть только в свой ход.';
-    if (stateOf(actor)?.played === turnKey(combat)) return 'В этот ход карта уже сыграна.';
+    if (!combat?.started) return t('Карты играются только в бою.');
+    if (combat.combatant?.actor?.id !== actor.id) return t('Карту можно сыграть только в свой ход.');
+    if (stateOf(actor)?.played === turnKey(combat)) return t('В этот ход карта уже сыграна.');
     return null;
 }
 
@@ -155,66 +156,66 @@ export async function playCard({ actorId, tokenId, sceneId, index, target = null
         if (victims.length) {
             const prof = actor.system?.attributes?.prof ?? 2;
             // Как у способностей dnd5e: урон — кнопкой в карточке, применяет Мастер лотком
-            await blast({ actor, title: 'Партейка: Казнь', icon: 'fa-skull', victims, formula: `${prof}d8`, type: 'force' });
-            result = `Казнь: ${esc(victims.map(t => t.name).join(', '))} — ${prof}d8 урона силовым полем, кнопкой в карточке.`;
-        } else result = 'Казнь: в 30 футах никого.';
+            await blast({ actor, title: t('Партейка: Казнь'), icon: 'fa-skull', victims, formula: `${prof}d8`, type: 'force' });
+            result = t('Казнь: {v} — {prof}d8 урона силовым полем, кнопкой в карточке.', { v: esc(victims.map(t => t.name).join(', ')), prof });
+        } else result = t('Казнь: в 30 футах никого.');
     } else if (key === 'frost' || key === 'fog') {
         await createCircle(scene, {
-            x: target.x, y: target.y, distance: ZONE, name: key === 'frost' ? 'Партейка: Трескучий мороз' : 'Партейка: Непроглядный туман',
+            x: target.x, y: target.y, distance: ZONE, name: key === 'frost' ? t('Партейка: Трескучий мороз') : t('Партейка: Непроглядный туман'),
             fillColor: key === 'frost' ? '#9fe3ff' : '#8a8f99', borderColor: key === 'frost' ? '#d6f4ff' : '#c4c8cf',
             flags: { [MODULE_ID]: { gwentWeather: key, actorId: actor.id } }
         });
         if (key === 'frost') {
             const disposition = token.disposition;
             const inside = scene.tokens.filter(t => t.disposition !== disposition && Math.hypot(center(t).x - target.x, center(t).y - target.y) <= ZONE / (scene.grid.distance ?? 5) * size + size / 2);
-            for (const t of inside) {
-                await addTurnEffect(t.actor, combat, {
-                    name: 'Партейка: Трескучий мороз', img: 'icons/svg/frozen.svg',
-                    description: '<p>Скорость всех видов вдвое меньше.</p><p><em>Партейка: до конца следующего хода этого существа.</em></p>',
+            for (const victim of inside) {
+                await addTurnEffect(victim.actor, combat, {
+                    name: t('Партейка: Трескучий мороз'), img: 'icons/svg/frozen.svg',
+                    description: t('<p>Скорость всех видов вдвое меньше.</p><p><em>Партейка: до конца следующего хода этого существа.</em></p>'),
                     changes: ['walk', 'fly', 'swim', 'climb', 'burrow'].map(m => ({ key: `system.attributes.movement.${m}`, mode: 1, value: '0.5' }))
-                }, { tokenId: t.id });
+                }, { tokenId: victim.id });
             }
-            result = `Трескучий мороз: ${inside.length ? `замедлены ${esc(inside.map(t => t.name).join(', '))}` : 'в зоне врагов нет'}.`;
-        } else result = 'Непроглядный туман: дальнобойные атаки в зону и из неё — с помехой, до конца боя.';
+            result = t('Трескучий мороз: {v}.', { v: inside.length ? t('замедлены {v}', { v: esc(inside.map(t => t.name).join(', ')) }) : t('в зоне врагов нет') });
+        } else result = t('Непроглядный туман: дальнобойные атаки в зону и из неё — с помехой, до конца боя.');
     } else if (key === 'clear') {
         const removed = await deleteTemplates(scene, t => t.flags?.[MODULE_ID]?.gwentWeather);
-        result = `Ясное небо: снято зон — ${removed}.`;
+        result = t('Ясное небо: снято зон — {removed}.', { removed });
     } else if (key === 'horn') {
         const ally = scene.tokens.get(target.tokenId);
         await addTurnEffect(ally.actor, combat, {
-            name: 'Партейка: Командирский рог', img: 'icons/svg/upgrade.svg',
-            description: '<p>+1d6 к броскам атаки и урону.</p><p><em>Партейка: до конца следующего хода этого существа.</em></p>',
+            name: t('Партейка: Командирский рог'), img: 'icons/svg/upgrade.svg',
+            description: t('<p>+1d6 к броскам атаки и урону.</p><p><em>Партейка: до конца следующего хода этого существа.</em></p>'),
             changes: [...attackBonus('attack', '+1d6'), ...attackBonus('damage', '+1d6')]
         }, { tokenId: ally.id });
-        result = `Командирский рог: ${esc(ally.name)} — +1d6 к атакам и урону.`;
+        result = t('Командирский рог: {v} — +1d6 к атакам и урону.', { v: esc(ally.name) });
     } else if (key === 'decoy') {
         const ally = scene.tokens.get(target.tokenId);
         const a = { x: token.x, y: token.y }, b = { x: ally.x, y: ally.y };
         await placeToken(token, b.x, b.y);
         await placeToken(ally, a.x, a.y);
-        result = `Чучело: ${esc(token.name)} и ${esc(ally.name)} поменялись местами.`;
+        result = t('Чучело: {v} и {v2} поменялись местами.', { v: esc(token.name), v2: esc(ally.name) });
     } else if (key === 'spy') {
         draw(state, 2);
         await addTurnEffect(actor, combat, {
-            name: 'Партейка: Шпион', img: `${ICON}/statuses/marked.svg`,
-            description: '<p>Атаки по вам — с преимуществом.</p><p><em>Партейка: до конца вашего следующего хода.</em></p>'
+            name: t('Партейка: Шпион'), img: `${ICON}/statuses/marked.svg`,
+            description: t('<p>Атаки по вам — с преимуществом.</p><p><em>Партейка: до конца вашего следующего хода.</em></p>')
         }, { tokenId: token.id });
-        result = 'Шпион: +2 карты в руку, атаки по персонажу — с преимуществом до конца его следующего хода.';
+        result = t('Шпион: +2 карты в руку, атаки по персонажу — с преимуществом до конца его следующего хода.');
     } else if (key === 'medic') {
         // Сама «Медик» уже в сбросе — вернуть можно другую
         const i = state.discard.lastIndexOf(target.card);
         if (target.card && i >= 0 && target.card !== 'medic') {
             state.discard.splice(i, 1);
             state.hand.push(target.card);
-            result = `Медик: в руку вернулась «${CARDS[target.card].name}».`;
-        } else result = 'Медик: возвращать нечего.';
+            result = t('Медик: в руку вернулась «{name}».', { name: CARDS[target.card].name });
+        } else result = t('Медик: возвращать нечего.');
     } else if (key === 'witcher') {
         await addTurnEffect(actor, combat, {
-            name: 'Партейка: Охотник', img: 'icons/svg/sword.svg',
-            description: '<p>Атаки наносят +2d6 урона.</p><p><em>Партейка: до конца этого хода.</em></p>',
+            name: t('Партейка: Охотник'), img: 'icons/svg/sword.svg',
+            description: t('<p>Атаки наносят +2d6 урона.</p><p><em>Партейка: до конца этого хода.</em></p>'),
             changes: attackBonus('damage', '+2d6')
         }, { until: 'thisTurn', tokenId: token.id });
-        result = 'Охотник: атаки до конца хода — +2d6 урона.';
+        result = t('Охотник: атаки до конца хода — +2d6 урона.');
     }
 
     await saveState(actor, state);

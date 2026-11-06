@@ -4,16 +4,16 @@
     <div class="gd-bar">
         {{#if rules.length}}<div class="gd-bar-rules">{{#each rules}}<span><i class="fas {{icon}}"></i>{{text}}</span>{{/each}}</div>{{/if}}
         <div class="gd-bar-who">
-            <b>{{#if roster}}<a data-action="prevActor" data-tooltip="Предыдущий герой"><i class="fas fa-chevron-left"></i></a> {{/if}}{{dockActor.name}}{{#if roster}} <a data-action="nextActor" data-tooltip="Следующий герой"><i class="fas fa-chevron-right"></i></a>{{/if}}</b>
-            <small><span class="{{#if mind.over}}over{{/if}}" data-tooltip="Предел разума"><i class="fas fa-brain"></i>{{mind.filled}}/{{mind.natural}}</span>{{#if echo}}<span data-tooltip="{{echo.tip}}" style="--echo: {{echo.color}}"><i class="fas {{echo.icon}} gd-echo-i"></i>{{echo.value}}</span>{{/if}}</small>
-            <small>{{#each topTags}}<span class="{{#if muffled}}muffled{{/if}}" data-tooltip="{{tag}}"><i class="fas {{icon}}"></i>{{n}}</span>{{/each}}</small>
+            <b>{{#if roster}}<a data-action="prevActor" data-tooltip="{{t 'Предыдущий герой'}}"><i class="fas fa-chevron-left"></i></a> {{/if}}{{dockActor.name}}{{#if roster}} <a data-action="nextActor" data-tooltip="{{t 'Следующий герой'}}"><i class="fas fa-chevron-right"></i></a>{{/if}}</b>
+            <small><span class="{{#if mind.over}}over{{/if}}" data-tooltip="{{t 'Предел разума'}}"><i class="fas fa-brain"></i>{{mind.filled}}/{{mind.natural}}</span>{{#if echo}}<span data-tooltip="{{echo.tip}}" style="--echo: {{echo.color}}"><i class="fas {{echo.icon}} gd-echo-i"></i>{{echo.value}}</span>{{/if}}</small>
+            <small>{{#each topTags}}<span class="{{#if muffled}}muffled{{/if}}" data-tooltip="{{tagLabel tag}}"><i class="fas {{icon}}"></i>{{n}}</span>{{/each}}</small>
         </div>
         <span class="gd-bar-sep"></span>
         {{#each barSkills}}
         <div class="gd-act {{#if uses}}{{#unless uses.value}}spent{{/unless}}{{/if}} {{#if asleep}}asleep{{/if}}" data-item-id="{{id}}" data-pop="{{id}}" {{#if usable}}data-action="useItem"{{/if}}>
             <span class="gd-ak {{kind}}"></span>
             {{#if uses}}<span class="gd-ch">{{#each uses.pips}}<u class="{{#unless this}}off{{/unless}}"></u>{{/each}}</span>{{/if}}
-            <span class="gd-gem glow {{#if hot}}hot{{/if}}" style="--r: {{color}}"><i class="fas {{icon}}"></i>{{#if hot}}<svg class="gd-crack" viewBox="0 0 46 52"><path d="M23 4 L20 15 L26 22 L18 31 L24 40 L21 49" /><path d="M26 22 L33 26 M18 31 L11 33" /></svg>{{/if}}{{#if counter}}<span class="gd-cnt">{{counter.state}}</span>{{/if}}{{#if hot}}<span class="gd-loan">заём</span>{{/if}}{{#if asleep}}<span class="gd-moon">спит</span>{{/if}}</span>
+            <span class="gd-gem glow {{#if hot}}hot{{/if}}" style="--r: {{color}}"><i class="fas {{icon}}"></i>{{#if hot}}<svg class="gd-crack" viewBox="0 0 46 52"><path d="M23 4 L20 15 L26 22 L18 31 L24 40 L21 49" /><path d="M26 22 L33 26 M18 31 L11 33" /></svg>{{/if}}{{#if counter}}<span class="gd-cnt">{{counter.state}}</span>{{/if}}{{#if hot}}<span class="gd-loan">{{t "заём"}}</span>{{/if}}{{#if asleep}}<span class="gd-moon">{{t "спит"}}</span>{{/if}}</span>
             <span class="gd-act-nm">{{name}}</span>
         </div>
         {{/each}}
@@ -28,64 +28,64 @@
         {{/each}}
         {{#if barPassive.length}}
         <span class="gd-bar-sep"></span>
-        <div class="gd-bar-passive" data-tooltip="Пассивные: {{#each barPassive}}{{name}}{{#unless @last}}, {{/unless}}{{/each}}">
+        <div class="gd-bar-passive" data-tooltip="{{t 'Пассивные:'}} {{#each barPassive}}{{name}}{{#unless @last}}, {{/unless}}{{/each}}">
             {{#each barPassive}}<span class="gd-gem small {{#if asleep}}asleep{{/if}}" style="--r: {{color}}"><i class="fas {{icon}}"></i></span>{{/each}}
         </div>
         {{/if}}
         <div class="gd-bar-btns">
-            <button type="button" data-action="mode" data-tooltip="Сборка"><i class="fas fa-brain"></i></button>
-            <button type="button" data-action="close" data-tooltip="Закрыть"><i class="fas fa-xmark"></i></button>
+            <button type="button" data-action="mode" data-tooltip="{{t 'Сборка'}}"><i class="fas fa-brain"></i></button>
+            <button type="button" data-action="close" data-tooltip="{{t 'Закрыть'}}"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="gd-bar-pop gd-t-detail" hidden></div>
-        {{#each barSkills}}<template data-pop-for="{{id}}"><div class="gd-t-detail-hd"><span class="gd-gem glow" style="--r: {{color}}"><i class="fas {{icon}}"></i></span><h3>{{name}}<small style="color: {{color}}">{{rarityLabel}}</small></h3></div><div class="gd-t-meta"><span><span class="gd-ak {{kind}}"></span>{{kindLabel}}</span>{{#if uses}}<span><i class="fas fa-gem"></i>заряды {{uses.value}} из {{uses.max}}{{#if uses.period}} · {{uses.period}}{{/if}}</span>{{/if}}{{#if hot}}<span class="hot"><i class="fas fa-fire"></i>заём — перегрев</span>{{/if}}{{#if asleep}}<span class="moon"><i class="fas fa-moon"></i>спит</span>{{/if}}</div><div class="gd-t-text">{{{desc}}}</div></template>{{/each}}
-        {{#each abilities}}<template data-pop-for="ab-{{id}}"><div class="gd-t-detail-hd"><span class="gd-gem glow" style="--r: #f0a52a"><i class="fas {{icon}}"></i></span><h3>{{name}}<small>синергия</small></h3></div><div class="gd-t-meta"><span><span class="gd-ak {{kind}}"></span>{{kindLabel}}</span>{{#if uses}}<span><i class="fas fa-gem"></i>заряды {{uses.value}} из {{uses.max}}</span>{{/if}}</div><div class="gd-t-text">{{{desc}}}</div></template>{{/each}}
+        {{#each barSkills}}<template data-pop-for="{{id}}"><div class="gd-t-detail-hd"><span class="gd-gem glow" style="--r: {{color}}"><i class="fas {{icon}}"></i></span><h3>{{name}}<small style="color: {{color}}">{{rarityLabel}}</small></h3></div><div class="gd-t-meta"><span><span class="gd-ak {{kind}}"></span>{{kindLabel}}</span>{{#if uses}}<span><i class="fas fa-gem"></i>{{t "заряды {value} из {max}" value=uses.value max=uses.max}}{{#if uses.period}} · {{uses.period}}{{/if}}</span>{{/if}}{{#if hot}}<span class="hot"><i class="fas fa-fire"></i>{{t "заём — перегрев"}}</span>{{/if}}{{#if asleep}}<span class="moon"><i class="fas fa-moon"></i>{{t "спит"}}</span>{{/if}}</div><div class="gd-t-text">{{{desc}}}</div></template>{{/each}}
+        {{#each abilities}}<template data-pop-for="ab-{{id}}"><div class="gd-t-detail-hd"><span class="gd-gem glow" style="--r: #f0a52a"><i class="fas {{icon}}"></i></span><h3>{{name}}<small>{{t "синергия"}}</small></h3></div><div class="gd-t-meta"><span><span class="gd-ak {{kind}}"></span>{{kindLabel}}</span>{{#if uses}}<span><i class="fas fa-gem"></i>{{t "заряды {value} из {max}" value=uses.value max=uses.max}}</span>{{/if}}</div><div class="gd-t-text">{{{desc}}}</div></template>{{/each}}
     </div>
     {{else}}
     {{!-- Сборка: заголовок, Предел разума и эхо, кнопки вкладок как у паутины --}}
     <header class="gd-t-top">
-        <div class="gd-t-title">Терминал<span>{{dockActor.name}} · {{#if facetPage}}Огранка{{else}}Память{{/if}}</span></div>
+        <div class="gd-t-title">{{t "Терминал"}}<span>{{dockActor.name}} · {{#if facetPage}}{{t "Огранка"}}{{else}}{{t "Память"}}{{/if}}</span></div>
         {{#if rules.length}}<div class="gd-t-rules">{{#each rules}}<span><i class="fas {{icon}}"></i>{{text}}</span>{{/each}}</div>{{/if}}
     </header>
     <div class="gd-t-stats">
-        <div class="gd-mind {{#if mind.over}}over{{/if}}" data-tooltip="Предел разума: занято {{mind.filled}} из {{mind.natural}}{{#if mind.extra}} · абсолютный предел {{mind.absolute}}{{/if}}{{#if mind.over}} · сверх {{mind.natural}}: +1 эхо в начале боя за каждый слот{{/if}}">
+        <div class="gd-mind {{#if mind.over}}over{{/if}}" data-tooltip="{{t 'Предел разума: занято'}} {{mind.filled}} {{t 'из'}} {{mind.natural}}{{#if mind.extra}} {{t '· абсолютный предел'}} {{mind.absolute}}{{/if}}{{#if mind.over}} {{t '· сверх'}} {{mind.natural}}{{t ': +1 эхо в начале боя за каждый слот'}}{{/if}}">
             <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" class="rim"/><circle cx="32" cy="32" r="29" class="rim2"/>
-                {{#each mind.sockets}}<rect x="{{x}}" y="{{y}}" width="6.4" height="6.4" transform="translate(-3.2 -3.2) rotate(45 {{x}} {{y}})" class="{{#if on}}on{{/if}} {{#if extra}}extra{{/if}} {{#if next}}next{{/if}}"/>{{/each}}
+                {{#each mind.sockets}}<rect x="-3.2" y="-3.2" width="6.4" height="6.4" transform="translate({{x}} {{y}}) rotate(45)" class="{{#if on}}on{{/if}} {{#if extra}}extra{{/if}} {{#if next}}next{{/if}}"/>{{/each}}
                 <circle cx="32" cy="32" r="3" class="core"/></svg>
-            <div><span class="gd-lbl">Предел разума</span><b>{{mind.filled}} / {{mind.natural}}</b></div>
+            <div><span class="gd-lbl">{{t "Предел разума"}}</span><b>{{mind.filled}} / {{mind.natural}}</b></div>
         </div>
         {{#if echo}}
         <div class="gd-t-echo st-{{echo.stage}} {{#if echo.full}}full{{/if}}" style="--echo: {{echo.color}}; --echo-pct: {{echo.pct}}%" data-tooltip="{{echo.tip}}">
             <span class="gd-t-echo-i"><i class="fas {{echo.icon}}"></i></span>
-            <div><span class="gd-lbl">Эхо{{#if echo.title}} · {{echo.title}}{{/if}}</span><b>{{echo.value}} / {{echo.max}}</b><div class="gd-echo-bar"><div></div></div></div>
+            <div><span class="gd-lbl">{{t "Эхо"}}{{#if echo.title}} · {{echo.title}}{{/if}}</span><b>{{echo.value}} / {{echo.max}}</b><div class="gd-echo-bar"><div></div></div></div>
             {{#if isGM}}<div class="gd-echo-gm">
-                <button type="button" data-action="echoWhisper" data-tooltip="Строка придёт игроку как реплика голоса — он не отличит её от модуля"><i class="fas fa-comment-dots"></i> Шепнуть</button>
-                <button type="button" data-action="echoPeek" class="{{#if echoPeek}}on{{/if}}" data-tooltip="{{#if echoPeek}}Вернуть свой экран{{else}}Видение этого игрока — у вас на экране, как видит он{{/if}}"><i class="fas {{#if echoPeek}}fa-eye-slash{{else}}fa-eye{{/if}}"></i> {{#if echoPeek}}Свой экран{{else}}Его экран{{/if}}</button>
+                <button type="button" data-action="echoWhisper" data-tooltip="{{t 'Строка придёт игроку как реплика голоса — он не отличит её от модуля'}}"><i class="fas fa-comment-dots"></i> {{t "Шепнуть"}}</button>
+                <button type="button" data-action="echoPeek" class="{{#if echoPeek}}on{{/if}}" data-tooltip="{{#if echoPeek}}{{t 'Вернуть свой экран'}}{{else}}{{t 'Видение этого игрока — у вас на экране, как видит он'}}{{/if}}"><i class="fas {{#if echoPeek}}fa-eye-slash{{else}}fa-eye{{/if}}"></i> {{#if echoPeek}}{{t "Свой экран"}}{{else}}{{t "Его экран"}}{{/if}}</button>
             </div>{{/if}}
         </div>
         {{/if}}
     </div>
     <div class="gd-t-buttons">
-        <button type="button" class="{{#unless facetPage}}on{{/unless}}" data-action="page" data-page="build" data-tooltip="Терминал Тумана: навыки"><i class="fas fa-brain"></i></button>
-        <button type="button" class="{{#if facetPage}}on{{/if}}" data-action="page" data-page="facet" data-tooltip="Огранка: способности класса"><i class="fas fa-gem"></i></button>
-        <button type="button" data-action="goto" data-goto="map" data-tooltip="Карта этажа"><i class="fas fa-circle-nodes"></i></button>
-        <button type="button" data-action="goto" data-goto="stash" data-tooltip="Хранилище"><i class="fas fa-box-archive"></i></button>
+        <button type="button" class="{{#unless facetPage}}on{{/unless}}" data-action="page" data-page="build" data-tooltip="{{t 'Терминал Тумана: навыки'}}"><i class="fas fa-brain"></i></button>
+        <button type="button" class="{{#if facetPage}}on{{/if}}" data-action="page" data-page="facet" data-tooltip="{{t 'Огранка: способности класса'}}"><i class="fas fa-gem"></i></button>
+        <button type="button" data-action="goto" data-goto="map" data-tooltip="{{t 'Карта этажа'}}"><i class="fas fa-circle-nodes"></i></button>
+        <button type="button" data-action="goto" data-goto="stash" data-tooltip="{{t 'Хранилище'}}"><i class="fas fa-box-archive"></i></button>
         <span class="gap"></span>
-        <button type="button" data-action="mode" data-tooltip="Панель боя над хотбаром"><i class="fas fa-angles-down"></i></button>
-        <button type="button" data-action="close" data-tooltip="Закрыть (Esc)"><i class="fas fa-xmark"></i></button>
+        <button type="button" data-action="mode" data-tooltip="{{t 'Панель боя над хотбаром'}}"><i class="fas fa-angles-down"></i></button>
+        <button type="button" data-action="close" data-tooltip="{{t 'Закрыть (Esc)'}}"><i class="fas fa-xmark"></i></button>
     </div>
     {{!-- Листалка героев — под кнопками вкладок --}}
     {{#if roster}}
         <div class="gd-t-roster">
-            <button type="button" data-action="prevActor" data-tooltip="Предыдущий герой"><i class="fas fa-chevron-left"></i></button>
+            <button type="button" data-action="prevActor" data-tooltip="{{t 'Предыдущий герой'}}"><i class="fas fa-chevron-left"></i></button>
             {{#each roster}}<img src="{{img}}" alt="" class="{{#if on}}on{{/if}}" data-action="pickActor" data-actor-id="{{id}}" data-tooltip="{{name}}">{{/each}}
-            <button type="button" data-action="nextActor" data-tooltip="Следующий герой"><i class="fas fa-chevron-right"></i></button>
+            <button type="button" data-action="nextActor" data-tooltip="{{t 'Следующий герой'}}"><i class="fas fa-chevron-right"></i></button>
         </div>
         {{/if}}
 
     {{#if atRest}}
     <div class="gd-t-rest">
-        <i class="fas {{restIcon}}"></i> {{restLabel}} · Кости Хитов <b>{{hitDice}}</b>
-        <button type="button" data-action="openAltar"><i class="fas fa-fire-alt"></i> Алтарь Памяти</button>
+        <i class="fas {{restIcon}}"></i> {{t "{restLabel} · Кости Хитов" restLabel=restLabel}} <b>{{hitDice}}</b>
+        <button type="button" data-action="openAltar"><i class="fas fa-fire-alt"></i> {{t "Алтарь Памяти"}}</button>
         {{#each restLinks}}<button type="button" data-action="restLink" data-index="{{index}}" data-tooltip="{{title}}"><i class="{{icon}}"></i> {{label}}</button>{{/each}}
     </div>
     {{/if}}

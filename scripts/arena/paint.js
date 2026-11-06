@@ -840,9 +840,48 @@ function grade(ctx, plan, { W, H, cell, mood, seed, M, art = {}, rotMask = null 
             ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(c, 0, 0); ctx.restore();
         }
     }
-    if (mood === 'blood') {
-        regrade('saturate(0.85) sepia(0.15) hue-rotate(-8deg)');
-        if (M.riverbed) { const c = document.createElement('canvas'); c.width = W; c.height = H; const l = c.getContext('2d'); l.fillStyle = 'rgba(120,10,10,0.75)'; l.fillRect(0, 0, W, H); l.globalCompositeOperation = 'destination-in'; l.drawImage(M.riverbed, 0, 0, W, H); ctx.drawImage(c, 0, 0); }
-        for (let i = 0; i < 14; i++) blot(R.range(cell * 4, W - cell * 4), R.range(cell, H - cell), cell * R.range(0.3, 0.8), 'rgba(110,10,10,0.75)', 'rgba(110,10,10,0)');
+}
+
+/**
+ * Пробуждение Босса: этаж бледнеет к чёрному и белому — Босс вытягивает из него жизнь, а красное (кровь) остаётся
+ * и становится ярче. По ступеням 1–4 цвет уходит ровными шагами, на 4-й — 78% (у зелени и воды остаётся тень
+ * цвета); тон — без провала в чёрное и без выжженного белого; края чуть темнее. Макет — tools/mockups/arena-awakening-*
+ * Картинка арены остаётся как есть: бледная копия ложится поверх плиткой, чтобы прорыв Пожирателя мог её мягко снять
+ * @param {HTMLCanvasElement} source  нарисованная арена
+ * @param {number} stage              ступень 1–4
+ * @returns {HTMLCanvasElement}       бледная копия
+ */
+export function awakened(source, stage) {
+    const copy = document.createElement('canvas');
+    copy.width = source.width; copy.height = source.height;
+    const ctx = copy.getContext('2d');
+    ctx.drawImage(source, 0, 0);
+    awaken(ctx, copy.width, copy.height, stage);
+    return copy;
+}
+
+const AWAKEN = { paper: [228, 222, 210], ink: [30, 26, 26], contrast: 0.55, lo: 0.08, hi: 0.92, last: 0.78, steps: [0, 0.36, 0.62, 0.82, 1] };
+function awaken(ctx, W, H, stage) {
+    stage = Math.max(0, Math.min(4, Math.round(stage)));
+    if (!stage) return;
+    const k = stage / 4, desat = AWAKEN.steps[stage] * AWAKEN.last;
+    const lo = AWAKEN.lo * k, span = Math.max(1 - (1 - AWAKEN.hi) * k - lo, 1e-3), con = AWAKEN.contrast * k;
+    const [pr, pg, pb] = AWAKEN.paper.map(v => v / 255), [ir, ig, ib] = AWAKEN.ink.map(v => v / 255);
+    const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+    const img = ctx.getImageData(0, 0, W, H), d = img.data, cx = W / 2, cy = H / 2;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+        const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+        let t = clamp01((0.299 * r + 0.587 * g + 0.114 * b - lo) / span);
+        t += (t * t * (3 - 2 * t) - t) * con;
+        let or = r + (ir + (pr - ir) * t - r) * desat, og = g + (ig + (pg - ig) * t - g) * desat, ob = b + (ib + (pb - ib) * t - b) * desat;
+        // Настоящий красный (оттенок около 0°, насыщенный) остаётся и ярче — песок и охра не в счёт
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        if (r >= mx && r - mn > 0.05) {
+            const m = clamp01(1 - Math.abs(g - b) / (r - mn) * 2.5) * clamp01(((mx - mn) / mx - 0.45) * 4) * clamp01(r * 1.8) * Math.min(1, 0.4 + k);
+            if (m > 0) { or += (Math.min(1, r * (1 + 0.35 * k)) - or) * m; og += (g * (1 - 0.3 * k) - og) * m; ob += (b * (1 - 0.3 * k) - ob) * m; }
+        }
+        const x = p % W, y = (p / W) | 0, v = 1 - clamp01(Math.hypot((x - cx) / cx, (y - cy) / cy) - 0.75) * 0.6 * k;
+        d[i] = or * v * 255; d[i + 1] = og * v * 255; d[i + 2] = ob * v * 255;
     }
+    ctx.putImageData(img, 0, 0);
 }

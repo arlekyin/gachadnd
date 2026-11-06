@@ -10,6 +10,7 @@ import { MODULE_ID } from "../../core/constants.js";
 import { CARDS, HAND, stateOf, ensureState, canPlay, requestPlay, isGwent } from "./gwent.js";
 import { pickCell } from "./pick.js";
 import { key, cellOf } from "./grid.js";
+import { t } from "../../core/i18n.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 const RANGE = 30, ZONE = 15;
@@ -19,7 +20,7 @@ export class GwentPanel extends ApplicationV2 {
     static DEFAULT_OPTIONS = {
         classes: ['gachadnd-gwent'],
         tag: 'div',
-        window: { title: 'Партейка', icon: 'fas fa-layer-group', resizable: false },
+        window: { title: t('Партейка'), icon: 'fas fa-layer-group', resizable: false },
         position: { width: 470, height: 'auto' }
     };
 
@@ -35,7 +36,7 @@ export class GwentPanel extends ApplicationV2 {
             return app;
         } catch (error) {
             console.error(`${MODULE_ID} | Партейка: панель не открылась`, error);
-            ui.notifications.error(`Партейка: панель не открылась — ${error?.message ?? error}. Подробности в консоли (F12).`);
+            ui.notifications.error(t('Партейка: панель не открылась — {v}. Подробности в консоли (F12).', { v: error?.message ?? error }));
             return null;
         }
     }
@@ -47,7 +48,7 @@ export class GwentPanel extends ApplicationV2 {
     }
 
     get title() {
-        return `Партейку? — ${this.actor.name}`;
+        return t('Партейку? — {name}', { name: this.actor.name });
     }
 
     async _prepareContext() {
@@ -66,7 +67,7 @@ export class GwentPanel extends ApplicationV2 {
         const state = this.cards;
         const blocked = canPlay(this.actor);
         if (!state) {
-            return `<div class="gd-gwent"><p class="gd-gwent-empty">Колода тасуется в начале боя.</p></div>`;
+            return `<div class="gd-gwent"><p class="gd-gwent-empty">${t('Колода тасуется в начале боя.')}</p></div>`;
         }
         const cards = state.hand.map((k, i) => {
             const card = CARDS[k];
@@ -75,13 +76,13 @@ export class GwentPanel extends ApplicationV2 {
                 <span class="gd-gwent-name">${card.name}</span>
                 <span class="gd-gwent-text">${card.text}</span>
             </button>`;
-        }).join('') || '<p class="gd-gwent-empty">Рука пуста.</p>';
+        }).join('') || t('<p class="gd-gwent-empty">Рука пуста.</p>');
         return `<div class="gd-gwent">
             <div class="gd-gwent-hand">${cards}</div>
             <footer class="gd-gwent-status">
-                <span><i class="fas fa-layer-group"></i> колода ${state.deck.length}</span>
-                <span><i class="fas fa-trash-can"></i> сброс ${state.discard.length}</span>
-                <p>${blocked ? esc(blocked) : `Бонусным действием сыграйте карту. В начале хода рука добирается до ${HAND}.`}</p>
+                <span><i class="fas fa-layer-group"></i> ${t('колода {length}', { length: state.deck.length })}</span>
+                <span><i class="fas fa-trash-can"></i> ${t('сброс {length}', { length: state.discard.length })}</span>
+                <p>${blocked ? esc(blocked) : t('Бонусным действием сыграйте карту. В начале хода рука добирается до {HAND}.', { HAND })}</p>
             </footer>
         </div>`;
     }
@@ -98,7 +99,7 @@ export class GwentPanel extends ApplicationV2 {
         const keyName = this.cards.hand[index];
         const card = CARDS[keyName];
         const token = this.actor.getActiveTokens?.()[0];
-        if (!card || !token) return ui.notifications.warn('Токена персонажа нет на сцене.');
+        if (!card || !token) return ui.notifications.warn(t('Токена персонажа нет на сцене.'));
         this.busy = true;
         try {
             const target = await chooseTarget(card, token, this.cards);
@@ -117,7 +118,7 @@ async function chooseTarget(card, caster, state) {
     if (card.target === 'point') {
         const cell = await pickCell({
             caster, range: RANGE,
-            hint: `${card.name}: клик — центр зоны, правая кнопка или Esc — отмена.`,
+            hint: t('{name}: клик — центр зоны, правая кнопка или Esc — отмена.', { name: card.name }),
             draw: (g, [x, y], ok, s) => {
                 const r = ZONE / canvas.dimensions.distance * s;
                 const tint = ok ? 0x9fe3ff : 0xff4d4d;
@@ -132,7 +133,7 @@ async function chooseTarget(card, caster, state) {
             && key(...cellOf(t.document, size)) === key(...cell));
         const cell = await pickCell({
             caster, range: RANGE, allowed: cell => !!allyAt(cell),
-            hint: `${card.name}: клик по союзнику в пределах ${RANGE} футов, правая кнопка или Esc — отмена.`,
+            hint: t('{name}: клик по союзнику в пределах {RANGE} футов, правая кнопка или Esc — отмена.', { name: card.name, RANGE }),
             draw: (g, [x, y], ok, s) => {
                 const tint = ok ? 0x7dff8a : 0xff4d4d;
                 g.lineStyle(3, tint, 0.95).drawRect(x * s + 2, y * s + 2, s - 4, s - 4);
@@ -143,11 +144,11 @@ async function chooseTarget(card, caster, state) {
     }
     if (card.target === 'discard') {
         const options = [...new Set(state.discard.filter(k => k !== 'medic'))];
-        if (!options.length) { ui.notifications.warn('В сбросе нечего вернуть.'); return null; }
+        if (!options.length) { ui.notifications.warn(t('В сбросе нечего вернуть.')); return null; }
         const choice = await foundry.applications.api.DialogV2.prompt({
-            window: { title: 'Медик' },
-            content: `<p>Какую карту вернуть в руку?</p><select name="card">${options.map(k => `<option value="${k}">${CARDS[k].name}</option>`).join('')}</select>`,
-            ok: { label: 'Вернуть', callback: (event, button) => button.form.elements.card.value },
+            window: { title: t('Медик') },
+            content: `<p>${t('Какую карту вернуть в руку?')}</p><select name="card">${options.map(k => `<option value="${k}">${CARDS[k].name}</option>`).join('')}</select>`,
+            ok: { label: t('Вернуть'), callback: (event, button) => button.form.elements.card.value },
             rejectClose: false
         }).catch(() => null);
         return choice ? { card: choice } : null;

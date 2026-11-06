@@ -8,6 +8,7 @@
 
 import { MODULE_ID } from "../core/constants.js";
 import { HOOKS } from "../memory/memory-api.js";
+import { t } from "../core/i18n.js";
 
 // Награды золотом: доля базы этажа (минимум–максимум)
 export const GOLD_SHARE = {
@@ -30,16 +31,16 @@ export function allowedItemRarities(floor) {
 
 export function registerEconomySettings() {
     const settings = {
-        runFloor: { name: 'Этаж забега', type: Number, default: 1, config: false },
-        goldBase: { name: 'Базовое золото 1-го этажа', hint: 'База(Э) = базовое золото × рост^(Э − 1).', type: Number, default: 100 },
-        goldGrowth: { name: 'Рост золота за этаж', hint: 'Этаж — два уровня: 2,25 = 1,5 за уровень.', type: Number, default: 2.25 },
-        crystalPrices: { name: 'Цены кристаллов (доля базы)', hint: 'Серый / зелёный / синий / фиолетовый. Красные не продаются.', type: String, default: '0.2/0.5/1.2/3' },
-        cleansePrice: { name: 'Очистка навыка (доля базы)', hint: 'Цена = база × доля × (1 + очисток за забег).', type: Number, default: 0.5 },
-        rerollPrice: { name: 'Обновление ассортимента (доля базы)', hint: 'Цена = база × доля × (1 + обновлений в этом магазине).', type: Number, default: 0.2 },
-        doomHorseBlood: { name: 'Погибель: кровь на одного коня (× средний уровень)', hint: 'Конь № N открывает пасть при N × доля × средний уровень отряда крови.', type: Number, default: 12 },
-        doomCurseBlood: { name: 'Погибель: кровь за проклятый кристалл (× средний уровень)', hint: 'Каждые доля × средний уровень отряда крови на постаменте — кристалл с тегом «проклятье» тому, чья жертва добрала до отметки.', type: Number, default: 3 },
-        shopConsumables: { name: 'Компендиум расходников магазина', hint: 'Например dnd5e.items. Берутся предметы типа «расходник».', type: String, default: 'dnd5e.items' },
-        shopMagicItems: { name: 'Компендиум магических предметов магазина', hint: 'Например dnd5e.items. Берутся предметы с редкостью, кроме расходников.', type: String, default: 'dnd5e.items' }
+        runFloor: { name: t('Этаж забега'), type: Number, default: 1, config: false },
+        goldBase: { name: t('Базовое золото 1-го этажа'), hint: t('База(Э) = базовое золото × рост^(Э − 1).'), type: Number, default: 100 },
+        goldGrowth: { name: t('Рост золота за этаж'), hint: t('Этаж — два уровня: 2,25 = 1,5 за уровень.'), type: Number, default: 2.25 },
+        crystalPrices: { name: t('Цены кристаллов (доля базы)'), hint: t('Серый / зелёный / синий / фиолетовый. Красные не продаются.'), type: String, default: '0.2/0.5/1.2/3' },
+        cleansePrice: { name: t('Очистка навыка (доля базы)'), hint: t('Цена = база × доля × (1 + очисток за забег).'), type: Number, default: 0.5 },
+        rerollPrice: { name: t('Обновление ассортимента (доля базы)'), hint: t('Цена = база × доля × (1 + обновлений в этом магазине).'), type: Number, default: 0.2 },
+        doomHorseBlood: { name: t('Погибель: кровь на одного коня (× средний уровень)'), hint: t('Конь № N открывает пасть при N × доля × средний уровень отряда крови.'), type: Number, default: 12 },
+        doomCurseBlood: { name: t('Погибель: кровь за проклятый кристалл (× средний уровень)'), hint: t('Каждые доля × средний уровень отряда крови на постаменте — кристалл с тегом «проклятье» тому, чья жертва добрала до отметки.'), type: Number, default: 3 },
+        shopConsumables: { name: t('Компендиум расходников магазина'), hint: t('Например dnd5e.items. Берутся предметы типа «расходник».'), type: String, default: 'dnd5e.items' },
+        shopMagicItems: { name: t('Компендиум магических предметов магазина'), hint: t('Например dnd5e.items. Берутся предметы с редкостью, кроме расходников.'), type: String, default: 'dnd5e.items' }
     };
     for (const [key, config] of Object.entries(settings)) {
         game.settings.register(MODULE_ID, key, { scope: 'world', config: false, ...config });
@@ -135,8 +136,9 @@ export async function addGold(actor, gold) {
 
 // Подключение к добыче Памяти: золото комнаты растёт с этажом — База(Э) × доля комнаты
 Hooks.on(HOOKS.lootGenerated, loot => {
-    const gold = rollGold(loot.roomType);
+    // Множитель — от тех, кто планировал добычу (обеты Элиты)
+    const gold = Math.round(rollGold(loot.roomType) * (loot.goldScale ?? 1));
     if (gold <= 0) return;
     if (loot.actor) loot.tasks.push(addGold(loot.actor, gold));
-    loot.lines.push(`<div style="text-align: center; margin-top: 8px; color: #ffd27a; font-size: 1.15em;"><i class="fas fa-coins"></i> ${gold} зм · этаж ${getFloor()}</div>`);
+    loot.lines.push(`<div style="text-align: center; margin-top: 8px; color: #ffd27a; font-size: 1.15em;"><i class="fas fa-coins"></i> ${t('{gold} зм · этаж {v}', { gold, v: getFloor() })}</div>`);
 });

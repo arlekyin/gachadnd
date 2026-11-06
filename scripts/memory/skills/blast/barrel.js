@@ -14,6 +14,7 @@ import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { pickCell } from "../pick.js";
 import { occupied, key } from "../grid.js";
 import { isBlast, ref, actorFrom, tokenOf, quiet, damageOf, dcOf, areaOf, around, blast, boomAt } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const IMG = 'icons/containers/barrels/barrel-drum-steel-oil.webp';
 const FLAG = 'barrel';
@@ -26,7 +27,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     if (chosen.has(item.id)) return;
     const caster = tokenOf(actor);
     if (!canvas?.ready || !caster) {
-        ui.notifications.warn('Красная бочка: токена персонажа нет на сцене.');
+        ui.notifications.warn(t('Красная бочка: токена персонажа нет на сцене.'));
         return false;
     }
     const range = Number(activity.range?.value) || 30;
@@ -36,7 +37,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
         const taken = occupied(canvas.scene, size);
         const cells = [];
         for (const n of [1, 2]) {
-            const cell = await pickCell({ caster, range, allowed: c => !taken.has(key(...c)), draw, hint: `Красная бочка ${n} из 2: выберите свободную клетку.` });
+            const cell = await pickCell({ caster, range, allowed: c => !taken.has(key(...c)), draw, hint: t('Красная бочка {n} из 2: выберите свободную клетку.', { n }) });
             if (!cell) return;
             taken.add(key(...cell));
             cells.push(cell);
@@ -62,7 +63,7 @@ async function barrelActor() {
     const found = game.actors.find(a => a.flags?.[MODULE_ID]?.barrelActor);
     if (found) return found;
     return Actor.create({
-        name: 'Красная бочка', type: 'npc', img: IMG,
+        name: t('Красная бочка'), type: 'npc', img: IMG,
         system: { attributes: { hp: { value: 1, max: 1 }, ac: { calc: 'flat', flat: 10 } }, details: { cr: 0 } },
         prototypeToken: { actorLink: false, disposition: 0, texture: { src: IMG, tint: '#ff4a3d' }, displayName: 0, displayBars: 0 },
         flags: { [MODULE_ID]: { barrelActor: true } }
@@ -77,10 +78,10 @@ export async function place({ actorId, tokenId, sceneId, cells, formula, dc, rad
     const size = scene.grid.size;
     const combatId = game.combat?.started ? game.combat.id : null;
     await scene.createEmbeddedDocuments('Token', cells.map(([x, y]) => ({
-        ...actor.prototypeToken.toObject(), actorId: actor.id, name: 'Красная бочка', x: x * size, y: y * size,
+        ...actor.prototypeToken.toObject(), actorId: actor.id, name: t('Красная бочка'), x: x * size, y: y * size,
         flags: { [MODULE_ID]: { [FLAG]: { ownerId: owner.id, formula, dc, radius, combatId } } }
     })));
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: owner }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-oil-can"></i> Красная бочка</div><p>На поле две бочки. Одно попадание — и бум.</p></div>` });
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: owner }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-oil-can"></i> ${t('Красная бочка')}</div><p>${t('На поле две бочки. Одно попадание — и бум.')}</p></div>` });
 }
 
 const exploding = new Set();
@@ -93,7 +94,7 @@ export async function explode(token) {
     const victims = around(token, flag.radius).filter(t => !exploding.has(t.id));
     const at = boomAt(token, flag.radius);
     const owner = game.actors.get(flag.ownerId);
-    await blast({ actor: owner, title: 'Красная бочка взрывается', icon: 'fa-oil-can', victims, formula: flag.formula, type: 'fire', ability: 'dex', dc: flag.dc, at });
+    await blast({ actor: owner, title: t('Красная бочка взрывается'), icon: 'fa-oil-can', victims, formula: flag.formula, type: 'fire', ability: 'dex', dc: flag.dc, at });
     await new Promise(r => setTimeout(r, 300));
     if (token.parent?.tokens.has(token.id)) await token.delete();
     exploding.delete(token.id);

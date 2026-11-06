@@ -14,6 +14,7 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { isLight, ref, actorFrom, tokenOf, lightCard, esc } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const FLAG = 'lightSpeed';
 
@@ -24,13 +25,13 @@ function combatantOf(combat, actor, tokenId = null) {
 
 /** Причина отказа или null */
 export function cannotJump(combat, combatant) {
-    if (!combat?.started) return 'Скорость света — только в начатом бою.';
-    if (!combatant) return 'Персонаж не участвует в бою.';
-    if (combat.combatant?.id === combatant.id) return 'Сейчас и так ваш ход.';
+    if (!combat?.started) return t('Скорость света — только в начатом бою.');
+    if (!combatant) return t('Персонаж не участвует в бою.');
+    if (combat.combatant?.id === combatant.id) return t('Сейчас и так ваш ход.');
     const state = combat.getFlag(MODULE_ID, FLAG);
-    if (state?.round === combat.round && state.phase === 'active') return 'Сейчас уже идёт ход вне очереди.';
-    if (state?.round === combat.round && state.combatantId === combatant.id) return 'В этом раунде вы уже ходили.';
-    if (combat.turns.indexOf(combatant) < combat.turn) return 'В этом раунде вы уже ходили.';
+    if (state?.round === combat.round && state.phase === 'active') return t('Сейчас уже идёт ход вне очереди.');
+    if (state?.round === combat.round && state.combatantId === combatant.id) return t('В этом раунде вы уже ходили.');
+    if (combat.turns.indexOf(combatant) < combat.turn) return t('В этом раунде вы уже ходили.');
     return null;
 }
 
@@ -53,7 +54,7 @@ Hooks.on('dnd5e.postUseActivity', (activity) => {
 
 onSocket('lightSpeed', ({ payload }) => {
     if (!isActiveGM()) return;
-    jump(payload).catch(error => console.error('gachadnd | Скорость света', error));
+    jump(payload).catch(error => console.error(`gachadnd | Скорость света`, error));
 });
 
 /** Мастер: ход персонажа начинается немедленно */
@@ -68,7 +69,7 @@ export async function jump({ actorId, tokenId, sceneId }) {
         turn: combat.turns.indexOf(combatant),
         [`flags.${MODULE_ID}.${FLAG}`]: { round: combat.round, combatantId: combatant.id, fromId: from?.id ?? null, phase: 'active' }
     }, { direction: 1 });
-    await lightCard(actor, 'Скорость света', `<p>${esc(combatant.name)} ходит вне очереди${from ? ` — сразу после ${esc(from.name)}` : ''}.</p>`, { icon: 'fa-bolt' });
+    await lightCard(actor, t('Скорость света'), `<p>${t('{v} ходит вне очереди{v2}.', { v: esc(combatant.name), v2: from ? t(' — сразу после {v}', { v: esc(from.name) }) : '' })}</p>`, { icon: 'fa-bolt' });
 }
 
 /** Следующий индекс хода после index, пропуская побеждённых, как Combat#nextTurn; null — раунд кончился */

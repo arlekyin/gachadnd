@@ -15,6 +15,7 @@ import { emit, onSocket } from "../../../core/socket.js";
 import { inBeam } from "../light/lighthouse.js";
 import { isBlast, blastSkill, tokenOf, quiet, dcOf, blast } from "./common.js";
 import { placedTemplate, shapeOf } from "../../../core/templates.js";
+import { t } from "../../../core/i18n.js";
 
 const MAX = 4, MELT = '2d6';
 const FLAG = 'bladeHeat';
@@ -56,14 +57,14 @@ const onAttack = async (rolls, { subject } = {}) => {
     const heat = heatOf(blade) + 1;
     if (heat < MAX) {
         await blade.setFlag(MODULE_ID, FLAG, heat);
-        pop(actor, `Нагрев ${heat}`);
+        pop(actor, t('Нагрев {heat}', { heat }));
         return;
     }
     // Плавится в руке
     await blade.setFlag(MODULE_ID, FLAG, 0);
-    pop(actor, 'Клинок плавится!', '#ff3b2f');
+    pop(actor, t('Клинок плавится!'), '#ff3b2f');
     const token = tokenOf(actor);
-    await blast({ actor, title: `Раскалённый клинок плавится в руке ${actor.name}`, icon: 'fa-temperature-arrow-up', victims: token ? [token.document] : [], formula: MELT, type: 'fire' });
+    await blast({ actor, title: t('Раскалённый клинок плавится в руке {name}', { name: actor.name }), icon: 'fa-temperature-arrow-up', victims: token ? [token.document] : [], formula: MELT, type: 'fire' });
 };
 Hooks.on('dnd5e.rollAttack', onAttack);
 Hooks.on('dnd5e.rollAttackV2', onAttack);
@@ -88,7 +89,7 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     if (!isBlast(item, 'blade') || !item.actor) return;
     const heat = heatOf(item);
     if (!heat) {
-        ui.notifications.warn('Раскалённый клинок холодный — стравливать нечего. Нагрейте его попаданиями.');
+        ui.notifications.warn(t('Раскалённый клинок холодный — стравливать нечего. Нагрейте его попаданиями.'));
         return false;
     }
     if (message) message.create = false;
@@ -105,6 +106,6 @@ Hooks.on('dnd5e.postUseActivity', async (activity, usage, results) => {
     await item.setFlag(MODULE_ID, FLAG, 0);
     const self = tokenOf(actor)?.document;
     const victims = template ? template.parent.tokens.filter(t => t.actor && !t.hidden && t.id !== self?.id && inBeam(template, { x: t.x + (t.width || 1) * template.parent.grid.size / 2, y: t.y + (t.height || 1) * template.parent.grid.size / 2 })) : [];
-    await blast({ actor, title: `${actor.name} стравливает жар клинка`, icon: 'fa-fire-flame-curved', victims, formula: `${heat}d6`, type: 'fire', ability: 'dex', dc: dcOf(item), at: shape ? { sceneId: template.parent.id, x: shape.x, y: shape.y, radius: template.parent.grid.size * 1.5 } : null });
+    await blast({ actor, title: t('{name} стравливает жар клинка', { name: actor.name }), icon: 'fa-fire-flame-curved', victims, formula: `${heat}d6`, type: 'fire', ability: 'dex', dc: dcOf(item), at: shape ? { sceneId: template.parent.id, x: shape.x, y: shape.y, radius: template.parent.grid.size * 1.5 } : null });
     if (template) await template.delete();
 });

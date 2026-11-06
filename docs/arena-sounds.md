@@ -53,6 +53,22 @@
 | [Mystic Forest Ambient](https://freesound.org/people/szegvari/sounds/559389/) | 1:55 | szegvari | Мистический гул с ветром в лесу — «что-то не так с этим лесом». **Мой выбор.** |
 | [Ominous Rumble — loopable](https://freesound.org/people/steaq/sounds/593785/) | 3:10 | steaq | Низкий тёмный гул, бесшовная петля. Тяжелее — скорее для Пожирателя. |
 
+## 6. Подземелья — катакомбы и пещеры (второй этаж)
+
+Фон арены подземелья — `crypt` (катакомбы) и `caves` (пещеры; без своего файла — как катакомбы). Лесного фона под
+землёй нет: нет файла — тишина. Лицензия проверена 29.10.2026 по странице звука (кроме помеченных).
+
+| Звук | Длит. | Автор | Чем подходит | Файл |
+|---|---|---|---|---|
+| [Dark Dungeon Ambience](https://freesound.org/people/Kinoton/sounds/516566/) | 3:00 | Kinoton | Тёмный гул, низкий рокот, капель с потолка, медленный сквозняк. Длинный — повтор не слышен. **Мой выбор для катакомб.** | `crypt-1` |
+| [Underground Eerie Breathing Ambience 8](https://freesound.org/people/newlocknew/sounds/789913/) | 0:21 | newlocknew | Ровный тревожный подземный гул, бесшовная петля (так у автора). Второй вариант катакомб — суше, без капели. | `crypt-2` |
+| [ambience cave](https://freesound.org/people/fonografico/sounds/636108/) | 3:00 | fonografico | Пещера: капель, камень, вода. Синтетика, но мягкая. **Мой выбор для пещер.** | `caves-1` |
+| [Dripping water](https://freesound.org/people/Electroviolence/sounds/234554/) | 0:34 | Electroviolence | Капель в пещере — запасной для пещер. *Лицензия не проверена по странице (в поиске — с фильтром CC0).* | — |
+| [Dungeon Air](https://freesound.org/people/Flamiffer/sounds/530161/) | 1:00 | Flamiffer | Только воздух большого зала, без капели — для сквозняка. *Лицензия не проверена по странице (в поиске — с фильтром CC0).* | — |
+
+Скачанные — в `assets/sounds/arena/_src/` с именами как с сайта; `python tools/sound/arena.py` разложит их по
+фонам (`crypt-1`, `crypt-2`, `caves-1`).
+
 ---
 
 ## Что стоит в модуле (24.10.2026)

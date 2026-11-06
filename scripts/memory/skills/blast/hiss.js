@@ -12,6 +12,7 @@
 import { MODULE_ID } from "../../../core/constants.js";
 import { emit, onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { isBlast, blastSkill, ref, actorFrom, tokenOf, esc, quiet, damageOf, dcOf, areaOf, feetBetween, around, blast, boomAt } from "./common.js";
+import { t } from "../../../core/i18n.js";
 
 const FLAG = 'hiss';
 const ICON = 'icons/svg/explosion.svg';
@@ -22,11 +23,11 @@ Hooks.on('dnd5e.preUseActivity', (activity, usage, dialog, message) => {
     quiet(usage, message);
     const combat = game.combat;
     if (!combat?.started || !combat.combatants.some(c => c.actor?.id === actor.id) || !tokenOf(actor)) {
-        ui.notifications.warn('Ссссс… — только в бою, в котором участвует персонаж.');
+        ui.notifications.warn(t('Ссссс… — только в бою, в котором участвует персонаж.'));
         return false;
     }
     if (combat.getFlag(MODULE_ID, FLAG)?.actorId === actor.id) {
-        ui.notifications.warn('Вы уже шипите.');
+        ui.notifications.warn(t('Вы уже шипите.'));
         return false;
     }
 });
@@ -42,7 +43,7 @@ onSocket('blastHissText', data => hissText(data));
 
 function hissText({ sceneId, tokenId }) {
     const token = canvas?.scene?.id === sceneId ? canvas.tokens.get(tokenId) : null;
-    if (token) canvas.interface?.createScrollingText?.(token.center, 'ссссс…', { anchor: CONST.TEXT_ANCHOR_POINTS?.TOP ?? 2, fontSize: 30, fill: '#7dff6a', stroke: '#000000', strokeThickness: 5, duration: 2400 });
+    if (token) canvas.interface?.createScrollingText?.(token.center, t('ссссс…'), { anchor: CONST.TEXT_ANCHOR_POINTS?.TOP ?? 2, fontSize: 30, fill: '#7dff6a', stroke: '#000000', strokeThickness: 5, duration: 2400 });
 }
 
 export async function start({ actorId, tokenId, sceneId, formula, dc, radius }) {
@@ -51,10 +52,10 @@ export async function start({ actorId, tokenId, sceneId, formula, dc, radius }) 
     const combatant = combat?.combatants.find(c => c.tokenId === tokenId || c.actor?.id === actorId);
     if (!combat || !actor || !combatant) return;
     await combat.setFlag(MODULE_ID, FLAG, { actorId: actor.id, tokenId, combatantId: combatant.id, round: combat.round, formula, dc, radius });
-    await actor.createEmbeddedDocuments('ActiveEffect', [{ name: 'Шипит', img: ICON, showIcon: 2, description: 'В конце следующего хода — взрыв, если рядом враг.', flags: { [MODULE_ID]: { hiss: true } } }]);
+    await actor.createEmbeddedDocuments('ActiveEffect', [{ name: t('Шипит'), img: ICON, showIcon: 2, description: t('В конце следующего хода — взрыв, если рядом враг.'), flags: { [MODULE_ID]: { hiss: true } } }]);
     emit('blastHissText', { sceneId, tokenId });
     hissText({ sceneId, tokenId });
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-explosion"></i> Ссссс…</div><p>${esc(actor.name)} шипит. Кто останется рядом к концу его следующего хода — пожалеет.</p></div>` });
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-explosion"></i> ${t('Ссссс…')}</div><p>${t('{v} шипит. Кто останется рядом к концу его следующего хода — пожалеет.', { v: esc(actor.name) })}</p></div>` });
 }
 
 async function stop(combat, actor) {
@@ -76,10 +77,10 @@ Hooks.on('updateCombat', async (combat, changed) => {
     if (!enemies.length) {
         const item = blastSkill(actor, 'hiss');
         if (item) await item.update({ 'system.uses.spent': Math.max(0, (Number(item.system.uses.spent) || 0) - 1) });
-        await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-explosion"></i> Ссссс…</div><p>Рядом никого — шипение стихло. Заряд вернулся.</p></div>` });
+        await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<div class="gd-blast-card"><div class="gd-blast-title"><i class="fas fa-explosion"></i> ${t('Ссссс…')}</div><p>${t('Рядом никого — шипение стихло. Заряд вернулся.')}</p></div>` });
         return;
     }
-    await blast({ actor, title: `${actor.name} взрывается`, icon: 'fa-explosion', victims: around(token, state.radius), formula: state.formula, type: 'thunder', ability: 'dex', dc: state.dc, self: actor, at: boomAt(token, state.radius) });
+    await blast({ actor, title: t('{name} взрывается', { name: actor.name }), icon: 'fa-explosion', victims: around(token, state.radius), formula: state.formula, type: 'thunder', ability: 'dex', dc: state.dc, self: actor, at: boomAt(token, state.radius) });
 });
 
 Hooks.on('deleteCombat', async (combat) => {

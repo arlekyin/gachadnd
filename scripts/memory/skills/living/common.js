@@ -14,6 +14,7 @@ import { MODULE_ID } from "../../../core/constants.js";
 import { onSocket, requestGM, isActiveGM } from "../../../core/socket.js";
 import { isAwake, updateActorSynergies } from "../../synergy/synergy.js";
 import { HOOKS } from "../../memory-api.js";
+import { t } from "../../../core/i18n.js";
 
 export { ref, actorFrom, tokenOf, esc, quiet, dcOf, damageOf, around, inCircle, blast, boom, boomAt, feetBetween, centerOf, feetToPx, isDead } from "../blast/common.js";
 export { sourceOf, combatOf } from "../knack/common.js";
@@ -68,7 +69,7 @@ export async function wakeSkill(item) {
 }
 
 // Терминал: счётчик живого навыка и пометка двойного
-const LABELS = { hone: 'зарубки', third: 'провалы подряд', ember: 'убито огнём' };
+const LABELS = { hone: t('зарубки'), third: t('провалы подряд'), ember: t('убито огнём') };
 Hooks.on(HOOKS.terminalSkillView, (item, view) => {
     const flags = item.flags?.[MODULE_ID] ?? {};
     const kind = flags.living;
@@ -76,8 +77,8 @@ Hooks.on(HOOKS.terminalSkillView, (item, view) => {
         const max = kind === 'hone' ? counterMax(item, 4) : kind === 'third' ? 2 : null;
         view.notes.push({ cls: 'gd-living-note', text: `◆ ${LABELS[kind]}: ${counterOf(item)}${max ? ` / ${max}` : ''}` });
     }
-    if (flags.duo) view.notes.push({ cls: 'gd-living-note', text: `◆ двойной навык: ${flags.duo.join(' + ')}` });
-    if (flags.asleep) view.notes.push({ cls: 'gd-living-note asleep', text: `☾ спит — ${flags.asleep.reason ?? 'до конца боя'}` });
+    if (flags.duo) view.notes.push({ cls: 'gd-living-note', text: t('◆ двойной навык: {v}', { v: flags.duo.join(' + ') }) });
+    if (flags.asleep) view.notes.push({ cls: 'gd-living-note asleep', text: t('☾ спит — {v}', { v: flags.asleep.reason ?? t('до конца боя') }) });
 });
 
 // Спящий навык не используется
@@ -85,6 +86,6 @@ Hooks.on('dnd5e.preUseActivity', activity => {
     const item = activity?.item;
     const sleep = item?.flags?.[MODULE_ID]?.asleep;
     if (!sleep || item.flags[MODULE_ID].is_crystal_item) return;
-    ui.notifications.warn(`${item.name} спит — ${sleep.reason ?? 'до конца боя'}.`);
+    ui.notifications.warn(t('{name} спит — {v}.', { name: item.name, v: sleep.reason ?? t('до конца боя') }));
     return false;
 });

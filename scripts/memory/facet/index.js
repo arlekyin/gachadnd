@@ -4,3 +4,4 @@
  */
 
 import "./stones.js";
+import "./odds.js";

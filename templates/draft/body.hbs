@@ -2,11 +2,11 @@
     {{#if active}}
     <header class="gd-draft-head">
         <span class="gd-draft-room">{{room}}</span>
-        <strong class="gd-draft-turn">{{#if mine}}Выбирает {{picker}} — ваш ход{{else}}Выбирает {{picker}}{{/if}}</strong>
+        <strong class="gd-draft-turn">{{#if mine}}{{t "Выбирает {picker} — ваш ход" picker=picker}}{{else}}{{t "Выбирает {picker}" picker=picker}}{{/if}}</strong>
     </header>
     <ol class="gd-draft-order">
         {{#each order}}
-        <li class="{{#if current}}current{{/if}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if lagging}}<i class="fas fa-arrow-up" title="Выбирает первым вне очереди: меньше всех фиолетовых и красных навыков"></i>{{/if}}{{#if count}}<b>{{count}}</b>{{/if}}</li>
+        <li class="{{#if current}}current{{/if}}"><img src="{{img}}" alt=""><span>{{name}}</span>{{#if lagging}}<i class="fas fa-arrow-up" title="{{t 'Выбирает первым вне очереди: меньше всех фиолетовых и красных навыков'}}"></i>{{/if}}{{#if count}}<b>{{count}}</b>{{/if}}</li>
         {{/each}}
     </ol>
     <div class="gd-draft-pool">
@@ -14,17 +14,17 @@
         <button type="button" class="gd-draft-crystal {{#if glint}}glint{{/if}} {{#unless ../mine}}locked{{/unless}}" style="--rarity: {{color}}; --delay: {{@index}}" {{#if ../mine}}data-action="pick"{{else}}aria-disabled="true"{{/if}} data-key="{{key}}" data-gd-skill="{{skillId}}">
             <img src="{{img}}" alt="">
             <span class="gd-draft-name">{{name}}</span>
-            <span class="gd-draft-meta">{{category}}{{#if tags}} · {{tags}}{{/if}}</span>
+            <span class="gd-draft-meta">{{categoryLabel category}}{{#if tags}} · {{tags}}{{/if}}</span>
         </button>
         {{/each}}
     </div>
     {{#if isGM}}
     <footer class="gd-draft-gm">
-        <button type="button" data-action="skip"><i class="fas fa-forward"></i> Пропустить ход</button>
-        <button type="button" data-action="stop"><i class="fas fa-stop"></i> Закрыть распределение</button>
+        <button type="button" data-action="skip"><i class="fas fa-forward"></i> {{t "Пропустить ход"}}</button>
+        <button type="button" data-action="stop"><i class="fas fa-stop"></i> {{t "Закрыть распределение"}}</button>
     </footer>
     {{/if}}
     {{else}}
-    <p class="gd-draft-empty">Распределение не идёт.</p>
+    <p class="gd-draft-empty">{{t "Распределение не идёт."}}</p>
     {{/if}}
 </div>

@@ -1,5 +1,5 @@
 // Терминал Тумана в настоящей Foundry: node tools/foundry/dock.mjs [--headed]
-// Сборка в общем Тумане: пластины (надетые, гнёзда, Память), метки действия и зарядов, синергии списком;
+// Сборка в общем Тумане: пластины (надетые, гнёзда, Память), метки действия и зарядов, синергии списком и что они дают;
 // наведение — подробности и предпросмотр ступеней; щелчок — надеть; в бою — панель над хотбаром, правила Босса;
 // переход Терминал ↔ паутина с общим Туманом.
 import { connect, checker, moduleErrors, done } from './harness.mjs';
@@ -82,6 +82,37 @@ const ab = await ev(async () => {
 });
 check('способности синергий: своё поле, «Реактивная тяга — движение + взрыв», наведение и щелчок показывают её в панели и не применяют (она срабатывает сама — кнопки «Использовать» нет)', ab.rows >= 1 && /движение \+ взрыв/.test(ab.source ?? '') && ab.detail === 'Реактивная тяга' && !ab.use && ab.notSpent, JSON.stringify(ab));
 await f.shot('dock-1b-ability');
+
+// ---------- Что дают синергии: ступени без способности — строкой с описанием; наведение на синергию — её ступени
+const tiers = await ev(async () => {
+    const el = foundry.applications.instances.get('gachadnd-dock').element;
+    const rows = [...el.querySelectorAll('.gd-ability')];
+    const calm = rows.filter(r => r.classList.contains('calm'));
+    calm[0]?.click();
+    await new Promise(r => setTimeout(r, 600));
+    const d = el.querySelector('.gd-t-detail.ability');
+    const syn = el.querySelector('.gd-syn-row[data-tag="движение"]');
+    syn.dispatchEvent(new PointerEvent('pointerenter'));
+    const lit = [...el.querySelectorAll('.gd-ability.rel')].map(r => r.querySelector('b').textContent);
+    const focus = el.querySelector('.gd-t-abil').classList.contains('focus');
+    syn.dispatchEvent(new PointerEvent('pointerleave'));
+    // Ромбы Предела разума — по центру гнёзд: центр ромба на окружности r = 24
+    const off = [...el.querySelectorAll('.gd-mind svg rect')].map(r => { const b = r.getBBox(), m = r.transform.baseVal.consolidate().matrix;
+        const c = new DOMPoint(b.x + b.width / 2, b.y + b.height / 2).matrixTransform(m); return Math.abs(Math.hypot(c.x - 32, c.y - 32) - 24); });
+    return {
+        calm: calm.map(r => r.querySelector('b').textContent), source: calm[0]?.querySelector('small')?.textContent.trim(),
+        text: d?.querySelector('.gd-t-text')?.textContent.trim().slice(0, 40), sheet: !!d?.querySelector('[data-action="openSheet"]'),
+        lit, focus, ringOff: Math.max(...off).toFixed(2)
+    };
+});
+check('ступени без способности — строкой «Тег I: название · ступень I», щелчок — описание без кнопки «Лист»', tiers.calm.length >= 1 && /: /.test(tiers.calm[0]) && /ступень I/.test(tiers.source ?? '') && tiers.text?.length > 10 && !tiers.sheet, JSON.stringify(tiers));
+check('наведение на синергию «движение» подсвечивает её ступени и связку', tiers.focus && tiers.lit.some(n => /Реактивная тяга/.test(n)) && tiers.lit.some(n => /^Движение/.test(n)), JSON.stringify(tiers));
+check('ромбы Предела разума — по центру гнёзд на кольце', Number(tiers.ringOff) < 0.1, JSON.stringify(tiers));
+await ev(async () => {
+    const el = foundry.applications.instances.get('gachadnd-dock').element;
+    el.querySelector('.gd-syn-row[data-tag="движение"]').dispatchEvent(new PointerEvent('pointerenter'));
+});
+await f.shot('dock-1c-tiers');
 
 // ---------- Щелчок по пластине — надеть
 await ev(async id => {
