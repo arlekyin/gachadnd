@@ -40,6 +40,11 @@ export const WEATHER = {
 // Направление ветра: восемь сторон, откуда дует (стрелка — куда)
 const WINDS = [[t('с запада'), '→'], [t('с северо-запада'), '↘'], [t('с севера'), '↓'], [t('с северо-востока'), '↙'], [t('с востока'), '←'], [t('с юго-востока'), '↖'], [t('с юга'), '↑'], [t('с юго-запада'), '↗']];
 
+// Туман Предела временно не выпадает: вид не устраивает, код и applyWeather(scene, 'fog') целы (BACKLOG.md)
+const OFF = ['fog'];
+/** Погода, которая может выпасть сама и по кнопке «Другая погода» */
+export const weatherKinds = () => Object.keys(WEATHER).filter(k => !OFF.includes(k));
+
 export const weatherOf = scene => scene?.getFlag(MODULE_ID, FLAG) ?? null;
 
 /** Плитка клочка тумана: рисуется один раз на мир — мягкие бирюзовые клубы на прозрачном */
@@ -189,7 +194,7 @@ onRenderChatMessage((message, html) => {
             await clearWeather(scene);
             return message.update({ content: `<div class="gd-scent-chat gd-weather-card"><i class="fas fa-sun"></i> <strong>${t('Погода стихла.')}</strong></div>` });
         }
-        const others = Object.keys(WEATHER).filter(k => k !== w.kind);
+        const others = weatherKinds().filter(k => k !== w.kind);
         const next = await applyWeather(scene, others[Math.floor(Math.random() * others.length)]);
         return message.update({ content: cardHtml(next) });
     }));

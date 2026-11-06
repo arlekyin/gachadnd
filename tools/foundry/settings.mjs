@@ -24,7 +24,7 @@ const listed = await ev(() => ({
     settings: [...game.settings.settings.values()].filter(s => s.namespace === 'gachadnd' && s.config).map(s => s.key).sort(),
     menus: [...game.settings.menus.keys()].filter(k => k.startsWith('gachadnd.')).map(k => k.slice(9)).sort()
 }));
-check('в общем списке — 7 общих настроек (с Видениями Эха)', JSON.stringify(listed.settings) === JSON.stringify(['anchorSceneId', 'automation', 'echoVision', 'effects', 'gmHints', 'rudeNames', 'volume']), listed.settings.join(', '));
+check('в общем списке — 8 общих настроек (с Видениями Эха и темнотой подземелий)', JSON.stringify(listed.settings) === JSON.stringify(['anchorSceneId', 'automation', 'dungeonDark', 'echoVision', 'effects', 'gmHints', 'rudeNames', 'volume']), listed.settings.join(', '));
 check('кнопки подменю: экономика, звуки, подсказки, свои названия, Риск, срабатывания', JSON.stringify(listed.menus) === JSON.stringify(['automationMenu', 'economyMenu', 'hintsMenu', 'namesMenu', 'riskMenu', 'soundsMenu']), listed.menus.join(', '));
 
 // Окно настроек Foundry, вкладка модуля
@@ -45,7 +45,7 @@ const shown = await ev(() => {
     return { count: labels.length, labels };
 });
 await f.shot('settings_list');
-check('в окне настроек у модуля 13 строк: 6 кнопок подменю и 7 настроек', shown.count === 13, shown.labels.join(' · '));
+check('в окне настроек у модуля 14 строк: 6 кнопок подменю и 8 настроек', shown.count === 14, shown.labels.join(' · '));
 await ev(() => gdt.settingsApp.close());
 
 // ---------- Подменю: поля и сохранение
@@ -68,7 +68,7 @@ m = await openMenu('soundsMenu');
 check('Звуки и эффекты: 12 полей у Мастера (со звуками паутины, фоном арены в бою и его громкостью; звуки удара Сайтамы — в модуле impact-frames)', m.fields === 12, JSON.stringify(m));
 await ev(() => gdt.menuApp.close());
 m = await openMenu('hintsMenu');
-check('Подсказки Мастеру: 10 переключателей (Запах, атмосфера, Пульс, дары луны, счётчики, правило Босса, приветствие, встречи, обмен, погода)', m.fields === 10, JSON.stringify(m));
+check('Подсказки Мастеру: 11 переключателей (Запах, атмосфера, Пульс, дары луны, счётчики, правило Босса, приветствие, встречи, обмен, погода, обеты)', m.fields === 11, JSON.stringify(m));
 await page.uncheck(`#${m.id} input[name="gachadnd.hintPulse"]`);
 await page.click(`#${m.id} button[type="submit"]`);
 await wait(800);

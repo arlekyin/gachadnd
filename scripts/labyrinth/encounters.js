@@ -25,6 +25,7 @@ import { onRenderChatMessage } from "../core/chat-hooks.js";
 import { partyActors } from "./horsemen.js";
 import { BIOMES, currentBiome } from "./biomes.js";
 import { DUNGEON_BIOMES, dungeonNote } from "../arena/dungeon.js";
+import { weatherKinds } from "../arena/weather.js";
 import { SCHEME_NAMES as DUNGEON_SCHEMES } from "../arena/dungeon-layout.js";
 import { getFloor } from "./economy.js";
 import { mapScene } from "./scene-travel.js";
@@ -193,7 +194,7 @@ export async function buildEncounter(type, { party = partyActors(), biome = curr
  * Арена для встречи по состоянию этажа. Настроение: узел тронут или съеден Пожирателем — порча; Босс набрал
  * ступени — кровь на всех боях этажа; город — ночь; иначе день. Близость самого Пожирателя на картинку не
  * ложится — её показывают предвестия поверх любой сцены. Погода — на Элите в половине боёв, на Заставе и Боссе
- * всегда (галочка hintWeather): ливень, туман или ветер
+ * всегда (галочка hintWeather): ливень или ветер (туман временно не выпадает — weatherKinds)
  */
 export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_ID, 'floorMap'), rnd = Math.random } = {}) {
     const here = map?.web ? map.currentNodeId : null;
@@ -205,7 +206,7 @@ export function arenaFor(enc, enemies = [], { map = mapScene()?.getFlag(MODULE_I
     const [cols, rows] = vows.includes('narrow') ? NARROW_SIZE : ARENA_SIZE[enc.type] ?? [28, 20];
     const leader = NODES[enc.type]?.leader ? enemies[0] ?? null : null;
     // Обет «Непогода» — выбор отряда: не смотрит ни на шанс, ни на галочку
-    const weather = vows.includes('storm') || (hint('hintWeather') && rnd() < (WEATHER_CHANCE[enc.type] ?? 0)) ? pick(Object.keys(WEATHER_NAMES), rnd) : null;
+    const weather = vows.includes('storm') || (hint('hintWeather') && rnd() < (WEATHER_CHANCE[enc.type] ?? 0)) ? pick(weatherKinds(), rnd) : null;
     // Подземный биом этажа — арена подземелья
     return { biome: DUNGEON_BIOMES.has(enc.biome) ? enc.biome : 'forest', mood, stage: mood === 'blood' ? webStage(map?.web?.ticks ?? 0) : undefined, why, cols, rows, weather, encounter: { node: enc.type, leader, pincers: vows.includes('pincers') } };
 }

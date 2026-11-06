@@ -93,8 +93,12 @@ const offer = await ev(async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const n = game.messages.size;
     const h = await gdt.mod('labyrinth/horsemen.js');
+    // С обетами Элита ждёт их выбора (это проверяет votes); здесь — вход сразу на состав
+    const vowsWere = game.settings.get('gachadnd', 'hintVows');
+    await game.settings.set('gachadnd', 'hintVows', false);
     await h.onNodeEntered('elite');
     for (let i = 0; i < 20 && !game.messages.contents.slice(n).some(m => m.getFlag('gachadnd', 'encounter')); i++) await sleep(200);
+    await game.settings.set('gachadnd', 'hintVows', vowsWere);
     const msg = game.messages.contents.slice(n).find(m => m.getFlag('gachadnd', 'encounter'));
     const first = msg?.getFlag('gachadnd', 'encounter');
     const html = document.querySelector(`[data-message-id="${msg?.id}"]`);
